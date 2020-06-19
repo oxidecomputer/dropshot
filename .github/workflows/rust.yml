@@ -1,0 +1,29 @@
+#
+# Configuration for GitHub-based CI, based on the stock GitHub Rust config.
+#
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly-2020-06-02
+        default: false
+        components: rustfmt
+    - name: Check style
+      run: cargo +nightly-2020-06-02 fmt -- --check
+    - name: Run tests
+      run: cargo test --verbose

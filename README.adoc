@@ -1,0 +1,94 @@
+:showtitle:
+:toc: left
+:icons: font
+
+= Dropshot
+
+image::https://github.com/oxidecomputer/oxide-api-prototype/workflows/Rust/badge.svg[]
+
+Dropshot is a general-purpose crate for exposing REST APIs from a Rust program.
+For more, see the https://rust.docs.corp.oxide.computer/dropshot/[online
+Dropshot documentation].  You can build it yourself with:
+
+[source,text]
+----
+$ cargo +nightly doc
+----
+
+
+== Build and run
+
+You can **build and run the whole test suite** with `cargo test`.  The test
+suite runs cleanly and should remain clean.
+
+You can **format the code** using `cargo +nightly fmt`.  Make sure to run this
+before pushing changes.  The CI checks that the code is correctly formatted.
+
+
+== Configuration reference
+
+=== Dropshot servers
+
+Dropshot servers use a TOML configuration file.  Supported config properties
+include:
+
+[cols="1,1,1,3",options="header"]
+|===
+|Name
+|Example
+|Required?
+|Description
+
+|`bind_address`
+|`"127.0.0.1:12220"`
+|Yes
+|Specifies that the server should bind to the given IP address and TCP port.  In general, servers can bind to more than one IP address and port, but this is not (yet?) supported.
+
+|===
+
+=== Logging
+
+Dropshot provides a small wrapper to configure a slog-based Logger.  You can use
+this without using the rest of Dropshot.  Logging config properties include:
+
+[cols="1,1,1,3",options="header"]
+|===
+|Name
+|Example
+|Required?
+|Description
+
+|`mode`
+|`"file"`
+|Yes
+|Controls where server logging will go.  Valid modes are `"stderr-terminal"` and
+`"file".  If the mode is `"stderr-terminal"`, human-readable output, with colors
+and other terminal formatting if possible, will be sent to stderr.  If the mode
+is `"file"`, Bunyan-format output will be sent to the filesystem path given by
+`log.path`.  See also `log.if_exists`, which controls the behavior if the
+destination path already exists.
+
+|`level`
+|`"info"`
+|Yes
+|Specifies what severity of log messages should be included in the log.  Valid
+values include `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, and
+`"critical"`, which are increasing order of severity.  Log messages at the
+specified level and more severe levels will be included in the log.
+
+|`path`
+|`"logs/server.log"`
+|Only if `log.mode = "file"`
+|If `log.mode` is `"file"`, this property determines the path to the log file.
+See also `log.if_exists`.
+
+|`if_exists`
+|`"append"`
+|Only if `log.mode = "file"`
+|If `log.mode` is `"file"`, this property specifies what to do if the
+destination log file already exists.  Valid values include `"append"` (which
+appends to the existing file), `"truncate"` (which truncates the existing file
+and then uses it as though it had just been created), and `"fail"` (which causes
+the server to exit immediately with an error).
+
+|===

@@ -1,0 +1,17 @@
+[package]
+name = "dropshot_endpoint"
+version = "0.1.0"
+authors = ["Adam H. Leventhal <ahl@oxide.computer>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+serde = { version = "1.0", features = [ "derive" ] }
+serde_derive_internals = "0.25"
+serde_tokenstream = { git = "https://github.com/oxidecomputer/serde_tokenstream" }
+syn = { version = "1.0.17", features = [ "parsing", "printing" ] }
+schemars = "0.7"
