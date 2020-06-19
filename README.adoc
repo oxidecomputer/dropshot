@@ -4,7 +4,7 @@
 
 = Dropshot
 
-image::https://github.com/oxidecomputer/oxide-api-prototype/workflows/Rust/badge.svg[]
+image::https://github.com/oxidecomputer/dropshot/workflows/Rust/badge.svg[]
 
 Dropshot is a general-purpose crate for exposing REST APIs from a Rust program.
 For more, see the https://rust.docs.corp.oxide.computer/dropshot/[online
