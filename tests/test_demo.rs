@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Test cases for the "demo" handlers.  These handlers exercise various
  * supported configurations of the HTTP handler interface.  We exercise them

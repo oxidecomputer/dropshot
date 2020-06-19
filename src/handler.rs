@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Interface for implementing HTTP endpoint handler functions.
  *

@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Describes the endpoints and handler functions in your API
  */

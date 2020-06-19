@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * General-purpose HTTP-related facilities
  */

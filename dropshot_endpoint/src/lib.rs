@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 //! This macro defines attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
 //! Spec (OAS) v3 document that describes the API.

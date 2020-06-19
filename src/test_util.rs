@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Automated testing facilities.  These are intended for use both by this crate
  * and dependents of this crate.

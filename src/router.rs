@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Routes incoming HTTP requests to handler functions
  */

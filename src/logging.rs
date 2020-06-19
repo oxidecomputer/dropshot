@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Provides basic facilities for configuring logging and creating loggers, all
  * using Slog.  None of these facilities are required for this crate, but
