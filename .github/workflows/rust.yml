@@ -10,20 +10,28 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  check-style:
+    runs-on: ubuntu-18.04
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - uses: actions-rs/toolchain@v1
+    # actions/checkout@v2
+    - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
       with:
         toolchain: nightly-2020-06-02
         default: false
         components: rustfmt
     - name: Check style
       run: cargo +nightly-2020-06-02 fmt -- --check
+
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-18.04, windows-2019, macos-10.15 ]
+    steps:
+    # actions/checkout@v2
+    - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - name: Build
+      run: cargo build --tests --verbose
     - name: Run tests
       run: cargo test --verbose
