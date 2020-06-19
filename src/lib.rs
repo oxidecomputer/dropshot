@@ -37,13 +37,6 @@
  * to address the needs of the Oxide control plane.
  *
  *
- * ## Status
- *
- * Dropshot is a work in progress.  It remains inside the parent repo because
- * we're still making changes that span both repos reasonably often.  Once it's
- * mature, we'll separate it into a separate repo and potentially publish it.
- *
- *
  * ## Usage
  *
  * The bare minimum might look like this:
