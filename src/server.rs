@@ -73,7 +73,7 @@ pub struct HttpServer {
 
 impl HttpServer {
     pub fn local_addr(&self) -> SocketAddr {
-        self.local_addr.clone()
+        self.local_addr
     }
 
     pub fn close(mut self) {
@@ -128,7 +128,7 @@ impl HttpServer {
         /* TODO-cleanup too many Arcs? */
         let log_close = log.new(o!());
         let app_state = Arc::new(DropshotState {
-            private: private,
+            private,
             config: ServerConfig {
                 /* We start aggressively to ensure test coverage. */
                 request_body_max_bytes: 1024,
@@ -159,9 +159,9 @@ impl HttpServer {
         });
 
         Ok(HttpServer {
-            app_state: app_state,
+            app_state,
             server_future: Some(graceful.boxed()),
-            local_addr: local_addr,
+            local_addr,
             close_channel: Some(tx),
         })
     }

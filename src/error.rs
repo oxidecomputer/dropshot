@@ -158,15 +158,15 @@ impl HttpError {
      */
     pub fn for_client_error(
         error_code: Option<String>,
-        code: http::StatusCode,
+        status_code: http::StatusCode,
         message: String,
     ) -> Self {
-        assert!(code.is_client_error());
+        assert!(status_code.is_client_error());
         HttpError {
-            status_code: code,
-            error_code: error_code,
+            status_code,
+            error_code,
             internal_message: message.clone(),
-            external_message: message.clone(),
+            external_message: message,
         }
     }
 

@@ -377,17 +377,17 @@ impl LogContext {
                 eprintln!("log file: {:?}", new_path_str);
                 (Some(new_path), ConfigLogging::File {
                     level: level.clone(),
-                    path: new_path_str.clone(),
+                    path: new_path_str,
                     if_exists: if_exists.clone(),
                 })
             }
-            other_config @ _ => (None, other_config.clone()),
+            other_config => (None, other_config.clone()),
         };
 
         let log = log_config.to_logger(test_name).unwrap();
         LogContext {
-            log: log,
-            log_path: log_path,
+            log,
+            log_path,
         }
     }
 
@@ -498,8 +498,8 @@ pub async fn read_ndjson<T: DeserializeOwned>(
      * be NDJSON-compatible.
      */
     body_string
-        .split("\n")
-        .filter(|line| line.len() > 0)
+        .split('\n')
+        .filter(|line| !line.is_empty())
         .map(|line| {
             serde_json::from_str(line)
                 .expect("failed to parse server body as expected type")
@@ -607,15 +607,11 @@ pub fn log_file_for_test(test_name: &str) -> PathBuf {
         Path::new(&arg0path).file_name().unwrap().to_str().unwrap().to_string()
     };
 
-    let log_path = {
-        let mut pathbuf = std::env::temp_dir();
-        let id = TEST_SUITE_LOGGER_ID.fetch_add(1, Ordering::SeqCst);
-        let pid = std::process::id();
-        pathbuf.push(format!("{}-{}.{}.{}.log", arg0, test_name, pid, id));
-        pathbuf
-    };
-
-    log_path
+    let mut pathbuf = std::env::temp_dir();
+    let id = TEST_SUITE_LOGGER_ID.fetch_add(1, Ordering::SeqCst);
+    let pid = std::process::id();
+    pathbuf.push(format!("{}-{}.{}.{}.log", arg0, test_name, pid, id));
+    pathbuf
 }
 
 /**
@@ -655,12 +651,11 @@ pub struct BunyanLogRecord {
  */
 pub fn read_bunyan_log(logpath: &Path) -> Vec<BunyanLogRecord> {
     let log_contents = fs::read_to_string(logpath).unwrap();
-    let log_records = log_contents
-        .split("\n")
-        .filter(|line| line.len() > 0)
+    log_contents
+        .split('\n')
+        .filter(|line| !line.is_empty())
         .map(|line| serde_json::from_str::<BunyanLogRecord>(line).unwrap())
-        .collect::<Vec<BunyanLogRecord>>();
-    log_records
+        .collect::<Vec<BunyanLogRecord>>()
 }
 
 /**

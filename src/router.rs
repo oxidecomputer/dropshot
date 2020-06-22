@@ -115,13 +115,13 @@ impl PathSegment {
      * it's a variable or a literal.
      */
     pub fn from(segment: &str) -> PathSegment {
-        if segment.starts_with("{") || segment.ends_with("}") {
+        if segment.starts_with('{') || segment.ends_with('}') {
             assert!(
-                segment.starts_with("{"),
+                segment.starts_with('{'),
                 "HTTP URI path segment variable missing leading \"{\""
             );
             assert!(
-                segment.ends_with("}"),
+                segment.ends_with('}'),
                 "HTTP URI path segment variable missing trailing \"}\""
             );
             assert!(
@@ -499,7 +499,7 @@ pub fn path_to_segments(path: &str) -> Vec<&str> {
      * much here, but it does create more work, so we'll just split it
      * ourselves.
      */
-    path.split("/").filter(|segment| !segment.is_empty()).collect::<Vec<_>>()
+    path.split('/').filter(|segment| !segment.is_empty()).collect::<Vec<_>>()
 }
 
 #[cfg(test)]

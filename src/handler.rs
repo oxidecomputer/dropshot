@@ -439,7 +439,7 @@ where
     ) -> Box<dyn RouteHandler> {
         Box::new(HttpRouteHandler {
             label: label.to_string(),
-            handler: handler,
+            handler,
             phantom: PhantomData,
         })
     }
