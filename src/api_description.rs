@@ -140,7 +140,7 @@ impl ApiDescription {
     /**
      * Register a new API endpoint.
      */
-    pub fn register<'a, T>(&mut self, endpoint: T) -> Result<(), String>
+    pub fn register<T>(&mut self, endpoint: T) -> Result<(), String>
     where
         T: Into<ApiEndpoint>,
     {
@@ -165,8 +165,8 @@ impl ApiDescription {
             .collect::<HashSet<_>>();
 
         if path != vars {
-            let mut p = path.difference(&vars).into_iter().collect::<Vec<_>>();
-            let mut v = vars.difference(&path).into_iter().collect::<Vec<_>>();
+            let mut p = path.difference(&vars).collect::<Vec<_>>();
+            let mut v = vars.difference(&path).collect::<Vec<_>>();
             p.sort();
             v.sort();
 
@@ -349,7 +349,7 @@ impl ApiDescription {
                         required: true,
                     }))
                 })
-                .nth(0);
+                .next();
 
             if let Some(schema) = &endpoint.response.schema {
                 let js = schema.0(&mut generator);
@@ -394,10 +394,10 @@ impl ApiDescription {
         // Add the schemas for which we generated references.
         let schemas = &mut openapi
             .components
-            .get_or_insert_with(|| openapiv3::Components::default())
+            .get_or_insert_with(openapiv3::Components::default)
             .schemas;
         generator.definitions().iter().for_each(|(key, schema)| {
-            &schemas.insert(key.clone(), j2oas_schema(schema));
+            schemas.insert(key.clone(), j2oas_schema(schema));
         });
 
         println!("{}", serde_json::to_string_pretty(&openapi).unwrap());
@@ -510,7 +510,7 @@ fn j2oas_schema_object(
 }
 
 fn j2oas_subschemas(
-    subschemas: &Box<schemars::schema::SubschemaValidation>,
+    subschemas: &schemars::schema::SubschemaValidation,
 ) -> openapiv3::SchemaKind {
     match (&subschemas.all_of, &subschemas.any_of, &subschemas.one_of) {
         (Some(all_of), None, None) => openapiv3::SchemaKind::AllOf {
@@ -769,7 +769,7 @@ fn j2oas_object(
                         (prop.clone(), box_reference_or(j2oas_schema(schema)))
                     })
                     .collect::<_>(),
-                required: obj.required.iter().map(|s| s.clone()).collect::<_>(),
+                required: obj.required.iter().cloned().collect::<_>(),
                 additional_properties: obj.additional_properties.as_ref().map(
                     |schema| {
                         openapiv3::AdditionalProperties::Schema(Box::new(

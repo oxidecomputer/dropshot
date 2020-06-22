@@ -364,11 +364,10 @@ impl<'a> IntoIterator for &'a HttpRouter {
  */
 pub struct HttpRouterIter<'a> {
     method: Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint)> + 'a>,
-    path: Vec<(
-        PathSegment,
-        Box<dyn Iterator<Item = (PathSegment, &'a Box<HttpRouterNode>)> + 'a>,
-    )>,
+    path: Vec<(PathSegment, Box<PathIter<'a>>)>,
 }
+type PathIter<'a> =
+    dyn Iterator<Item = (PathSegment, &'a Box<HttpRouterNode>)> + 'a;
 
 impl<'a> HttpRouterIter<'a> {
     fn new(router: &'a HttpRouter) -> Self {
@@ -387,10 +386,7 @@ impl<'a> HttpRouterIter<'a> {
      * path parameter variable, and a modified iterator in the case of
      * literal, explicit path segments.
      */
-    fn iter_node(
-        node: &'a HttpRouterNode,
-    ) -> Box<dyn Iterator<Item = (PathSegment, &'a Box<HttpRouterNode>)> + 'a>
-    {
+    fn iter_node(node: &'a HttpRouterNode) -> Box<PathIter<'a>> {
         match &node.edges {
             Some(HttpRouterEdges::Literals(map)) => Box::new(
                 map.iter()

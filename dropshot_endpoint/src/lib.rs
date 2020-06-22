@@ -27,7 +27,7 @@ enum MethodType {
 }
 
 impl MethodType {
-    fn as_str(self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             MethodType::DELETE => "DELETE",
             MethodType::GET => "GET",
@@ -122,7 +122,7 @@ fn do_endpoint(
         }
     };
 
-    Ok(stream.into())
+    Ok(stream)
 }
 
 /// Derive the implementation for dropshot::ExtractedParameter
@@ -203,7 +203,7 @@ fn do_derive_parameter(
         }
     };
 
-    Ok(stream.into())
+    Ok(stream)
 }
 
 fn get_crate(var: Option<String>) -> TokenStream {
@@ -270,10 +270,7 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
                             {
                                 // Trim off the first character if the comment
                                 // begins with a single space.
-                                return Some(format!(
-                                    "{}",
-                                    &comment.as_str()[1..]
-                                ));
+                                return Some(comment.as_str()[1..].to_string());
                             } else {
                                 return Some(comment);
                             }
@@ -284,7 +281,7 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
             None
         })
         .fold(None, |acc, comment| {
-            Some(format!("{}{}", acc.unwrap_or(String::new()), comment))
+            Some(format!("{}{}", acc.unwrap_or_default(), comment))
         })
 }
 
