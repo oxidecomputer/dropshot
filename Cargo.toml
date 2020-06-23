@@ -1,9 +1,11 @@
 [package]
 name = "dropshot"
+description = "expose REST APIs from a Rust program"
 version = "0.1.0"
 authors = ["David Pacheco <dap@oxidecomputer.com>"]
 edition = "2018"
 license = "Apache-2.0"
+repository = "https://github.com/oxidecomputer/dropshot/"
 
 [dependencies]
 async-trait = "0.1.24"
