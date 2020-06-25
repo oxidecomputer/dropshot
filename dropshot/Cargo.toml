@@ -7,77 +7,47 @@ edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/oxidecomputer/dropshot/"
 
-[dependencies.async-trait]
-version = "0.1.24"
-
-[dependencies.bytes]
-version = "0.5.4"
+[dependencies]
+async-trait = "0.1.24"
+bytes = "0.5.4"
+futures = "0.3.1"
+hostname = "0.3.0"
+http = "0.2.0"
+hyper = "0.13.0"
+indexmap = "1.0.0"
+openapiv3 = "0.3.0"
+schemars = "0.7.0"
+serde_json = "1.0.0"
+serde_urlencoded = "0.6.0"
+slog-async = "2.4.0"
+slog-bunyan = "2.2.0"
+slog-json = "2.3.0"
+slog-term = "2.5.0"
+toml = "0.5.6"
 
 [dependencies.chrono]
-version = "0.4"
+version = "0.4.0"
 features = [ "serde" ]
 
 [dependencies.dropshot_endpoint]
 version = "0.1.0"
 path = "../dropshot_endpoint"
 
-[dependencies.futures]
-version = "0.3.1"
-
-[dependencies.http]
-version = "0.2.0"
-
-[dependencies.hostname]
-version = "0.3.0"
-
-[dependencies.hyper]
-version = "0.13"
-
-[dependencies.indexmap]
-version = "1"
-
-[dependencies.openapiv3]
-version = "0.3"
-
-[dependencies.schemars]
-version = "0.7"
-
 [dependencies.serde]
-version = "1.0"
+version = "1.0.0"
 features = [ "derive" ]
 
-[dependencies.serde_json]
-version = "1.0"
-
-[dependencies.serde_urlencoded]
-version = "0.6"
-
 [dependencies.slog]
-version = "2.5"
+version = "2.5.0"
 features = [ "max_level_trace", "release_max_level_debug" ]
 
-[dependencies.slog-async]
-version = "2.4"
-
-[dependencies.slog-bunyan]
-version = "2.2"
-
-[dependencies.slog-json]
-version = "2.3"
-
-[dependencies.slog-term]
-version = "2.5"
-
 [dependencies.tokio]
-version = "0.2"
+version = "0.2.0"
 features = [ "full" ]
 
-[dependencies.toml]
-version = "0.5.6"
-
 [dependencies.uuid]
-version = "0.8"
+version = "0.8.0"
 features = [ "serde", "v4" ]
 
-[dev-dependencies.libc]
-version = "0.2.71"
+[dev-dependencies]
+libc = "0.2.71"
