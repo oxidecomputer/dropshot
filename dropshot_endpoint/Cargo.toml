@@ -24,7 +24,7 @@ features = [ "derive" ]
 version = "0.25"
 
 [dependencies.serde_tokenstream]
-version = version = "0.1.0"
+version = "0.1.0"
 
 [dependencies.syn]
 version = "1.0.17"
