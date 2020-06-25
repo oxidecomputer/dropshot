@@ -1,5 +1,5 @@
 #
-# Dropshot is comprised of two crates.  Consumers only need to know about
+# Dropshot is comprised of two packages.  Consumers only need to know about
 # "dropshot".  "dropshot" depends on "dropshot_endpoint", a procedural macro
 # used for registering API handler functions.
 #
