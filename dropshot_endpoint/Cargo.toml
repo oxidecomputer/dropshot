@@ -1,8 +1,11 @@
 [package]
 name = "dropshot_endpoint"
+description = "macro used by dropshot consumers for registering handlers"
 version = "0.1.0"
 authors = ["Adam H. Leventhal <ahl@oxide.computer>"]
 edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/oxidecomputer/dropshot/"
 
 [lib]
 proc-macro = true
@@ -12,6 +15,6 @@ proc-macro2 = "1"
 quote = "1"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_derive_internals = "0.25"
-serde_tokenstream = { git = "https://github.com/oxidecomputer/serde_tokenstream" }
+serde_tokenstream = { version = "0.1.0" }
 syn = { version = "1.0.17", features = [ "parsing", "printing" ] }
 schemars = "0.7"
