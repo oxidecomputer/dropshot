@@ -10,11 +10,25 @@ repository = "https://github.com/oxidecomputer/dropshot/"
 [lib]
 proc-macro = true
 
-[dependencies]
-proc-macro2 = "1"
-quote = "1"
-serde = { version = "1.0", features = [ "derive" ] }
-serde_derive_internals = "0.25"
-serde_tokenstream = { version = "0.1.0" }
-syn = { version = "1.0.17", features = [ "parsing", "printing" ] }
-schemars = "0.7"
+[dependencies.proc-macro2]
+version = "1"
+
+[dependencies.quote]
+version = "1"
+
+[dependencies.serde]
+version = "1.0"
+features = [ "derive" ]
+
+[dependencies.serde_derive_internals]
+version = "0.25"
+
+[dependencies.serde_tokenstream]
+version = version = "0.1.0"
+
+[dependencies.syn]
+version = "1.0.17"
+features = [ "parsing", "printing" ]
+
+[dependencies.schemars]
+version = "0.7"

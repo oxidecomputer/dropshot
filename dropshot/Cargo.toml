@@ -7,32 +7,77 @@ edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/oxidecomputer/dropshot/"
 
-[dependencies]
-async-trait = "0.1.24"
-bytes = "0.5.4"
-chrono = { version = "0.4", features = [ "serde" ] }
-dropshot_endpoint = { version = "0.1.0", path = "../dropshot_endpoint" }
-futures = "0.3.1"
-http = "0.2.0"
-hostname = "0.3.0"
-hyper = "0.13"
-indexmap = "1"
-openapiv3 = "0.3"
-schemars = "0.7"
-serde = { version = "1.0", features = [ "derive" ] }
-serde_json = "1.0"
-serde_urlencoded = "0.6"
-slog-async = "2.4"
-slog-bunyan = "2.2"
-slog-json = "2.3"
-slog-term = "2.5"
-tokio = { version = "0.2", features = [ "full" ] }
-toml = "0.5.6"
-uuid = { version = "0.8", features = [ "serde", "v4" ] }
+[dependencies.async-trait]
+version = "0.1.24"
+
+[dependencies.bytes]
+version = "0.5.4"
+
+[dependencies.chrono]
+version = "0.4"
+features = [ "serde" ]
+
+[dependencies.dropshot_endpoint]
+version = "0.1.0"
+path = "../dropshot_endpoint"
+
+[dependencies.futures]
+version = "0.3.1"
+
+[dependencies.http]
+version = "0.2.0"
+
+[dependencies.hostname]
+version = "0.3.0"
+
+[dependencies.hyper]
+version = "0.13"
+
+[dependencies.indexmap]
+version = "1"
+
+[dependencies.openapiv3]
+version = "0.3"
+
+[dependencies.schemars]
+version = "0.7"
+
+[dependencies.serde]
+version = "1.0"
+features = [ "derive" ]
+
+[dependencies.serde_json]
+version = "1.0"
+
+[dependencies.serde_urlencoded]
+version = "0.6"
 
 [dependencies.slog]
 version = "2.5"
 features = [ "max_level_trace", "release_max_level_debug" ]
 
-[dev-dependencies]
-libc = "0.2.71"
+[dependencies.slog-async]
+version = "2.4"
+
+[dependencies.slog-bunyan]
+version = "2.2"
+
+[dependencies.slog-json]
+version = "2.3"
+
+[dependencies.slog-term]
+version = "2.5"
+
+[dependencies.tokio]
+version = "0.2"
+features = [ "full" ]
+
+[dependencies.toml]
+version = "0.5.6"
+
+[dependencies.uuid]
+version = "0.8"
+features = [ "serde", "v4" ]
+
+[dev-dependencies.libc]
+version = "0.2.71"
