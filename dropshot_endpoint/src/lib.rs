@@ -265,7 +265,7 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
                     if nv.path.is_ident(&doc) {
                         if let syn::Lit::Str(s) = nv.lit {
                             let comment = s.value();
-                            if comment.starts_with(" ")
+                            if comment.starts_with(' ')
                                 && !comment.starts_with("  ")
                             {
                                 // Trim off the first character if the comment
