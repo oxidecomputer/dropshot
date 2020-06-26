@@ -47,9 +47,9 @@ impl<'a> ApiEndpoint {
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         ApiEndpoint {
-            operation_id: operation_id,
+            operation_id,
             handler: Box::new(HttpRouteHandler::new(handler)),
-            method: method,
+            method,
             path: path.to_string(),
             parameters: FuncParams::metadata(),
             response: ResponseType::metadata(),
@@ -300,7 +300,7 @@ impl ApiDescription {
                         ApiEndpointParameterLocation::Query => {
                             Some(openapiv3::ReferenceOr::Item(
                                 openapiv3::Parameter::Query {
-                                    parameter_data: parameter_data,
+                                    parameter_data,
                                     allow_reserved: true,
                                     style: openapiv3::QueryStyle::Form,
                                     allow_empty_value: None,
@@ -310,7 +310,7 @@ impl ApiDescription {
                         ApiEndpointParameterLocation::Path => {
                             Some(openapiv3::ReferenceOr::Item(
                                 openapiv3::Parameter::Path {
-                                    parameter_data: parameter_data,
+                                    parameter_data,
                                     style: openapiv3::PathStyle::Simple,
                                 },
                             ))
@@ -337,7 +337,7 @@ impl ApiDescription {
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
-                            schema: schema,
+                            schema,
                             example: None,
                             examples: indexmap::IndexMap::new(),
                             encoding: indexmap::IndexMap::new(),
@@ -346,7 +346,7 @@ impl ApiDescription {
 
                     Some(openapiv3::ReferenceOr::Item(openapiv3::RequestBody {
                         description: None,
-                        content: content,
+                        content,
                         required: true,
                     }))
                 })
@@ -370,7 +370,7 @@ impl ApiDescription {
                 let response = openapiv3::Response {
                     description: "TODO: placeholder".to_string(), // TODO
                     headers: indexmap::IndexMap::new(),
-                    content: content,
+                    content,
                     links: indexmap::IndexMap::new(),
                 };
 
