@@ -254,7 +254,7 @@ fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
     quote!(#(#compile_errors)*)
 }
 
-fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
+fn extract_doc_from_attrs(attrs: &[syn::Attribute]) -> Option<String> {
     let doc = syn::Ident::new("doc", proc_macro2::Span::call_site());
 
     attrs
