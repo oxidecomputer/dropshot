@@ -424,7 +424,7 @@ where
      * signatures, return a RouteHandler that can be used to respond to HTTP
      * requests using this function.
      */
-    pub fn new(handler: HandlerType) -> Box<dyn RouteHandler> {
+    pub fn new(handler: HandlerType) -> Self {
         HttpRouteHandler::new_with_name(handler, "<unlabeled handler>")
     }
 
@@ -433,15 +433,12 @@ where
      * signatures, return a RouteHandler that can be used to respond to HTTP
      * requests using this function.
      */
-    pub fn new_with_name(
-        handler: HandlerType,
-        label: &str,
-    ) -> Box<dyn RouteHandler> {
-        Box::new(HttpRouteHandler {
+    pub fn new_with_name(handler: HandlerType, label: &str) -> Self {
+        HttpRouteHandler {
             label: label.to_string(),
             handler,
             phantom: PhantomData,
-        })
+        }
     }
 }
 

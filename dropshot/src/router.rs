@@ -520,11 +520,11 @@ mod test {
     }
 
     fn new_handler() -> Box<dyn RouteHandler> {
-        HttpRouteHandler::new(test_handler)
+        Box::new(HttpRouteHandler::new(test_handler))
     }
 
     fn new_handler_named(name: &str) -> Box<dyn RouteHandler> {
-        HttpRouteHandler::new_with_name(test_handler, name)
+        Box::new(HttpRouteHandler::new_with_name(test_handler, name))
     }
 
     fn new_endpoint(

@@ -48,7 +48,7 @@ impl<'a> ApiEndpoint {
     {
         ApiEndpoint {
             operation_id: operation_id,
-            handler: HttpRouteHandler::new(handler),
+            handler: Box::new(HttpRouteHandler::new(handler)),
             method: method,
             path: path.to_string(),
             parameters: FuncParams::metadata(),
@@ -811,7 +811,7 @@ mod test {
     }
 
     fn new_handler_named(name: &str) -> Box<dyn RouteHandler> {
-        HttpRouteHandler::new_with_name(test_handler, name)
+        Box::new(HttpRouteHandler::new_with_name(test_handler, name))
     }
 
     fn new_endpoint(
