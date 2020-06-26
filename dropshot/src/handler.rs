@@ -133,7 +133,11 @@ macro_rules! impl_extractor_for_tuple {
         async fn from_request(_rqctx: Arc<RequestContext>)
             -> Result<( $($T,)* ), HttpError>
         {
-            Ok( ($($T::from_request(Arc::clone(&_rqctx)).await?,)* ) )
+            futures::try_join!(
+                $(
+                    $T::from_request(Arc::clone(&_rqctx)),
+                )*
+            )
         }
 
         fn metadata() -> Vec<ApiEndpointParameter> {
