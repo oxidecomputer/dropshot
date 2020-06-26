@@ -10,6 +10,7 @@ use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 
+use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::FutureExt;
 use hyper::server::conn::AddrStream;
@@ -18,9 +19,7 @@ use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use std::any::Any;
-use std::future::Future;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -64,9 +63,7 @@ pub struct ServerConfig {
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
-    server_future: Option<
-        Pin<Box<dyn Future<Output = Result<(), hyper::error::Error>> + Send>>,
-    >,
+    server_future: Option<BoxFuture<'static, Result<(), hyper::error::Error>>>,
     local_addr: SocketAddr,
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -326,9 +323,7 @@ impl Service<&AddrStream> for ServerConnectionHandler {
      */
     type Response = ServerRequestHandler;
     type Error = GenericError;
-    type Future = Pin<
-        Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(
         &mut self,
@@ -381,9 +376,7 @@ impl ServerRequestHandler {
 impl Service<Request<Body>> for ServerRequestHandler {
     type Response = Response<Body>;
     type Error = GenericError;
-    type Future = Pin<
-        Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(
         &mut self,
