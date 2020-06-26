@@ -130,6 +130,17 @@ pub struct ApiDescription {
     /** In practice, all the information we need is encoded in the router. */
     router: HttpRouter,
 }
+pub struct OpenApiOptions<'a> {
+    title: &'a dyn ToString,
+    description: Option<&'a dyn ToString>,
+    terms_of_service: Option<&'a dyn ToString>,
+    contact_name: Option<&'a dyn ToString>,
+    contact_url: Option<&'a dyn ToString>,
+    contact_email: Option<&'a dyn ToString>,
+    license_name: Option<&'a dyn ToString>,
+    license_url: Option<&'a dyn ToString>,
+    version: &'a dyn ToString,
+}
 
 impl ApiDescription {
     pub fn new() -> Self {
@@ -205,35 +216,24 @@ impl ApiDescription {
      */
     // TODO: There's a bunch of error handling we need here such as checking
     // for duplicate parameter names.
-    pub fn print_openapi(
-        &self,
-        title: &dyn ToString,
-        description: Option<&dyn ToString>,
-        terms_of_service: Option<&dyn ToString>,
-        contact_name: Option<&dyn ToString>,
-        contact_url: Option<&dyn ToString>,
-        contact_email: Option<&dyn ToString>,
-        license_name: Option<&dyn ToString>,
-        license_url: Option<&dyn ToString>,
-        version: &dyn ToString,
-    ) {
+    pub fn print_openapi(&self, options: OpenApiOptions) {
         let mut openapi = openapiv3::OpenAPI::default();
 
         openapi.openapi = "3.0.3".to_string();
         openapi.info = openapiv3::Info {
-            title: title.to_string(),
-            description: description.map(ToString::to_string),
-            terms_of_service: terms_of_service.map(ToString::to_string),
+            title: options.title.to_string(),
+            description: options.description.map(ToString::to_string),
+            terms_of_service: options.terms_of_service.map(ToString::to_string),
             contact: Some(openapiv3::Contact {
-                name: contact_name.map(ToString::to_string),
-                url: contact_url.map(ToString::to_string),
-                email: contact_email.map(ToString::to_string),
+                name: options.contact_name.map(ToString::to_string),
+                url: options.contact_url.map(ToString::to_string),
+                email: options.contact_email.map(ToString::to_string),
             }),
-            license: license_name.map(|name| openapiv3::License {
+            license: options.license_name.map(|name| openapiv3::License {
                 name: name.to_string(),
-                url: license_url.map(ToString::to_string),
+                url: options.license_url.map(ToString::to_string),
             }),
-            version: version.to_string(),
+            version: options.version.to_string(),
         };
 
         let settings = schemars::gen::SchemaSettings::openapi3();
@@ -797,6 +797,7 @@ mod test {
     use super::ApiDescription;
     use super::ApiEndpoint;
     use super::ApiEndpointResponse;
+    use super::OpenApiOptions;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
@@ -847,17 +848,19 @@ mod test {
             "/",
         ))?;
 
-        api.print_openapi(
-            &"test API",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            &"9000",
-        );
+        let options = OpenApiOptions {
+            title: &"test API",
+            description: None,
+            terms_of_service: None,
+            contact_name: None,
+            contact_url: None,
+            contact_email: None,
+            license_name: None,
+            license_url: None,
+            version: &"9000",
+        };
+
+        api.print_openapi(options);
 
         Ok(())
     }
