@@ -125,6 +125,7 @@ impl std::fmt::Debug for ApiSchemaGenerator {
  * Other metadata could also be provided here.  This object can be used to
  * generate an OpenAPI spec or to run an HTTP server implementing the API.
  */
+#[derive(Default)]
 pub struct ApiDescription {
     /** In practice, all the information we need is encoded in the router. */
     router: HttpRouter,

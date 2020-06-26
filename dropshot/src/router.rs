@@ -60,7 +60,7 @@ use std::collections::BTreeSet;
  *   handlers.  After that initialization period, the router will be
  *   read-only.  This behavior isn't enforced by `HttpRouter`.
  */
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HttpRouter {
     /** root of the trie */
     root: Box<HttpRouterNode>,
@@ -78,7 +78,7 @@ pub struct HttpRouter {
  * variable edges, but not both.  However, we don't necessarily know what type
  * of outgoing edges a node will have when we create it.
  */
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct HttpRouterNode {
     /** Handlers, etc. for each of the HTTP methods defined for this node. */
     methods: BTreeMap<String, ApiEndpoint>,
