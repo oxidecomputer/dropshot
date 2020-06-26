@@ -1,4 +1,6 @@
 // Copyright 2020 Oxide Computer Company
+#![allow(clippy::needless_doctest_main)]
+
 /*!
  * Dropshot is a general-purpose crate for exposing REST APIs from a Rust
  * program.  Planned highlights include:
