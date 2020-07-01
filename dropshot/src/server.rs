@@ -10,6 +10,7 @@ use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 
+use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::FutureExt;
 use hyper::server::conn::AddrStream;
@@ -64,9 +65,7 @@ pub struct ServerConfig {
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
-    server_future: Option<
-        Pin<Box<dyn Future<Output = Result<(), hyper::error::Error>> + Send>>,
-    >,
+    server_future: Option<BoxFuture<'static, Result<(), hyper::error::Error>>>,
     local_addr: SocketAddr,
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
