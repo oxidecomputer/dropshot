@@ -1,7 +1,7 @@
 [package]
 name = "dropshot_endpoint"
 description = "macro used by dropshot consumers for registering handlers"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Adam H. Leventhal <ahl@oxide.computer>"]
 edition = "2018"
 license = "Apache-2.0"

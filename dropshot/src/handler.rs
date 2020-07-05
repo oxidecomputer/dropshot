@@ -824,7 +824,7 @@ pub struct HttpResponseOkObjectList<T: Serialize + Send + Sync + 'static>(
 impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
     for HttpResponseOkObjectList<T>
 {
-    type Body = T;
+    type Body = Vec<T>;
     const STATUS_CODE: StatusCode = StatusCode::OK;
 }
 impl<T: JsonSchema + Serialize + Send + Sync + 'static>
