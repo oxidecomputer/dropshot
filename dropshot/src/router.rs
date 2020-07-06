@@ -543,6 +543,7 @@ mod test {
                 success: None,
             },
             description: None,
+            tags: vec![],
         }
     }
 

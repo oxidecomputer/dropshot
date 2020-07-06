@@ -42,6 +42,7 @@ impl MethodType {
 struct Metadata {
     method: MethodType,
     path: String,
+    tags: Option<Vec<String>>,
     _dropshot_crate: Option<String>,
 }
 
@@ -83,11 +84,24 @@ fn do_endpoint(
     let description_doc_comment = quote! {
         #[doc = #description_text_annotated]
     };
-    let description = description_text_provided.map(|s| {
+    let description = description_text_provided.map(|description| {
         quote! {
-            endpoint.description = Some(#s.to_string());
+            .description(#description)
         }
     });
+
+    let tags = metadata
+        .tags
+        .map(|v| {
+            v.iter()
+                .map(|tag| {
+                    quote! {
+                        .tag(#tag)
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
@@ -109,15 +123,14 @@ fn do_endpoint(
             fn from(_: #name) -> Self {
                 #ast
 
-                #[allow(unused_mut)]
-                let mut endpoint = #dropshot::ApiEndpoint::new(
+                #dropshot::ApiEndpoint::new(
                     #name_str.to_string(),
                     #name,
                     #dropshot::Method::#method_ident,
                     #path,
-                );
+                )
                 #description
-                endpoint
+                #(#tags)*
             }
         }
     };
@@ -289,7 +302,7 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
 mod tests {
     use super::*;
     #[test]
-    fn test_endpoint1() {
+    fn test_endpoint() {
         let ret = do_endpoint(
             quote! {
                 method = GET,
@@ -311,15 +324,12 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
                     fn handler_xyz() {}
-                    #[allow(unused_mut)]
-                    let mut endpoint =
-                        dropshot::ApiEndpoint::new(
-                            "handler_xyz".to_string(),
-                            handler_xyz,
-                            dropshot::Method::GET,
-                            "/a/b/c",
-                        );
-                    endpoint
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
                 }
             }
         };
@@ -328,7 +338,46 @@ mod tests {
     }
 
     #[test]
-    fn test_endpoint1_with_doc() {
+    fn test_endpoint_with_tags() {
+        let ret = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+                tags = ["stuff", "things"],
+            }
+            .into(),
+            quote! {
+                fn handler_xyz() {}
+            }
+            .into(),
+        );
+        let expected = quote! {
+            #[allow(non_camel_case_types, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub struct handler_xyz {}
+            #[allow(non_upper_case_globals, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            const handler_xyz: handler_xyz = handler_xyz {};
+            impl From<handler_xyz> for dropshot::ApiEndpoint {
+                fn from(_: handler_xyz) -> Self {
+                    fn handler_xyz() {}
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
+                    .tag("stuff")
+                    .tag("things")
+                }
+            }
+        };
+
+        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_endpoint_with_doc() {
         let ret = do_endpoint(
             quote! {
                 method = GET,
@@ -352,17 +401,13 @@ mod tests {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
                     fn handler_xyz() {}
-                    #[allow(unused_mut)]
-                    let mut endpoint =
-                        dropshot::ApiEndpoint::new(
-                            "handler_xyz".to_string(),
-                            handler_xyz,
-                            dropshot::Method::GET,
-                            "/a/b/c",
-                        );
-                    endpoint.description = Some(
-                        "handle \"xyz\" requests ".to_string());
-                    endpoint
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
+                    .description("handle \"xyz\" requests ")
                 }
             }
         };
@@ -371,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn test_endpoint2() {
+    fn test_endpoint_invalid_item() {
         let ret = do_endpoint(
             quote! {
                 method = GET,
@@ -389,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn test_endpoint3() {
+    fn test_endpoint_bad_string() {
         let ret = do_endpoint(
             quote! {
                 method = GET,
@@ -407,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn test_endpoint4() {
+    fn test_endpoint_bad_metadata() {
         let ret = do_endpoint(
             quote! {
                 methud = GET,

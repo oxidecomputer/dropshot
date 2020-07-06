@@ -32,6 +32,7 @@ pub struct ApiEndpoint {
     pub parameters: Vec<ApiEndpointParameter>,
     pub response: ApiEndpointResponse,
     pub description: Option<String>,
+    pub tags: Vec<String>,
 }
 
 impl<'a> ApiEndpoint {
@@ -54,7 +55,18 @@ impl<'a> ApiEndpoint {
             parameters: FuncParams::metadata(),
             response: ResponseType::metadata(),
             description: None,
+            tags: vec![],
         }
+    }
+
+    pub fn description<T: ToString>(mut self, description: T) -> Self {
+        self.description.replace(description.to_string());
+        self
+    }
+
+    pub fn tag<T: ToString>(mut self, tag: T) -> Self {
+        self.tags.push(tag.to_string());
+        self
     }
 }
 
@@ -262,6 +274,7 @@ impl ApiDescription {
             let mut operation = openapiv3::Operation::default();
             operation.operation_id = Some(endpoint.operation_id.clone());
             operation.description = endpoint.description.clone();
+            operation.tags = endpoint.tags.clone();
 
             operation.parameters = endpoint
                 .parameters
@@ -829,6 +842,7 @@ mod test {
                 success: None,
             },
             description: None,
+            tags: vec!["six".to_string(), "helf_a_dozen".to_string()],
         }
     }
 
