@@ -723,7 +723,8 @@ pub trait HttpTypedResponse:
      * trait method to allow callers to avoid redundant type specification.
      */
     fn for_object(body_object: &Self::Body) -> HttpHandlerResult {
-        let serialized = serde_json::to_string(&body_object)?;
+        let serialized = serde_json::to_string(&body_object)
+            .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
         Ok(Response::builder()
             .status(Self::STATUS_CODE)
             .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -901,6 +902,7 @@ where
             let items = &mut response.1;
 
             if reverse {
+                /* XXX does this really do the right thing? */
                 items.reverse();
             }
 
