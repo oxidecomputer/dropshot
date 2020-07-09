@@ -47,7 +47,7 @@ async fn demo_handler_integers(
     query: Query<PaginationParams<IntegersByNumber>>,
 ) -> Result<HttpResponseOkPage<IntegersByNumber, u64>, HttpError> {
     let pag_params = query.into_inner();
-    let start = pag_params.marker.as_ref().map(|m| m.page_start.n).unwrap_or(1);
+    let start = pag_params.marker.as_ref().map(|m| m.page_start.n).unwrap_or(0);
 
     let limit = if let Some(limit) = pag_params.limit {
         limit
@@ -55,8 +55,8 @@ async fn demo_handler_integers(
         NonZeroU64::new(100).unwrap()
     };
     let range = Range {
-        start,
-        end: start + (u64::from(limit)),
+        start: start + 1,
+        end: start + (u64::from(limit)) + 1,
     };
 
     let results = range.collect();
@@ -148,6 +148,15 @@ async fn test_paginate_basic() {
     )
     .await;
     assert_eq!(page.items, vec![8, 7, 6, 5, 4, 3, 2, 1]);
+
+    // XXX
+    let marker: String = serde_json::from_str(&page.next_page.unwrap()).unwrap();
+    let page = objects_list_page::<IntegersByNumber, u32>(
+        &client,
+        &format!("/testing/the_integers?limit=8&order=descending&marker={}", marker),
+    )
+    .await;
+    assert_eq!(page.items, vec![16, 15, 14, 13, 12, 11, 10, 9]);
 
     testctx.teardown().await;
 }
