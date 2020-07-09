@@ -35,7 +35,7 @@ use crate::api_description::ApiDescription;
 use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
 use crate::logging::ConfigLogging;
-use crate::pagination::Page;
+use crate::pagination::ClientPage;
 use crate::server::HttpServer;
 
 /**
@@ -582,9 +582,8 @@ pub async fn objects_list<T: DeserializeOwned>(
 pub async fn objects_list_page<MarkerFields, ItemType>(
     client: &ClientTestContext,
     list_url: &str,
-) -> Vec<ItemType>
+) -> ClientPage<ItemType>
 where
-    MarkerFields: DeserializeOwned,
     ItemType: DeserializeOwned,
 {
     let mut response = client
@@ -597,8 +596,7 @@ where
         .await
         .unwrap();
 
-    let page: Page<MarkerFields, ItemType> = read_json(&mut response).await;
-    page.items
+    read_json::<ClientPage<ItemType>>(&mut response).await
 }
 
 /**

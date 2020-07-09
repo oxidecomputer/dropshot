@@ -111,13 +111,13 @@
  *
  * The most convenient way to define an endpoint with a handler function uses
  * the `endpoint!` macro.  Here's an example of a single endpoint that lists
- * three hardcoded projects:
+ * a hardcoded project:
  *
  * ```
  * use dropshot::endpoint;
  * use dropshot::ApiDescription;
  * use dropshot::HttpError;
- * use dropshot::HttpResponseOkObjectList;
+ * use dropshot::HttpResponseOkObject;
  * use dropshot::RequestContext;
  * use http::Method;
  * use schemars::JsonSchema;
@@ -131,21 +131,17 @@
  *     name: String,
  * }
  *
- * /** Fetch the list of projects. */
+ * /** Fetch a project. */
  * #[endpoint {
  *     method = GET,
- *     path = "/projects",
+ *     path = "/projects/project1",
  * }]
- * async fn myapi_projects_get(
+ * async fn myapi_projects_get_project(
  *     rqctx: Arc<RequestContext>,
- * ) -> Result<HttpResponseOkObjectList<Project>, HttpError>
+ * ) -> Result<HttpResponseOkObject<Project>, HttpError>
  * {
- *    let projects = vec![
- *        Project { name: String::from("project1") },
- *        Project { name: String::from("project2") },
- *        Project { name: String::from("project3") },
- *    ];
- *    Ok(HttpResponseOkObjectList(projects))
+ *    let project = Project { name: String::from("project1") };
+ *    Ok(HttpResponseOkObject(project))
  * }
  *
  * fn main() {
@@ -156,7 +152,7 @@
  *      * specifies the HTTP method and URI path that identify the endpoint,
  *      * allowing this metadata to live right alongside the handler function.
  *      */
- *     api.register(myapi_projects_get).unwrap();
+ *     api.register(myapi_projects_get_project).unwrap();
  *
  *     /* ... (use `api` to set up an `HttpServer` ) */
  * }
@@ -169,9 +165,8 @@
  *   invoke `ApiDescription::register()`, this information is used to register
  *   the endpoint that will be handled by our function.
  * * The signature of our function indicates that on success, it returns a
- *   `HttpResponseOkObjectList<Project>`.  This means that the function will
- *   return an HTTP 200 status code ("OK") with a list of objects, each being an
- *   instance of `Project`.
+ *   `HttpResponseOkObject<Project>`.  This means that the function will
+ *   return an HTTP 200 status code ("OK") with an object of type `Project`.
  * * The function itself has a Rustdoc comment that will be used to document
  *   this _endpoint_ in the OpenAPI schema.
  *
@@ -307,7 +302,6 @@ pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
 pub use handler::HttpResponseOkObject;
-pub use handler::HttpResponseOkObjectList;
 pub use handler::HttpResponseOkPage;
 pub use handler::HttpResponseUpdatedNoContent;
 pub use handler::Json;
