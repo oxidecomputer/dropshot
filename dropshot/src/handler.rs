@@ -854,12 +854,7 @@ where
             let items = &response.1;
             if let Some(last_item) = items.last() {
                 let marker = PaginationMarker::new(order, last_item.into());
-                let serialized = serde_json::to_string(&marker).map_err(|e| {
-                    HttpError::for_internal_error(format!(
-                        "failed to serialize marker: {}",
-                        e
-                    ))
-                })?;
+                let serialized = marker.to_serialized()?;
                 Some(serialized)
             } else {
                 None

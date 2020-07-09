@@ -10,16 +10,10 @@ use crate::error::HttpError;
 use base64::URL_SAFE;
 use dropshot_endpoint::ExtractedParameter;
 use schemars::JsonSchema;
-use serde::de;
 use serde::de::DeserializeOwned;
-use serde::de::Error as DeError;
-use serde::ser::Error as SerError;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::Serializer;
 use std::convert::TryFrom;
-use std::fmt;
-use std::marker::PhantomData;
 use std::num::NonZeroU64;
 
 /**
@@ -75,11 +69,26 @@ pub struct PaginationParams<MarkerFields> {
     pub limit: Option<NonZeroU64>,
 }
 
-#[derive(Debug, ExtractedParameter, JsonSchema)]
+#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema)]
+#[serde(try_from = "String")]
+#[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
 pub struct PaginationMarker<MarkerFields> {
-    version: DropshotMarkerVersion,
-    order: PaginationOrder,
     pub page_start: MarkerFields,
+    order: PaginationOrder,
+}
+
+#[derive(Debug, Serialize)]
+struct SerializedMarker<'a, MarkerFields> {
+    v: DropshotMarkerVersion,
+    order: PaginationOrder,
+    page_start: &'a MarkerFields,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeserializedMarker<MarkerFields> {
+    v: DropshotMarkerVersion,
+    order: PaginationOrder,
+    page_start: MarkerFields,
 }
 
 impl<MarkerFields> PaginationMarker<MarkerFields>
@@ -88,45 +97,26 @@ where
 {
     pub fn new(order: PaginationOrder, page_start: MarkerFields) -> Self {
         PaginationMarker {
-            version: DropshotMarkerVersion::V1,
             order,
             page_start,
         }
     }
-}
 
-#[derive(Serialize)]
-struct SerializedMarker<'a, MarkerFields> {
-    v: DropshotMarkerVersion,
-    order: PaginationOrder,
-    page_start: &'a MarkerFields,
-}
-
-#[derive(Deserialize)]
-struct DeserializedMarker<MarkerFields> {
-    v: DropshotMarkerVersion,
-    order: PaginationOrder,
-    page_start: MarkerFields,
-}
-
-impl<MarkerFields> Serialize for PaginationMarker<MarkerFields>
-where
-    MarkerFields: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    pub(crate) fn to_serialized(self) -> Result<String, HttpError> {
         let marker_bytes = {
-            let marker = SerializedMarker {
-                v: self.version,
+            let serialized_marker = SerializedMarker {
+                v: DropshotMarkerVersion::V1,
                 order: self.order,
                 page_start: &self.page_start,
             };
 
-            let json_bytes = serde_json::to_vec(&marker).map_err(|e| {
-                S::Error::custom(format!("failed to serialize marker: {}", e))
-            })?;
+            let json_bytes =
+                serde_json::to_vec(&serialized_marker).map_err(|e| {
+                    HttpError::for_internal_error(format!(
+                        "failed to serialize marker: {}",
+                        e
+                    ))
+                })?;
 
             base64::encode_config(json_bytes, URL_SAFE)
         };
@@ -140,35 +130,35 @@ where
          * very common marker?
          */
         if marker_bytes.len() > MAX_TOKEN_LENGTH {
-            return Err(S::Error::custom(format!(
+            return Err(HttpError::for_internal_error(format!(
                 "serialized token is too large ({} bytes, max is {})",
                 marker_bytes.len(),
                 MAX_TOKEN_LENGTH
             )));
         }
 
-        serializer.serialize_str(marker_bytes.as_str())
+        Ok(marker_bytes)
     }
 }
 
-struct PaginationMarkerVisitor<MarkerFields> {
-    p: PhantomData<MarkerFields>,
-}
-impl<'de, MarkerFields> de::Visitor<'de>
-    for PaginationMarkerVisitor<MarkerFields>
+impl<MarkerFields> TryFrom<String> for PaginationMarker<MarkerFields>
 where
     MarkerFields: DeserializeOwned,
 {
-    type Value = PaginationMarker<MarkerFields>;
+    type Error = String;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "a valid pagination token")
-    }
+    fn try_from(
+        value: String,
+    ) -> Result<PaginationMarker<MarkerFields>, String> {
+        if value.len() > MAX_TOKEN_LENGTH {
+            return Err(String::from(
+                "failed to parse pagination token: too large",
+            ));
+        }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
+        let json_bytes = base64::decode_config(value.as_bytes(), URL_SAFE)
+            .map_err(|e| format!("failed to parse pagination token: {}", e))?;
+
         /*
          * TODO-debugging: we don't want the user to have to know about the
          * internal structure of the token, so the error message here doesn't
@@ -180,38 +170,13 @@ where
          * output of the error anyway.  It's not clear how else we could
          * propagate this information out.
          */
-        if v.len() > MAX_TOKEN_LENGTH {
-            return Err(de::Error::invalid_length(v.len(), &self));
-        }
-
-        let json_bytes = base64::decode_config(v.as_bytes(), URL_SAFE)
-            .map_err(|_| {
-                de::Error::invalid_value(de::Unexpected::Str(v), &self)
-            })?;
-
-        let serialized: DeserializedMarker<MarkerFields> =
+        let deserialized: DeserializedMarker<MarkerFields> =
             serde_json::from_slice(&json_bytes).map_err(|_| {
-                de::Error::invalid_value(de::Unexpected::Str(v), &self)
+                format!("failed to parse pagination token: corrupted token")
             })?;
-
         Ok(PaginationMarker {
-            version: serialized.v,
-            order: serialized.order,
-            page_start: serialized.page_start,
-        })
-    }
-}
-
-impl<'de, MarkerFields> Deserialize<'de> for PaginationMarker<MarkerFields>
-where
-    MarkerFields: DeserializeOwned,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        deserializer.deserialize_str(PaginationMarkerVisitor {
-            p: PhantomData,
+            order: deserialized.order,
+            page_start: deserialized.page_start,
         })
     }
 }

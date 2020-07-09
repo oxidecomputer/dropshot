@@ -149,11 +149,12 @@ async fn test_paginate_basic() {
     .await;
     assert_eq!(page.items, vec![8, 7, 6, 5, 4, 3, 2, 1]);
 
-    // XXX
-    let marker: String = serde_json::from_str(&page.next_page.unwrap()).unwrap();
     let page = objects_list_page::<IntegersByNumber, u32>(
         &client,
-        &format!("/testing/the_integers?limit=8&order=descending&marker={}", marker),
+        &format!(
+            "/testing/the_integers?limit=8&order=descending&marker={}",
+            page.next_page.unwrap()
+        ),
     )
     .await;
     assert_eq!(page.items, vec![16, 15, 14, 13, 12, 11, 10, 9]);
