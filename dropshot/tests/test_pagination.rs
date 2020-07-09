@@ -5,13 +5,7 @@
 
 use dropshot::endpoint;
 use dropshot::test_util::objects_list_page;
-use dropshot::test_util::LogContext;
-use dropshot::test_util::TestContext;
 use dropshot::ApiDescription;
-use dropshot::ConfigDropshot;
-use dropshot::ConfigLogging;
-use dropshot::ConfigLoggingIfExists;
-use dropshot::ConfigLoggingLevel;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
@@ -27,57 +21,12 @@ use std::sync::Arc;
 #[macro_use]
 extern crate slog;
 
-/* XXX commonize with test_demo.rs */
-fn test_setup(test_name: &str) -> TestContext {
-    let config_dropshot = ConfigDropshot {
-        bind_address: "127.0.0.1:0".parse().unwrap(),
-    };
+mod common;
 
-    let config_logging = ConfigLogging::File {
-        level: ConfigLoggingLevel::Debug,
-        path: "UNUSED".to_string(),
-        if_exists: ConfigLoggingIfExists::Fail,
-    };
-
+fn paginate_api() -> ApiDescription {
     let mut api = ApiDescription::new();
-    register_test_endpoints(&mut api);
-    let logctx = LogContext::new(test_name, &config_logging);
-
-    let log = logctx.log.new(o!());
-    TestContext::new(
-        api,
-        Arc::new(0 as usize),
-        &config_dropshot,
-        Some(logctx),
-        log,
-    )
-}
-
-#[tokio::test]
-async fn test_paginate_basic() {
-    let testctx = test_setup("demo1");
-    let client = &testctx.client_testctx;
-
-    let numbers =
-        objects_list_page::<IntegersByNumber, u32>(&client, "/testing/the_integers?limit=5").await;
-    eprintln!("numbers: {:?}", numbers);
-
-    let numbers =
-        objects_list_page::<IntegersByNumber, u32>(&client, "/testing/the_integers?limit=8").await;
-    eprintln!("numbers: {:?}", numbers);
-
-    let numbers = objects_list_page::<IntegersByNumber, u32>(
-        &client,
-        "/testing/the_integers?limit=8&order=descending",
-    )
-    .await;
-    eprintln!("numbers: {:?}", numbers);
-
-    testctx.teardown().await;
-}
-
-pub fn register_test_endpoints(api: &mut ApiDescription) {
     api.register(demo_handler_integers).unwrap();
+    api
 }
 
 #[derive(Deserialize, ExtractedParameter, JsonSchema, Serialize)]
@@ -115,4 +64,34 @@ impl From<&u32> for IntegersByNumber {
             n: *last_seen,
         }
     }
+}
+
+#[tokio::test]
+async fn test_paginate_basic() {
+    let api = paginate_api();
+    let testctx = common::test_setup("demo1", api);
+    let client = &testctx.client_testctx;
+
+    let numbers = objects_list_page::<IntegersByNumber, u32>(
+        &client,
+        "/testing/the_integers?limit=5",
+    )
+    .await;
+    eprintln!("numbers: {:?}", numbers);
+
+    let numbers = objects_list_page::<IntegersByNumber, u32>(
+        &client,
+        "/testing/the_integers?limit=8",
+    )
+    .await;
+    eprintln!("numbers: {:?}", numbers);
+
+    let numbers = objects_list_page::<IntegersByNumber, u32>(
+        &client,
+        "/testing/the_integers?limit=8&order=descending",
+    )
+    .await;
+    eprintln!("numbers: {:?}", numbers);
+
+    testctx.teardown().await;
 }
