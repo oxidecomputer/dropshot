@@ -820,14 +820,15 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * size and the number of results that we're returning here, plus the marker.
  * TODO-cleanup move/copy the type aliases from src/api_model.rs?
  */
-pub struct HttpResponseOkPage<MarkerFields, ItemType>(
+pub struct HttpResponseOkPage<MarkerFields: DeserializeOwned, ItemType>
+(
     pub PaginationParams<MarkerFields>,
     pub Vec<ItemType>,
 );
 impl<MarkerFields, ItemType> HttpTypedResponse
     for HttpResponseOkPage<MarkerFields, ItemType>
 where
-    MarkerFields: Serialize + JsonSchema + Send + Sync + 'static,
+    MarkerFields: DeserializeOwned + Serialize + JsonSchema + Send + Sync + 'static,
     ItemType: Serialize + JsonSchema + Send + Sync + 'static,
     for<'a> &'a ItemType: Into<MarkerFields>,
 {
@@ -837,7 +838,7 @@ where
 impl<MarkerFields, ItemType> From<HttpResponseOkPage<MarkerFields, ItemType>>
     for HttpHandlerResult
 where
-    MarkerFields: Serialize + JsonSchema + Send + Sync + 'static,
+    MarkerFields: DeserializeOwned + Serialize + JsonSchema + Send + Sync + 'static,
     ItemType: Serialize + JsonSchema + Send + Sync + 'static,
     for<'a> &'a ItemType: Into<MarkerFields>,
 {
