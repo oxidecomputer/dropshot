@@ -77,21 +77,21 @@ async fn test_paginate_basic() {
         "/testing/the_integers?limit=5",
     )
     .await;
-    eprintln!("numbers: {:?}", numbers);
+    assert_eq!(numbers, vec![ 1, 2, 3, 4, 5 ]);
 
     let numbers = objects_list_page::<IntegersByNumber, u32>(
         &client,
         "/testing/the_integers?limit=8",
     )
     .await;
-    eprintln!("numbers: {:?}", numbers);
+    assert_eq!(numbers, vec![ 1, 2, 3, 4, 5, 6, 7, 8 ]);
 
     let numbers = objects_list_page::<IntegersByNumber, u32>(
         &client,
         "/testing/the_integers?limit=8&order=descending",
     )
     .await;
-    eprintln!("numbers: {:?}", numbers);
+    assert_eq!(numbers, vec![ 8, 7, 6, 5, 4, 3, 2, 1 ]);
 
     testctx.teardown().await;
 }
