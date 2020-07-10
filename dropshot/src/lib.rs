@@ -314,9 +314,9 @@ pub use http_util::HEADER_REQUEST_ID;
 pub use logging::ConfigLogging;
 pub use logging::ConfigLoggingIfExists;
 pub use logging::ConfigLoggingLevel;
-pub use pagination::PaginationMarker;
 pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
+pub use pagination::PaginationToken;
 pub use server::HttpServer;
 
 /*

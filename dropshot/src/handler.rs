@@ -44,9 +44,9 @@ use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
-use crate::pagination::PaginationMarker;
 use crate::pagination::PaginationOrder;
 use crate::pagination::PaginationParams;
+use crate::pagination::PaginationToken;
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -856,7 +856,7 @@ where
         let next_page = {
             let items = &response.1;
             if let Some(last_item) = items.last() {
-                let marker = PaginationMarker::new(order, last_item.into());
+                let marker = PaginationToken::new(order, last_item.into());
                 let serialized = marker.to_serialized()?;
                 Some(serialized)
             } else {

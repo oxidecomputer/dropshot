@@ -144,20 +144,8 @@ use std::convert::TryFrom;
 use std::num::NonZeroU64;
 
 /**
- * Maximum length of a pagination token once the consumer-provided type is
- * serialized and the result is base64-encoded.
- *
- * We impose a maximum length primarily to avoid a client forcing us to parse
- * extremely large strings.  We apply this limit when we create tokens as well
- * to attempt to catch the error earlier.
- *
- * Note that these tokens are passed in the HTTP request line (before the
- * headers), and many HTTP implementations impose an implicit limit as low as
- * 8KiB on the size of the request line and headers together, so it's a good
- * idea to keep this as small as we can.
+ * The order in which the client wants to page through the requested collection
  */
-const MAX_TOKEN_LENGTH: usize = 512;
-
 #[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PaginationOrder {
@@ -165,21 +153,24 @@ pub enum PaginationOrder {
     Descending,
 }
 
-#[derive(
-    Copy, Clone, Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize,
-)]
-#[serde(rename_all = "lowercase")]
-enum DropshotMarkerVersion {
-    V1,
-}
-
+/**
+ * Parameters provided by the client for each request to a paginated endpoint.
+ * This includes an optional limit and pagination token.
+ *
+ * XXX This needs work: it's not clear how we can support on the first request
+ * that user wants to page via a particular combination of fields.  There might
+ * be a different PaginationOrder for each field.
+ * One idea is that this becomes an enum with First(list of (field, order))
+ * tuples and Subsequent(list of (field name, field value, order) tuples), but
+ * it's not really clear how to represent either of these.
+ */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 pub struct PaginationParams<MarkerFields> {
     /**
      * If present, this is the value of the sort field for the last object seen
      */
     #[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
-    pub marker: Option<PaginationMarker<MarkerFields>>,
+    pub marker: Option<PaginationToken<MarkerFields>>,
 
     /**
      * If present, this is the order of results to return.
@@ -196,34 +187,109 @@ pub struct PaginationParams<MarkerFields> {
     pub limit: Option<NonZeroU64>,
 }
 
+/**
+ * Describes the current scan and the client's position within it
+ */
 #[derive(Debug, Deserialize, ExtractedParameter, JsonSchema)]
 #[serde(try_from = "String")]
 #[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
-pub struct PaginationMarker<MarkerFields> {
+pub struct PaginationToken<MarkerFields> {
     pub page_start: MarkerFields,
     order: PaginationOrder,
 }
 
+/**
+ * Client's view of a page of results from a paginated API
+ */
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+pub struct ClientPage<ItemType> {
+    /** token to be used in pagination params for the next page of results */
+    pub next_page: Option<String>,
+    /** whether there are more results */
+    pub has_next: bool,
+    /** list of items on this page of results */
+    pub items: Vec<ItemType>,
+}
+
+/*
+ * Token serialization and deserialization
+ *
+ * Pagination tokens essentially take the above `PaginationToken` struct, add a
+ * version number, serialize that as JSON, and base64-encode the result.  This
+ * token is returned in any response from a paginated API, and the client will
+ * pass it back as a query parameter for subsequent pagination requests. This
+ * approach allows us to rev the serialized form if needed (see
+ * `PaginationVersion`) and add other metadata in a backwards-compatiable way.
+ * It also emphasizes to clients that the token should be treated as opaque.
+ */
+
+/**
+ * Maximum length of a pagination token once the consumer-provided type is
+ * serialized and the result is base64-encoded.
+ *
+ * We impose a maximum length primarily to prevent a client from making us parse
+ * extremely large strings.  We apply this limit when we create tokens to avoid
+ * handing out a token that can't be used.
+ *
+ * Note that these tokens are passed in the HTTP request line (before the
+ * headers), and many HTTP implementations impose an implicit limit as low as
+ * 8KiB on the size of the request line and headers together, so it's a good
+ * idea to keep this as small as we can.
+ */
+const MAX_TOKEN_LENGTH: usize = 512;
+
+/**
+ * Version for the pagination token serialization format
+ *
+ * This may seem like overkill, but it allows us to rev this in a future version
+ * of Dropshot without breaking any ongoing scans when the change is deployed.
+ * If we rev this, we might need to provide a way for clients to request at
+ * runtime which version of token to generate so that if they do a rolling
+ * upgrade of multiple instances, they can configure the instances to generate
+ * v1 tokens until the rollout is complete, then switch on the new token
+ * version.  Obviously, it would be better to avoid revving this version if
+ * possible!
+ *
+ * Note that consumers still need to consider compatibility if they change their
+ * own `MarkerFields` types.
+ */
+#[derive(
+    Copy, Clone, Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize,
+)]
+#[serde(rename_all = "lowercase")]
+enum PaginationVersion {
+    V1,
+}
+
+/**
+ * Parts of the pagination token that will be serialized.  This is similar to
+ * [`DeserializedToken`], but this form refers to the marker fields by reference
+ * to avoid having to clone it.
+ * XXX can we rewrite the consumer to avoid this distinction?
+ */
 #[derive(Debug, Serialize)]
-struct SerializedMarker<'a, MarkerFields> {
-    v: DropshotMarkerVersion,
+struct SerializedToken<'a, MarkerFields> {
+    v: PaginationVersion,
     order: PaginationOrder,
     page_start: &'a MarkerFields,
 }
 
+/**
+ * Similar to [`SerializedToken`], but this struct has 'static lifetime.
+ */
 #[derive(Debug, Deserialize)]
-struct DeserializedMarker<MarkerFields> {
-    v: DropshotMarkerVersion,
+struct DeserializedToken<MarkerFields> {
+    v: PaginationVersion,
     order: PaginationOrder,
     page_start: MarkerFields,
 }
 
-impl<MarkerFields> PaginationMarker<MarkerFields>
+impl<MarkerFields> PaginationToken<MarkerFields>
 where
     MarkerFields: Serialize,
 {
     pub fn new(order: PaginationOrder, page_start: MarkerFields) -> Self {
-        PaginationMarker {
+        PaginationToken {
             order,
             page_start,
         }
@@ -231,8 +297,8 @@ where
 
     pub(crate) fn to_serialized(self) -> Result<String, HttpError> {
         let marker_bytes = {
-            let serialized_marker = SerializedMarker {
-                v: DropshotMarkerVersion::V1,
+            let serialized_marker = SerializedToken {
+                v: PaginationVersion::V1,
                 order: self.order,
                 page_start: &self.page_start,
             };
@@ -268,7 +334,7 @@ where
     }
 }
 
-impl<MarkerFields> TryFrom<String> for PaginationMarker<MarkerFields>
+impl<MarkerFields> TryFrom<String> for PaginationToken<MarkerFields>
 where
     MarkerFields: DeserializeOwned,
 {
@@ -276,7 +342,7 @@ where
 
     fn try_from(
         value: String,
-    ) -> Result<PaginationMarker<MarkerFields>, String> {
+    ) -> Result<PaginationToken<MarkerFields>, String> {
         if value.len() > MAX_TOKEN_LENGTH {
             return Err(String::from(
                 "failed to parse pagination token: too large",
@@ -297,20 +363,13 @@ where
          * output of the error anyway.  It's not clear how else we could
          * propagate this information out.
          */
-        let deserialized: DeserializedMarker<MarkerFields> =
+        let deserialized: DeserializedToken<MarkerFields> =
             serde_json::from_slice(&json_bytes).map_err(|_| {
                 format!("failed to parse pagination token: corrupted token")
             })?;
-        Ok(PaginationMarker {
+        Ok(PaginationToken {
             order: deserialized.order,
             page_start: deserialized.page_start,
         })
     }
-}
-
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
-pub struct ClientPage<ItemType> {
-    pub next_page: Option<String>,
-    pub has_next: bool,
-    pub items: Vec<ItemType>,
 }
