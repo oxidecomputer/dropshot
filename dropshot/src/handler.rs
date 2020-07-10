@@ -828,9 +828,7 @@ pub struct HttpResponseOkPage<MarkerFields: DeserializeOwned, ItemType>(
 impl<MarkerFields, ItemType> HttpTypedResponse
     for HttpResponseOkPage<MarkerFields, ItemType>
 where
-    // XXX JsonSchema shouldn't be needed for MarkerFields
-    MarkerFields:
-        DeserializeOwned + Serialize + JsonSchema + Send + Sync + 'static,
+    MarkerFields: DeserializeOwned + Serialize + Send + Sync + 'static,
     ItemType: Serialize + JsonSchema + Send + Sync + 'static,
     for<'a> &'a ItemType: Into<MarkerFields>,
 {
@@ -841,8 +839,7 @@ where
 impl<MarkerFields, ItemType> From<HttpResponseOkPage<MarkerFields, ItemType>>
     for HttpHandlerResult
 where
-    MarkerFields:
-        DeserializeOwned + Serialize + JsonSchema + Send + Sync + 'static,
+    MarkerFields: DeserializeOwned + Serialize + Send + Sync + 'static,
     ItemType: Serialize + JsonSchema + Send + Sync + 'static,
     for<'a> &'a ItemType: Into<MarkerFields>,
 {
