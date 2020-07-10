@@ -144,13 +144,16 @@ use std::convert::TryFrom;
 use std::num::NonZeroU64;
 
 /**
- * The order in which the client wants to page through the requested collection
+ * Client's view of a page of results from a paginated API
  */
-#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PaginationOrder {
-    Ascending,
-    Descending,
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+pub struct ClientPage<ItemType> {
+    /** token to be used in pagination params for the next page of results */
+    pub next_page: Option<String>,
+    /** whether there are more results */
+    pub has_next: bool,
+    /** list of items on this page of results */
+    pub items: Vec<ItemType>,
 }
 
 /**
@@ -188,27 +191,13 @@ pub struct PaginationParams<MarkerFields> {
 }
 
 /**
- * Describes the current scan and the client's position within it
+ * The order in which the client wants to page through the requested collection
  */
-#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema)]
-#[serde(try_from = "String")]
-#[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
-pub struct PaginationToken<MarkerFields> {
-    pub page_start: MarkerFields,
-    order: PaginationOrder,
-}
-
-/**
- * Client's view of a page of results from a paginated API
- */
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
-pub struct ClientPage<ItemType> {
-    /** token to be used in pagination params for the next page of results */
-    pub next_page: Option<String>,
-    /** whether there are more results */
-    pub has_next: bool,
-    /** list of items on this page of results */
-    pub items: Vec<ItemType>,
+#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PaginationOrder {
+    Ascending,
+    Descending,
 }
 
 /*
@@ -262,26 +251,24 @@ enum PaginationVersion {
 }
 
 /**
- * Parts of the pagination token that will be serialized.  This is similar to
- * [`DeserializedToken`], but this form refers to the marker fields by reference
- * to avoid having to clone it.
- * XXX can we rewrite the consumer to avoid this distinction?
+ * Parts of the pagination token that actually get serialized.
  */
-#[derive(Debug, Serialize)]
-struct SerializedToken<'a, MarkerFields> {
-    v: PaginationVersion,
-    order: PaginationOrder,
-    page_start: &'a MarkerFields,
-}
-
-/**
- * Similar to [`SerializedToken`], but this struct has 'static lifetime.
- */
-#[derive(Debug, Deserialize)]
-struct DeserializedToken<MarkerFields> {
+#[derive(Debug, Deserialize, Serialize)]
+struct SerializedToken<MarkerFields> {
     v: PaginationVersion,
     order: PaginationOrder,
     page_start: MarkerFields,
+}
+
+/**
+ * Describes the current scan and the client's position within it
+ */
+#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema)]
+#[serde(try_from = "String")]
+#[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
+pub struct PaginationToken<MarkerFields> {
+    pub page_start: MarkerFields,
+    order: PaginationOrder,
 }
 
 impl<MarkerFields> PaginationToken<MarkerFields>
@@ -296,11 +283,14 @@ where
     }
 
     pub(crate) fn to_serialized(self) -> Result<String, HttpError> {
+        let order = self.order;
+        let page_start = self.page_start;
+
         let marker_bytes = {
             let serialized_marker = SerializedToken {
                 v: PaginationVersion::V1,
-                order: self.order,
-                page_start: &self.page_start,
+                order: order,
+                page_start: page_start,
             };
 
             let json_bytes =
@@ -363,7 +353,7 @@ where
          * output of the error anyway.  It's not clear how else we could
          * propagate this information out.
          */
-        let deserialized: DeserializedToken<MarkerFields> =
+        let deserialized: SerializedToken<MarkerFields> =
             serde_json::from_slice(&json_bytes).map_err(|_| {
                 format!("failed to parse pagination token: corrupted token")
             })?;
