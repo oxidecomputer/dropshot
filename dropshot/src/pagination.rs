@@ -166,6 +166,8 @@ pub struct ClientPage<ItemType> {
  * One idea is that this becomes an enum with First(list of (field, order))
  * tuples and Subsequent(list of (field name, field value, order) tuples), but
  * it's not really clear how to represent either of these.
+ * XXX you probably also want to be able to specify whether reverse sort order
+ * is even allowed.
  */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 pub struct PaginationParams<MarkerFields> {
@@ -185,7 +187,13 @@ pub struct PaginationParams<MarkerFields> {
      * If present, this is an upper bound on how many objects the client wants
      * in this page of results.  The server may choose to use a lower limit.
      * XXX consider implementing a default() that gives this a value?  It'd be
-     * nice if this were runtime-configurable.
+     * nice if this were runtime-configurable.  Another way to effect this might
+     * be to have consumers use a helper function on the requestcontext, like
+     * rqctx.pagination_limit(pag_params, Option<...>).  This would prefer the
+     * client's requested limit, then the limit passed as an argument (if
+     * present), and then the server-wide limit (which would be required).  Or
+     * the server-wide limit could be optional and we'd use a compile-time
+     * default if that wasn't specified.
      */
     pub limit: Option<NonZeroU64>,
 }
