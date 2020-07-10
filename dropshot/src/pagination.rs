@@ -1,8 +1,135 @@
 // Copyright 2020 Oxide Computer Company
 /*!
- * Parameters related to paginated collection endpoints.
+ * Support for paginated resources
  *
- * XXX flesh out goals (e.g., multiple keys, etc.)
+ * "Pagination" here refers to the interface pattern where HTTP resources (or
+ * API endpoints) that provide a list of the items in a collection return a
+ * relatively small maximum number of items per request, often called a "page"
+ * of results.  Each page includes some metadata that the client can use to make
+ * another request for the next page of results.  The client can repeat this
+ * until they've gotten all the results.  Limiting the number of results
+ * returned per request helps bound the resource utilization and time required
+ * for any request, which in turn facilities horizontal scalability, high
+ * availability, and protection against some denial of service attacks
+ * (intentional or otherwise).
+ *
+ * For a well-commented example of how to use the interface here, see
+ * examples/pagination-basic.rs.  The rest of this comment describes the design
+ * and implementation considerations for this interface.
+ *
+ *
+ * ## Patterns for pagination
+ *
+ * A common pattern for paginating APIs looks something like this:
+ *
+ * Say we have a resource called a "Project" and a resource `GET /projects` to
+ * list all the Projects in the system.  There's a default limit (e.g., 100
+ * projects returned at a time).  Clients can request a higher limit using a
+ * query parameter (e.g., `?limit=1000`).  This limit is capped by a hard limit
+ * on the server.  If the client asks for more than the hard limit, the server
+ * can use the hard limit or reject the request.
+ *
+ * In each response, along with the actual page of results, the server includes
+ * some kind of token that can be used to get the next page.  The client usually
+ * sends this back in the next request as another query parameter, like
+ * `?page_token=abc123`.  [Google describes this approach in their own API
+ * design guidelines][1].
+ *
+ * There are many ways to implement this token with many different tradeoffs.
+ * For scalable HTTP APIs, a common approach is to make sure each resource has
+ * at least one unique identifier, sort results by that field, and use the id of
+ * the last item on the page as the token for the next page.  In our case,
+ * suppose each project has a unique user-defined "name" that's a UTF-8 string.
+ * Then we'd say that `GET /projects` returns results sorted by name.  When
+ * clients pass `token=abc123`, the server returns results starting from the
+ * first Project whose name sorts after "abc123".  In the response, the server
+ * specifies the name of the last Project on the page as the token for the next
+ * request.  This approach has a lot of nice properties:
+ *
+ * * For APIs backed by a database of some kind, it's usually straightforward to
+ *   use an existing primary key or other unique, sortable field as the token.
+ *
+ * * If the client scans all the way through the collection, they will see every
+ *   object that existed both before the scan and after the scan and was not
+ *   renamed during the scan.  (This isn't true for schemes that use a simple
+ *   numeric offset as the token.)
+ *
+ * * There's no server-side state associated with the token, so it's no problem
+ *   if the server crashes between requests or if subsequent requests are
+ *   handled by a different instance.  (This isn't true for schemes that store
+ *   the result set on the server.)
+ *
+ * * It's often straightforward to support a reversed-order scan as well -- this
+ *   may just be a matter of flipping the inequality used for a database query.
+ *
+ * * With some care, it's possible to support queries on multiple different
+ *   fields, even at the same time.  An API can support listing by any unique,
+ *   sortable combination of fields.  For example, say our Projects have a
+ *   modification time ("mtime") as well.  We could support listing projects
+ *   alphabetically by name _or_ in order of most recently modified.  For the
+ *   latter, since the modification time is generally not unique, and the marker
+ *   must be unique, we'd really be listing by an ("mtime" descending, "name"
+ *   ascending) tuple.
+ *
+ * The interfaces here are intended to support this sort of use case.  For APIs
+ * backed by traditional RDBMS databases, see [this post for background on
+ * various ways to page through a large set of data][2].  (What we're describing
+ * here leverages what this post calls "keyset pagination".)
+ *
+ * Another consideration in designing pagination is whether the token ought to
+ * be explicit and meaningful to the user or just an opaque token (likely
+ * encoded in some way).  It can be convenient for developers to use APIs where
+ * the token is explicitly intended to be one of the fields of the object (e.g.,
+ * so that you could list projects by `?project_name=myprojectname`), but it
+ * puts constraints on the server because clients may come to depend on specific
+ * fields being supported and sorted in a certain way.  Dropshot takes the
+ * approach of using an encoded token that includes information about the whole
+ * scan (e.g., the sort order).  This makes it possible to identify cases that
+ * might otherwise result in confusing behavior (e.g., a client lists projects
+ * in ascending order, but then asks for the next page in descending order).
+ * The token also includes a version number so that it can be evolved in the
+ * future.
+ *
+ *
+ * ## Background: Why paginate HTTP APIs?
+ *
+ * Pagination helps ensure that the cost of a request in terms of resource
+ * utilization remains O(1) -- that is, it can be bounded above by a constant
+ * rather than scaling proportionally with any of the request parameters.  This
+ * simplifies utilization monitoring, capacity planning, and scale-out
+ * activities for the service, since operators can think of the service in terms
+ * of one unit that needs to be scaled up.  (It's still a very complex process,
+ * but it would be significantly harder if requests weren't O(1).)
+ *
+ * Similarly, pagination helps ensure that the time required for a request is
+ * O(1) under normal conditions.  This makes it easier to define expectations
+ * for service latency and to monitor that latency to determine if those
+ * expectations are violated.  Generally, if latency increases, then the service
+ * is unhealthy, and a crisp definition of "unhealthy" is important to operate a
+ * service with high availability.  If requests weren't O(1), an increase in
+ * latency might just reflect a changing workload that's still performing within
+ * expectations -- e.g., clients listing larger collections than they were
+ * before, but still getting results promptly.  That would make it much harder
+ * to see when the service really is unhealthy.
+ *
+ * Finally, bounding requests to O(1) work is a critical mitigation for common
+ * (if basic) denial-of-service (DoS) attacks because it requires that clients
+ * consume resources commensurate with the server costs that they're imposing.
+ * If a service exposed an API that does an unbounded amount of work
+ * proportional to some parameter, then it's cheap to launch a DoS on the
+ * service by just invoking that API with a large parameter.  By contrast, if
+ * the client has to do work that scales linearly with the work the server has
+ * to do, then the client's costs go up in order to scale up the attack.
+ *
+ * Along these lines, connections and requests consume finite server resources
+ * like open file descriptors and database connections.  If a service is built
+ * so that requests are all supposed to take about the same amount of time (or
+ * at least that there's a constant upper bound), then it may be possible to use
+ * a simple timeout scheme to cancel requests that are taking too long, as might
+ * happen if a malicious client finds some way to do this.
+ *
+ * [1]: https://cloud.google.com/apis/design/design_patterns#list_pagination
+ * [2]: https://www.citusdata.com/blog/2016/03/30/five-ways-to-paginate/
  */
 
 use crate as dropshot; // XXX needed for ExtractedParameter below
@@ -42,7 +169,7 @@ pub enum PaginationOrder {
     Copy, Clone, Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize,
 )]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum DropshotMarkerVersion {
+enum DropshotMarkerVersion {
     V1,
 }
 

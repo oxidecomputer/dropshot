@@ -824,9 +824,11 @@ pub struct HttpResponseOkPage<MarkerFields: DeserializeOwned, ItemType>(
     pub PaginationParams<MarkerFields>,
     pub Vec<ItemType>,
 );
+
 impl<MarkerFields, ItemType> HttpTypedResponse
     for HttpResponseOkPage<MarkerFields, ItemType>
 where
+    // XXX JsonSchema shouldn't be needed for MarkerFields
     MarkerFields:
         DeserializeOwned + Serialize + JsonSchema + Send + Sync + 'static,
     ItemType: Serialize + JsonSchema + Send + Sync + 'static,
@@ -835,6 +837,7 @@ where
     type Body = ClientPage<ItemType>;
     const STATUS_CODE: StatusCode = StatusCode::OK;
 }
+
 impl<MarkerFields, ItemType> From<HttpResponseOkPage<MarkerFields, ItemType>>
     for HttpHandlerResult
 where
@@ -866,6 +869,7 @@ where
 
             if reverse {
                 /* XXX does this really do the right thing? */
+                // XXX no: you need the first request to start at the back
                 items.reverse();
             }
 
