@@ -156,47 +156,61 @@ pub struct ClientPage<ItemType> {
     pub items: Vec<ItemType>,
 }
 
-/**
- * Parameters provided by the client for each request to a paginated endpoint.
- * This includes an optional limit and pagination token.
- *
- * XXX This needs work: it's not clear how we can support on the first request
- * that user wants to page via a particular combination of fields.  There might
- * be a different PaginationOrder for each field.
- * One idea is that this becomes an enum with First(list of (field, order))
- * tuples and Subsequent(list of (field name, field value, order) tuples), but
- * it's not really clear how to represent either of these.
- * XXX you probably also want to be able to specify whether reverse sort order
- * is even allowed.
- */
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+pub enum PageParams<FirstPageParams, NextPageParams> {
+    FirstPage(FirstPageParams),
+    NextPage(NextPageParams),
+}
+
 #[derive(Debug, Deserialize, ExtractedParameter)]
-pub struct PaginationParams<MarkerFields> {
-    /**
-     * If present, this is the value of the sort field for the last object seen
-     */
-    #[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
-    pub marker: Option<PaginationToken<MarkerFields>>,
-
-    /**
-     * If present, this is the order of results to return.
-     * XXX consider implementing a default() that makes this ascending?
-     */
-    pub order: Option<PaginationOrder>,
-
-    /**
-     * If present, this is an upper bound on how many objects the client wants
-     * in this page of results.  The server may choose to use a lower limit.
-     * XXX consider implementing a default() that gives this a value?  It'd be
-     * nice if this were runtime-configurable.  Another way to effect this might
-     * be to have consumers use a helper function on the requestcontext, like
-     * rqctx.pagination_limit(pag_params, Option<...>).  This would prefer the
-     * client's requested limit, then the limit passed as an argument (if
-     * present), and then the server-wide limit (which would be required).  Or
-     * the server-wide limit could be optional and we'd use a compile-time
-     * default if that wasn't specified.
-     */
+#[serde(bound(deserialize = "FirstPageParams: DeserializeOwned, NextPageParams: DeserializeOwned"))]
+pub struct PaginationParams<FirstPageParams, NextPageParams> {
+    // XXX not quite right? it's either None or FirstPage or NextPage
+    pub page: Option<PaginationToken<FirstPageParams, NextPageParams>>,
     pub limit: Option<NonZeroU64>,
 }
+
+// /**
+//  * Parameters provided by the client for each request to a paginated endpoint.
+//  * This includes an optional limit and pagination token.
+//  *
+//  * XXX This needs work: it's not clear how we can support on the first request
+//  * that user wants to page via a particular combination of fields.  There might
+//  * be a different PaginationOrder for each field.
+//  * One idea is that this becomes an enum with First(list of (field, order))
+//  * tuples and Subsequent(list of (field name, field value, order) tuples), but
+//  * it's not really clear how to represent either of these.
+//  * XXX you probably also want to be able to specify whether reverse sort order
+//  * is even allowed.
+//  */
+// #[derive(Debug, Deserialize, ExtractedParameter)]
+// pub struct PaginationParams<MarkerFields> {
+//     /**
+//      * If present, this is the value of the sort field for the last object seen
+//      */
+//     #[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
+//     pub marker: Option<PaginationToken<MarkerFields>>,
+//
+//     /**
+//      * If present, this is the order of results to return.
+//      * XXX consider implementing a default() that makes this ascending?
+//      */
+//     pub order: Option<PaginationOrder>,
+//
+//     /**
+//      * If present, this is an upper bound on how many objects the client wants
+//      * in this page of results.  The server may choose to use a lower limit.
+//      * XXX consider implementing a default() that gives this a value?  It'd be
+//      * nice if this were runtime-configurable.  Another way to effect this might
+//      * be to have consumers use a helper function on the requestcontext, like
+//      * rqctx.pagination_limit(pag_params, Option<...>).  This would prefer the
+//      * client's requested limit, then the limit passed as an argument (if
+//      * present), and then the server-wide limit (which would be required).  Or
+//      * the server-wide limit could be optional and we'd use a compile-time
+//      * default if that wasn't specified.
+//      */
+//     pub limit: Option<NonZeroU64>,
+// }
 
 /**
  * The order in which the client wants to page through the requested collection
@@ -251,7 +265,14 @@ const MAX_TOKEN_LENGTH: usize = 512;
  * own `MarkerFields` types.
  */
 #[derive(
-    Copy, Clone, Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize,
+    Copy,
+    Clone,
+    Debug,
+    Deserialize,
+    ExtractedParameter,
+    JsonSchema,
+    PartialEq,
+    Serialize,
 )]
 #[serde(rename_all = "lowercase")]
 enum PaginationVersion {
@@ -262,42 +283,39 @@ enum PaginationVersion {
  * Parts of the pagination token that actually get serialized.
  */
 #[derive(Debug, Deserialize, Serialize)]
-struct SerializedToken<MarkerFields> {
+struct SerializedToken<FirstPageParams, NextPageParams> {
     v: PaginationVersion,
-    order: PaginationOrder,
-    page_start: MarkerFields,
+    page_start: PageParams<FirstPageParams, NextPageParams>,
 }
 
 /**
  * Describes the current scan and the client's position within it
  */
-#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema)]
+#[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(try_from = "String")]
-#[serde(bound(deserialize = "MarkerFields: DeserializeOwned"))]
-pub struct PaginationToken<MarkerFields> {
-    pub page_start: MarkerFields,
-    order: PaginationOrder,
+#[serde(bound(deserialize = "FirstPageParams: DeserializeOwned, NextPageParams: DeserializeOwned"))]
+pub struct PaginationToken<FirstPageParams, NextPageParams> {
+    pub page_start: PageParams<FirstPageParams, NextPageParams>,
 }
 
-impl<MarkerFields> PaginationToken<MarkerFields>
+impl<FirstPageParams, NextPageParams>
+    PaginationToken<FirstPageParams, NextPageParams>
 where
-    MarkerFields: Serialize,
+    FirstPageParams: Serialize, // XXX
+    NextPageParams: Serialize,
 {
-    pub fn new(order: PaginationOrder, page_start: MarkerFields) -> Self {
+    pub fn new(page_start: NextPageParams) -> Self {
         PaginationToken {
-            order,
-            page_start,
+            page_start: PageParams::NextPage(page_start),
         }
     }
 
     pub(crate) fn to_serialized(self) -> Result<String, HttpError> {
-        let order = self.order;
         let page_start = self.page_start;
 
         let marker_bytes = {
             let serialized_marker = SerializedToken {
                 v: PaginationVersion::V1,
-                order: order,
                 page_start: page_start,
             };
 
@@ -332,15 +350,16 @@ where
     }
 }
 
-impl<MarkerFields> TryFrom<String> for PaginationToken<MarkerFields>
+impl<FirstPageParams, NextPageParams> TryFrom<String> for PaginationToken<FirstPageParams, NextPageParams>
 where
-    MarkerFields: DeserializeOwned,
+    FirstPageParams: DeserializeOwned,
+    NextPageParams: DeserializeOwned,
 {
     type Error = String;
 
     fn try_from(
         value: String,
-    ) -> Result<PaginationToken<MarkerFields>, String> {
+    ) -> Result<PaginationToken<FirstPageParams, NextPageParams>, String> {
         if value.len() > MAX_TOKEN_LENGTH {
             return Err(String::from(
                 "failed to parse pagination token: too large",
@@ -361,12 +380,19 @@ where
          * output of the error anyway.  It's not clear how else we could
          * propagate this information out.
          */
-        let deserialized: SerializedToken<MarkerFields> =
+        let deserialized: SerializedToken<FirstPageParams, NextPageParams> =
             serde_json::from_slice(&json_bytes).map_err(|_| {
                 format!("failed to parse pagination token: corrupted token")
             })?;
+
+        if deserialized.v != PaginationVersion::V1 {
+            return Err(format!(
+                "failed to parse pagination token: unsupported version: {:?}",
+                deserialized.v,
+            ));
+        }
+
         Ok(PaginationToken {
-            order: deserialized.order,
             page_start: deserialized.page_start,
         })
     }
