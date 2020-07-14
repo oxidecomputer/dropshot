@@ -51,7 +51,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::ops::Bound;
 use std::sync::Arc;
@@ -82,6 +81,13 @@ impl PaginatedResource for ProjectScan {
                 Descending,
                 last_item.name.clone(),
             ),
+            ProjectScanMode::ByMtimeAscending => {
+                ProjectScanPageSelector::MtimeName(
+                    Ascending,
+                    last_item.mtime,
+                    last_item.name.clone(),
+                )
+            }
             ProjectScanMode::ByMtimeDescending => {
                 ProjectScanPageSelector::MtimeName(
                     Descending,
@@ -95,33 +101,32 @@ impl PaginatedResource for ProjectScan {
     fn scan_mode_for(
         which: &WhichPage<ProjectScan>,
     ) -> Result<ProjectScanMode, HttpError> {
-        match which {
+        Ok(match which {
             WhichPage::FirstPage {
                 list_mode: None,
-            } => Ok(ProjectScanMode::ByNameAscending),
+            } => ProjectScanMode::ByNameAscending,
 
             WhichPage::FirstPage {
                 list_mode: Some(p),
-            } => Ok(p.clone()),
+            } => p.clone(),
 
             WhichPage::NextPage {
                 page_token,
             } => match &page_token.page_start {
                 ProjectScanPageSelector::Name(Ascending, ..) => {
-                    Ok(ProjectScanMode::ByNameAscending)
+                    ProjectScanMode::ByNameAscending
                 }
                 ProjectScanPageSelector::Name(Descending, ..) => {
-                    Ok(ProjectScanMode::ByNameDescending)
+                    ProjectScanMode::ByNameDescending
+                }
+                ProjectScanPageSelector::MtimeName(Ascending, ..) => {
+                    ProjectScanMode::ByMtimeAscending
                 }
                 ProjectScanPageSelector::MtimeName(Descending, ..) => {
-                    Ok(ProjectScanMode::ByMtimeDescending)
+                    ProjectScanMode::ByMtimeDescending
                 }
-                _ => Err(HttpError::for_bad_request(
-                    None,
-                    String::from("unsupported scan mode"),
-                )),
             },
-        }
+        })
     }
 }
 
@@ -132,8 +137,6 @@ impl PaginatedResource for ProjectScan {
  * It's up to the consumer (e.g., this example) to decide exactly which modes
  * are supported here and what each one means.  This enum represents an
  * interface that's part of the OpenAPI specification for the service.
- * TODO-correctness: this structure should appear in the OpenAPI spec, but it
- * doesn't.
  *
  * NOTE: To be useful, this field must be deserializable using the
  * `serde_querystring` module.  You can test this by writing test code to
@@ -149,7 +152,9 @@ enum ProjectScanMode {
     ByNameAscending,
     /** by name descending */
     ByNameDescending,
-    /** by mtime descending, then by name ascending */
+    /** by mtime ascending, then by name ascending */
+    ByMtimeAscending,
+    /** by mtime descending, then by name descending */
     ByMtimeDescending,
 }
 
@@ -167,10 +172,6 @@ enum ProjectScanMode {
  * (i.e., the fields that the results are sorted by).  When you get this
  * selector back, you find the object having the next value after the one stored
  * in the token and start returning results from there.
- *
- * In our case, we support a limited set of scan modes.  To keep future options
- * open to support things like `ByMtimeAscending`, the structure for the page
- * selector is more general.
  */
 #[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -193,37 +194,6 @@ struct Project {
 }
 
 /**
- * For our own convenience, we define a conversion that extracts the scan mode
- * out of the page selector.  This can fail because as noted above, our page
- * selector supports configurations for which we don't define a real scan mode.
- * (Clients have no way to use these directly, but the serialization format
- * allows us to add this compatibly in the future.)
- */
-impl TryFrom<&ProjectScanPageSelector> for ProjectScanMode {
-    type Error = HttpError;
-
-    fn try_from(
-        p: &ProjectScanPageSelector,
-    ) -> Result<ProjectScanMode, HttpError> {
-        match p {
-            ProjectScanPageSelector::Name(Ascending, ..) => {
-                Ok(ProjectScanMode::ByNameAscending)
-            }
-            ProjectScanPageSelector::Name(Descending, ..) => {
-                Ok(ProjectScanMode::ByNameDescending)
-            }
-            ProjectScanPageSelector::MtimeName(Descending, ..) => {
-                Ok(ProjectScanMode::ByMtimeDescending)
-            }
-            _ => Err(HttpError::for_bad_request(
-                None,
-                String::from("unsupported scan mode"),
-            )),
-        }
-    }
-}
-
-/**
  * API endpoint for listing projects
  *
  * This implementation stores all the projects in a BTreeMap, which makes it
@@ -243,32 +213,31 @@ async fn example_list_projects(
     let data = rqctx_to_data(rqctx);
     let scan_mode = ProjectScan::scan_mode_for(&pag_params.page_params)?;
     let iter = match &pag_params.page_params {
-        WhichPage::FirstPage { .. } => {
-            match scan_mode {
-                ProjectScanMode::ByNameAscending => data.iter_by_name_asc(),
-                ProjectScanMode::ByNameDescending => data.iter_by_name_desc(),
-                ProjectScanMode::ByMtimeDescending => data.iter_by_mtime_desc(),
-            }
-        }
+        WhichPage::FirstPage {
+            ..
+        } => match scan_mode {
+            ProjectScanMode::ByNameAscending => data.iter_by_name_asc(),
+            ProjectScanMode::ByNameDescending => data.iter_by_name_desc(),
+            ProjectScanMode::ByMtimeAscending => data.iter_by_mtime_asc(),
+            ProjectScanMode::ByMtimeDescending => data.iter_by_mtime_desc(),
+        },
 
         WhichPage::NextPage {
             page_token: page_params,
-        } => {
-            match &page_params.page_start {
-                ProjectScanPageSelector::Name(Ascending, name) => {
-                    data.iter_by_name_asc_from(name)
-                }
-                ProjectScanPageSelector::Name(Descending, name) => {
-                    data.iter_by_name_desc_from(name)
-                }
-                ProjectScanPageSelector::MtimeName(Ascending, mtime, name) => {
-                    data.iter_by_mtime_asc_from(mtime, name)
-                }
-                ProjectScanPageSelector::MtimeName(Descending, mtime, name) => {
-                    data.iter_by_mtime_desc_from(mtime, name)
-                }
+        } => match &page_params.page_start {
+            ProjectScanPageSelector::Name(Ascending, name) => {
+                data.iter_by_name_asc_from(name)
             }
-        }
+            ProjectScanPageSelector::Name(Descending, name) => {
+                data.iter_by_name_desc_from(name)
+            }
+            ProjectScanPageSelector::MtimeName(Ascending, mtime, name) => {
+                data.iter_by_mtime_asc_from(mtime, name)
+            }
+            ProjectScanPageSelector::MtimeName(Descending, mtime, name) => {
+                data.iter_by_mtime_desc_from(mtime, name)
+            }
+        },
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
@@ -328,6 +297,7 @@ fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
     let all_modes = vec![
         ProjectScanMode::ByNameAscending,
         ProjectScanMode::ByNameDescending,
+        ProjectScanMode::ByMtimeAscending,
         ProjectScanMode::ByMtimeDescending,
     ];
     for mode in all_modes {

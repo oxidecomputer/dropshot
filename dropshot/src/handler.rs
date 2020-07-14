@@ -861,9 +861,6 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
 
 /**
  * XXX document
- * TODO-polish We will probably want to add headers for the total result set
- * size and the number of results that we're returning here, plus the marker.
- * TODO-cleanup move/copy the type aliases from src/api_model.rs?
  */
 pub struct HttpResponseOkPage<P>(pub P::ScanMode, pub Vec<P::Item>)
 where
@@ -884,28 +881,19 @@ where
     fn from(response: HttpResponseOkPage<P>) -> HttpHandlerResult {
         let HttpResponseOkPage(list_mode, items) = response;
 
-        //
-        // XXX TODO-cleanup could be cleaned up with some of the combinators on
-        // Option / Result
-        //
-        let next_page = {
-            if let Some(last_item) = items.last() {
+        let next_page = items
+            .last()
+            .map(|last_item| {
                 let last_item_marker =
                     P::page_selector_for(last_item, &list_mode);
-                let token = PageToken::new(last_item_marker);
-                let serialized = token.to_serialized()?;
-                Some(serialized)
-            } else {
-                None
-            }
-        };
+                PageToken::new(last_item_marker).to_serialized()
+            })
+            .transpose()?;
 
-        let page = ClientPage {
+        HttpResponseOkPage::<P>::for_object(&ClientPage {
             next_page,
             items,
-        };
-
-        HttpResponseOkPage::<P>::for_object(&page)
+        })
     }
 }
 
