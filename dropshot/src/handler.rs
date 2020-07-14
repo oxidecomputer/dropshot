@@ -44,8 +44,8 @@ use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
-use crate::pagination::PageListItem;
 use crate::pagination::PageToken;
+use crate::pagination::PaginatedResource;
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -816,38 +816,23 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * size and the number of results that we're returning here, plus the marker.
  * TODO-cleanup move/copy the type aliases from src/api_model.rs?
  */
-/* XXX needs PageSelector and PhantomData to make this approach work? */
-pub struct HttpResponseOkPage<ListMode, Item>(pub ListMode, pub Vec<Item>);
-
-impl<ListMode, PageSelector, Item> HttpTypedResponse
-    for HttpResponseOkPage<ListMode, Item>
+pub struct HttpResponseOkPage<P>(pub P::ScanMode, pub Vec<P::Item>)
 where
-    ListMode: Serialize + Send + Sync + 'static,
-    PageSelector: Serialize + Send + Sync + 'static,
-    Item: PageListItem<ListMode, PageSelector>
-        + Serialize
-        + JsonSchema
-        + Send
-        + Sync
-        + 'static,
+    P: PaginatedResource;
+
+impl<P> HttpTypedResponse for HttpResponseOkPage<P>
+where
+    P: PaginatedResource,
 {
-    type Body = ClientPage<Item>;
+    type Body = ClientPage<P::Item>;
     const STATUS_CODE: StatusCode = StatusCode::OK;
 }
 
-impl<ListMode, PageSelector, Item> From<HttpResponseOkPage<ListMode, Item>>
-    for HttpHandlerResult
+impl<P> From<HttpResponseOkPage<P>> for HttpHandlerResult
 where
-    ListMode: Serialize + Send + Sync + 'static,
-    PageSelector: Serialize + Send + Sync + 'static,
-    Item: PageListItem<ListMode, PageSelector>
-        + Serialize
-        + JsonSchema
-        + Send
-        + Sync
-        + 'static,
+    P: PaginatedResource,
 {
-    fn from(response: HttpResponseOkPage<ListMode, Item>) -> HttpHandlerResult {
+    fn from(response: HttpResponseOkPage<P>) -> HttpHandlerResult {
         let HttpResponseOkPage(list_mode, items) = response;
 
         //
@@ -856,7 +841,8 @@ where
         //
         let next_page = {
             if let Some(last_item) = items.last() {
-                let last_item_marker = last_item.to_page_selector(&list_mode);
+                let last_item_marker =
+                    P::page_selector_for(last_item, &list_mode);
                 let token = PageToken::new(last_item_marker);
                 let serialized = token.to_serialized()?;
                 Some(serialized)
@@ -870,7 +856,7 @@ where
             items,
         };
 
-        HttpResponseOkPage::<ListMode, Item>::for_object(&page)
+        HttpResponseOkPage::<P>::for_object(&page)
     }
 }
 

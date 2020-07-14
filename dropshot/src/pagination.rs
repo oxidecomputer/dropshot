@@ -143,8 +143,16 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use std::num::NonZeroU64;
 
-pub trait PageListItem<ListMode, PageSelector> {
-    fn to_page_selector(list_mode: &ListMode) -> PageSelector;
+// XXX currently used for output; commonize with input?
+pub trait PaginatedResource: 'static {
+    type ScanMode: DeserializeOwned + Send + Sync + 'static;
+    type PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static;
+    type Item: Serialize + JsonSchema + Send + Sync + 'static;
+
+    fn page_selector_for(
+        i: &Self::Item,
+        p: &Self::ScanMode,
+    ) -> Self::PageSelector;
 }
 
 /**
@@ -162,9 +170,12 @@ pub struct ClientPage<ItemType> {
 #[serde(untagged)]
 #[serde(bound(deserialize = "ScanParams: DeserializeOwned, PageSelector: \
                              DeserializeOwned"))]
+// XXX naming: list_mode vs. scan params vs. scan mode
+// XXX document that the order of these affects deserialization because tagging
+// is off
 pub enum WhichPage<ScanParams, PageSelector> {
-    FirstPage { list_mode: Option<ScanParams> },
     NextPage { page_token: PageToken<PageSelector> },
+    FirstPage { list_mode: Option<ScanParams> },
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter)]

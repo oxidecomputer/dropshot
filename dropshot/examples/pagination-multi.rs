@@ -27,18 +27,21 @@ use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
-use dropshot::PageParams;
+use dropshot::PaginatedResource;
 use dropshot::PaginationOrder;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::WhichPage;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
 use std::ops::Bound;
 use std::sync::Arc;
+
+#[macro_use]
+extern crate slog;
 
 /**
  * Object returned by our paginated endpoint
@@ -56,51 +59,67 @@ struct Project {
 /**
  * Provided with the first pagination request to specify by what fields the
  * caller wishes to list items and how they are to be sorted.
+ * XXX how do we ensure that has a form that's deserializable by
+ * serde_querystring?
  */
 #[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum ProjectListMode {
-    /** by name only */
-    Name(PaginationOrder),
-    /** by mtime, then by name */
-    MtimeName(PaginationOrder),
+#[serde(rename_all = "kebab-case")]
+enum ProjectScanMode {
+    /** by name ascending */
+    ByNameAscending,
+    /** by name descending */
+    ByNameDescending,
+    /** by mtime descending, then by name ascending */
+    ByMtimeDescending,
 }
 
 #[derive(Deserialize, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "lowercase")]
-enum ProjectListPageParams {
+enum ProjectScanPageSelector {
     Name(PaginationOrder, String),
     MtimeName(PaginationOrder, DateTime<Utc>, String),
 }
 
-impl From<&ProjectListPageParams> for ProjectListMode {
-    fn from(p: &ProjectListPageParams) -> ProjectListMode {
+impl From<&ProjectScanPageSelector> for ProjectScanMode {
+    fn from(p: &ProjectScanPageSelector) -> ProjectScanMode {
         match p {
-            ProjectListPageParams::Name(order, ..) => {
-                ProjectListMode::Name(*order)
+            ProjectScanPageSelector::Name(PaginationOrder::Ascending, ..) => {
+                ProjectScanMode::ByNameAscending
             }
-            ProjectListPageParams::MtimeName(order, ..) => {
-                ProjectListMode::MtimeName(*order)
+            ProjectScanPageSelector::Name(PaginationOrder::Descending, ..) => {
+                ProjectScanMode::ByNameDescending
             }
+            ProjectScanPageSelector::MtimeName(
+                PaginationOrder::Descending,
+                ..,
+            ) => ProjectScanMode::ByMtimeDescending,
+            _ => panic!("unsupported mode"), // XXX
         }
     }
 }
 
-/**
- * Defines a conversion from a Project to a set of page parameters for the next
- * page of projects.  This depends also on the scan mode.
- */
-impl From<(&Project, &ProjectListMode)> for ProjectListPageParams {
-    fn from(
-        (last_item, mode): (&Project, &ProjectListMode),
-    ) -> ProjectListPageParams {
-        match mode {
-            ProjectListMode::Name(order) => {
-                ProjectListPageParams::Name(*order, last_item.name.clone())
-            }
-            ProjectListMode::MtimeName(order) => {
-                ProjectListPageParams::MtimeName(
-                    *order,
+struct ProjectScan;
+impl PaginatedResource for ProjectScan {
+    type ScanMode = ProjectScanMode;
+    type PageSelector = ProjectScanPageSelector;
+    type Item = Project;
+
+    fn page_selector_for(
+        last_item: &Project,
+        scan_mode: &ProjectScanMode,
+    ) -> ProjectScanPageSelector {
+        match scan_mode {
+            ProjectScanMode::ByNameAscending => ProjectScanPageSelector::Name(
+                PaginationOrder::Ascending,
+                last_item.name.clone(),
+            ),
+            ProjectScanMode::ByNameDescending => ProjectScanPageSelector::Name(
+                PaginationOrder::Descending,
+                last_item.name.clone(),
+            ),
+            ProjectScanMode::ByMtimeDescending => {
+                ProjectScanPageSelector::MtimeName(
+                    PaginationOrder::Descending,
                     last_item.mtime,
                     last_item.name.clone(),
                 )
@@ -126,11 +145,8 @@ const MAX_LIMIT: usize = 100;
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectListMode, ProjectListPageParams>>,
-) -> Result<
-    HttpResponseOkPage<ProjectListMode, ProjectListPageParams, Project>,
-    HttpError,
-> {
+    query: Query<PaginationParams<ProjectScanMode, ProjectScanPageSelector>>,
+) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
     let pag_params = query.into_inner();
     // XXX even a convenience method here would help
     let mut limit =
@@ -139,43 +155,40 @@ async fn example_list_projects(
         limit = MAX_LIMIT;
     }
 
+    // XXX more streamlined way for the library to figure out the list mode
     let data = rqctx_to_data(rqctx);
-    let page = match pag_params.page {
-        Some(token) => token.page_start,
-        None => PageParams::FirstPage(ProjectListMode::Name(
-            PaginationOrder::Ascending,
-        )),
-    };
-    let (list_mode, iter) = match &page {
-        PageParams::FirstPage(
-            list_mode @ ProjectListMode::Name(PaginationOrder::Ascending),
-        ) => (list_mode.clone(), data.iter_by_name_asc()),
-        PageParams::FirstPage(
-            list_mode @ ProjectListMode::Name(PaginationOrder::Descending),
-        ) => (list_mode.clone(), data.iter_by_name_desc()),
-        PageParams::FirstPage(
-            list_mode @ ProjectListMode::MtimeName(PaginationOrder::Ascending),
-        ) => (list_mode.clone(), data.iter_by_mtime_asc()),
-        PageParams::FirstPage(
-            list_mode @ ProjectListMode::MtimeName(PaginationOrder::Descending),
-        ) => (list_mode.clone(), data.iter_by_mtime_desc()),
-        PageParams::NextPage(page_params) => {
-            let list_mode = ProjectListMode::from(page_params);
-            let iter = match page_params {
-                ProjectListPageParams::Name(
+    let (list_mode, iter) = match &pag_params.page_params {
+        WhichPage::FirstPage {
+            list_mode: None,
+        } => (ProjectScanMode::ByNameAscending, data.iter_by_name_asc()),
+        WhichPage::FirstPage {
+            list_mode: Some(list_mode @ ProjectScanMode::ByNameAscending),
+        } => (list_mode.clone(), data.iter_by_name_asc()),
+        WhichPage::FirstPage {
+            list_mode: Some(list_mode @ ProjectScanMode::ByNameDescending),
+        } => (list_mode.clone(), data.iter_by_name_desc()),
+        WhichPage::FirstPage {
+            list_mode: Some(list_mode @ ProjectScanMode::ByMtimeDescending),
+        } => (list_mode.clone(), data.iter_by_mtime_desc()),
+        WhichPage::NextPage {
+            page_token: page_params,
+        } => {
+            let list_mode = ProjectScanMode::from(&page_params.page_start);
+            let iter = match &page_params.page_start {
+                ProjectScanPageSelector::Name(
                     PaginationOrder::Ascending,
                     name,
                 ) => data.iter_by_name_asc_from(name),
-                ProjectListPageParams::Name(
+                ProjectScanPageSelector::Name(
                     PaginationOrder::Descending,
                     name,
                 ) => data.iter_by_name_desc_from(name),
-                ProjectListPageParams::MtimeName(
+                ProjectScanPageSelector::MtimeName(
                     PaginationOrder::Ascending,
                     mtime,
                     name,
                 ) => data.iter_by_mtime_asc_from(mtime, name),
-                ProjectListPageParams::MtimeName(
+                ProjectScanPageSelector::MtimeName(
                     PaginationOrder::Descending,
                     mtime,
                     name,
@@ -187,7 +200,7 @@ async fn example_list_projects(
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage(list_mode, projects, PhantomData))
+    Ok(HttpResponseOkPage(list_mode, projects))
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
@@ -244,6 +257,20 @@ async fn main() -> Result<(), String> {
     let mut server = HttpServer::new(&config_dropshot, api, ctx, &log)
         .map_err(|error| format!("failed to create server: {}", error))?;
     let server_task = server.run();
+
+    /*
+     * Dump out sample serialization tokens.
+     */
+    #[derive(Serialize)]
+    struct ToPrint {
+        list_mode: ProjectScanMode,
+    };
+    info!(
+        log,
+        "{}",
+        serde_urlencoded::to_string(ToPrint { list_mode: ProjectScanMode::ByNameAscending }).unwrap()
+    );
+
     server.wait_for_shutdown(server_task).await
 }
 
