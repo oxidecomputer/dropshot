@@ -134,6 +134,7 @@
 
 use crate as dropshot; // XXX needed for ExtractedParameter below
 use crate::error::HttpError;
+use crate::handler::ExtractedParameter;
 use base64::URL_SAFE;
 use dropshot_endpoint::ExtractedParameter;
 use schemars::JsonSchema;
@@ -143,7 +144,6 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::num::NonZeroU64;
-use crate::handler::ExtractedParameter;
 
 pub trait PaginatedResource: 'static {
     type ScanMode: Debug

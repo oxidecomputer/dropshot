@@ -33,13 +33,13 @@ use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::WhichPage;
+use hyper::Uri;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::sync::Arc;
-use hyper::Uri;
 
 #[macro_use]
 extern crate slog;
@@ -63,7 +63,9 @@ struct Project {
  * XXX how do we ensure that has a form that's deserializable by
  * serde_querystring?
  */
-#[derive(Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize)]
+#[derive(
+    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
+)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectScanMode {
     /** by name ascending */
@@ -258,6 +260,7 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
+
     let mut server = HttpServer::new(&config_dropshot, api, ctx, &log)
         .map_err(|error| format!("failed to create server: {}", error))?;
     let server_task = server.run();
@@ -276,7 +279,9 @@ async fn main() -> Result<(), String> {
     ];
     let local_addr = server.local_addr();
     for mode in all_modes {
-        let to_print = ToPrint { list_mode: mode };
+        let to_print = ToPrint {
+            list_mode: mode,
+        };
         let query_string = serde_urlencoded::to_string(to_print).unwrap();
         let uri = Uri::builder()
             .scheme("http")
