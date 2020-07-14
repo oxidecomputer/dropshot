@@ -230,7 +230,7 @@ pub struct PaginationParams<P: PaginatedResource> {
      * Optional client-requested limit on page size.  See
      * [`RequestContext::page_limit()`].
      */
-    pub(crate) client_limit: Option<NonZeroU64>,
+    pub(crate) limit: Option<NonZeroU64>,
 }
 
 /**

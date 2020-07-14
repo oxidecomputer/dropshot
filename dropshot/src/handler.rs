@@ -115,7 +115,7 @@ impl RequestContext {
     {
         let server_config = &self.server.config;
         /* XXX TODO-cleanup clean up with combinators? */
-        if let Some(client_limit) = pag_params.client_limit {
+        if let Some(client_limit) = pag_params.limit {
             /*
              * This is a gnarly edge case.  Internally, we want the limit to
              * be a "usize" so that we can use iter.take() with it (as an
