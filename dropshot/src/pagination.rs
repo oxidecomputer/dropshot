@@ -145,7 +145,8 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::num::NonZeroU64;
 
-pub trait PaginatedResource: 'static {
+// XXX why Sized?
+pub trait PaginatedResource: Sized + 'static {
     type ScanMode: Debug
         + DeserializeOwned
         + ExtractedParameter
@@ -165,6 +166,8 @@ pub trait PaginatedResource: 'static {
         i: &Self::Item,
         p: &Self::ScanMode,
     ) -> Self::PageSelector;
+
+    fn scan_mode_for(w: &WhichPage<Self>) -> Result<Self::ScanMode, HttpError>;
 }
 
 /**

@@ -40,6 +40,8 @@ use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
 use dropshot::PaginatedResource;
 use dropshot::PaginationOrder;
+use dropshot::PaginationOrder::Ascending;
+use dropshot::PaginationOrder::Descending;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -73,21 +75,52 @@ impl PaginatedResource for ProjectScan {
         scan_mode: &ProjectScanMode,
     ) -> ProjectScanPageSelector {
         match scan_mode {
-            ProjectScanMode::ByNameAscending => ProjectScanPageSelector::Name(
-                PaginationOrder::Ascending,
-                last_item.name.clone(),
-            ),
+            ProjectScanMode::ByNameAscending => {
+                ProjectScanPageSelector::Name(Ascending, last_item.name.clone())
+            }
             ProjectScanMode::ByNameDescending => ProjectScanPageSelector::Name(
-                PaginationOrder::Descending,
+                Descending,
                 last_item.name.clone(),
             ),
             ProjectScanMode::ByMtimeDescending => {
                 ProjectScanPageSelector::MtimeName(
-                    PaginationOrder::Descending,
+                    Descending,
                     last_item.mtime,
                     last_item.name.clone(),
                 )
             }
+        }
+    }
+
+    fn scan_mode_for(
+        which: &WhichPage<ProjectScan>,
+    ) -> Result<ProjectScanMode, HttpError> {
+        match which {
+            WhichPage::FirstPage {
+                list_mode: None,
+            } => Ok(ProjectScanMode::ByNameAscending),
+
+            WhichPage::FirstPage {
+                list_mode: Some(p),
+            } => Ok(p.clone()),
+
+            WhichPage::NextPage {
+                page_token,
+            } => match &page_token.page_start {
+                ProjectScanPageSelector::Name(Ascending, ..) => {
+                    Ok(ProjectScanMode::ByNameAscending)
+                }
+                ProjectScanPageSelector::Name(Descending, ..) => {
+                    Ok(ProjectScanMode::ByNameDescending)
+                }
+                ProjectScanPageSelector::MtimeName(Descending, ..) => {
+                    Ok(ProjectScanMode::ByMtimeDescending)
+                }
+                _ => Err(HttpError::for_bad_request(
+                    None,
+                    String::from("unsupported scan mode"),
+                )),
+            },
         }
     }
 }
@@ -173,16 +206,15 @@ impl TryFrom<&ProjectScanPageSelector> for ProjectScanMode {
         p: &ProjectScanPageSelector,
     ) -> Result<ProjectScanMode, HttpError> {
         match p {
-            ProjectScanPageSelector::Name(PaginationOrder::Ascending, ..) => {
+            ProjectScanPageSelector::Name(Ascending, ..) => {
                 Ok(ProjectScanMode::ByNameAscending)
             }
-            ProjectScanPageSelector::Name(PaginationOrder::Descending, ..) => {
+            ProjectScanPageSelector::Name(Descending, ..) => {
                 Ok(ProjectScanMode::ByNameDescending)
             }
-            ProjectScanPageSelector::MtimeName(
-                PaginationOrder::Descending,
-                ..,
-            ) => Ok(ProjectScanMode::ByMtimeDescending),
+            ProjectScanPageSelector::MtimeName(Descending, ..) => {
+                Ok(ProjectScanMode::ByMtimeDescending)
+            }
             _ => Err(HttpError::for_bad_request(
                 None,
                 String::from("unsupported scan mode"),
@@ -208,52 +240,39 @@ async fn example_list_projects(
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
 
-    // XXX more streamlined way for the library to figure out the list mode
     let data = rqctx_to_data(rqctx);
-    let (list_mode, iter) = match &pag_params.page_params {
-        WhichPage::FirstPage {
-            list_mode: None,
-        } => (ProjectScanMode::ByNameAscending, data.iter_by_name_asc()),
-        WhichPage::FirstPage {
-            list_mode: Some(list_mode @ ProjectScanMode::ByNameAscending),
-        } => (list_mode.clone(), data.iter_by_name_asc()),
-        WhichPage::FirstPage {
-            list_mode: Some(list_mode @ ProjectScanMode::ByNameDescending),
-        } => (list_mode.clone(), data.iter_by_name_desc()),
-        WhichPage::FirstPage {
-            list_mode: Some(list_mode @ ProjectScanMode::ByMtimeDescending),
-        } => (list_mode.clone(), data.iter_by_mtime_desc()),
+    let scan_mode = ProjectScan::scan_mode_for(&pag_params.page_params)?;
+    let iter = match &pag_params.page_params {
+        WhichPage::FirstPage { .. } => {
+            match scan_mode {
+                ProjectScanMode::ByNameAscending => data.iter_by_name_asc(),
+                ProjectScanMode::ByNameDescending => data.iter_by_name_desc(),
+                ProjectScanMode::ByMtimeDescending => data.iter_by_mtime_desc(),
+            }
+        }
+
         WhichPage::NextPage {
             page_token: page_params,
         } => {
-            let list_mode = ProjectScanMode::try_from(&page_params.page_start)?;
-            let iter = match &page_params.page_start {
-                ProjectScanPageSelector::Name(
-                    PaginationOrder::Ascending,
-                    name,
-                ) => data.iter_by_name_asc_from(name),
-                ProjectScanPageSelector::Name(
-                    PaginationOrder::Descending,
-                    name,
-                ) => data.iter_by_name_desc_from(name),
-                ProjectScanPageSelector::MtimeName(
-                    PaginationOrder::Ascending,
-                    mtime,
-                    name,
-                ) => data.iter_by_mtime_asc_from(mtime, name),
-                ProjectScanPageSelector::MtimeName(
-                    PaginationOrder::Descending,
-                    mtime,
-                    name,
-                ) => data.iter_by_mtime_desc_from(mtime, name),
-            };
-            (list_mode, iter)
+            match &page_params.page_start {
+                ProjectScanPageSelector::Name(Ascending, name) => {
+                    data.iter_by_name_asc_from(name)
+                }
+                ProjectScanPageSelector::Name(Descending, name) => {
+                    data.iter_by_name_desc_from(name)
+                }
+                ProjectScanPageSelector::MtimeName(Ascending, mtime, name) => {
+                    data.iter_by_mtime_asc_from(mtime, name)
+                }
+                ProjectScanPageSelector::MtimeName(Descending, mtime, name) => {
+                    data.iter_by_mtime_desc_from(mtime, name)
+                }
+            }
         }
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-
-    Ok(HttpResponseOkPage(list_mode, projects))
+    Ok(HttpResponseOkPage(scan_mode, projects))
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
