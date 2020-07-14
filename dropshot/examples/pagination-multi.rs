@@ -22,6 +22,8 @@
  *   token** that's provided with the next request as a query parameter.
  * * The scan mode cannot change between requests that are part of the same
  *   scan.
+ *
+ * XXX document the query parameters here with examples
  */
 
 use chrono::offset::TimeZone;
@@ -56,16 +58,38 @@ use std::sync::Arc;
 extern crate slog;
 
 /**
- * Item returned by our paginated endpoint
- *
- * Like anything returned by Dropshot, we must implement `JsonSchema` and
- * `Serialize`.  We also implement `Clone` to simplify the example.
+ * Structure on which we hang our implementation of [`PaginatedResource`].
  */
-#[derive(Clone, JsonSchema, Serialize)]
-struct Project {
-    name: String,
-    mtime: DateTime<Utc>,
-    // lots more fields
+// XXX shouldn't need to be Deserialize
+#[derive(Deserialize)]
+struct ProjectScan;
+impl PaginatedResource for ProjectScan {
+    type ScanMode = ProjectScanMode;
+    type PageSelector = ProjectScanPageSelector;
+    type Item = Project;
+
+    fn page_selector_for(
+        last_item: &Project,
+        scan_mode: &ProjectScanMode,
+    ) -> ProjectScanPageSelector {
+        match scan_mode {
+            ProjectScanMode::ByNameAscending => ProjectScanPageSelector::Name(
+                PaginationOrder::Ascending,
+                last_item.name.clone(),
+            ),
+            ProjectScanMode::ByNameDescending => ProjectScanPageSelector::Name(
+                PaginationOrder::Descending,
+                last_item.name.clone(),
+            ),
+            ProjectScanMode::ByMtimeDescending => {
+                ProjectScanPageSelector::MtimeName(
+                    PaginationOrder::Descending,
+                    last_item.mtime,
+                    last_item.name.clone(),
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -122,6 +146,26 @@ enum ProjectScanPageSelector {
     MtimeName(PaginationOrder, DateTime<Utc>, String),
 }
 
+/**
+ * Item returned by our paginated endpoint
+ *
+ * Like anything returned by Dropshot, we must implement `JsonSchema` and
+ * `Serialize`.  We also implement `Clone` to simplify the example.
+ */
+#[derive(Clone, JsonSchema, Serialize)]
+struct Project {
+    name: String,
+    mtime: DateTime<Utc>,
+    // lots more fields
+}
+
+/**
+ * For our own convenience, we define a conversion that extracts the scan mode
+ * out of the page selector.  This can fail because as noted above, our page
+ * selector supports configurations for which we don't define a real scan mode.
+ * (Clients have no way to use these directly, but the serialization format
+ * allows us to add this compatibly in the future.)
+ */
 impl TryFrom<&ProjectScanPageSelector> for ProjectScanMode {
     type Error = HttpError;
 
@@ -148,46 +192,6 @@ impl TryFrom<&ProjectScanPageSelector> for ProjectScanMode {
 }
 
 /**
- * Structure on which we hang our implementation of [`PaginatedResource`].
- */
-// XXX shouldn't need to be Deserialize
-#[derive(Deserialize)]
-struct ProjectScan;
-impl PaginatedResource for ProjectScan {
-    type ScanMode = ProjectScanMode;
-    type PageSelector = ProjectScanPageSelector;
-    type Item = Project;
-
-    fn page_selector_for(
-        last_item: &Project,
-        scan_mode: &ProjectScanMode,
-    ) -> ProjectScanPageSelector {
-        match scan_mode {
-            ProjectScanMode::ByNameAscending => ProjectScanPageSelector::Name(
-                PaginationOrder::Ascending,
-                last_item.name.clone(),
-            ),
-            ProjectScanMode::ByNameDescending => ProjectScanPageSelector::Name(
-                PaginationOrder::Descending,
-                last_item.name.clone(),
-            ),
-            ProjectScanMode::ByMtimeDescending => {
-                ProjectScanPageSelector::MtimeName(
-                    PaginationOrder::Descending,
-                    last_item.mtime,
-                    last_item.name.clone(),
-                )
-            }
-        }
-    }
-}
-
-/** Default number of returned results */
-const DEFAULT_LIMIT: usize = 5;
-/** Maximum number of returned results */
-const MAX_LIMIT: usize = 100;
-
-/**
  * API endpoint for listing projects
  *
  * This implementation stores all the projects in a BTreeMap, which makes it
@@ -202,12 +206,7 @@ async fn example_list_projects(
     query: Query<PaginationParams<ProjectScan>>,
 ) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
     let pag_params = query.into_inner();
-    // XXX even a convenience method here would help
-    let mut limit =
-        pag_params.limit.map(|l| l.get() as usize).unwrap_or(DEFAULT_LIMIT);
-    if limit > MAX_LIMIT {
-        limit = MAX_LIMIT;
-    }
+    let limit = rqctx.page_limit(&pag_params)?.get();
 
     // XXX more streamlined way for the library to figure out the list mode
     let data = rqctx_to_data(rqctx);

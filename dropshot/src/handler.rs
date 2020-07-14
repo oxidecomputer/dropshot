@@ -46,6 +46,7 @@ use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
 use crate::pagination::PageToken;
 use crate::pagination::PaginatedResource;
+use crate::pagination::PaginationParams;
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -57,12 +58,15 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use slog::Logger;
+use std::cmp::min;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 /**
@@ -91,6 +95,51 @@ pub struct RequestContext {
     pub request_id: String,
     /** logger for this specific request */
     pub log: Logger,
+}
+
+impl RequestContext {
+    /**
+     * Returns the appropriate count of items to return for a paginated request
+     *
+     * This first looks at any client-requested limit and clamps it based on the
+     * server-configured maximum page size.  If the client did not request any
+     * particular limit, this function returns the server-configured default
+     * page size.
+     */
+    pub fn page_limit<P>(
+        &self,
+        pag_params: &PaginationParams<P>,
+    ) -> Result<NonZeroUsize, HttpError>
+    where
+        P: PaginatedResource,
+    {
+        let server_config = &self.server.config;
+        /* XXX TODO-cleanup clean up with combinators? */
+        if let Some(client_limit) = pag_params.client_limit {
+            /*
+             * This is a gnarly edge case.  Internally, we want the limit to
+             * be a "usize" so that we can use iter.take() with it (as an
+             * example).  We don't want to put "usize" in the public
+             * interface, as that would cause the server's exported
+             * interface to change when it was built differently, although
+             * that's arguably correct.  Instead, we essentially validate
+             * here that the client gave us a value that we can support.
+             */
+            let client_limit_u64 = client_limit.get();
+            let client_limit_usize = usize::try_from(client_limit_u64)
+                .map_err(|_| {
+                    HttpError::for_bad_request(
+                        None,
+                        String::from("unsupported pagination limit: too large"),
+                    )
+                })?;
+            let client_limit_nzusize =
+                NonZeroUsize::new(client_limit_usize).unwrap();
+            Ok(min(client_limit_nzusize, server_config.page_max_nitems))
+        } else {
+            Ok(server_config.page_default_nitems)
+        }
+    }
 }
 
 /**

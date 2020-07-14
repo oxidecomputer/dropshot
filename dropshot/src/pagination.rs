@@ -178,30 +178,56 @@ pub struct ClientPage<ItemType> {
     pub items: Vec<ItemType>,
 }
 
+/**
+ * Specifies whether the client is beginning a new scan or resuming an existing
+ * one and provides additional parameters for either case
+ */
+/*
+ * In REST APIs, callers typically provide either the parameters to resume a
+ * scan or the parameters to begin a new one, with no separate field indicating
+ * which case they're requesting.  Fortunately, serde(untagged) implements this
+ * behavior precisely, with one caveat: the variants below are tried in order
+ * until one succeeds.  For this to work, `NextPage` must be defined before
+ * `FirstPage`, since any set of parameters at all (including no parameters at
+ * all) are valid for `FirstPage`.
+ */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(untagged)]
-// XXX document that the order of these affects deserialization because tagging
-// is off
 pub enum WhichPage<P: PaginatedResource> {
+    /**
+     * Indicates that the client is resuming a previous scan.  The client
+     * provides `page_token`, an opaque value that wraps the consumer's
+     * `PageSelector` type.  Critically, this must provide enough information
+     * for the consumer to resume a scan.
+     */
     NextPage { page_token: PageToken<P::PageSelector> },
+
+    /**
+     * Indicates that the client is beginning a new scan.  The client may
+     * provide `list_mode`, a consumer-specified type.
+     */
     FirstPage { list_mode: Option<P::ScanMode> },
 }
 
+/**
+ * Query parameters provided by clients when scanning a paginated collection
+ */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 pub struct PaginationParams<P: PaginatedResource> {
+    /**
+     * Specifies either how to begin a new scan or how to resume a previous
+     * scan.  This field is flattened by serde, so see the variants of
+     * [`WhichPage`] to see which fields actually show up in the serialized
+     * form.
+     */
     #[serde(flatten)]
     pub page_params: WhichPage<P>,
-    //
-    // XXX consider implementing a default() that gives this a value?  It'd be
-    // nice if this were runtime-configurable.  Another way to effect this might
-    // be to have consumers use a helper function on the requestcontext, like
-    // rqctx.pagination_limit(pag_params, Option<...>).  This would prefer the
-    // client's requested limit, then the limit passed as an argument (if
-    // present), and then the server-wide limit (which would be required).  Or
-    // the server-wide limit could be optional and we'd use a compile-time
-    // default if that wasn't specified.
-    //
-    pub limit: Option<NonZeroU64>,
+
+    /**
+     * Optional client-requested limit on page size.  See
+     * [`RequestContext::page_limit()`].
+     */
+    pub(crate) client_limit: Option<NonZeroU64>,
 }
 
 /**
