@@ -1,18 +1,27 @@
 /*!
- * Basic example that shows a paginated API
+ * Example of an API endpoint that supports pagination using several different
+ * fields as the sorting key.
  *
  * When you run this program, it will start an HTTP server on an available local
- * port.  See the log entry to see what port it ran on.  Then use curl to use
- * it, like this:
+ * port.  See the log for example URLs to use.  Try passing different values of
+ * the `limit` query parameter.  Try passing the `next_page` token from the
+ * response as a query parameter called `page_token`, too.
  *
- * ```ignore
- * $ curl localhost:50568/projects
- * ```
+ * Key terms:
  *
- * (Replace 50568 with whatever port your server is listening on.)
- *
- * Try passing different values of the `limit` query parameter.  Try passing the
- * next page token from the response as a query parameter, too.
+ * * This server exposes a single **API endpoint** that returns the **items**
+ *   contained within a **collection**.
+ * * The client is not allowed to list the entire collection in one request.
+ *   Instead, they list the collection using a sequence of requests to the one
+ *   endpoint.  This sequence of requests is a **scan** of the collection, and
+ *   we sometimes say that the client **pages through** the collection.
+ * * The initial request in the scan may specify the **scan mode**, which
+ *   typically specifies how the results are to be sorted (i.e., by which field
+ *   and whether the sort is ascending or descending).
+ * * Each request returns a **page** of results at a time, along with a **page
+ *   token** that's provided with the next request as a query parameter.
+ * * The scan mode cannot change between requests that are part of the same
+ *   scan.
  */
 
 use chrono::offset::TimeZone;
@@ -38,6 +47,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
+use std::net::SocketAddr;
 use std::ops::Bound;
 use std::sync::Arc;
 
@@ -45,12 +56,12 @@ use std::sync::Arc;
 extern crate slog;
 
 /**
- * Object returned by our paginated endpoint
+ * Item returned by our paginated endpoint
  *
  * Like anything returned by Dropshot, we must implement `JsonSchema` and
  * `Serialize`.  We also implement `Clone` to simplify the example.
  */
-#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[derive(Clone, JsonSchema, Serialize)]
 struct Project {
     name: String,
     mtime: DateTime<Utc>,
@@ -58,10 +69,19 @@ struct Project {
 }
 
 /**
- * Provided with the first pagination request to specify by what fields the
- * caller wishes to list items and how they are to be sorted.
- * XXX how do we ensure that has a form that's deserializable by
- * serde_querystring?
+ * Specifies how the client wants to page through results (typically: what
+ * field(s) to sort by and whether the sort should be ascending or descending)
+ *
+ * It's up to the consumer (e.g., this example) to decide exactly which modes
+ * are supported here and what each one means.  This enum represents an
+ * interface that's part of the OpenAPI specification for the service.
+ * TODO-correctness: this structure should appear in the OpenAPI spec, but it
+ * doesn't.
+ *
+ * NOTE: To be useful, this field must be deserializable using the
+ * `serde_querystring` module.  You can test this by writing test code to
+ * serialize it using `serde_querystring`.  That code could fail at runtime for
+ * certain types of values (e.g., enum variants that contain data).
  */
 #[derive(
     Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
@@ -76,6 +96,25 @@ enum ProjectScanMode {
     ByMtimeDescending,
 }
 
+/**
+ * Specifies the scan mode and the client's current position in the scan
+ *
+ * Dropshot uses this information to construct a page token that's sent to the
+ * client with each page of results.  The client provides that page token in a
+ * subsequent request for the next page of results.  Your endpoint is expected
+ * to use this information to resume the scan where the previous request left
+ * off.
+ *
+ * The most common robust and scalable implementation is to have this structure
+ * include the scan mode (see above) and the last value seen the key field(s)
+ * (i.e., the fields that the results are sorted by).  When you get this
+ * selector back, you find the object having the next value after the one stored
+ * in the token and start returning results from there.
+ *
+ * In our case, we support a limited set of scan modes.  To keep future options
+ * open to support things like `ByMtimeAscending`, the structure for the page
+ * selector is more general.
+ */
 #[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum ProjectScanPageSelector {
@@ -83,28 +122,37 @@ enum ProjectScanPageSelector {
     MtimeName(PaginationOrder, DateTime<Utc>, String),
 }
 
-impl From<&ProjectScanPageSelector> for ProjectScanMode {
-    fn from(p: &ProjectScanPageSelector) -> ProjectScanMode {
+impl TryFrom<&ProjectScanPageSelector> for ProjectScanMode {
+    type Error = HttpError;
+
+    fn try_from(
+        p: &ProjectScanPageSelector,
+    ) -> Result<ProjectScanMode, HttpError> {
         match p {
             ProjectScanPageSelector::Name(PaginationOrder::Ascending, ..) => {
-                ProjectScanMode::ByNameAscending
+                Ok(ProjectScanMode::ByNameAscending)
             }
             ProjectScanPageSelector::Name(PaginationOrder::Descending, ..) => {
-                ProjectScanMode::ByNameDescending
+                Ok(ProjectScanMode::ByNameDescending)
             }
             ProjectScanPageSelector::MtimeName(
                 PaginationOrder::Descending,
                 ..,
-            ) => ProjectScanMode::ByMtimeDescending,
-            _ => panic!("unsupported mode"), // XXX
+            ) => Ok(ProjectScanMode::ByMtimeDescending),
+            _ => Err(HttpError::for_bad_request(
+                None,
+                String::from("unsupported scan mode"),
+            )),
         }
     }
 }
 
+/**
+ * Structure on which we hang our implementation of [`PaginatedResource`].
+ */
 // XXX shouldn't need to be Deserialize
 #[derive(Deserialize)]
 struct ProjectScan;
-
 impl PaginatedResource for ProjectScan {
     type ScanMode = ProjectScanMode;
     type PageSelector = ProjectScanPageSelector;
@@ -179,7 +227,7 @@ async fn example_list_projects(
         WhichPage::NextPage {
             page_token: page_params,
         } => {
-            let list_mode = ProjectScanMode::from(&page_params.page_start);
+            let list_mode = ProjectScanMode::try_from(&page_params.page_start)?;
             let iter = match &page_params.page_start {
                 ProjectScanPageSelector::Name(
                     PaginationOrder::Ascending,
@@ -217,38 +265,9 @@ fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
 #[tokio::main]
 async fn main() -> Result<(), String> {
     /*
-     * Create 1000 projects up front.
-     */
-    let mut data = ProjectCollection {
-        by_name: BTreeMap::new(),
-        by_mtime: BTreeMap::new(),
-    };
-    let mut timestamp = DateTime::parse_from_rfc3339("2020-07-13T17:35:00Z")
-        .unwrap()
-        .timestamp_millis();
-    for n in 1..1000 {
-        let name = format!("project{:03}", n);
-        let project = Arc::new(Project {
-            name: name.clone(),
-            mtime: Utc.timestamp_millis(timestamp),
-        });
-        /*
-         * To make this dataset at least somewhat interesting in terms of
-         * exercising different pagination parameters, we'll make the mtimes
-         * decrease with the names, and we'll have some objects with the same
-         * mtime.
-         */
-        if n % 10 != 0 {
-            timestamp = timestamp - 1;
-        }
-        data.by_name.insert(name.clone(), Arc::clone(&project));
-        data.by_mtime.insert((project.mtime, name), project);
-    }
-
-    /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(data);
+    let ctx = Arc::new(ProjectCollection::new());
     let config_dropshot = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
     };
@@ -260,13 +279,29 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
-
     let mut server = HttpServer::new(&config_dropshot, api, ctx, &log)
         .map_err(|error| format!("failed to create server: {}", error))?;
     let server_task = server.run();
 
     /*
-     * Dump out some useful starting points.
+     * Print out some example requests to start with.
+     */
+    print_example_requests(log, &server.local_addr());
+
+    server.wait_for_shutdown(server_task).await
+}
+
+fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
+    /*
+     * We want to print out the valid querystring values for our API endpoint.
+     * Querystrings have to be a sequence key-value pairs.  Variants of
+     * ProjectScanMode wind up being values, so they need to be wrapped in a
+     * structure with a key.  The correct key is "list_mode" -- see
+     * [`dropshot::PaginationParams`]`.page_params`, which is a
+     * [`dropshot::WhichPage::FirstPage`].  It would be simpler to use
+     * `WhichPage::FirstPage` directly here, but that doesn't implement
+     * `Serialize`.  (Dropshot doesn't even require that `ProjectScanMode`
+     * implement `Serialize`).
      */
     #[derive(Serialize)]
     struct ToPrint {
@@ -277,7 +312,6 @@ async fn main() -> Result<(), String> {
         ProjectScanMode::ByNameDescending,
         ProjectScanMode::ByMtimeDescending,
     ];
-    let local_addr = server.local_addr();
     for mode in all_modes {
         let to_print = ToPrint {
             list_mode: mode,
@@ -285,16 +319,19 @@ async fn main() -> Result<(), String> {
         let query_string = serde_urlencoded::to_string(to_print).unwrap();
         let uri = Uri::builder()
             .scheme("http")
-            .authority(local_addr.to_string().as_str())
+            .authority(addr.to_string().as_str())
             .path_and_query(format!("/projects?{}", query_string).as_str())
             .build()
             .unwrap();
         info!(log, "example: {}", uri);
     }
-
-    server.wait_for_shutdown(server_task).await
 }
 
+/**
+ * Tracks a (static) collection of Projects indexed in two different ways to
+ * demonstrate an endpoint that provides multiple ways to scan a large
+ * collection.
+ */
 struct ProjectCollection {
     by_name: BTreeMap<String, Arc<Project>>,
     by_mtime: BTreeMap<(DateTime<Utc>, String), Arc<Project>>,
@@ -303,19 +340,55 @@ struct ProjectCollection {
 type ProjectIter<'a> = Box<dyn Iterator<Item = Arc<Project>> + 'a>;
 
 impl ProjectCollection {
-    fn iter_by_name_asc(&self) -> ProjectIter {
+    /** Constructs an example collection of projects to back the API endpoint */
+    pub fn new() -> ProjectCollection {
+        let mut data = ProjectCollection {
+            by_name: BTreeMap::new(),
+            by_mtime: BTreeMap::new(),
+        };
+        let mut timestamp =
+            DateTime::parse_from_rfc3339("2020-07-13T17:35:00Z")
+                .unwrap()
+                .timestamp_millis();
+        for n in 1..1000 {
+            let name = format!("project{:03}", n);
+            let project = Arc::new(Project {
+                name: name.clone(),
+                mtime: Utc.timestamp_millis(timestamp),
+            });
+            /*
+             * To make this dataset at least somewhat interesting in terms of
+             * exercising different pagination parameters, we'll make the mtimes
+             * decrease with the names, and we'll have some objects with the same
+             * mtime.
+             */
+            if n % 10 != 0 {
+                timestamp = timestamp - 1;
+            }
+            data.by_name.insert(name.clone(), Arc::clone(&project));
+            data.by_mtime.insert((project.mtime, name), project);
+        }
+
+        data
+    }
+
+    /*
+     * Iterate by name (ascending, descending)
+     */
+
+    pub fn iter_by_name_asc(&self) -> ProjectIter {
         self.make_iter(self.by_name.iter())
     }
-    fn iter_by_name_desc(&self) -> ProjectIter {
+    pub fn iter_by_name_desc(&self) -> ProjectIter {
         self.make_iter(self.by_name.iter().rev())
     }
-    fn iter_by_name_asc_from(&self, last_seen: &String) -> ProjectIter {
+    pub fn iter_by_name_asc_from(&self, last_seen: &String) -> ProjectIter {
         let iter = self
             .by_name
             .range((Bound::Excluded(last_seen.clone()), Bound::Unbounded));
         self.make_iter(iter)
     }
-    fn iter_by_name_desc_from(&self, last_seen: &String) -> ProjectIter {
+    pub fn iter_by_name_desc_from(&self, last_seen: &String) -> ProjectIter {
         let iter = self
             .by_name
             .range((Bound::Unbounded, Bound::Excluded(last_seen.clone())))
@@ -323,21 +396,17 @@ impl ProjectCollection {
         self.make_iter(iter)
     }
 
-    fn make_iter<'a, K, I>(&'a self, iter: I) -> ProjectIter<'a>
-    where
-        I: Iterator<Item = (K, &'a Arc<Project>)> + 'a,
-    {
-        Box::new(iter.map(|(_, project)| Arc::clone(project)))
-    }
+    /*
+     * Iterate by mtime (ascending, descending)
+     */
 
-    fn iter_by_mtime_asc(&self) -> ProjectIter {
+    pub fn iter_by_mtime_asc(&self) -> ProjectIter {
         self.make_iter(self.by_mtime.iter())
     }
-    fn iter_by_mtime_desc(&self) -> ProjectIter {
+    pub fn iter_by_mtime_desc(&self) -> ProjectIter {
         self.make_iter(self.by_mtime.iter().rev())
     }
-
-    fn iter_by_mtime_asc_from(
+    pub fn iter_by_mtime_asc_from(
         &self,
         last_mtime: &DateTime<Utc>,
         last_name: &String,
@@ -347,8 +416,7 @@ impl ProjectCollection {
             self.by_mtime.range((Bound::Excluded(last_seen), Bound::Unbounded));
         self.make_iter(iter)
     }
-
-    fn iter_by_mtime_desc_from(
+    pub fn iter_by_mtime_desc_from(
         &self,
         last_mtime: &DateTime<Utc>,
         last_name: &String,
@@ -359,5 +427,16 @@ impl ProjectCollection {
             .range((Bound::Unbounded, Bound::Excluded(last_seen)))
             .rev();
         self.make_iter(iter)
+    }
+
+    /**
+     * Helper function to turn the initial iterators produced above into what we
+     * actually need to provide consumers.
+     */
+    fn make_iter<'a, K, I>(&'a self, iter: I) -> ProjectIter<'a>
+    where
+        I: Iterator<Item = (K, &'a Arc<Project>)> + 'a,
+    {
+        Box::new(iter.map(|(_, project)| Arc::clone(project)))
     }
 }

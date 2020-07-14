@@ -159,7 +159,7 @@ pub trait PaginatedResource: 'static {
         + Send
         + Sync
         + 'static;
-    type Item: Debug + Serialize + JsonSchema + Send + Sync + 'static;
+    type Item: Serialize + JsonSchema + Send + Sync + 'static;
 
     fn page_selector_for(
         i: &Self::Item,
