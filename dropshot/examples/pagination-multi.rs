@@ -58,6 +58,7 @@ struct Project {
  * caller wishes to list items and how they are to be sorted.
  */
 #[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum ProjectListMode {
     /** by name only */
     Name(PaginationOrder),
@@ -66,6 +67,7 @@ enum ProjectListMode {
 }
 
 #[derive(Deserialize, ExtractedParameter, JsonSchema, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum ProjectListPageParams {
     Name(PaginationOrder, String),
     MtimeName(PaginationOrder, DateTime<Utc>, String),

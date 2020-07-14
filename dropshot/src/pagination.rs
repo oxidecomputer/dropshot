@@ -157,6 +157,7 @@ pub struct ClientPage<ItemType> {
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+#[serde(untagged)]
 pub enum PageParams<FirstPageParams, NextPageParams> {
     FirstPage(FirstPageParams),
     NextPage(NextPageParams),
@@ -166,6 +167,11 @@ pub enum PageParams<FirstPageParams, NextPageParams> {
 #[serde(bound(deserialize = "FirstPageParams: DeserializeOwned, NextPageParams: DeserializeOwned"))]
 pub struct PaginationParams<FirstPageParams, NextPageParams> {
     // XXX not quite right? it's either None or FirstPage or NextPage
+    // XXX FirstPageParams case should not be inside a token
+    // XXX maybe this should be an enum with variants:
+    // A: page: NextPageToken
+    // B: scan: FirstPageParams
+    // C: None?
     pub page: Option<PaginationToken<FirstPageParams, NextPageParams>>,
     pub limit: Option<NonZeroU64>,
 }
