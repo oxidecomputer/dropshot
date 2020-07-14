@@ -141,13 +141,25 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::num::NonZeroU64;
+use crate::handler::ExtractedParameter;
 
-// XXX currently used for output; commonize with input?
 pub trait PaginatedResource: 'static {
-    type ScanMode: DeserializeOwned + Send + Sync + 'static;
-    type PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static;
-    type Item: Serialize + JsonSchema + Send + Sync + 'static;
+    type ScanMode: Debug
+        + DeserializeOwned
+        + ExtractedParameter
+        + Send
+        + Sync
+        + 'static;
+    type PageSelector: Debug
+        + DeserializeOwned
+        + ExtractedParameter
+        + Serialize
+        + Send
+        + Sync
+        + 'static;
+    type Item: Debug + Serialize + JsonSchema + Send + Sync + 'static;
 
     fn page_selector_for(
         i: &Self::Item,
@@ -168,22 +180,17 @@ pub struct ClientPage<ItemType> {
 
 #[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(untagged)]
-#[serde(bound(deserialize = "ScanParams: DeserializeOwned, PageSelector: \
-                             DeserializeOwned"))]
-// XXX naming: list_mode vs. scan params vs. scan mode
 // XXX document that the order of these affects deserialization because tagging
 // is off
-pub enum WhichPage<ScanParams, PageSelector> {
-    NextPage { page_token: PageToken<PageSelector> },
-    FirstPage { list_mode: Option<ScanParams> },
+pub enum WhichPage<P: PaginatedResource> {
+    NextPage { page_token: PageToken<P::PageSelector> },
+    FirstPage { list_mode: Option<P::ScanMode> },
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter)]
-#[serde(bound(deserialize = "ScanParams: DeserializeOwned, PageSelector: \
-                             DeserializeOwned"))]
-pub struct PaginationParams<ScanParams, PageSelector> {
+pub struct PaginationParams<P: PaginatedResource> {
     #[serde(flatten)]
-    pub page_params: WhichPage<ScanParams, PageSelector>,
+    pub page_params: WhichPage<P>,
     //
     // XXX consider implementing a default() that gives this a value?  It'd be
     // nice if this were runtime-configurable.  Another way to effect this might
@@ -247,7 +254,7 @@ const MAX_TOKEN_LENGTH: usize = 512;
  * possible!
  *
  * Note that consumers still need to consider compatibility if they change their
- * own `ScanParams` or `PageSelector` types.
+ * own `ScanMode` or `PageSelector` types.
  */
 #[derive(
     Copy,

@@ -39,6 +39,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::sync::Arc;
+use hyper::Uri;
 
 #[macro_use]
 extern crate slog;
@@ -49,7 +50,7 @@ extern crate slog;
  * Like anything returned by Dropshot, we must implement `JsonSchema` and
  * `Serialize`.  We also implement `Clone` to simplify the example.
  */
-#[derive(Clone, JsonSchema, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 struct Project {
     name: String,
     mtime: DateTime<Utc>,
@@ -62,7 +63,7 @@ struct Project {
  * XXX how do we ensure that has a form that's deserializable by
  * serde_querystring?
  */
-#[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
+#[derive(Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectScanMode {
     /** by name ascending */
@@ -73,7 +74,7 @@ enum ProjectScanMode {
     ByMtimeDescending,
 }
 
-#[derive(Deserialize, ExtractedParameter, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum ProjectScanPageSelector {
     Name(PaginationOrder, String),
@@ -98,7 +99,10 @@ impl From<&ProjectScanPageSelector> for ProjectScanMode {
     }
 }
 
+// XXX shouldn't need to be Deserialize
+#[derive(Deserialize)]
 struct ProjectScan;
+
 impl PaginatedResource for ProjectScan {
     type ScanMode = ProjectScanMode;
     type PageSelector = ProjectScanPageSelector;
@@ -129,7 +133,7 @@ impl PaginatedResource for ProjectScan {
 }
 
 /** Default number of returned results */
-const DEFAULT_LIMIT: usize = 10;
+const DEFAULT_LIMIT: usize = 5;
 /** Maximum number of returned results */
 const MAX_LIMIT: usize = 100;
 
@@ -145,7 +149,7 @@ const MAX_LIMIT: usize = 100;
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScanMode, ProjectScanPageSelector>>,
+    query: Query<PaginationParams<ProjectScan>>,
 ) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
     let pag_params = query.into_inner();
     // XXX even a convenience method here would help
@@ -259,17 +263,29 @@ async fn main() -> Result<(), String> {
     let server_task = server.run();
 
     /*
-     * Dump out sample serialization tokens.
+     * Dump out some useful starting points.
      */
     #[derive(Serialize)]
     struct ToPrint {
         list_mode: ProjectScanMode,
     };
-    info!(
-        log,
-        "{}",
-        serde_urlencoded::to_string(ToPrint { list_mode: ProjectScanMode::ByNameAscending }).unwrap()
-    );
+    let all_modes = vec![
+        ProjectScanMode::ByNameAscending,
+        ProjectScanMode::ByNameDescending,
+        ProjectScanMode::ByMtimeDescending,
+    ];
+    let local_addr = server.local_addr();
+    for mode in all_modes {
+        let to_print = ToPrint { list_mode: mode };
+        let query_string = serde_urlencoded::to_string(to_print).unwrap();
+        let uri = Uri::builder()
+            .scheme("http")
+            .authority(local_addr.to_string().as_str())
+            .path_and_query(format!("/projects?{}", query_string).as_str())
+            .build()
+            .unwrap();
+        info!(log, "example: {}", uri);
+    }
 
     server.wait_for_shutdown(server_task).await
 }
