@@ -44,8 +44,8 @@ use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
-use crate::pagination::PageParams;
-use crate::pagination::PaginationToken;
+use crate::pagination::PageListItem;
+use crate::pagination::PageToken;
 
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -816,45 +816,48 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * size and the number of results that we're returning here, plus the marker.
  * TODO-cleanup move/copy the type aliases from src/api_model.rs?
  */
-pub struct HttpResponseOkPage<ListMode, ListPageParams, Item>(
-    pub ListMode,
-    pub Vec<Item>,
-    pub PhantomData<ListPageParams>, // XXX
-);
+/* XXX needs PageSelector and PhantomData to make this approach work? */
+pub struct HttpResponseOkPage<ListMode, Item>(pub ListMode, pub Vec<Item>);
 
-impl<ListMode, ListPageParams, Item> HttpTypedResponse
-    for HttpResponseOkPage<ListMode, ListPageParams, Item>
+impl<ListMode, PageSelector, Item> HttpTypedResponse
+    for HttpResponseOkPage<ListMode, Item>
 where
-    for<'a, 'b> ListPageParams:
-        Serialize + From<(&'a Item, &'b ListMode)> + Send + Sync + 'static,
-    for<'a> ListMode: Serialize + Send + Sync + 'static,
-    Item: Serialize + JsonSchema + Send + Sync + 'static,
+    ListMode: Serialize + Send + Sync + 'static,
+    PageSelector: Serialize + Send + Sync + 'static,
+    Item: PageListItem<ListMode, PageSelector>
+        + Serialize
+        + JsonSchema
+        + Send
+        + Sync
+        + 'static,
 {
     type Body = ClientPage<Item>;
     const STATUS_CODE: StatusCode = StatusCode::OK;
 }
 
-impl<ListMode, ListPageParams, Item>
-    From<HttpResponseOkPage<ListMode, ListPageParams, Item>>
+impl<ListMode, PageSelector, Item> From<HttpResponseOkPage<ListMode, Item>>
     for HttpHandlerResult
 where
-    for<'a, 'b> ListPageParams:
-        Serialize + From<(&'a Item, &'b ListMode)> + Send + Sync + 'static,
-    for<'a> ListMode: Serialize + Send + Sync + 'static,
-    Item: Serialize + JsonSchema + Send + Sync + 'static,
+    ListMode: Serialize + Send + Sync + 'static,
+    PageSelector: Serialize + Send + Sync + 'static,
+    Item: PageListItem<ListMode, PageSelector>
+        + Serialize
+        + JsonSchema
+        + Send
+        + Sync
+        + 'static,
 {
-    fn from(
-        response: HttpResponseOkPage<ListMode, ListPageParams, Item>,
-    ) -> HttpHandlerResult {
-        let HttpResponseOkPage(list_mode, items, _) = response;
+    fn from(response: HttpResponseOkPage<ListMode, Item>) -> HttpHandlerResult {
+        let HttpResponseOkPage(list_mode, items) = response;
 
+        //
+        // XXX TODO-cleanup could be cleaned up with some of the combinators on
+        // Option / Result
+        //
         let next_page = {
             if let Some(last_item) = items.last() {
-                let last_item_marker =
-                    ListPageParams::from((last_item.into(), &list_mode));
-                let token = PaginationToken::<ListMode, ListPageParams>::new(
-                    last_item_marker,
-                );
+                let last_item_marker = last_item.to_page_selector(&list_mode);
+                let token = PageToken::new(last_item_marker);
                 let serialized = token.to_serialized()?;
                 Some(serialized)
             } else {
@@ -862,15 +865,12 @@ where
             }
         };
 
-        /* XXX unwind my attempt to implement reverse() here */
-        let has_next = next_page.is_some();
         let page = ClientPage {
             next_page,
-            has_next,
             items,
         };
 
-        HttpResponseOkPage::<ListMode, ListPageParams, Item>::for_object(&page)
+        HttpResponseOkPage::<ListMode, Item>::for_object(&page)
     }
 }
 

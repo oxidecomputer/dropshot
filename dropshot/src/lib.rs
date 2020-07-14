@@ -314,10 +314,12 @@ pub use http_util::HEADER_REQUEST_ID;
 pub use logging::ConfigLogging;
 pub use logging::ConfigLoggingIfExists;
 pub use logging::ConfigLoggingLevel;
-pub use pagination::PageParams;
+pub use pagination::ClientPage;
+pub use pagination::PageListItem;
+pub use pagination::PageToken;
 pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
-pub use pagination::PaginationToken;
+pub use pagination::WhichPage;
 pub use server::HttpServer;
 
 /*
