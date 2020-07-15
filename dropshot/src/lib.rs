@@ -320,6 +320,8 @@ pub use pagination::PaginatedResource;
 pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::WhichPage;
+pub use pagination::SimplePageSelector;
+pub use pagination::SimplePaginated;
 pub use server::HttpServer;
 
 /*

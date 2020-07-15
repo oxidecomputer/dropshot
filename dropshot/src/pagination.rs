@@ -170,6 +170,58 @@ pub trait PaginatedResource: Sized + 'static {
     fn scan_mode_for(w: &WhichPage<Self>) -> Result<Self::ScanMode, HttpError>;
 }
 
+/*
+ * "Simple" pagination API
+ */
+
+pub trait SimplePaginated {
+    type PaginatedField: Debug
+        + DeserializeOwned
+        + Serialize
+        + Send
+        + Sync
+        + 'static;
+    type SimpleItem: Serialize + JsonSchema + Send + Sync + 'static;
+
+    fn page_selector_for_item(i: &Self::SimpleItem) -> Self::PaginatedField;
+
+    fn scan_mode() -> SimpleScanMode {
+        SimpleScanMode::FullScan
+    }
+}
+
+#[derive(Debug, Deserialize, ExtractedParameter)]
+pub enum SimpleScanMode {
+    FullScan,
+}
+
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+pub enum SimplePageSelector<F> {
+    FullScan(F),
+}
+
+impl<S> PaginatedResource for S
+where
+    S: SimplePaginated + 'static,
+{
+    type ScanMode = SimpleScanMode;
+    type PageSelector = SimplePageSelector<S::PaginatedField>;
+    type Item = S::SimpleItem;
+
+    fn page_selector_for(
+        i: &S::SimpleItem,
+        _p: &SimpleScanMode,
+    ) -> SimplePageSelector<S::PaginatedField> {
+        SimplePageSelector::FullScan(S::page_selector_for_item(i))
+    }
+
+    fn scan_mode_for(
+        _w: &WhichPage<Self>,
+    ) -> Result<SimpleScanMode, HttpError> {
+        Ok(SimpleScanMode::FullScan)
+    }
+}
+
 /**
  * Client's view of a page of results from a paginated API
  */
