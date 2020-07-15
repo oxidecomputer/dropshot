@@ -579,7 +579,7 @@ pub async fn objects_list<T: DeserializeOwned>(
 /**
  * Fetches a page of resources from the API.
  */
-pub async fn objects_list_page<MarkerFields, ItemType>(
+pub async fn objects_list_page<ItemType>(
     client: &ClientTestContext,
     list_url: &str,
 ) -> ClientPage<ItemType>

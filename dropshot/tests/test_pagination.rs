@@ -10,15 +10,15 @@ use dropshot::ApiDescription;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
+use dropshot::PaginatedResource;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::WhichPage;
 use http::Method;
 use http::StatusCode;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::num::NonZeroU64;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -33,42 +33,64 @@ fn paginate_api() -> ApiDescription {
     api
 }
 
-#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
-struct IntegersByNumber {
-    n: u64,
-}
-
 #[endpoint {
     method = GET,
-    path = "/testing/the_integers",
+    path = "/testing/intapi",
 }]
 async fn demo_handler_integers(
-    _rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<IntegersByNumber>>,
-) -> Result<HttpResponseOkPage<IntegersByNumber, u64>, HttpError> {
+    rqctx: Arc<RequestContext>,
+    query: Query<PaginationParams<PaginatedIntegers>>,
+) -> Result<HttpResponseOkPage<PaginatedIntegers>, HttpError> {
     let pag_params = query.into_inner();
-    let start = pag_params.marker.as_ref().map(|m| m.page_start.n).unwrap_or(0);
+    let limit = rqctx.page_limit(&pag_params)?.get();
 
-    let limit = if let Some(limit) = pag_params.limit {
-        limit
-    } else {
-        NonZeroU64::new(100).unwrap()
+    let start = match &pag_params.page_params {
+        WhichPage::FirstPage {
+            ..
+        } => 0,
+        WhichPage::NextPage {
+            page_token,
+        } => {
+            let IntegersPageSelector::ByNum(n) = page_token.page_start;
+            n as usize
+        }
     };
-    let range = Range {
+
+    let results = Range {
         start: start + 1,
-        end: start + (u64::from(limit)) + 1,
-    };
+        end: start + limit + 1,
+    }
+    .collect();
 
-    let results = range.collect();
-
-    Ok(HttpResponseOkPage(pag_params, results))
+    Ok(HttpResponseOkPage(IntegersScanMode::ByNum, results))
 }
 
-impl From<&u64> for IntegersByNumber {
-    fn from(last_seen: &u64) -> IntegersByNumber {
-        IntegersByNumber {
-            n: *last_seen,
-        }
+#[derive(Deserialize)] // XXX
+struct PaginatedIntegers;
+#[derive(Debug, Deserialize, ExtractedParameter)]
+enum IntegersScanMode {
+    ByNum,
+}
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+enum IntegersPageSelector {
+    ByNum(usize),
+}
+impl PaginatedResource for PaginatedIntegers {
+    type ScanMode = IntegersScanMode;
+    type PageSelector = IntegersPageSelector;
+    type Item = usize;
+
+    fn page_selector_for(
+        n: &usize,
+        _p: &IntegersScanMode,
+    ) -> IntegersPageSelector {
+        IntegersPageSelector::ByNum(*n)
+    }
+
+    fn scan_mode_for(
+        _w: &WhichPage<PaginatedIntegers>,
+    ) -> Result<IntegersScanMode, HttpError> {
+        Ok(IntegersScanMode::ByNum)
     }
 }
 
@@ -84,23 +106,18 @@ async fn test_paginate_basic_errors() {
     };
     let test_cases = vec![
         ErrorTestCase {
-            path: "/testing/the_integers?limit=0",
+            path: "/testing/intapi?limit=0",
             message: "unable to parse query string: expected a non-zero value",
         },
         ErrorTestCase {
-            path: "/testing/the_integers?limit=-3",
+            path: "/testing/intapi?limit=-3",
             message: "unable to parse query string: invalid digit found in \
                       string",
         },
         ErrorTestCase {
-            path: "/testing/the_integers?limit=seven",
+            path: "/testing/intapi?limit=seven",
             message: "unable to parse query string: invalid digit found in \
                       string",
-        },
-        ErrorTestCase {
-            path: "/testing/the_integers?order=boom",
-            message: "unable to parse query string: unknown variant `boom`, \
-                      expected `ascending` or `descending`",
         },
     ];
 
@@ -127,37 +144,14 @@ async fn test_paginate_basic() {
     let testctx = common::test_setup("demo1", api);
     let client = &testctx.client_testctx;
 
-    let page = objects_list_page::<IntegersByNumber, u32>(
-        &client,
-        "/testing/the_integers?limit=5",
-    )
-    .await;
+    let page =
+        objects_list_page::<usize>(&client, "/testing/intapi?limit=5").await;
     assert_eq!(page.items, vec![1, 2, 3, 4, 5]);
     eprintln!("page: {:?}", page);
 
-    let page = objects_list_page::<IntegersByNumber, u32>(
-        &client,
-        "/testing/the_integers?limit=8",
-    )
-    .await;
+    let page =
+        objects_list_page::<usize>(&client, "/testing/intapi?limit=8").await;
     assert_eq!(page.items, vec![1, 2, 3, 4, 5, 6, 7, 8]);
-
-    let page = objects_list_page::<IntegersByNumber, u32>(
-        &client,
-        "/testing/the_integers?limit=8&order=descending",
-    )
-    .await;
-    assert_eq!(page.items, vec![8, 7, 6, 5, 4, 3, 2, 1]);
-
-    let page = objects_list_page::<IntegersByNumber, u32>(
-        &client,
-        &format!(
-            "/testing/the_integers?limit=8&order=descending&marker={}",
-            page.next_page.unwrap()
-        ),
-    )
-    .await;
-    assert_eq!(page.items, vec![16, 15, 14, 13, 12, 11, 10, 9]);
 
     testctx.teardown().await;
 }

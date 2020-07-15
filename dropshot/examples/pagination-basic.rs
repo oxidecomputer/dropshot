@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Basic example that shows a paginated API
  *

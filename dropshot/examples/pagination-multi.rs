@@ -1,3 +1,4 @@
+// Copyright 2020 Oxide Computer Company
 /*!
  * Example of an API endpoint that supports pagination using several different
  * fields as the sorting key.
