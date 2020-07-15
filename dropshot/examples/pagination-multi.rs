@@ -174,7 +174,7 @@ enum ProjectScanMode {
  * in the token and start returning results from there.
  */
 #[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 enum ProjectScanPageSelector {
     Name(PaginationOrder, String),
     MtimeName(PaginationOrder, DateTime<Utc>, String),

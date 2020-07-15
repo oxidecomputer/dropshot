@@ -24,15 +24,70 @@ use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
+use dropshot::PaginatedResource;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::WhichPage;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::ops::RangeFrom;
 use std::sync::Arc;
+
+/**
+ * Structure on which we hang our implementation of [`PaginatedResource`].
+ */
+// XXX shouldn't need to be Deserialize
+#[derive(Deserialize)]
+struct ProjectScan;
+impl PaginatedResource for ProjectScan {
+    type ScanMode = ProjectScanMode;
+    type PageSelector = ProjectScanPageSelector;
+    type Item = Project;
+
+    fn page_selector_for(
+        last_item: &Project,
+        _scan_mode: &ProjectScanMode,
+    ) -> ProjectScanPageSelector {
+        ProjectScanPageSelector::NameAscending(last_item.name.clone())
+    }
+
+    fn scan_mode_for(
+        _which: &WhichPage<ProjectScan>,
+    ) -> Result<ProjectScanMode, HttpError> {
+        Ok(ProjectScanMode::ByNameAscending)
+    }
+}
+
+/**
+ * Specifies how the client can page through results (typically: what field(s)
+ * to sort by and whether the sort should be ascending or descending)
+ *
+ * This example only supports pagination by name in ascending order.  For a more
+ * interesting case, see pagination-multi.rs.
+ */
+#[derive(
+    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
+)]
+#[serde(rename_all = "kebab-case")]
+enum ProjectScanMode {
+    /** by name ascending */
+    ByNameAscending,
+}
+
+/**
+ * Specifies the scan mode and the client's current position in the scan
+ *
+ * In this example, all we need is the name of the last item seen by the client.
+ * For a more interesting example, see pagination-multi.rs.
+ */
+#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProjectScanPageSelector {
+    NameAscending(String),
+}
 
 /**
  * Object returned by our paginated endpoint
@@ -47,41 +102,6 @@ struct Project {
 }
 
 /**
- * Holds the fields that a client can sort by and the value(s) describing the
- * client's current position in the scan
- *
- * This example shows how to support listing projects by name.
- *
- * This struct must implement `Deserialize` and `ExtractedParameter` because we
- * receive it as a query parameter (see [`dropshot::Query`]).  The struct must
- * also impl `Serialize` because we serialize it as part of the token we give to
- * clients for the next page.
- */
-#[derive(Deserialize, ExtractedParameter, JsonSchema, Serialize)]
-struct ProjectsByName {
-    /** the name of the last project the client has seen so far */
-    name: String,
-}
-
-/**
- * Defines a conversion from Projects to ProjectsByName so that Dropshot can
- * generate the pagination token for the client directly from our list of
- * results.
- */
-impl From<&Project> for ProjectsByName {
-    fn from(last_item: &Project) -> ProjectsByName {
-        ProjectsByName {
-            name: last_item.name.clone(),
-        }
-    }
-}
-
-/** Default number of returned results */
-const DEFAULT_LIMIT: usize = 10;
-/** Maximum number of returned results */
-const MAX_LIMIT: usize = 100;
-
-/**
  * API endpoint for listing projects
  *
  * This implementation stores all the projects in a BTreeMap, which makes it
@@ -93,30 +113,29 @@ const MAX_LIMIT: usize = 100;
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectsByName>>,
-) -> Result<HttpResponseOkPage<ProjectsByName, Project>, HttpError> {
+    query: Query<PaginationParams<ProjectScan>>,
+) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
     let pag_params = query.into_inner();
-    // XXX even a convenience method here would help
-    let mut limit =
-        pag_params.limit.map(|l| l.get() as usize).unwrap_or(DEFAULT_LIMIT);
-    if limit > MAX_LIMIT {
-        limit = MAX_LIMIT;
-    }
-
+    let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
-    let projects = match &pag_params.marker {
-        None => {
+    let projects = match &pag_params.page_params {
+        WhichPage::FirstPage {
+            ..
+        } => {
             /* Return a list of the first "limit" projects. */
             tree.iter()
                 .take(limit)
                 .map(|(_, project)| project.clone())
                 .collect()
         }
-        Some(marker) => {
+        WhichPage::NextPage {
+            page_token,
+        } => {
             /* Return a list of the first "limit" projects after this name. */
-            let last_project_name_seen = &marker.page_start.name;
+            let ProjectScanPageSelector::NameAscending(last_seen) =
+                &page_token.page_start;
             tree.range(RangeFrom {
-                start: last_project_name_seen.clone(),
+                start: last_seen.clone(),
             })
             .take(limit)
             .map(|(_, project)| project.clone())
@@ -124,7 +143,7 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage(pag_params, projects))
+    Ok(HttpResponseOkPage(ProjectScanMode::ByNameAscending, projects))
 }
 
 fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {
