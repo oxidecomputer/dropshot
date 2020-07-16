@@ -34,7 +34,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::ops::RangeFrom;
+use std::ops::Bound;
 use std::sync::Arc;
 
 /**
@@ -97,12 +97,10 @@ async fn example_list_projects(
             /* Return a list of the first "limit" projects after this name. */
             let SimplePageSelector::FullScan(last_seen) =
                 &page_token.page_start;
-            tree.range(RangeFrom {
-                start: last_seen.clone(),
-            })
-            .take(limit)
-            .map(|(_, project)| project.clone())
-            .collect()
+            tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
+                .take(limit)
+                .map(|(_, project)| project.clone())
+                .collect()
         }
     };
 
