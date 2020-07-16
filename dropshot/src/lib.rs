@@ -321,6 +321,7 @@ pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::SimplePageSelector;
 pub use pagination::SimplePaginated;
+pub use pagination::SimpleScanMode;
 pub use pagination::WhichPage;
 pub use server::HttpServer;
 

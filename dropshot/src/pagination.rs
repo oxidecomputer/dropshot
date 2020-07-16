@@ -145,14 +145,29 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::num::NonZeroU64;
 
+/**
+ * Primary interface implemented by consumers to implement a paginated API.
+ */
 // XXX why Sized?
 pub trait PaginatedResource: Sized + 'static {
+    /**
+     * (typically an enum) Describes the different supported ways to list the
+     * resource (e.g., by name ascending, by id descending, etc.).  This will be
+     * deserialized from the "list_mode" parameter of the querystring.
+     */
     type ScanMode: Debug
         + DeserializeOwned
         + ExtractedParameter
         + Send
         + Sync
         + 'static;
+
+    /**
+     * Describes what page the client wants to fetch.  This type is serialized
+     * to JSON, encoded as an opaque string, and inserted into the response
+     * containing the list of items on a page.  The client is expected to pass
+     * this string back as the "page_token" querystring parameter.
+     */
     type PageSelector: Debug
         + DeserializeOwned
         + ExtractedParameter
@@ -160,14 +175,22 @@ pub trait PaginatedResource: Sized + 'static {
         + Send
         + Sync
         + 'static;
+
+    /**
+     * Describes the actual items in each page of results.
+     */
     type Item: Serialize + JsonSchema + Send + Sync + 'static;
 
+    /**
+     * Given an item and a particular scan mode, return a suitable
+     * `PageSelector`.  Generally, this function will be invoked on the last
+     * item on the page to produce the token that the client can use to fetch
+     * the next page of results.
+     */
     fn page_selector_for(
         i: &Self::Item,
         p: &Self::ScanMode,
     ) -> Self::PageSelector;
-
-    fn scan_mode_for(w: &WhichPage<Self>) -> Result<Self::ScanMode, HttpError>;
 }
 
 /*
@@ -184,10 +207,6 @@ pub trait SimplePaginated {
     type SimpleItem: Serialize + JsonSchema + Send + Sync + 'static;
 
     fn page_selector_for_item(i: &Self::SimpleItem) -> Self::PaginatedField;
-
-    fn scan_mode() -> SimpleScanMode {
-        SimpleScanMode::FullScan
-    }
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter)]
@@ -213,12 +232,6 @@ where
         _p: &SimpleScanMode,
     ) -> SimplePageSelector<S::PaginatedField> {
         SimplePageSelector::FullScan(S::page_selector_for_item(i))
-    }
-
-    fn scan_mode_for(
-        _w: &WhichPage<Self>,
-    ) -> Result<SimpleScanMode, HttpError> {
-        Ok(SimpleScanMode::FullScan)
     }
 }
 

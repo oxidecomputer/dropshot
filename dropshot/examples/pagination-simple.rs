@@ -29,6 +29,7 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::SimplePageSelector;
 use dropshot::SimplePaginated;
+use dropshot::SimpleScanMode;
 use dropshot::WhichPage;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -104,7 +105,7 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage(ProjectScan::scan_mode(), projects))
+    Ok(HttpResponseOkPage(SimpleScanMode::FullScan, projects))
 }
 
 fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {

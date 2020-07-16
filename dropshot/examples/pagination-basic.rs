@@ -54,12 +54,6 @@ impl PaginatedResource for ProjectScan {
     ) -> ProjectScanPageSelector {
         ProjectScanPageSelector::NameAscending(last_item.name.clone())
     }
-
-    fn scan_mode_for(
-        _which: &WhichPage<ProjectScan>,
-    ) -> Result<ProjectScanMode, HttpError> {
-        Ok(ProjectScanMode::ByNameAscending)
-    }
 }
 
 /**

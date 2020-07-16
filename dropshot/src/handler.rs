@@ -860,7 +860,8 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
 }
 
 /**
- * XXX document
+ * Wraps a list of items with a response intended for pagination.  See the
+ * pagination documentation docs for more details.
  */
 pub struct HttpResponseOkPage<P>(pub P::ScanMode, pub Vec<P::Item>)
 where

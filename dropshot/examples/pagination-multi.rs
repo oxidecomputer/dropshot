@@ -176,37 +176,6 @@ impl PaginatedResource for ProjectScan {
             }
         }
     }
-
-    fn scan_mode_for(
-        which: &WhichPage<ProjectScan>,
-    ) -> Result<ProjectScanMode, HttpError> {
-        Ok(match which {
-            WhichPage::FirstPage {
-                list_mode: None,
-            } => ProjectScanMode::ByNameAscending,
-
-            WhichPage::FirstPage {
-                list_mode: Some(p),
-            } => p.clone(),
-
-            WhichPage::NextPage {
-                page_token,
-            } => match &page_token.page_start {
-                ProjectScanPageSelector::Name(Ascending, ..) => {
-                    ProjectScanMode::ByNameAscending
-                }
-                ProjectScanPageSelector::Name(Descending, ..) => {
-                    ProjectScanMode::ByNameDescending
-                }
-                ProjectScanPageSelector::MtimeName(Ascending, ..) => {
-                    ProjectScanMode::ByMtimeAscending
-                }
-                ProjectScanPageSelector::MtimeName(Descending, ..) => {
-                    ProjectScanMode::ByMtimeDescending
-                }
-            },
-        })
-    }
 }
 
 /**
@@ -290,7 +259,33 @@ async fn example_list_projects(
     let limit = rqctx.page_limit(&pag_params)?.get();
 
     let data = rqctx_to_data(rqctx);
-    let scan_mode = ProjectScan::scan_mode_for(&pag_params.page_params)?;
+    let scan_mode = match &pag_params.page_params {
+        WhichPage::FirstPage {
+            list_mode: None,
+        } => ProjectScanMode::ByNameAscending,
+
+        WhichPage::FirstPage {
+            list_mode: Some(p),
+        } => p.clone(),
+
+        WhichPage::NextPage {
+            page_token,
+        } => match &page_token.page_start {
+            ProjectScanPageSelector::Name(Ascending, ..) => {
+                ProjectScanMode::ByNameAscending
+            }
+            ProjectScanPageSelector::Name(Descending, ..) => {
+                ProjectScanMode::ByNameDescending
+            }
+            ProjectScanPageSelector::MtimeName(Ascending, ..) => {
+                ProjectScanMode::ByMtimeAscending
+            }
+            ProjectScanPageSelector::MtimeName(Descending, ..) => {
+                ProjectScanMode::ByMtimeDescending
+            }
+        },
+    };
+
     let iter = match &pag_params.page_params {
         WhichPage::FirstPage {
             ..

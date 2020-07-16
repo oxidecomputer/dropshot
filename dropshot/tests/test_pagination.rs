@@ -86,12 +86,6 @@ impl PaginatedResource for PaginatedIntegers {
     ) -> IntegersPageSelector {
         IntegersPageSelector::ByNum(*n)
     }
-
-    fn scan_mode_for(
-        _w: &WhichPage<PaginatedIntegers>,
-    ) -> Result<IntegersScanMode, HttpError> {
-        Ok(IntegersScanMode::ByNum)
-    }
 }
 
 #[tokio::test]
