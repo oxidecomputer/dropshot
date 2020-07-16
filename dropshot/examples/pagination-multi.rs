@@ -24,7 +24,85 @@
  * * The scan mode cannot change between requests that are part of the same
  *   scan.
  *
- * XXX document the query parameters here with examples
+ * This example uses a resource called a "Project", which only has a "name" and
+ * an "mtime" (modification time).  The server creates 1,000 projects on startup
+ * and provides one API endpoint to page through them.
+ *
+ * Initially, a client just invokes the API to list the first page of results
+ * using the default sort order (we'll use limit=3 to keep the result set
+ * short):
+ *
+ * ```ignore
+ * $ curl -s http://127.0.0.1:50800/projects?limit=3 | json
+ * {
+ *   "next_page": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwMyJdfX0=",
+ *   "items": [
+ *     {
+ *       "name": "project001",
+ *       "mtime": "2020-07-13T17:35:00Z"
+ *     },
+ *     {
+ *       "name": "project002",
+ *       "mtime": "2020-07-13T17:34:59.999Z"
+ *     },
+ *     {
+ *       "name": "project003",
+ *       "mtime": "2020-07-13T17:34:59.998Z"
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * This should be pretty self-explanatory: we have three projects here and
+ * they're sorted in ascending order by name.  The "next_page" token is used to
+ * fetch the next page of results as follows:
+ *
+ * ```ignore
+ * $ curl -s http://127.0.0.1:50800/projects?limit=3'&'page_token=eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwMyJdfX0= | json
+ * {
+ *   "next_page": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwNiJdfX0=",
+ *   "items": [
+ *     {
+ *       "name": "project004",
+ *       "mtime": "2020-07-13T17:34:59.997Z"
+ *     },
+ *     {
+ *       "name": "project005",
+ *       "mtime": "2020-07-13T17:34:59.996Z"
+ *     },
+ *     {
+ *       "name": "project006",
+ *       "mtime": "2020-07-13T17:34:59.995Z"
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * Now we have the next three projects and a new token.  We can continue this
+ * way until we've listed all the projects.
+ *
+ * What does that page token look like?  It's implementation-defined, so you
+ * shouldn't rely on the structure.  In this case, it's a base64-encoded,
+ * versioned JSON structure describing the scan and the client's position in the
+ * scan:
+ *
+ * ```ignore
+ * $ echo -n 'eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwNiJdfX0=' | base64 -d | json
+ * {
+ *   "v": "v1",
+ *   "page_start": {
+ *     "name": [
+ *       "ascending",
+ *       "project006"
+ *     ]
+ *   }
+ * }
+ * ```
+ *
+ * This token says that we're scanning in ascending order of "name" and the last
+ * one we saw was "project006".  Again, this is subject to change and should not
+ * be relied upon.  We mention it here just to help explain how the pagination
+ * mechanism works.
  */
 
 use chrono::offset::TimeZone;
