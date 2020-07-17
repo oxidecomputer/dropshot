@@ -147,33 +147,32 @@ impl PaginatedResource for ProjectScan {
     type ScanMode = ProjectScanMode;
     type PageSelector = ProjectScanPageSelector;
     type Item = Project;
+}
 
-    fn page_selector_for(
-        last_item: &Project,
-        scan_mode: &ProjectScanMode,
-    ) -> ProjectScanPageSelector {
-        match scan_mode {
-            ProjectScanMode::ByNameAscending => {
-                ProjectScanPageSelector::Name(Ascending, last_item.name.clone())
-            }
-            ProjectScanMode::ByNameDescending => ProjectScanPageSelector::Name(
-                Descending,
+fn page_selector_for(
+    last_item: &Project,
+    scan_mode: &ProjectScanMode,
+) -> ProjectScanPageSelector {
+    match scan_mode {
+        ProjectScanMode::ByNameAscending => {
+            ProjectScanPageSelector::Name(Ascending, last_item.name.clone())
+        }
+        ProjectScanMode::ByNameDescending => {
+            ProjectScanPageSelector::Name(Descending, last_item.name.clone())
+        }
+        ProjectScanMode::ByMtimeAscending => {
+            ProjectScanPageSelector::MtimeName(
+                Ascending,
+                last_item.mtime,
                 last_item.name.clone(),
-            ),
-            ProjectScanMode::ByMtimeAscending => {
-                ProjectScanPageSelector::MtimeName(
-                    Ascending,
-                    last_item.mtime,
-                    last_item.name.clone(),
-                )
-            }
-            ProjectScanMode::ByMtimeDescending => {
-                ProjectScanPageSelector::MtimeName(
-                    Descending,
-                    last_item.mtime,
-                    last_item.name.clone(),
-                )
-            }
+            )
+        }
+        ProjectScanMode::ByMtimeDescending => {
+            ProjectScanPageSelector::MtimeName(
+                Descending,
+                last_item.mtime,
+                last_item.name.clone(),
+            )
         }
     }
 }
@@ -254,7 +253,7 @@ struct Project {
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ProjectScan>>,
-) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
+) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
 
@@ -315,7 +314,11 @@ async fn example_list_projects(
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-    Ok(HttpResponseOkPage(scan_mode, projects))
+    Ok(HttpResponseOkPage::new_with_paginator::<ProjectScan, _>(
+        projects,
+        &scan_mode,
+        page_selector_for,
+    )?)
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
