@@ -1,6 +1,8 @@
 // Copyright 2020 Oxide Computer Company
 /*!
- * Basic example that shows a paginated API
+ * Example showing a simple use of the explicit pagination API.  See
+ * pagination-marker.rs.  In reality, this use case is simpler using the marker
+ * pagination API.
  *
  * When you run this program, it will start an HTTP server on an available local
  * port.  See the log entry to see what port it ran on.  Then use curl to use
@@ -38,22 +40,34 @@ use std::ops::Bound;
 use std::sync::Arc;
 
 /**
+ * Object returned by our paginated endpoint
+ *
+ * Like anything returned by Dropshot, we must implement `JsonSchema` and
+ * `Serialize`.  We also implement `Clone` to simplify the example.
+ */
+#[derive(Clone, JsonSchema, Serialize)]
+struct Project {
+    name: String,
+    // lots more fields
+}
+
+/**
  * Structure on which we hang our implementation of [`PaginatedResource`].
  */
 // XXX shouldn't need to be Deserialize
-#[derive(Deserialize)]
+#[derive(Deserialize, ExtractedParameter)]
 struct ProjectScan;
 impl PaginatedResource for ProjectScan {
     type ScanMode = ProjectScanMode;
     type PageSelector = ProjectScanPageSelector;
     type Item = Project;
+}
 
-    fn page_selector_for(
-        last_item: &Project,
-        _scan_mode: &ProjectScanMode,
-    ) -> ProjectScanPageSelector {
-        ProjectScanPageSelector::NameAscending(last_item.name.clone())
-    }
+fn page_selector_for(
+    last_item: &Project,
+    _scan_mode: &ProjectScanMode,
+) -> ProjectScanPageSelector {
+    ProjectScanPageSelector::NameAscending(last_item.name.clone())
 }
 
 /**
@@ -63,9 +77,7 @@ impl PaginatedResource for ProjectScan {
  * This example only supports pagination by name in ascending order.  For a more
  * interesting case, see pagination-multi.rs.
  */
-#[derive(
-    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
-)]
+#[derive(Clone, Debug, Deserialize, ExtractedParameter)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectScanMode {
     /** by name ascending */
@@ -85,18 +97,6 @@ enum ProjectScanPageSelector {
 }
 
 /**
- * Object returned by our paginated endpoint
- *
- * Like anything returned by Dropshot, we must implement `JsonSchema` and
- * `Serialize`.  We also implement `Clone` to simplify the example.
- */
-#[derive(Clone, JsonSchema, Serialize)]
-struct Project {
-    name: String,
-    // lots more fields
-}
-
-/**
  * API endpoint for listing projects
  *
  * This implementation stores all the projects in a BTreeMap, which makes it
@@ -109,7 +109,7 @@ struct Project {
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ProjectScan>>,
-) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
+) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
@@ -136,7 +136,11 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage(ProjectScanMode::ByNameAscending, projects))
+    Ok(HttpResponseOkPage::new_with_paginator::<ProjectScan, _>(
+        projects,
+        &ProjectScanMode::ByNameAscending,
+        page_selector_for,
+    )?)
 }
 
 fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {

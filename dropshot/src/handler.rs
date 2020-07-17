@@ -902,6 +902,29 @@ where
             items,
         }))
     }
+
+    pub fn new_with_paginator<P, F>(
+        items: Vec<I>,
+        scan_mode: &P::ScanMode,
+        get_page_selector: F,
+    ) -> Result<HttpResponseOkPage<I>, HttpError>
+    where
+        F: Fn(&I, &P::ScanMode) -> P::PageSelector,
+        P: PaginatedResource<Item = I>,
+    {
+        let next_page = items
+            .last()
+            .map(|last_item| {
+                let selector = get_page_selector(last_item, scan_mode);
+                PageToken::new(selector).to_serialized()
+            })
+            .transpose()?;
+
+        Ok(HttpResponseOkPage(ClientPage {
+            next_page,
+            items,
+        }))
+    }
 }
 
 impl<I> From<HttpResponseOkPage<I>> for HttpHandlerResult
