@@ -44,6 +44,7 @@ use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
+use crate::pagination::MarkerPageSelector;
 use crate::pagination::PageToken;
 use crate::pagination::PaginatedResource;
 use crate::pagination::PaginationParams;
@@ -863,38 +864,52 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * Wraps a list of items with a response intended for pagination.  See the
  * pagination documentation docs for more details.
  */
-pub struct HttpResponseOkPage<P>(pub P::ScanMode, pub Vec<P::Item>)
+pub struct HttpResponseOkPage<I>(ClientPage<I>)
 where
-    P: PaginatedResource;
+    I: JsonSchema + Serialize + Send + Sync + 'static;
 
-impl<P> HttpTypedResponse for HttpResponseOkPage<P>
+impl<I> HttpTypedResponse for HttpResponseOkPage<I>
 where
-    P: PaginatedResource,
+    I: JsonSchema + Serialize + Send + Sync + 'static,
 {
-    type Body = ClientPage<P::Item>;
+    type Body = ClientPage<I>;
     const STATUS_CODE: StatusCode = StatusCode::OK;
 }
 
-impl<P> From<HttpResponseOkPage<P>> for HttpHandlerResult
+impl<I> HttpResponseOkPage<I>
 where
-    P: PaginatedResource,
+    I: JsonSchema + Serialize + Send + Sync + 'static,
 {
-    fn from(response: HttpResponseOkPage<P>) -> HttpHandlerResult {
-        let HttpResponseOkPage(list_mode, items) = response;
-
+    pub fn new_for_marker<F, S>(
+        items: Vec<I>,
+        get_field_value: F,
+    ) -> Result<HttpResponseOkPage<I>, HttpError>
+    where
+        F: Fn(&I) -> S,
+        S: Serialize + Send + Sync,
+    {
         let next_page = items
             .last()
             .map(|last_item| {
-                let last_item_marker =
-                    P::page_selector_for(last_item, &list_mode);
-                PageToken::new(last_item_marker).to_serialized()
+                let field_value = get_field_value(last_item);
+                let selector = MarkerPageSelector::Marker(field_value);
+                PageToken::new(selector).to_serialized()
             })
             .transpose()?;
 
-        HttpResponseOkPage::<P>::for_object(&ClientPage {
+        Ok(HttpResponseOkPage(ClientPage {
             next_page,
             items,
-        })
+        }))
+    }
+}
+
+impl<I> From<HttpResponseOkPage<I>> for HttpHandlerResult
+where
+    I: JsonSchema + Serialize + Send + Sync + 'static,
+{
+    fn from(response: HttpResponseOkPage<I>) -> HttpHandlerResult {
+        HttpResponseOkPage::<I>::for_object(&response.0)
     }
 }
 

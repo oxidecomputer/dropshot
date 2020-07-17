@@ -1,6 +1,6 @@
 // Copyright 2020 Oxide Computer Company
 /*!
- * Example showing use of the "Simple" pagination API
+ * Example showing use of the marker-based pagination API
  *
  * When you run this program, it will start an HTTP server on an available local
  * port.  See the log entry to see what port it ran on.  Then use curl to use
@@ -24,34 +24,17 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
+use dropshot::MarkerPageSelector;
+use dropshot::MarkerPaginator;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
-use dropshot::SimplePageSelector;
-use dropshot::SimplePaginated;
-use dropshot::SimpleScanMode;
 use dropshot::WhichPage;
 use schemars::JsonSchema;
-use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::sync::Arc;
-
-/**
- * Structure on which we hang our implementation of [`SimplePaginated`].
- */
-// XXX shouldn't need to be Deserialize
-#[derive(Deserialize)]
-struct ProjectScan;
-impl SimplePaginated for ProjectScan {
-    type PaginatedField = String;
-    type SimpleItem = Project;
-
-    fn page_selector_for_item(p: &Project) -> String {
-        p.name.clone()
-    }
-}
 
 /**
  * Object returned by our paginated endpoint
@@ -77,8 +60,8 @@ struct Project {
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScan>>,
-) -> Result<HttpResponseOkPage<ProjectScan>, HttpError> {
+    query: Query<PaginationParams<MarkerPaginator<String, Project>>>,
+) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
@@ -96,8 +79,7 @@ async fn example_list_projects(
             page_token,
         } => {
             /* Return a list of the first "limit" projects after this name. */
-            let SimplePageSelector::FullScan(last_seen) =
-                &page_token.page_start;
+            let MarkerPageSelector::Marker(last_seen) = &page_token.page_start;
             tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
                 .take(limit)
                 .map(|(_, project)| project.clone())
@@ -105,7 +87,9 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage(SimpleScanMode::FullScan, projects))
+    Ok(HttpResponseOkPage::new_for_marker(projects, |p: &Project| {
+        p.name.clone()
+    })?)
 }
 
 fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {

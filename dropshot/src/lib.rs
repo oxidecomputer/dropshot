@@ -315,13 +315,12 @@ pub use logging::ConfigLogging;
 pub use logging::ConfigLoggingIfExists;
 pub use logging::ConfigLoggingLevel;
 pub use pagination::ClientPage;
+pub use pagination::MarkerPageSelector;
+pub use pagination::MarkerPaginator;
 pub use pagination::PageToken;
 pub use pagination::PaginatedResource;
 pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
-pub use pagination::SimplePageSelector;
-pub use pagination::SimplePaginated;
-pub use pagination::SimpleScanMode;
 pub use pagination::WhichPage;
 pub use server::HttpServer;
 

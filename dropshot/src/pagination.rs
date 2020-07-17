@@ -143,97 +143,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::num::NonZeroU64;
-
-/**
- * Primary interface implemented by consumers to implement a paginated API.
- */
-// XXX why Sized?
-pub trait PaginatedResource: Sized + 'static {
-    /**
-     * (typically an enum) Describes the different supported ways to list the
-     * resource (e.g., by name ascending, by id descending, etc.).  This will be
-     * deserialized from the "list_mode" parameter of the querystring.
-     */
-    type ScanMode: Debug
-        + DeserializeOwned
-        + ExtractedParameter
-        + Send
-        + Sync
-        + 'static;
-
-    /**
-     * Describes what page the client wants to fetch.  This type is serialized
-     * to JSON, encoded as an opaque string, and inserted into the response
-     * containing the list of items on a page.  The client is expected to pass
-     * this string back as the "page_token" querystring parameter.
-     */
-    type PageSelector: Debug
-        + DeserializeOwned
-        + ExtractedParameter
-        + Serialize
-        + Send
-        + Sync
-        + 'static;
-
-    /**
-     * Describes the actual items in each page of results.
-     */
-    type Item: Serialize + JsonSchema + Send + Sync + 'static;
-
-    /**
-     * Given an item and a particular scan mode, return a suitable
-     * `PageSelector`.  Generally, this function will be invoked on the last
-     * item on the page to produce the token that the client can use to fetch
-     * the next page of results.
-     */
-    fn page_selector_for(
-        i: &Self::Item,
-        p: &Self::ScanMode,
-    ) -> Self::PageSelector;
-}
-
-/*
- * "Simple" pagination API
- */
-
-pub trait SimplePaginated {
-    type PaginatedField: Debug
-        + DeserializeOwned
-        + Serialize
-        + Send
-        + Sync
-        + 'static;
-    type SimpleItem: Serialize + JsonSchema + Send + Sync + 'static;
-
-    fn page_selector_for_item(i: &Self::SimpleItem) -> Self::PaginatedField;
-}
-
-#[derive(Debug, Deserialize, ExtractedParameter)]
-pub enum SimpleScanMode {
-    FullScan,
-}
-
-#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
-pub enum SimplePageSelector<F> {
-    FullScan(F),
-}
-
-impl<S> PaginatedResource for S
-where
-    S: SimplePaginated + 'static,
-{
-    type ScanMode = SimpleScanMode;
-    type PageSelector = SimplePageSelector<S::PaginatedField>;
-    type Item = S::SimpleItem;
-
-    fn page_selector_for(
-        i: &S::SimpleItem,
-        _p: &SimpleScanMode,
-    ) -> SimplePageSelector<S::PaginatedField> {
-        SimplePageSelector::FullScan(S::page_selector_for_item(i))
-    }
-}
 
 /**
  * Client's view of a page of results from a paginated API
@@ -247,15 +158,163 @@ pub struct ClientPage<ItemType> {
 }
 
 /**
- * Specifies whether the client is beginning a new scan or resuming an existing
- * one and provides additional parameters for either case
+ * Primary interface implemented by consumers to implement a paginated endpoint
+ *
+ * Implementing this interface just means defining types for the Item returned
+ * by the API endpoint, the query parameters used to choose how to scan the
+ * collection (e.g., what fields to sort by, whether the sort is ascending or
+ * descending, or whatever), and the query parameters used to specify the
+ * client's position in the scan (e.g., the last-seen values for the sort
+ * fields).
+ *
+ * Consumers interface with pagination in two places:
+ *
+ * 1. On input: to consume query parameters in an API endpoint function, that
+ *    function should accept a `Query<PaginationParams<P>>` argument for some
+ *    `P: PaginatedResource`.  Doing so allows consumers to easily tell if this
+ *    is the first request of a scan or a subsequent request and to extract the
+ *    query parameters mentioned above.
+ *
+ * 2. On output: to produce a page of results with an appropriate page token,
+ *    the function should return an `HttpResponseOkPage<Item>`.
+ *
+ * There are basically two ways to do this:
+ *
+ * 1. The simpler approach is to use the `MarkerPaginator` struct, which works
+ *    if all you want to support is sorting the returned items by just one field
+ *    in only one order (e.g., ascending).  See examples/pagination-marker.rs
+ *    for an example of this.
+ *
+ * 2. For more complex use cases, you probably want to implement
+ *    `PaginatedResource` directly.  This is useful if you want to be able to
+ *    sort by more than one field at a time (e.g., modification time _and_ name)
+ *    or provide more than one way to sort (e.g., name _or_ id).
+ */
+// XXX why Sized?
+pub trait PaginatedResource: Sized + 'static {
+    /**
+     * (typically an enum) Describes the different supported ways to list the
+     * resource (e.g., by name ascending, by id descending, etc.).  This will be
+     * deserialized from the optional "list_mode" querystring parameter on the
+     * first request that a client makes as part of a scan.
+     */
+    type ScanMode: Debug
+        + DeserializeOwned
+        + ExtractedParameter
+        + Send
+        + Sync
+        + 'static;
+
+    /**
+     * Identifies which page the client wants to fetch.  This type is
+     * deserialized from the "page_token" querystring parameter on all requests
+     * made by the client as part of a scan after for the first one.  The client
+     * gets this value from the previous results page and passes it through
+     * unmodified.  A new value is constructed, serialized, and included into
+     * each page of results so that the client can fetch the next page.
+     */
+    type PageSelector: Debug
+        + DeserializeOwned
+        + ExtractedParameter
+        + Serialize
+        + Send
+        + Sync
+        + 'static;
+
+    /**
+     * Describes the actual items returned in each page of results.
+     */
+    type Item: Serialize + JsonSchema + Send + Sync + 'static;
+}
+
+/**
+ * Pagination interface for simple cases where a collection is sorted in one
+ * direction by one Serializable field (called the marker)
+ *
+ * This is simpler to use than implementing `PaginatedResource` directly, but
+ * it's less flexible.  See examples/pagination-marker.rs for details.
+ */
+/*
+ * We want this type to be parametrized by FieldType and ItemType so that
+ * consumers can specify the types for the marker and the items they're
+ * returning.  This is important below for us to implement `PaginatedResource`.
+ * However, we don't actually need any data for these types (in fact, we don't
+ * need any data at all -- this struct will never be instantiated: it only
+ * exists to hang an implementation of `PaginatedResource` from), hence the
+ * PhantomData fields.
+ */
+#[derive(Deserialize, ExtractedParameter)]
+pub struct MarkerPaginator<FieldType, ItemType> {
+    dummy1: PhantomData<FieldType>,
+    dummy2: PhantomData<ItemType>,
+}
+
+impl<FieldType, ItemType> PaginatedResource
+    for MarkerPaginator<FieldType, ItemType>
+where
+    FieldType: Debug + DeserializeOwned + Serialize + Send + Sync + 'static,
+    ItemType: JsonSchema + Serialize + Send + Sync + 'static,
+{
+    type ScanMode = MarkerScanMode;
+    type PageSelector = MarkerPageSelector<FieldType>;
+    type Item = ItemType;
+}
+
+/**
+ * Internal type used as `PaginatedResource::ScanMode` for `MarkerPaginated`.
+ */
+#[derive(Debug, Deserialize, ExtractedParameter)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarkerScanMode {
+    ByMarkerAsc,
+}
+
+/**
+ * Internal type used as `PaginatedResource::PageSelector` for `MarkerPaginated`.
+ */
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarkerPageSelector<F> {
+    Marker(F),
+}
+
+/*
+ * Generic pagination infrastructure
+ */
+
+/**
+ * Query parameters provided by clients when scanning a paginated collection
+ *
+ * See `PaginatedResource` for more information.
+ */
+#[derive(Debug, Deserialize, ExtractedParameter)]
+pub struct PaginationParams<P: PaginatedResource> {
+    /**
+     * Specifies either how the client wants to begin a new scan or how to
+     * resume a previous scan.  This field is flattened by serde, so see the
+     * variants of [`WhichPage`] to see which fields actually show up in the
+     * serialized form.
+     */
+    #[serde(flatten)]
+    pub page_params: WhichPage<P>,
+
+    /**
+     * Optional client-requested limit on page size.  Consumers should use
+     * [`RequestContext::page_limit()`] to access this value.
+     */
+    pub(crate) limit: Option<NonZeroU64>,
+}
+
+/**
+ * Indicates whether the client is beginning a new scan or resuming an existing
+ * one and provides the corresponding parameters for each case
  */
 /*
  * In REST APIs, callers typically provide either the parameters to resume a
  * scan or the parameters to begin a new one, with no separate field indicating
  * which case they're requesting.  Fortunately, serde(untagged) implements this
  * behavior precisely, with one caveat: the variants below are tried in order
- * until one succeeds.  For this to work, `NextPage` must be defined before
+ * until one succeeds.  So for this to work, `NextPage` must be defined before
  * `FirstPage`, since any set of parameters at all (including no parameters at
  * all) are valid for `FirstPage`.
  */
@@ -275,27 +334,6 @@ pub enum WhichPage<P: PaginatedResource> {
      * provide `list_mode`, a consumer-specified type.
      */
     FirstPage { list_mode: Option<P::ScanMode> },
-}
-
-/**
- * Query parameters provided by clients when scanning a paginated collection
- */
-#[derive(Debug, Deserialize, ExtractedParameter)]
-pub struct PaginationParams<P: PaginatedResource> {
-    /**
-     * Specifies either how to begin a new scan or how to resume a previous
-     * scan.  This field is flattened by serde, so see the variants of
-     * [`WhichPage`] to see which fields actually show up in the serialized
-     * form.
-     */
-    #[serde(flatten)]
-    pub page_params: WhichPage<P>,
-
-    /**
-     * Optional client-requested limit on page size.  See
-     * [`RequestContext::page_limit()`].
-     */
-    pub(crate) limit: Option<NonZeroU64>,
 }
 
 /**
