@@ -63,6 +63,11 @@ impl PaginatedResource for ProjectScan {
     type Item = Project;
 }
 
+/**
+ * Given a project (typically representing the last project in a page of
+ * results) and scan mode, return a page selector that can be sent to the client
+ * to request the next page of results.
+ */
 fn page_selector_for(
     last_item: &Project,
     _scan_mode: &ProjectScanMode,

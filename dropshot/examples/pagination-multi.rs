@@ -138,6 +138,19 @@ use std::sync::Arc;
 extern crate slog;
 
 /**
+ * Item returned by our paginated endpoint
+ *
+ * Like anything returned by Dropshot, we must implement `JsonSchema` and
+ * `Serialize`.  We also implement `Clone` to simplify the example.
+ */
+#[derive(Clone, JsonSchema, Serialize)]
+struct Project {
+    name: String,
+    mtime: DateTime<Utc>,
+    // lots more fields
+}
+
+/**
  * Structure on which we hang our implementation of [`PaginatedResource`].
  */
 // XXX shouldn't need to be Deserialize
@@ -147,34 +160,6 @@ impl PaginatedResource for ProjectScan {
     type ScanMode = ProjectScanMode;
     type PageSelector = ProjectScanPageSelector;
     type Item = Project;
-}
-
-fn page_selector_for(
-    last_item: &Project,
-    scan_mode: &ProjectScanMode,
-) -> ProjectScanPageSelector {
-    match scan_mode {
-        ProjectScanMode::ByNameAscending => {
-            ProjectScanPageSelector::Name(Ascending, last_item.name.clone())
-        }
-        ProjectScanMode::ByNameDescending => {
-            ProjectScanPageSelector::Name(Descending, last_item.name.clone())
-        }
-        ProjectScanMode::ByMtimeAscending => {
-            ProjectScanPageSelector::MtimeName(
-                Ascending,
-                last_item.mtime,
-                last_item.name.clone(),
-            )
-        }
-        ProjectScanMode::ByMtimeDescending => {
-            ProjectScanPageSelector::MtimeName(
-                Descending,
-                last_item.mtime,
-                last_item.name.clone(),
-            )
-        }
-    }
 }
 
 /**
@@ -228,16 +213,36 @@ enum ProjectScanPageSelector {
 }
 
 /**
- * Item returned by our paginated endpoint
- *
- * Like anything returned by Dropshot, we must implement `JsonSchema` and
- * `Serialize`.  We also implement `Clone` to simplify the example.
+ * Given a project (typically representing the last project in a page of
+ * results) and scan mode, return a page selector that can be sent to the client
+ * to request the next page of results.
  */
-#[derive(Clone, JsonSchema, Serialize)]
-struct Project {
-    name: String,
-    mtime: DateTime<Utc>,
-    // lots more fields
+fn page_selector_for(
+    last_item: &Project,
+    scan_mode: &ProjectScanMode,
+) -> ProjectScanPageSelector {
+    match scan_mode {
+        ProjectScanMode::ByNameAscending => {
+            ProjectScanPageSelector::Name(Ascending, last_item.name.clone())
+        }
+        ProjectScanMode::ByNameDescending => {
+            ProjectScanPageSelector::Name(Descending, last_item.name.clone())
+        }
+        ProjectScanMode::ByMtimeAscending => {
+            ProjectScanPageSelector::MtimeName(
+                Ascending,
+                last_item.mtime,
+                last_item.name.clone(),
+            )
+        }
+        ProjectScanMode::ByMtimeDescending => {
+            ProjectScanPageSelector::MtimeName(
+                Descending,
+                last_item.mtime,
+                last_item.name.clone(),
+            )
+        }
+    }
 }
 
 /**
@@ -331,8 +336,7 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(ProjectCollection::new());
-    let config_dropshot = ConfigDropshot {
+    let ctx = Arc::new(ProjectCollection::new()); let config_dropshot = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
     };
     let config_logging = ConfigLogging::StderrTerminal {
