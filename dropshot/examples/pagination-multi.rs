@@ -261,7 +261,6 @@ async fn example_list_projects(
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-
     let data = rqctx_to_data(rqctx);
     let scan_mode = match &pag_params.page_params {
         WhichPage::FirstPage {
