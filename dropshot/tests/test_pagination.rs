@@ -40,7 +40,7 @@ fn paginate_api() -> ApiDescription {
 async fn demo_handler_integers(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<PaginatedIntegers>>,
-) -> Result<HttpResponseOkPage<PaginatedIntegers>, HttpError> {
+) -> Result<HttpResponseOkPage<usize>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
 
@@ -62,7 +62,11 @@ async fn demo_handler_integers(
     }
     .collect();
 
-    Ok(HttpResponseOkPage(IntegersScanMode::ByNum, results))
+    Ok(HttpResponseOkPage::new_with_paginator::<PaginatedIntegers, _>(
+        results,
+        &IntegersScanMode::ByNum,
+        page_selector_for,
+    )?)
 }
 
 #[derive(Deserialize)] // XXX
@@ -79,13 +83,10 @@ impl PaginatedResource for PaginatedIntegers {
     type ScanMode = IntegersScanMode;
     type PageSelector = IntegersPageSelector;
     type Item = usize;
+}
 
-    fn page_selector_for(
-        n: &usize,
-        _p: &IntegersScanMode,
-    ) -> IntegersPageSelector {
-        IntegersPageSelector::ByNum(*n)
-    }
+fn page_selector_for(n: &usize, _p: &IntegersScanMode) -> IntegersPageSelector {
+    IntegersPageSelector::ByNum(*n)
 }
 
 #[tokio::test]
