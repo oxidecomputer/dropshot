@@ -10,7 +10,6 @@ use dropshot::ApiDescription;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
-use dropshot::PaginatedResource;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -39,7 +38,7 @@ fn paginate_api() -> ApiDescription {
 }]
 async fn demo_handler_integers(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<PaginatedIntegers>>,
+    query: Query<PaginationParams<IntegersScanMode, IntegersPageSelector>>,
 ) -> Result<HttpResponseOkPage<usize>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -62,15 +61,13 @@ async fn demo_handler_integers(
     }
     .collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator::<PaginatedIntegers, _>(
+    Ok(HttpResponseOkPage::new_with_paginator(
         results,
         &IntegersScanMode::ByNum,
         page_selector_for,
     )?)
 }
 
-#[derive(Deserialize)] // XXX
-struct PaginatedIntegers;
 #[derive(Debug, Deserialize, ExtractedParameter)]
 enum IntegersScanMode {
     ByNum,
@@ -78,11 +75,6 @@ enum IntegersScanMode {
 #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 enum IntegersPageSelector {
     ByNum(usize),
-}
-impl PaginatedResource for PaginatedIntegers {
-    type ScanMode = IntegersScanMode;
-    type PageSelector = IntegersPageSelector;
-    type Item = usize;
 }
 
 fn page_selector_for(n: &usize, _p: &IntegersScanMode) -> IntegersPageSelector {

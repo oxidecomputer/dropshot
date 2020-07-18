@@ -27,7 +27,6 @@ use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
-use dropshot::PaginatedResource;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -49,18 +48,6 @@ use std::sync::Arc;
 struct Project {
     name: String,
     // lots more fields
-}
-
-/**
- * Structure on which we hang our implementation of [`PaginatedResource`].
- */
-// XXX shouldn't need to be Deserialize
-#[derive(Deserialize, ExtractedParameter)]
-struct ProjectScan;
-impl PaginatedResource for ProjectScan {
-    type ScanMode = ProjectScanMode;
-    type PageSelector = ProjectScanPageSelector;
-    type Item = Project;
 }
 
 /**
@@ -113,7 +100,7 @@ enum ProjectScanPageSelector {
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScan>>,
+    query: Query<PaginationParams<ProjectScanMode, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -141,7 +128,7 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage::new_with_paginator::<ProjectScan, _>(
+    Ok(HttpResponseOkPage::new_with_paginator(
         projects,
         &ProjectScanMode::ByNameAscending,
         page_selector_for,

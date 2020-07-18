@@ -26,7 +26,6 @@ use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
 use dropshot::MarkerPageSelector;
 use dropshot::MarkerPaginator;
-use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::WhichPage;
@@ -60,7 +59,7 @@ struct Project {
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<MarkerPaginator<String, Project>>>,
+    query: Query<MarkerPaginator<String>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();

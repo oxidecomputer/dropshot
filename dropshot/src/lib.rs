@@ -318,7 +318,6 @@ pub use pagination::ClientPage;
 pub use pagination::MarkerPageSelector;
 pub use pagination::MarkerPaginator;
 pub use pagination::PageToken;
-pub use pagination::PaginatedResource;
 pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::WhichPage;

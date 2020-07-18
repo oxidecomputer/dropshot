@@ -46,7 +46,6 @@ use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
 use crate::pagination::MarkerPageSelector;
 use crate::pagination::PageToken;
-use crate::pagination::PaginatedResource;
 use crate::pagination::PaginationParams;
 
 use async_trait::async_trait;
@@ -107,12 +106,13 @@ impl RequestContext {
      * particular limit, this function returns the server-configured default
      * page size.
      */
-    pub fn page_limit<P>(
+    pub fn page_limit<ScanMode, PageSelector>(
         &self,
-        pag_params: &PaginationParams<P>,
+        pag_params: &PaginationParams<ScanMode, PageSelector>,
     ) -> Result<NonZeroUsize, HttpError>
     where
-        P: PaginatedResource,
+        ScanMode: Debug + DeserializeOwned + Send + Sync + 'static,
+        PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
     {
         let server_config = &self.server.config;
         /* XXX TODO-cleanup clean up with combinators? */
@@ -886,7 +886,7 @@ where
     ) -> Result<HttpResponseOkPage<I>, HttpError>
     where
         F: Fn(&I) -> S,
-        S: Serialize + Send + Sync,
+        S: Serialize + Send + Sync + 'static,
     {
         let next_page = items
             .last()
@@ -903,14 +903,14 @@ where
         }))
     }
 
-    pub fn new_with_paginator<P, F>(
+    pub fn new_with_paginator<F, ScanMode, PageSelector>(
         items: Vec<I>,
-        scan_mode: &P::ScanMode,
+        scan_mode: &ScanMode,
         get_page_selector: F,
     ) -> Result<HttpResponseOkPage<I>, HttpError>
     where
-        F: Fn(&I, &P::ScanMode) -> P::PageSelector,
-        P: PaginatedResource<Item = I>,
+        F: Fn(&I, &ScanMode) -> PageSelector,
+        PageSelector: Serialize,
     {
         let next_page = items
             .last()

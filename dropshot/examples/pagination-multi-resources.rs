@@ -14,7 +14,6 @@ use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
-use dropshot::PaginatedResource;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
 use dropshot::PaginationOrder::Descending;
@@ -26,13 +25,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
 use std::ops::Bound;
 use std::sync::Arc;
 use uuid::Uuid;
-
-#[macro_use]
-extern crate slog;
 
 /*
  * Example API data model: we have three resources, each having an "id" and
@@ -127,24 +122,7 @@ fn page_selector<T: HasIdentity>(
     }
 }
 
-// XXX shouldn't need to be Deserialize
-#[derive(Deserialize)]
-struct ExScan<T> {
-    dummy: PhantomData<T>,
-}
-impl<T> PaginatedResource for ExScan<T>
-where
-    T: Serialize + JsonSchema + Send + Sync + 'static,
-{
-    type ScanMode = ExScanMode;
-    type PageSelector = ExPageSelector;
-    type Item = T;
-}
-
-fn scan_mode<T>(p: &WhichPage<ExScan<T>>) -> ExScanMode
-where
-    T: Serialize + JsonSchema + Send + Sync + 'static,
-{
+fn scan_mode(p: &WhichPage<ExScanMode, ExPageSelector>) -> ExScanMode {
     match p {
         WhichPage::FirstPage {
             list_mode: None,
@@ -181,7 +159,7 @@ where
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScan<Project>>>,
+    query: Query<PaginationParams<ExScanMode, ExPageSelector>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -198,7 +176,7 @@ async fn example_list_projects(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator::<ExScan<Project>, _>(
+    Ok(HttpResponseOkPage::new_with_paginator(
         items,
         &scan_mode,
         page_selector,
@@ -211,7 +189,7 @@ async fn example_list_projects(
 }]
 async fn example_list_disks(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScan<Disk>>>,
+    query: Query<PaginationParams<ExScanMode, ExPageSelector>>,
 ) -> Result<HttpResponseOkPage<Disk>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -228,7 +206,7 @@ async fn example_list_disks(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator::<ExScan<Disk>, _>(
+    Ok(HttpResponseOkPage::new_with_paginator(
         items,
         &scan_mode,
         page_selector,
@@ -241,7 +219,7 @@ async fn example_list_disks(
 }]
 async fn example_list_instances(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScan<Instance>>>,
+    query: Query<PaginationParams<ExScanMode, ExPageSelector>>,
 ) -> Result<HttpResponseOkPage<Instance>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -258,7 +236,7 @@ async fn example_list_instances(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator::<ExScan<Instance>, _>(
+    Ok(HttpResponseOkPage::new_with_paginator(
         items,
         &scan_mode,
         page_selector,
@@ -268,7 +246,7 @@ async fn example_list_instances(
 fn do_list<'a, T>(
     data: &'a Arc<DataCollection>,
     scan_mode: &ExScanMode,
-    p: &'a WhichPage<ExScan<T>>,
+    p: &'a WhichPage<ExScanMode, ExPageSelector>,
     by_name: &'a BTreeMap<String, Arc<T>>,
     by_id: &'a BTreeMap<Uuid, Arc<T>>,
 ) -> ItemIter<'a, T>

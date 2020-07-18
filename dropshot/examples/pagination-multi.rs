@@ -8,25 +8,10 @@
  * the `limit` query parameter.  Try passing the `next_page` token from the
  * response as a query parameter called `page_token`, too.
  *
- * Key terms:
- *
- * * This server exposes a single **API endpoint** that returns the **items**
- *   contained within a **collection**.
- * * The client is not allowed to list the entire collection in one request.
- *   Instead, they list the collection using a sequence of requests to the one
- *   endpoint.  This sequence of requests is a **scan** of the collection, and
- *   we sometimes say that the client **pages through** the collection.
- * * The initial request in the scan may specify the **scan mode**, which
- *   typically specifies how the results are to be sorted (i.e., by which field
- *   and whether the sort is ascending or descending).
- * * Each request returns a **page** of results at a time, along with a **page
- *   token** that's provided with the next request as a query parameter.
- * * The scan mode cannot change between requests that are part of the same
- *   scan.
- *
- * This example uses a resource called a "Project", which only has a "name" and
- * an "mtime" (modification time).  The server creates 1,000 projects on startup
- * and provides one API endpoint to page through them.
+ * For background, see src/pagination.rs.  This example uses a resource called a
+ * "Project", which only has a "name" and an "mtime" (modification time).  The
+ * server creates 1,000 projects on startup and provides one API endpoint to
+ * page through them.
  *
  * Initially, a client just invokes the API to list the first page of results
  * using the default sort order (we'll use limit=3 to keep the result set
@@ -117,7 +102,6 @@ use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
 use dropshot::HttpServer;
-use dropshot::PaginatedResource;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
 use dropshot::PaginationOrder::Descending;
@@ -148,18 +132,6 @@ struct Project {
     name: String,
     mtime: DateTime<Utc>,
     // lots more fields
-}
-
-/**
- * Structure on which we hang our implementation of [`PaginatedResource`].
- */
-// XXX shouldn't need to be Deserialize
-#[derive(Deserialize)]
-struct ProjectScan;
-impl PaginatedResource for ProjectScan {
-    type ScanMode = ProjectScanMode;
-    type PageSelector = ProjectScanPageSelector;
-    type Item = Project;
 }
 
 /**
@@ -257,7 +229,7 @@ fn page_selector_for(
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScan>>,
+    query: Query<PaginationParams<ProjectScanMode, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -318,7 +290,7 @@ async fn example_list_projects(
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-    Ok(HttpResponseOkPage::new_with_paginator::<ProjectScan, _>(
+    Ok(HttpResponseOkPage::new_with_paginator(
         projects,
         &scan_mode,
         page_selector_for,
@@ -335,7 +307,8 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(ProjectCollection::new()); let config_dropshot = ConfigDropshot {
+    let ctx = Arc::new(ProjectCollection::new());
+    let config_dropshot = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
     };
     let config_logging = ConfigLogging::StderrTerminal {
