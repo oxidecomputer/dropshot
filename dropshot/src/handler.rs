@@ -115,31 +115,40 @@ impl RequestContext {
         PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
     {
         let server_config = &self.server.config;
-        /* XXX TODO-cleanup clean up with combinators? */
-        if let Some(client_limit) = pag_params.limit {
+
+        Ok(pag_params
+            .limit
             /*
-             * This is a gnarly edge case.  Internally, we want the limit to
-             * be a "usize" so that we can use iter.take() with it (as an
-             * example).  We don't want to put "usize" in the public
-             * interface, as that would cause the server's exported
-             * interface to change when it was built differently, although
-             * that's arguably correct.  Instead, we essentially validate
-             * here that the client gave us a value that we can support.
+             * Convert the client-provided limit from a NonZeroU64 to a
+             * usize.  That's because internally, we want the limit to be a
+             * "usize" so we can use functions like `iter.take()` with it (as an
+             * example).  We could put "usize" in the public interface, but that
+             * would cause the server's exported interface to change when it was
+             * built differently, although that's arguably correct.  Instead, we
+             * essentially validate here that the client gave us a value that we
+             * can support.
              */
-            let client_limit_u64 = client_limit.get();
-            let client_limit_usize = usize::try_from(client_limit_u64)
-                .map_err(|_| {
-                    HttpError::for_bad_request(
-                        None,
-                        String::from("unsupported pagination limit: too large"),
-                    )
-                })?;
-            let client_limit_nzusize =
-                NonZeroUsize::new(client_limit_usize).unwrap();
-            Ok(min(client_limit_nzusize, server_config.page_max_nitems))
-        } else {
-            Ok(server_config.page_default_nitems)
-        }
+            .map(|limit_nzu64| usize::try_from(limit_nzu64.get()))
+            .transpose()
+            .map_err(|_| {
+                HttpError::for_bad_request(
+                    None,
+                    String::from("unsupported pagination limit: too large"),
+                )
+            })?
+            /*
+             * Compare the client-provided limit to the configured max for the
+             * server and take the smaller one.
+             */
+            .map(|limit_usize| {
+                let limit_nzusize = NonZeroUsize::new(limit_usize).unwrap();
+                min(limit_nzusize, server_config.page_max_nitems)
+            })
+            /*
+             * If no limit was provided by the client, use the configured
+             * default.
+             */
+            .unwrap_or(server_config.page_default_nitems))
     }
 }
 
