@@ -147,18 +147,19 @@ struct Project {
  * serialize it using `serde_querystring`.  That code could fail at runtime for
  * certain types of values (e.g., enum variants that contain data).
  */
-#[derive(
-    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
-)]
-struct ProjectScanParams {
-    sort_mode: Option<ProjectScanMode>,
+#[derive(Deserialize, Clone, ExtractedParameter)]
+struct ProjectScanParamsIncoming {
+    sort: Option<ProjectSort>,
 }
 
-#[derive(
-    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
-)]
+#[derive(JsonSchema, Serialize)]
+struct ProjectScanParams {
+    sort: ProjectSort,
+}
+
+#[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "kebab-case")]
-enum ProjectScanMode {
+enum ProjectSort {
     /** by name ascending */
     ByNameAscending,
     /** by name descending */
@@ -184,7 +185,7 @@ enum ProjectScanMode {
  * selector back, you find the object having the next value after the one stored
  * in the token and start returning results from there.
  */
-#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
+#[derive(Deserialize, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectScanPageSelector {
     Name(PaginationOrder, String),
@@ -198,29 +199,25 @@ enum ProjectScanPageSelector {
  */
 fn page_selector_for(
     last_item: &Project,
-    scan_mode: &ProjectScanMode,
+    scan_params: &ProjectScanParams,
 ) -> ProjectScanPageSelector {
-    match scan_mode {
-        ProjectScanMode::ByNameAscending => {
+    match scan_params.sort {
+        ProjectSort::ByNameAscending => {
             ProjectScanPageSelector::Name(Ascending, last_item.name.clone())
         }
-        ProjectScanMode::ByNameDescending => {
+        ProjectSort::ByNameDescending => {
             ProjectScanPageSelector::Name(Descending, last_item.name.clone())
         }
-        ProjectScanMode::ByMtimeAscending => {
-            ProjectScanPageSelector::MtimeName(
-                Ascending,
-                last_item.mtime,
-                last_item.name.clone(),
-            )
-        }
-        ProjectScanMode::ByMtimeDescending => {
-            ProjectScanPageSelector::MtimeName(
-                Descending,
-                last_item.mtime,
-                last_item.name.clone(),
-            )
-        }
+        ProjectSort::ByMtimeAscending => ProjectScanPageSelector::MtimeName(
+            Ascending,
+            last_item.mtime,
+            last_item.name.clone(),
+        ),
+        ProjectSort::ByMtimeDescending => ProjectScanPageSelector::MtimeName(
+            Descending,
+            last_item.mtime,
+            last_item.name.clone(),
+        ),
     }
 }
 
@@ -236,40 +233,46 @@ fn page_selector_for(
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
+    query: Query<
+        PaginationParams<ProjectScanParamsIncoming, ProjectScanPageSelector>,
+    >,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_mode = match &pag_params.page_params {
-        WhichPage::First(ProjectScanParams {
-            sort_mode: None,
-        }) => ProjectScanMode::ByNameAscending,
+    let scan_params = ProjectScanParams {
+        sort: match &pag_params.page_params {
+            WhichPage::First(ProjectScanParamsIncoming {
+                sort: None,
+            }) => ProjectSort::ByNameAscending,
 
-        WhichPage::First(ProjectScanParams {
-            sort_mode: Some(p),
-        }) => p.clone(),
+            WhichPage::First(ProjectScanParamsIncoming {
+                sort: Some(p),
+            }) => p.clone(),
 
-        WhichPage::Next(ProjectScanPageSelector::Name(Ascending, ..)) => {
-            ProjectScanMode::ByNameAscending
-        }
-        WhichPage::Next(ProjectScanPageSelector::Name(Descending, ..)) => {
-            ProjectScanMode::ByNameDescending
-        }
-        WhichPage::Next(ProjectScanPageSelector::MtimeName(Ascending, ..)) => {
-            ProjectScanMode::ByMtimeAscending
-        }
-        WhichPage::Next(ProjectScanPageSelector::MtimeName(Descending, ..)) => {
-            ProjectScanMode::ByMtimeDescending
-        }
+            WhichPage::Next(ProjectScanPageSelector::Name(Ascending, ..)) => {
+                ProjectSort::ByNameAscending
+            }
+            WhichPage::Next(ProjectScanPageSelector::Name(Descending, ..)) => {
+                ProjectSort::ByNameDescending
+            }
+            WhichPage::Next(ProjectScanPageSelector::MtimeName(
+                Ascending,
+                ..,
+            )) => ProjectSort::ByMtimeAscending,
+            WhichPage::Next(ProjectScanPageSelector::MtimeName(
+                Descending,
+                ..,
+            )) => ProjectSort::ByMtimeDescending,
+        },
     };
 
     let iter = match &pag_params.page_params {
-        WhichPage::First(..) => match scan_mode {
-            ProjectScanMode::ByNameAscending => data.iter_by_name_asc(),
-            ProjectScanMode::ByNameDescending => data.iter_by_name_desc(),
-            ProjectScanMode::ByMtimeAscending => data.iter_by_mtime_asc(),
-            ProjectScanMode::ByMtimeDescending => data.iter_by_mtime_desc(),
+        WhichPage::First(..) => match scan_params.sort {
+            ProjectSort::ByNameAscending => data.iter_by_name_asc(),
+            ProjectSort::ByNameDescending => data.iter_by_name_desc(),
+            ProjectSort::ByMtimeAscending => data.iter_by_mtime_asc(),
+            ProjectSort::ByMtimeDescending => data.iter_by_mtime_desc(),
         },
 
         WhichPage::Next(ProjectScanPageSelector::Name(Ascending, name)) => {
@@ -291,7 +294,7 @@ async fn example_list_projects(
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-    Ok(HttpResponseOkPage::new(projects, &scan_mode, page_selector_for)?)
+    Ok(HttpResponseOkPage::new(projects, &scan_params, page_selector_for)?)
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
@@ -330,14 +333,14 @@ async fn main() -> Result<(), String> {
 
 fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
     let all_modes = vec![
-        ProjectScanMode::ByNameAscending,
-        ProjectScanMode::ByNameDescending,
-        ProjectScanMode::ByMtimeAscending,
-        ProjectScanMode::ByMtimeDescending,
+        ProjectSort::ByNameAscending,
+        ProjectSort::ByNameDescending,
+        ProjectSort::ByMtimeAscending,
+        ProjectSort::ByMtimeDescending,
     ];
     for mode in all_modes {
         let to_print = ProjectScanParams {
-            sort_mode: Some(mode),
+            sort: mode,
         };
         let query_string = serde_urlencoded::to_string(to_print).unwrap();
         let uri = Uri::builder()

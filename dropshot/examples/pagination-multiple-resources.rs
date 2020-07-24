@@ -86,18 +86,19 @@ impl_HasIdentity!(Instance);
 /*
  * Pagination-related types
  */
-#[derive(
-    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
-)]
+#[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
 struct ExScanParams {
-    sort: Option<ExScanMode>,
+    sort: ExSortMode,
 }
 
-#[derive(
-    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
-)]
+#[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
+struct ExScanParamsIncoming {
+    sort: Option<ExSortMode>,
+}
+
+#[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
 #[serde(rename_all = "kebab-case")]
-enum ExScanMode {
+enum ExSortMode {
     ByIdAscending,
     ByIdDescending,
     ByNameAscending,
@@ -117,45 +118,46 @@ fn page_selector<T: HasIdentity>(
 ) -> ExPageSelector {
     match scan_params {
         ExScanParams {
-            sort: Some(ExScanMode::ByIdAscending),
+            sort: ExSortMode::ByIdAscending,
         } => ExPageSelector::Id(Ascending, *item.id()),
         ExScanParams {
-            sort: Some(ExScanMode::ByIdDescending),
+            sort: ExSortMode::ByIdDescending,
         } => ExPageSelector::Id(Descending, *item.id()),
         ExScanParams {
-            sort: Some(ExScanMode::ByNameAscending),
+            sort: ExSortMode::ByNameAscending,
         } => ExPageSelector::Name(Ascending, item.name().clone()),
         ExScanParams {
-            sort: Some(ExScanMode::ByNameDescending),
+            sort: ExSortMode::ByNameDescending,
         } => ExPageSelector::Name(Descending, item.name().clone()),
-        // XXX It would be better if we had a distinct type where this wasn't
-        // possible.
-        _ => unimplemented!(),
     }
 }
 
-fn scan_mode(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanMode {
-    match p {
-        WhichPage::First(ExScanParams {
-            sort: None,
-        }) => ExScanMode::ByNameAscending,
+fn scan_params(
+    p: &WhichPage<ExScanParamsIncoming, ExPageSelector>,
+) -> ExScanParams {
+    ExScanParams {
+        sort: match p {
+            WhichPage::First(ExScanParamsIncoming {
+                sort: None,
+            }) => ExSortMode::ByNameAscending,
 
-        WhichPage::First(ExScanParams {
-            sort: Some(p),
-        }) => p.clone(),
+            WhichPage::First(ExScanParamsIncoming {
+                sort: Some(p),
+            }) => p.clone(),
 
-        WhichPage::Next(ExPageSelector::Id(Ascending, ..)) => {
-            ExScanMode::ByIdAscending
-        }
-        WhichPage::Next(ExPageSelector::Id(Descending, ..)) => {
-            ExScanMode::ByIdDescending
-        }
-        WhichPage::Next(ExPageSelector::Name(Ascending, ..)) => {
-            ExScanMode::ByNameAscending
-        }
-        WhichPage::Next(ExPageSelector::Name(Descending, ..)) => {
-            ExScanMode::ByNameDescending
-        }
+            WhichPage::Next(ExPageSelector::Id(Ascending, ..)) => {
+                ExSortMode::ByIdAscending
+            }
+            WhichPage::Next(ExPageSelector::Id(Descending, ..)) => {
+                ExSortMode::ByIdDescending
+            }
+            WhichPage::Next(ExPageSelector::Name(Ascending, ..)) => {
+                ExSortMode::ByNameAscending
+            }
+            WhichPage::Next(ExPageSelector::Name(Descending, ..)) => {
+                ExSortMode::ByNameDescending
+            }
+        },
     }
 }
 
@@ -173,16 +175,16 @@ fn scan_mode(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanMode {
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
+    query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_mode = scan_mode(&pag_params.page_params);
+    let scan_params = scan_params(&pag_params.page_params);
 
     let iter = do_list(
         &data,
-        &scan_mode,
+        &scan_params,
         &pag_params.page_params,
         &data.projects_by_name,
         &data.projects_by_id,
@@ -192,9 +194,7 @@ async fn example_list_projects(
 
     Ok(HttpResponseOkPage::new(
         items,
-        &ExScanParams {
-            sort: Some(scan_mode),
-        },
+        &scan_params,
         page_selector,
     )?)
 }
@@ -205,16 +205,16 @@ async fn example_list_projects(
 }]
 async fn example_list_disks(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
+    query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
 ) -> Result<HttpResponseOkPage<Disk>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_mode = scan_mode(&pag_params.page_params);
+    let scan_params = scan_params(&pag_params.page_params);
 
     let iter = do_list(
         &data,
-        &scan_mode,
+        &scan_params,
         &pag_params.page_params,
         &data.disks_by_name,
         &data.disks_by_id,
@@ -224,9 +224,7 @@ async fn example_list_disks(
 
     Ok(HttpResponseOkPage::new(
         items,
-        &ExScanParams {
-            sort: Some(scan_mode),
-        },
+        &scan_params,
         page_selector,
     )?)
 }
@@ -237,16 +235,16 @@ async fn example_list_disks(
 }]
 async fn example_list_instances(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
+    query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
 ) -> Result<HttpResponseOkPage<Instance>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_mode = scan_mode(&pag_params.page_params);
+    let scan_params = scan_params(&pag_params.page_params);
 
     let iter = do_list(
         &data,
-        &scan_mode,
+        &scan_params,
         &pag_params.page_params,
         &data.instances_by_name,
         &data.instances_by_id,
@@ -256,17 +254,15 @@ async fn example_list_instances(
 
     Ok(HttpResponseOkPage::new(
         items,
-        &ExScanParams {
-            sort: Some(scan_mode),
-        },
+        &scan_params,
         page_selector,
     )?)
 }
 
 fn do_list<'a, T>(
     data: &'a Arc<DataCollection>,
-    scan_mode: &ExScanMode,
-    p: &'a WhichPage<ExScanParams, ExPageSelector>,
+    scan_params: &ExScanParams,
+    p: &'a WhichPage<ExScanParamsIncoming, ExPageSelector>,
     by_name: &'a BTreeMap<String, Arc<T>>,
     by_id: &'a BTreeMap<Uuid, Arc<T>>,
 ) -> ItemIter<'a, T>
@@ -274,11 +270,11 @@ where
     T: Clone + JsonSchema + Serialize + Send + Sync + 'static,
 {
     match p {
-        WhichPage::First(_) => match scan_mode {
-            ExScanMode::ByIdAscending => data.iter_asc(by_id),
-            ExScanMode::ByIdDescending => data.iter_desc(by_id),
-            ExScanMode::ByNameAscending => data.iter_asc(by_name),
-            ExScanMode::ByNameDescending => data.iter_desc(by_name),
+        WhichPage::First(_) => match scan_params.sort {
+            ExSortMode::ByIdAscending => data.iter_asc(by_id),
+            ExSortMode::ByIdDescending => data.iter_desc(by_id),
+            ExSortMode::ByNameAscending => data.iter_asc(by_name),
+            ExSortMode::ByNameDescending => data.iter_desc(by_name),
         },
 
         WhichPage::Next(ExPageSelector::Id(Ascending, id)) => {

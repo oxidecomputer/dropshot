@@ -580,22 +580,6 @@ where
 }
 
 /*
- * XXX this approach won't work recursively (e.g., a struct containing a
- * pagination params
- * Maybe the thing to do is implement ExtractedParameter for PaginationParams in
- * a more specific way.  That might require that ExtractedParameter no longer
- * extend DeserializeOwned, but instead have an implementation for anything that
- * _does_ extend DeserializeOwned.
- *
- * Alternatively, implement our own deserializer for PaginationParams?
- */
-// impl Extractor for Query<PaginationParams> {
-//     async fn from_request(
-//         rqctx: Arc<RequestContext>
-//     ) -> Result<Query<PaginationParams>, HttpError>
-// }
-
-/*
  * Path: path parameter string extractor
  */
 

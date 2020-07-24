@@ -59,7 +59,7 @@ struct Project {
  * include with each page of results, and it must be `Deserialize +
  * ExtractedParameter` to get it back in a querystring.
  */
-#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+#[derive(Deserialize, ExtractedParameter, Serialize)]
 struct ProjectPage {
     name: String,
 }
