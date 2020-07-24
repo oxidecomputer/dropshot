@@ -139,7 +139,7 @@ struct Project {
  * field(s) to sort by and whether the sort should be ascending or descending)
  *
  * It's up to the consumer (e.g., this example) to decide exactly which modes
- * are supported here and what each one means.  This enum represents an
+ * are supported here and what each one means.  This type represents an
  * interface that's part of the OpenAPI specification for the service.
  *
  * NOTE: To be useful, this field must be deserializable using the
@@ -147,6 +147,13 @@ struct Project {
  * serialize it using `serde_querystring`.  That code could fail at runtime for
  * certain types of values (e.g., enum variants that contain data).
  */
+#[derive(
+    Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
+)]
+struct ProjectScanParams {
+    sort_mode: Option<ProjectScanMode>,
+}
+
 #[derive(
     Deserialize, Clone, Debug, ExtractedParameter, JsonSchema, Serialize,
 )]
@@ -229,64 +236,58 @@ fn page_selector_for(
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScanMode, ProjectScanPageSelector>>,
+    query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
     let scan_mode = match &pag_params.page_params {
-        WhichPage::FirstPage {
-            list_mode: None,
-        } => ProjectScanMode::ByNameAscending,
+        WhichPage::First(ProjectScanParams {
+            sort_mode: None,
+        }) => ProjectScanMode::ByNameAscending,
 
-        WhichPage::FirstPage {
-            list_mode: Some(p),
-        } => p.clone(),
+        WhichPage::First(ProjectScanParams {
+            sort_mode: Some(p),
+        }) => p.clone(),
 
-        WhichPage::NextPage {
-            page_token,
-        } => match &page_token.page_start {
-            ProjectScanPageSelector::Name(Ascending, ..) => {
-                ProjectScanMode::ByNameAscending
-            }
-            ProjectScanPageSelector::Name(Descending, ..) => {
-                ProjectScanMode::ByNameDescending
-            }
-            ProjectScanPageSelector::MtimeName(Ascending, ..) => {
-                ProjectScanMode::ByMtimeAscending
-            }
-            ProjectScanPageSelector::MtimeName(Descending, ..) => {
-                ProjectScanMode::ByMtimeDescending
-            }
-        },
+        WhichPage::Next(ProjectScanPageSelector::Name(Ascending, ..)) => {
+            ProjectScanMode::ByNameAscending
+        }
+        WhichPage::Next(ProjectScanPageSelector::Name(Descending, ..)) => {
+            ProjectScanMode::ByNameDescending
+        }
+        WhichPage::Next(ProjectScanPageSelector::MtimeName(Ascending, ..)) => {
+            ProjectScanMode::ByMtimeAscending
+        }
+        WhichPage::Next(ProjectScanPageSelector::MtimeName(Descending, ..)) => {
+            ProjectScanMode::ByMtimeDescending
+        }
     };
 
     let iter = match &pag_params.page_params {
-        WhichPage::FirstPage {
-            ..
-        } => match scan_mode {
+        WhichPage::First(..) => match scan_mode {
             ProjectScanMode::ByNameAscending => data.iter_by_name_asc(),
             ProjectScanMode::ByNameDescending => data.iter_by_name_desc(),
             ProjectScanMode::ByMtimeAscending => data.iter_by_mtime_asc(),
             ProjectScanMode::ByMtimeDescending => data.iter_by_mtime_desc(),
         },
 
-        WhichPage::NextPage {
-            page_token: page_params,
-        } => match &page_params.page_start {
-            ProjectScanPageSelector::Name(Ascending, name) => {
-                data.iter_by_name_asc_from(name)
-            }
-            ProjectScanPageSelector::Name(Descending, name) => {
-                data.iter_by_name_desc_from(name)
-            }
-            ProjectScanPageSelector::MtimeName(Ascending, mtime, name) => {
-                data.iter_by_mtime_asc_from(mtime, name)
-            }
-            ProjectScanPageSelector::MtimeName(Descending, mtime, name) => {
-                data.iter_by_mtime_desc_from(mtime, name)
-            }
-        },
+        WhichPage::Next(ProjectScanPageSelector::Name(Ascending, name)) => {
+            data.iter_by_name_asc_from(name)
+        }
+        WhichPage::Next(ProjectScanPageSelector::Name(Descending, name)) => {
+            data.iter_by_name_desc_from(name)
+        }
+        WhichPage::Next(ProjectScanPageSelector::MtimeName(
+            Ascending,
+            mtime,
+            name,
+        )) => data.iter_by_mtime_asc_from(mtime, name),
+        WhichPage::Next(ProjectScanPageSelector::MtimeName(
+            Descending,
+            mtime,
+            name,
+        )) => data.iter_by_mtime_desc_from(mtime, name),
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
@@ -332,21 +333,6 @@ async fn main() -> Result<(), String> {
 }
 
 fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
-    /*
-     * We want to print out the valid querystring values for our API endpoint.
-     * Querystrings have to be a sequence key-value pairs.  Variants of
-     * ProjectScanMode wind up being values, so they need to be wrapped in a
-     * structure with a key.  The correct key is "list_mode" -- see
-     * [`dropshot::PaginationParams`]`.page_params`, which is a
-     * [`dropshot::WhichPage::FirstPage`].  It would be simpler to use
-     * `WhichPage::FirstPage` directly here, but that doesn't implement
-     * `Serialize`.  (Dropshot doesn't even require that `ProjectScanMode`
-     * implement `Serialize`).
-     */
-    #[derive(Serialize)]
-    struct ToPrint {
-        list_mode: ProjectScanMode,
-    };
     let all_modes = vec![
         ProjectScanMode::ByNameAscending,
         ProjectScanMode::ByNameDescending,
@@ -354,8 +340,8 @@ fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
         ProjectScanMode::ByMtimeDescending,
     ];
     for mode in all_modes {
-        let to_print = ToPrint {
-            list_mode: mode,
+        let to_print = ProjectScanParams {
+            sort_mode: Some(mode),
         };
         let query_string = serde_urlencoded::to_string(to_print).unwrap();
         let uri = Uri::builder()

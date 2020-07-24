@@ -208,7 +208,7 @@ impl_extractor_for_tuple!(T1);
 impl_extractor_for_tuple!(T1, T2);
 impl_extractor_for_tuple!(T1, T2, T3);
 
-pub trait ExtractedParameter: DeserializeOwned {
+pub trait ExtractedParameter {
     fn metadata(inn: ApiEndpointParameterLocation)
         -> Vec<ApiEndpointParameter>;
 }
@@ -517,11 +517,11 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
-pub struct Query<QueryType: ExtractedParameter + Send + Sync> {
+pub struct Query<QueryType: Send + Sync> {
     inner: QueryType,
 }
 
-impl<QueryType: ExtractedParameter + Send + Sync> Query<QueryType> {
+impl<QueryType: Send + Sync> Query<QueryType> {
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
@@ -534,11 +534,11 @@ impl<QueryType: ExtractedParameter + Send + Sync> Query<QueryType> {
  * Given an HTTP request, pull out the query string and attempt to deserialize
  * it as an instance of `QueryType`.
  */
-fn http_request_load_query<QueryType: Send + Sync>(
+fn http_request_load_query<QueryType>(
     request: &Request<Body>,
 ) -> Result<Query<QueryType>, HttpError>
 where
-    QueryType: ExtractedParameter,
+    QueryType: DeserializeOwned + ExtractedParameter + Send + Sync,
 {
     let raw_query_string = request.uri().query().unwrap_or("");
     /*
@@ -566,7 +566,7 @@ where
 #[async_trait]
 impl<QueryType> Extractor for Query<QueryType>
 where
-    QueryType: ExtractedParameter + Send + Sync + 'static,
+    QueryType: DeserializeOwned + ExtractedParameter + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -579,6 +579,22 @@ where
         QueryType::metadata(ApiEndpointParameterLocation::Query)
     }
 }
+
+/*
+ * XXX this approach won't work recursively (e.g., a struct containing a
+ * pagination params
+ * Maybe the thing to do is implement ExtractedParameter for PaginationParams in
+ * a more specific way.  That might require that ExtractedParameter no longer
+ * extend DeserializeOwned, but instead have an implementation for anything that
+ * _does_ extend DeserializeOwned.
+ *
+ * Alternatively, implement our own deserializer for PaginationParams?
+ */
+// impl Extractor for Query<PaginationParams> {
+//     async fn from_request(
+//         rqctx: Arc<RequestContext>
+//     ) -> Result<Query<PaginationParams>, HttpError>
+// }
 
 /*
  * Path: path parameter string extractor
@@ -611,7 +627,7 @@ impl<PathType: ExtractedParameter + Send + Sync> Path<PathType> {
 #[async_trait]
 impl<PathType> Extractor for Path<PathType>
 where
-    PathType: ExtractedParameter + Send + Sync + 'static,
+    PathType: DeserializeOwned + ExtractedParameter + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,

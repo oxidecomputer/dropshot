@@ -38,21 +38,14 @@ fn paginate_api() -> ApiDescription {
 }]
 async fn demo_handler_integers(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<IntegersScanMode, IntegersPageSelector>>,
+    query: Query<PaginationParams<IntegersScanParams, IntegersPageSelector>>,
 ) -> Result<HttpResponseOkPage<usize>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
 
     let start = match &pag_params.page_params {
-        WhichPage::FirstPage {
-            ..
-        } => 0,
-        WhichPage::NextPage {
-            page_token,
-        } => {
-            let IntegersPageSelector::ByNum(n) = page_token.page_start;
-            n as usize
-        }
+        WhichPage::First(..) => 0,
+        WhichPage::Next(IntegersPageSelector::ByNum(n)) => *n as usize,
     };
 
     let results = Range {
@@ -63,21 +56,22 @@ async fn demo_handler_integers(
 
     Ok(HttpResponseOkPage::new_with_paginator(
         results,
-        &IntegersScanMode::ByNum,
+        &IntegersScanParams {},
         page_selector_for,
     )?)
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter)]
-enum IntegersScanMode {
-    ByNum,
-}
+struct IntegersScanParams {} // XXX ScanMode -> ScanParams
 #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 enum IntegersPageSelector {
     ByNum(usize),
 }
 
-fn page_selector_for(n: &usize, _p: &IntegersScanMode) -> IntegersPageSelector {
+fn page_selector_for(
+    n: &usize,
+    _p: &IntegersScanParams,
+) -> IntegersPageSelector {
     IntegersPageSelector::ByNum(*n)
 }
 

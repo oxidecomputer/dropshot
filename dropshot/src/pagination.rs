@@ -294,16 +294,13 @@ pub struct ClientPage<ItemType> {
  * flexible.  See examples/pagination-marker.rs for details.
  */
 pub type MarkerPaginator<FieldType> =
-    PaginationParams<MarkerScanMode, MarkerPageSelector<FieldType>>;
+    PaginationParams<MarkerScanParams, MarkerPageSelector<FieldType>>;
 
 /**
  * Internal type used as the `ScanMode` type for `MarkerPaginator`.
  */
 #[derive(Debug, Deserialize, ExtractedParameter)]
-#[serde(rename_all = "kebab-case")]
-pub enum MarkerScanMode {
-    ByMarkerAsc,
-}
+pub struct MarkerScanParams {}
 
 /**
  * Internal type used as the `PageSelector` type for `MarkerPaginator`.
@@ -328,6 +325,7 @@ pub enum MarkerPageSelector<F> {
 #[serde(bound(
     deserialize = "PageSelector: DeserializeOwned, ScanMode: DeserializeOwned"
 ))]
+#[serde(try_from = "RawPaginationParams<ScanMode>")]
 pub struct PaginationParams<ScanMode, PageSelector>
 where
     ScanMode: Debug + Send + Sync + 'static,
@@ -362,11 +360,11 @@ where
  * `FirstPage`, since any set of parameters at all (including no parameters at
  * all) are valid for `FirstPage`.
  */
-#[derive(Debug, Deserialize, ExtractedParameter)]
-#[serde(bound(
-    deserialize = "PageSelector: DeserializeOwned, ScanMode: DeserializeOwned"
-))]
-#[serde(untagged)]
+//#[derive(Debug, Deserialize, ExtractedParameter)]
+//#[serde(bound(
+//    deserialize = "PageSelector: DeserializeOwned, ScanMode: DeserializeOwned"
+//))]
+#[derive(Debug)]
 pub enum WhichPage<ScanMode, PageSelector>
 where
     ScanMode: Debug + Send + Sync + 'static,
@@ -378,13 +376,27 @@ where
      * `PageSelector` type.  Critically, this must provide enough information
      * for the consumer to resume a scan.
      */
-    NextPage { page_token: PageToken<PageSelector> },
+    Next(PageSelector),
 
     /**
      * Indicates that the client is beginning a new scan.  The client may
      * provide `list_mode`, a consumer-specified type.
      */
-    FirstPage { list_mode: Option<ScanMode> },
+    First(ScanMode),
+}
+
+impl<ScanMode, PageSelector> dropshot::ExtractedParameter
+    for WhichPage<ScanMode, PageSelector>
+where
+    ScanMode: Debug + Send + Sync + 'static,
+    PageSelector: Serialize + Send + Sync + 'static,
+{
+    fn metadata(
+        inn: dropshot::ApiEndpointParameterLocation,
+    ) -> Vec<dropshot::ApiEndpointParameter> {
+        // XXX
+        todo!()
+    }
 }
 
 /**
@@ -395,6 +407,94 @@ where
 pub enum PaginationOrder {
     Ascending,
     Descending,
+}
+
+/*
+ * Query string deserialization
+ */
+
+#[derive(Deserialize, ExtractedParameter)]
+#[serde(bound(deserialize = "ScanMode: DeserializeOwned"))]
+#[serde(untagged)]
+enum RawWhichPage<ScanMode>
+where
+    ScanMode: Debug + Send + Sync + 'static,
+{
+    Next { page_token: String },
+    First(ScanMode),
+}
+
+#[derive(Deserialize, ExtractedParameter)]
+#[serde(bound(deserialize = "ScanMode: DeserializeOwned"))]
+struct RawPaginationParams<ScanMode>
+where
+    ScanMode: Debug + Send + Sync + 'static,
+{
+    #[serde(flatten)]
+    page_params: RawWhichPage<ScanMode>,
+    limit: Option<NonZeroU64>,
+}
+
+impl<ScanMode, PageSelector> TryFrom<RawPaginationParams<ScanMode>>
+    for PaginationParams<ScanMode, PageSelector>
+where
+    ScanMode: Debug + DeserializeOwned + Send + Sync + 'static,
+    PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
+{
+    type Error = String;
+
+    fn try_from(
+        raw: RawPaginationParams<ScanMode>,
+    ) -> Result<PaginationParams<ScanMode, PageSelector>, String> {
+        let token_str = match raw.page_params {
+            RawWhichPage::First(scan_mode) => {
+                return Ok(PaginationParams {
+                    page_params: WhichPage::First(scan_mode),
+                    limit: raw.limit,
+                })
+            }
+            RawWhichPage::Next {
+                page_token,
+            } => page_token,
+        };
+
+        if token_str.len() > MAX_TOKEN_LENGTH {
+            return Err(String::from(
+                "failed to parse pagination token: too large",
+            ));
+        }
+
+        let json_bytes = base64::decode_config(token_str.as_bytes(), URL_SAFE)
+            .map_err(|e| format!("failed to parse pagination token: {}", e))?;
+
+        /*
+         * TODO-debugging: we don't want the user to have to know about the
+         * internal structure of the token, so the error message here doesn't
+         * say anything about that.  However, it would be nice if we could
+         * create an internal error message that included the serde_json error,
+         * which would have more context for someone looking at the server logs
+         * to figure out what happened with this request.  Our own `HttpError`
+         * supports this, but it seems like serde only preserves the to_string()
+         * output of the error anyway.  It's not clear how else we could
+         * propagate this information out.
+         */
+        let deserialized: SerializedToken<PageSelector> =
+            serde_json::from_slice(&json_bytes).map_err(|_| {
+                format!("failed to parse pagination token: corrupted token")
+            })?;
+
+        if deserialized.v != PaginationVersion::V1 {
+            return Err(format!(
+                "failed to parse pagination token: unsupported version: {:?}",
+                deserialized.v,
+            ));
+        }
+
+        Ok(PaginationParams {
+            page_params: WhichPage::Next(deserialized.page_start),
+            limit: raw.limit,
+        })
+    }
 }
 
 /*

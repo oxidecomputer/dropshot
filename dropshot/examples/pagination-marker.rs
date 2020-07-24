@@ -65,20 +65,15 @@ async fn example_list_projects(
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
     let projects = match &pag_params.page_params {
-        WhichPage::FirstPage {
-            ..
-        } => {
+        WhichPage::First(..) => {
             /* Return a list of the first "limit" projects. */
             tree.iter()
                 .take(limit)
                 .map(|(_, project)| project.clone())
                 .collect()
         }
-        WhichPage::NextPage {
-            page_token,
-        } => {
+        WhichPage::Next(MarkerPageSelector::Marker(last_seen)) => {
             /* Return a list of the first "limit" projects after this name. */
-            let MarkerPageSelector::Marker(last_seen) = &page_token.page_start;
             tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
                 .take(limit)
                 .map(|(_, project)| project.clone())

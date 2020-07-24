@@ -57,7 +57,7 @@ struct Project {
  */
 fn page_selector_for(
     last_item: &Project,
-    _scan_mode: &ProjectScanMode,
+    _scan_mode: &ProjectScanParams,
 ) -> ProjectScanPageSelector {
     ProjectScanPageSelector::NameAscending(last_item.name.clone())
 }
@@ -66,15 +66,11 @@ fn page_selector_for(
  * Specifies how the client can page through results (typically: what field(s)
  * to sort by and whether the sort should be ascending or descending)
  *
- * This example only supports pagination by name in ascending order.  For a more
- * interesting case, see pagination-multi.rs.
+ * We don't support any parameters here because we always paginate by name in
+ * ascending order.  For a more interesting case, see pagination-multi.rs.
  */
 #[derive(Clone, Debug, Deserialize, ExtractedParameter)]
-#[serde(rename_all = "kebab-case")]
-enum ProjectScanMode {
-    /** by name ascending */
-    ByNameAscending,
-}
+struct ProjectScanParams {}
 
 /**
  * Specifies the scan mode and the client's current position in the scan
@@ -100,27 +96,21 @@ enum ProjectScanPageSelector {
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScanMode, ProjectScanPageSelector>>,
+    query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
     let projects = match &pag_params.page_params {
-        WhichPage::FirstPage {
-            ..
-        } => {
+        WhichPage::First(..) => {
             /* Return a list of the first "limit" projects. */
             tree.iter()
                 .take(limit)
                 .map(|(_, project)| project.clone())
                 .collect()
         }
-        WhichPage::NextPage {
-            page_token,
-        } => {
+        WhichPage::Next(ProjectScanPageSelector::NameAscending(last_seen)) => {
             /* Return a list of the first "limit" projects after this name. */
-            let ProjectScanPageSelector::NameAscending(last_seen) =
-                &page_token.page_start;
             tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
                 .take(limit)
                 .map(|(_, project)| project.clone())
@@ -130,7 +120,7 @@ async fn example_list_projects(
 
     Ok(HttpResponseOkPage::new_with_paginator(
         projects,
-        &ProjectScanMode::ByNameAscending,
+        &ProjectScanParams {},
         page_selector_for,
     )?)
 }
