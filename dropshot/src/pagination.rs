@@ -291,7 +291,7 @@ pub struct ClientPage<ItemType> {
 #[serde(try_from = "RawPaginationParams<ScanParams>")]
 pub struct PaginationParams<ScanParams, PageSelector>
 where
-    ScanParams: Debug + Send + Sync + 'static,
+    ScanParams: Send + Sync + 'static,
     PageSelector: Serialize + Send + Sync + 'static,
 {
     /**
@@ -317,7 +317,7 @@ where
 #[derive(Debug)]
 pub enum WhichPage<ScanParams, PageSelector>
 where
-    ScanParams: Debug + Send + Sync + 'static,
+    ScanParams: Send + Sync + 'static,
     PageSelector: Serialize + Send + Sync + 'static,
 {
     /**
@@ -337,7 +337,7 @@ where
 impl<ScanParams, PageSelector> dropshot::ExtractedParameter
     for WhichPage<ScanParams, PageSelector>
 where
-    ScanParams: Debug + Send + Sync + 'static,
+    ScanParams: Send + Sync + 'static,
     PageSelector: Serialize + Send + Sync + 'static,
 {
     fn metadata(
@@ -387,7 +387,7 @@ pub enum PaginationOrder {
 #[serde(untagged)]
 enum RawWhichPage<ScanParams>
 where
-    ScanParams: Debug + Send + Sync + 'static,
+    ScanParams: Send + Sync + 'static,
 {
     Next { page_token: String },
     First(ScanParams),
@@ -397,7 +397,7 @@ where
 #[serde(bound(deserialize = "ScanParams: DeserializeOwned"))]
 struct RawPaginationParams<ScanParams>
 where
-    ScanParams: Debug + Send + Sync + 'static,
+    ScanParams: Send + Sync + 'static,
 {
     #[serde(flatten)]
     page_params: RawWhichPage<ScanParams>,
@@ -407,7 +407,7 @@ where
 impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
     for PaginationParams<ScanParams, PageSelector>
 where
-    ScanParams: Debug + DeserializeOwned + Send + Sync + 'static,
+    ScanParams: DeserializeOwned + Send + Sync + 'static,
     PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
 {
     type Error = String;

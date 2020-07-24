@@ -110,7 +110,7 @@ impl RequestContext {
         pag_params: &PaginationParams<ScanParams, PageSelector>,
     ) -> Result<NonZeroUsize, HttpError>
     where
-        ScanParams: Debug + DeserializeOwned + Send + Sync + 'static,
+        ScanParams: DeserializeOwned + Send + Sync + 'static,
         PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
     {
         let server_config = &self.server.config;
