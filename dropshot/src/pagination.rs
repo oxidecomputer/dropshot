@@ -4,7 +4,6 @@
  * go elsewhere.  Maybe on PaginationParams?
  */
 /*!
- *
  * # Support for paginated resources
  *
  * "Pagination" here refers to the interface pattern where HTTP resources (or
@@ -29,13 +28,14 @@
  *   Instead, they list the collection using a sequence of requests to the one
  *   endpoint.  We call this sequence of requests a **scan** of the collection,
  *   and we sometimes say that the client **pages through** the collection.
- * * The initial request in the scan may specify the **scan mode**, which
- *   typically specifies how the results are to be sorted (i.e., by which
- *   field(s) and whether the sort is ascending or descending).
+ * * The initial request in the scan may specify the **scan parameters**, which
+ *   typically specify how the results are to be sorted (i.e., by which
+ *   field(s) and whether the sort is ascending or descending), any filters to
+ *   apply, etc.
  * * Each request returns a **page** of results at a time, along with a **page
  *   token** that's provided with the next request as a query parameter.
- * * The scan mode cannot change between requests that are part of the same
- *   scan.
+ * * The scan parameters cannot change between requests that are part of the
+ *   same scan.
  * * With all requests: there's a default limit (e.g., 100 items returned at a
  *   time).  Clients can request a higher limit using a query parameter (e.g.,
  *   `limit=1000`).  This limit is capped by a hard limit on the server.  If the
@@ -81,27 +81,26 @@
  *
  * The subsequent request to the API fetches "/animals?page_token=abc123...".
  * The page token `"abc123..."` is an opaque token to the client, but typically
- * encodes the scan mode ("sorting by name in ascending order") and the value of
- * the last item seen ("name=badger").  The client knows it has completed the
- * scan when it receives a response with no `page_token` in it.
+ * encodes the scan parameters and the value of the last item seen
+ * ("name=badger").  The client knows it has completed the scan when it receives
+ * a response with no `page_token` in it.
  *
  * Our API endpoint can also support scanning in reverse order.  In this case,
  * when the client makes the first request, it should fetch
- * `"/animals?list_mode=name-descending".  (We use "list_mode" synonymously with
- * "scan_mode".)  Now, the first result might be "zebra".  Again, the page token
- * must include the scan mode so that in subsequent requests, the API endpoint
- * knows that we're scanning backwards, not forwards, from the value we were
- * given.  It's not allowed to change directions or sort order in the middle of
- * a scan.  (You can always start a new scan, but you can't pick up from where
- * you were in the previous scan.)
+ * `"/animals?sort=name-descending".  Now the first result might be "zebra".
+ * Again, the page token must include the scan parameters so that in subsequent
+ * requests, the API endpoint knows that we're scanning backwards, not forwards,
+ * from the value we were given.  It's not allowed to change directions or sort
+ * order in the middle of a scan.  (You can always start a new scan, but you
+ * can't pick up from where you were in the previous scan.)
  *
  * It's also possible to support sorting by multiple fields.  For example, we
- * could support `list_mode=class-name`, which we could define to mean that
- * we'll sort the results first by class, then by name.  Thus we'd get all the
- * amphibians in sorted order, then all the mammals, then all the reptiles.
- * The main requirement is that the combination of fields used for pagination
- * must be unique.  We cannot paginate by the animal's class alone.  (To see
- * why: there are over 6,000 mammals.  If the page size is, say, 1000, then the
+ * could support `sort=class-name`, which we could define to mean that we'll
+ * sort the results first by class, then by name.  Thus we'd get all the
+ * amphibians in sorted order, then all the mammals, then all the reptiles.  The
+ * main requirement is that the combination of fields used for pagination must
+ * be unique.  We cannot paginate by the animal's class alone.  (To see why:
+ * there are over 6,000 mammals.  If the page size is, say, 1000, then the
  * page_token would say "mammal", but there's not enough information there to
  * see where we are within the list of mammals.  It doesn't matter whether there
  * are 2 mammals or 6,000 because clients can limit the page size to just one
@@ -115,28 +114,18 @@
  * page token).
  *
  * For input, a paginated API endpoint's handler function should accept a
- * `Query<PaginationParams<ScanMode, PageSelector>>`, where `ScanMode` is a
- * consumer-defined type describing the allowed values of `list_mode` (usually
- * represented by an enum with no data) and `PageSelector` is a consumer-defined
- * type describing the page token.  The PageSelector will be serialized to JSON
- * and base64-encoded to construct the page token.
+ * `Query<PaginationParams<ScanParams, PageSelector>>`, where `ScanParams` is a
+ * consumer-defined type specifying the parameters of the scan (typically
+ * including the sort fields, sort order, and filter options) and `PageSelector`
+ * is a consumer-defined type describing the page token.  The PageSelector will
+ * be serialized to JSON and base64-encoded to construct the page token.  This
+ * will be automatically parsed on the way back in.
  *
  * For output, a paginated API endpoint's handler function should return
  * `Result<HttpResponseOkPage<ItemType>>`, where `ItemType` is whatever object
  * the API returns a list of.  In our case, `ItemType` would be `Animal`.
  *
- * For the simple case of paginating a collection by a single unique field, we
- * provide the helper type `MarkerPaginator<FieldType>` that you can use in
- * place of `PaginationParams`.  This provides a scan mode with only a single
- * option that corresponds to a scan sorted in increasing order of your field,
- * which has type `FieldType`.  (The client would generally never use
- * "list_mode" in this case because there's only one option and it's the default
- * anyway.)  `MarkerPaginator` also provides a page selector containing the
- * last-seen value of your field.
- *
- * For a complete, documented example of the simpler `MarkerPaginator`
- * interface, see examples/pagination-marker.rs.  For more complex examples, see
- * the other pagination examples in that directory.
+ * There are several complete, documented examples in the "examples" directory.
  *
  *
  * ## Advanced usage notes
@@ -152,7 +141,7 @@
  * use serde::Deserialize;
  * # use serde::Serialize;
  * # #[derive(Debug, Deserialize, ExtractedParameter)]
- * # enum MyScanMode { A };
+ * # enum MyScanParams { A };
  * # #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
  * # enum MyPageSelector { A(String) };
  * ##[derive(Deserialize, ExtractedParameter)]
@@ -160,7 +149,7 @@
  *     do_extra_stuff: bool,
  *
  *     ##[serde(flatten)]
- *     pagination_params: PaginationParams<MyScanMode, MyPageSelector>
+ *     pagination_params: PaginationParams<MyScanParams, MyPageSelector>
  * }
  * ```
  *
@@ -286,31 +275,6 @@ pub struct ClientPage<ItemType> {
     pub items: Vec<ItemType>,
 }
 
-/**
- * Pagination interface for simple cases where a collection is sorted in one
- * direction by one Serializable field (called the marker)
- *
- * This is simpler to use than `PaginationParams` directly, but it's less
- * flexible.  See examples/pagination-marker.rs for details.
- */
-pub type MarkerPaginator<FieldType> =
-    PaginationParams<MarkerScanParams, MarkerPageSelector<FieldType>>;
-
-/**
- * Internal type used as the `ScanMode` type for `MarkerPaginator`.
- */
-#[derive(Debug, Deserialize, ExtractedParameter)]
-pub struct MarkerScanParams {}
-
-/**
- * Internal type used as the `PageSelector` type for `MarkerPaginator`.
- */
-#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum MarkerPageSelector<F> {
-    Marker(F),
-}
-
 /*
  * Generic pagination infrastructure
  * XXX need to better understand the trait bounds / serde bounds here.
@@ -322,13 +286,12 @@ pub enum MarkerPageSelector<F> {
  * See `PaginatedResource` for more information.
  */
 #[derive(Debug, Deserialize, ExtractedParameter)]
-#[serde(bound(
-    deserialize = "PageSelector: DeserializeOwned, ScanMode: DeserializeOwned"
-))]
-#[serde(try_from = "RawPaginationParams<ScanMode>")]
-pub struct PaginationParams<ScanMode, PageSelector>
+#[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
+                             DeserializeOwned"))]
+#[serde(try_from = "RawPaginationParams<ScanParams>")]
+pub struct PaginationParams<ScanParams, PageSelector>
 where
-    ScanMode: Debug + Send + Sync + 'static,
+    ScanParams: Debug + Send + Sync + 'static,
     PageSelector: Serialize + Send + Sync + 'static,
 {
     /**
@@ -338,7 +301,7 @@ where
      * serialized form.
      */
     #[serde(flatten)]
-    pub page_params: WhichPage<ScanMode, PageSelector>,
+    pub page_params: WhichPage<ScanParams, PageSelector>,
 
     /**
      * Optional client-requested limit on page size.  Consumers should use
@@ -351,23 +314,10 @@ where
  * Indicates whether the client is beginning a new scan or resuming an existing
  * one and provides the corresponding parameters for each case
  */
-/*
- * In REST APIs, callers typically provide either the parameters to resume a
- * scan or the parameters to begin a new one, with no separate field indicating
- * which case they're requesting.  Fortunately, serde(untagged) implements this
- * behavior precisely, with one caveat: the variants below are tried in order
- * until one succeeds.  So for this to work, `NextPage` must be defined before
- * `FirstPage`, since any set of parameters at all (including no parameters at
- * all) are valid for `FirstPage`.
- */
-//#[derive(Debug, Deserialize, ExtractedParameter)]
-//#[serde(bound(
-//    deserialize = "PageSelector: DeserializeOwned, ScanMode: DeserializeOwned"
-//))]
 #[derive(Debug)]
-pub enum WhichPage<ScanMode, PageSelector>
+pub enum WhichPage<ScanParams, PageSelector>
 where
-    ScanMode: Debug + Send + Sync + 'static,
+    ScanParams: Debug + Send + Sync + 'static,
     PageSelector: Serialize + Send + Sync + 'static,
 {
     /**
@@ -379,16 +329,15 @@ where
     Next(PageSelector),
 
     /**
-     * Indicates that the client is beginning a new scan.  The client may
-     * provide `list_mode`, a consumer-specified type.
+     * Indicates that the client is beginning a new scan.
      */
-    First(ScanMode),
+    First(ScanParams),
 }
 
-impl<ScanMode, PageSelector> dropshot::ExtractedParameter
-    for WhichPage<ScanMode, PageSelector>
+impl<ScanParams, PageSelector> dropshot::ExtractedParameter
+    for WhichPage<ScanParams, PageSelector>
 where
-    ScanMode: Debug + Send + Sync + 'static,
+    ScanParams: Debug + Send + Sync + 'static,
     PageSelector: Serialize + Send + Sync + 'static,
 {
     fn metadata(
@@ -398,6 +347,14 @@ where
         todo!()
     }
 }
+
+/**
+ * `ScanParams` for use with `PaginationParams` when the API endpoint has no
+ * scan parameters (i.e., it always iterates items in the collection in the same
+ * way).
+ */
+#[derive(Debug, Deserialize)]
+pub struct EmptyScanParams {}
 
 /**
  * The order in which the client wants to page through the requested collection
@@ -413,43 +370,55 @@ pub enum PaginationOrder {
  * Query string deserialization
  */
 
+/*
+ * This enum definition looks a little strange because it's designed so that
+ * serde will deserialize exactly the input we want to support.  In REST APIs,
+ * callers typically provide either the parameters to resume a scan (in our
+ * case, just "page_token") or the parameters to begin a new one (which can be
+ * any set of parameters that our consumer wants).  There's generally no
+ * separate field to indicate which case they're requesting.  Fortunately,
+ * serde(untagged) implements this behavior precisely, with one caveat: the
+ * variants below are tried in order until one succeeds.  So for this to work,
+ * `Next` must be defined before `First`, since any set of parameters at all
+ * (including no parameters at all) are valid for `First`.
+ */
 #[derive(Deserialize, ExtractedParameter)]
-#[serde(bound(deserialize = "ScanMode: DeserializeOwned"))]
+#[serde(bound(deserialize = "ScanParams: DeserializeOwned"))]
 #[serde(untagged)]
-enum RawWhichPage<ScanMode>
+enum RawWhichPage<ScanParams>
 where
-    ScanMode: Debug + Send + Sync + 'static,
+    ScanParams: Debug + Send + Sync + 'static,
 {
     Next { page_token: String },
-    First(ScanMode),
+    First(ScanParams),
 }
 
 #[derive(Deserialize, ExtractedParameter)]
-#[serde(bound(deserialize = "ScanMode: DeserializeOwned"))]
-struct RawPaginationParams<ScanMode>
+#[serde(bound(deserialize = "ScanParams: DeserializeOwned"))]
+struct RawPaginationParams<ScanParams>
 where
-    ScanMode: Debug + Send + Sync + 'static,
+    ScanParams: Debug + Send + Sync + 'static,
 {
     #[serde(flatten)]
-    page_params: RawWhichPage<ScanMode>,
+    page_params: RawWhichPage<ScanParams>,
     limit: Option<NonZeroU64>,
 }
 
-impl<ScanMode, PageSelector> TryFrom<RawPaginationParams<ScanMode>>
-    for PaginationParams<ScanMode, PageSelector>
+impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
+    for PaginationParams<ScanParams, PageSelector>
 where
-    ScanMode: Debug + DeserializeOwned + Send + Sync + 'static,
+    ScanParams: Debug + DeserializeOwned + Send + Sync + 'static,
     PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
 {
     type Error = String;
 
     fn try_from(
-        raw: RawPaginationParams<ScanMode>,
-    ) -> Result<PaginationParams<ScanMode, PageSelector>, String> {
+        raw: RawPaginationParams<ScanParams>,
+    ) -> Result<PaginationParams<ScanParams, PageSelector>, String> {
         let token_str = match raw.page_params {
-            RawWhichPage::First(scan_mode) => {
+            RawWhichPage::First(scan_params) => {
                 return Ok(PaginationParams {
-                    page_params: WhichPage::First(scan_mode),
+                    page_params: WhichPage::First(scan_params),
                     limit: raw.limit,
                 })
             }
@@ -537,7 +506,7 @@ const MAX_TOKEN_LENGTH: usize = 512;
  * possible!
  *
  * Note that consumers still need to consider compatibility if they change their
- * own `ScanMode` or `PageSelector` types.
+ * own `ScanParams` or `PageSelector` types.
  */
 #[derive(
     Copy,
@@ -586,16 +555,16 @@ where
     pub(crate) fn to_serialized(self) -> Result<String, HttpError> {
         let page_start = self.page_start;
 
-        let marker_bytes = {
-            let serialized_marker = SerializedToken {
+        let token_bytes = {
+            let serialized_token = SerializedToken {
                 v: PaginationVersion::V1,
                 page_start: page_start,
             };
 
             let json_bytes =
-                serde_json::to_vec(&serialized_marker).map_err(|e| {
+                serde_json::to_vec(&serialized_token).map_err(|e| {
                     HttpError::for_internal_error(format!(
-                        "failed to serialize marker: {}",
+                        "failed to serialize token: {}",
                         e
                     ))
                 })?;
@@ -605,21 +574,21 @@ where
 
         /*
          * TODO-robustness is there a way for us to know at compile-time that
-         * this won't be a problem?  What if we say that MarkerFields has to be
+         * this won't be a problem?  What if we say that PageSelector has to be
          * Sized?  That won't guarantee that this will work, but wouldn't that
          * mean that if it ever works, then it will always work?  But would that
-         * interface be a pain to use, given that variable-length strings are a
-         * very common marker?
+         * interface be a pain to use, given that variable-length strings are
+         * very common in the token?
          */
-        if marker_bytes.len() > MAX_TOKEN_LENGTH {
+        if token_bytes.len() > MAX_TOKEN_LENGTH {
             return Err(HttpError::for_internal_error(format!(
                 "serialized token is too large ({} bytes, max is {})",
-                marker_bytes.len(),
+                token_bytes.len(),
                 MAX_TOKEN_LENGTH
             )));
         }
 
-        Ok(marker_bytes)
+        Ok(token_bytes)
     }
 }
 

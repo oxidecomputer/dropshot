@@ -291,11 +291,7 @@ async fn example_list_projects(
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-    Ok(HttpResponseOkPage::new_with_paginator(
-        projects,
-        &scan_mode,
-        page_selector_for,
-    )?)
+    Ok(HttpResponseOkPage::new(projects, &scan_mode, page_selector_for)?)
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {

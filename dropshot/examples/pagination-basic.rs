@@ -1,8 +1,6 @@
 // Copyright 2020 Oxide Computer Company
 /*!
- * Example showing a simple use of the explicit pagination API.  See
- * pagination-marker.rs.  In reality, this use case is simpler using the marker
- * pagination API.
+ * Example showing a relatively simple use of the pagination API
  *
  * When you run this program, it will start an HTTP server on an available local
  * port.  See the log entry to see what port it ran on.  Then use curl to use
@@ -23,6 +21,7 @@ use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
+use dropshot::EmptyScanParams;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOkPage;
@@ -51,37 +50,18 @@ struct Project {
 }
 
 /**
- * Given a project (typically representing the last project in a page of
- * results) and scan mode, return a page selector that can be sent to the client
- * to request the next page of results.
- */
-fn page_selector_for(
-    last_item: &Project,
-    _scan_mode: &ProjectScanParams,
-) -> ProjectScanPageSelector {
-    ProjectScanPageSelector::NameAscending(last_item.name.clone())
-}
-
-/**
- * Specifies how the client can page through results (typically: what field(s)
- * to sort by and whether the sort should be ascending or descending)
+ * Parameters describing the client's position in a scan through all projects
  *
- * We don't support any parameters here because we always paginate by name in
- * ascending order.  For a more interesting case, see pagination-multi.rs.
- */
-#[derive(Clone, Debug, Deserialize, ExtractedParameter)]
-struct ProjectScanParams {}
-
-/**
- * Specifies the scan mode and the client's current position in the scan
+ * This implementation only needs the name of the last project seen, as we only
+ * support listing projects in ascending order by name.
  *
- * In this example, all we need is the name of the last item seen by the client.
- * For a more interesting example, see pagination-multi.rs.
+ * This must be `Serialize` so that Dropshot can turn it into a page token to
+ * include with each page of results, and it must be `Deserialize +
+ * ExtractedParameter` to get it back in a querystring.
  */
-#[derive(Debug, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
-#[serde(rename_all = "kebab-case")]
-enum ProjectScanPageSelector {
-    NameAscending(String),
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+struct ProjectPage {
+    name: String,
 }
 
 /**
@@ -96,7 +76,7 @@ enum ProjectScanPageSelector {
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
+    query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
 ) -> Result<HttpResponseOkPage<Project>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -109,7 +89,9 @@ async fn example_list_projects(
                 .map(|(_, project)| project.clone())
                 .collect()
         }
-        WhichPage::Next(ProjectScanPageSelector::NameAscending(last_seen)) => {
+        WhichPage::Next(ProjectPage {
+            name: last_seen,
+        }) => {
             /* Return a list of the first "limit" projects after this name. */
             tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
                 .take(limit)
@@ -118,10 +100,12 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage::new_with_paginator(
+    Ok(HttpResponseOkPage::new(
         projects,
-        &ProjectScanParams {},
-        page_selector_for,
+        &EmptyScanParams {},
+        |p: &Project, _| ProjectPage {
+            name: p.name.clone(),
+        },
     )?)
 }
 

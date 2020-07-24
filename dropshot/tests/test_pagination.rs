@@ -54,7 +54,7 @@ async fn demo_handler_integers(
     }
     .collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator(
+    Ok(HttpResponseOkPage::new(
         results,
         &IntegersScanParams {},
         page_selector_for,
@@ -62,7 +62,7 @@ async fn demo_handler_integers(
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter)]
-struct IntegersScanParams {} // XXX ScanMode -> ScanParams
+struct IntegersScanParams {}
 #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 enum IntegersPageSelector {
     ByNum(usize),

@@ -190,7 +190,7 @@ async fn example_list_projects(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator(
+    Ok(HttpResponseOkPage::new(
         items,
         &ExScanParams {
             sort: Some(scan_mode),
@@ -222,7 +222,7 @@ async fn example_list_disks(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator(
+    Ok(HttpResponseOkPage::new(
         items,
         &ExScanParams {
             sort: Some(scan_mode),
@@ -254,7 +254,7 @@ async fn example_list_instances(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new_with_paginator(
+    Ok(HttpResponseOkPage::new(
         items,
         &ExScanParams {
             sort: Some(scan_mode),

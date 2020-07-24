@@ -44,7 +44,6 @@ use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::ClientPage;
-use crate::pagination::MarkerPageSelector;
 use crate::pagination::PageToken;
 use crate::pagination::PaginationParams;
 
@@ -106,12 +105,12 @@ impl RequestContext {
      * particular limit, this function returns the server-configured default
      * page size.
      */
-    pub fn page_limit<ScanMode, PageSelector>(
+    pub fn page_limit<ScanParams, PageSelector>(
         &self,
-        pag_params: &PaginationParams<ScanMode, PageSelector>,
+        pag_params: &PaginationParams<ScanParams, PageSelector>,
     ) -> Result<NonZeroUsize, HttpError>
     where
-        ScanMode: Debug + DeserializeOwned + Send + Sync + 'static,
+        ScanParams: Debug + DeserializeOwned + Send + Sync + 'static,
         PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
     {
         let server_config = &self.server.config;
@@ -905,42 +904,19 @@ impl<I> HttpResponseOkPage<I>
 where
     I: JsonSchema + Serialize + Send + Sync + 'static,
 {
-    pub fn new_for_marker<F, S>(
+    pub fn new<F, ScanParams, PageSelector>(
         items: Vec<I>,
-        get_field_value: F,
-    ) -> Result<HttpResponseOkPage<I>, HttpError>
-    where
-        F: Fn(&I) -> S,
-        S: Serialize + Send + Sync + 'static,
-    {
-        let next_page = items
-            .last()
-            .map(|last_item| {
-                let field_value = get_field_value(last_item);
-                let selector = MarkerPageSelector::Marker(field_value);
-                PageToken::new(selector).to_serialized()
-            })
-            .transpose()?;
-
-        Ok(HttpResponseOkPage(ClientPage {
-            next_page,
-            items,
-        }))
-    }
-
-    pub fn new_with_paginator<F, ScanMode, PageSelector>(
-        items: Vec<I>,
-        scan_mode: &ScanMode,
+        scan_params: &ScanParams,
         get_page_selector: F,
     ) -> Result<HttpResponseOkPage<I>, HttpError>
     where
-        F: Fn(&I, &ScanMode) -> PageSelector,
+        F: Fn(&I, &ScanParams) -> PageSelector,
         PageSelector: Serialize,
     {
         let next_page = items
             .last()
             .map(|last_item| {
-                let selector = get_page_selector(last_item, scan_mode);
+                let selector = get_page_selector(last_item, scan_params);
                 PageToken::new(selector).to_serialized()
             })
             .transpose()?;
