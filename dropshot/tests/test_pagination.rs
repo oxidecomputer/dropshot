@@ -43,7 +43,7 @@ async fn demo_handler_integers(
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
 
-    let start = match &pag_params.page_params {
+    let start = match &pag_params.page {
         WhichPage::First(..) => 0,
         WhichPage::Next(IntegersPageSelector::ByNum(n)) => *n as usize,
     };

@@ -241,7 +241,7 @@ async fn example_list_projects(
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
     let scan_params = ProjectScanParams {
-        sort: match &pag_params.page_params {
+        sort: match &pag_params.page {
             WhichPage::First(ProjectScanParamsIncoming {
                 sort: None,
             }) => ProjectSort::ByNameAscending,
@@ -267,7 +267,7 @@ async fn example_list_projects(
         },
     };
 
-    let iter = match &pag_params.page_params {
+    let iter = match &pag_params.page {
         WhichPage::First(..) => match scan_params.sort {
             ProjectSort::ByNameAscending => data.iter_by_name_asc(),
             ProjectSort::ByNameDescending => data.iter_by_name_desc(),

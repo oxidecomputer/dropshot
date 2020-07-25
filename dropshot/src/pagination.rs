@@ -304,7 +304,7 @@ where
      * serialized form.
      */
     #[serde(flatten)]
-    pub page_params: WhichPage<ScanParams, PageSelector>,
+    pub page: WhichPage<ScanParams, PageSelector>,
 
     /**
      * Optional client-requested limit on page size.  Consumers should use
@@ -407,7 +407,7 @@ where
         let token_str = match raw.page_params {
             RawWhichPage::First(scan_params) => {
                 return Ok(PaginationParams {
-                    page_params: WhichPage::First(scan_params),
+                    page: WhichPage::First(scan_params),
                     limit: raw.limit,
                 })
             }
@@ -449,7 +449,7 @@ where
         }
 
         Ok(PaginationParams {
-            page_params: WhichPage::Next(deserialized.page_start),
+            page: WhichPage::Next(deserialized.page_start),
             limit: raw.limit,
         })
     }

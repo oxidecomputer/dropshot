@@ -81,7 +81,7 @@ async fn example_list_projects(
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
-    let projects = match &pag_params.page_params {
+    let projects = match &pag_params.page {
         WhichPage::First(..) => {
             /* Return a list of the first "limit" projects. */
             tree.iter()

@@ -180,12 +180,12 @@ async fn example_list_projects(
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_params = scan_params(&pag_params.page_params);
+    let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
         &data,
         &scan_params,
-        &pag_params.page_params,
+        &pag_params.page,
         &data.projects_by_name,
         &data.projects_by_id,
     );
@@ -210,12 +210,12 @@ async fn example_list_disks(
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_params = scan_params(&pag_params.page_params);
+    let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
         &data,
         &scan_params,
-        &pag_params.page_params,
+        &pag_params.page,
         &data.disks_by_name,
         &data.disks_by_id,
     );
@@ -240,12 +240,12 @@ async fn example_list_instances(
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
-    let scan_params = scan_params(&pag_params.page_params);
+    let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
         &data,
         &scan_params,
-        &pag_params.page_params,
+        &pag_params.page,
         &data.instances_by_name,
         &data.instances_by_id,
     );
