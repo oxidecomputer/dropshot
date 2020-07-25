@@ -275,10 +275,6 @@ pub struct ClientPage<ItemType> {
     pub items: Vec<ItemType>,
 }
 
-/*
- * Generic pagination infrastructure
- */
-
 /**
  * Query parameters provided by clients when scanning a paginated collection
  */
@@ -362,37 +358,116 @@ pub enum PaginationOrder {
 }
 
 /*
- * Query string deserialization
+ * Token and querystring serialization and deserialization
+ *
+ * Page tokens essentially take the consumer's PageSelector struct, add a
+ * version number, serialize that as JSON, and base64-encode the result.  This
+ * token is returned in any response from a paginated API, and the client will
+ * pass it back as a query parameter for subsequent pagination requests. This
+ * approach allows us to rev the serialized form if needed (see
+ * `PaginationVersion`) and add other metadata in a backwards-compatiable way.
+ * It also emphasizes to clients that the token should be treated as opaque.
  */
+
+/**
+ * Maximum length of a page token once the consumer-provided type is serialized
+ * and the result is base64-encoded
+ *
+ * We impose a maximum length primarily to prevent a client from making us parse
+ * extremely large strings.  We apply this limit when we create tokens to avoid
+ * handing out a token that can't be used.
+ *
+ * Note that these tokens are passed in the HTTP request line (before the
+ * headers), and many HTTP implementations impose an implicit limit as low as
+ * 8KiB on the size of the request line and headers together, so it's a good
+ * idea to keep this as small as we can.
+ */
+const MAX_TOKEN_LENGTH: usize = 512;
+
+/**
+ * Version for the pagination token serialization format
+ *
+ * This may seem like overkill, but it allows us to rev this in a future version
+ * of Dropshot without breaking any ongoing scans when the change is deployed.
+ * If we rev this, we might need to provide a way for clients to request at
+ * runtime which version of token to generate so that if they do a rolling
+ * upgrade of multiple instances, they can configure the instances to generate
+ * v1 tokens until the rollout is complete, then switch on the new token
+ * version.  Obviously, it would be better to avoid revving this version if
+ * possible!
+ *
+ * Note that consumers still need to consider compatibility if they change their
+ * own `ScanParams` or `PageSelector` types.
+ */
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Deserialize,
+    ExtractedParameter,
+    JsonSchema,
+    PartialEq,
+    Serialize,
+)]
+#[serde(rename_all = "lowercase")]
+enum PaginationVersion {
+    V1,
+}
+
+/**
+ * Parts of the pagination token that actually get serialized
+ */
+#[derive(Debug, Deserialize, Serialize)]
+struct SerializedToken<PageSelector> {
+    v: PaginationVersion,
+    page_start: PageSelector,
+}
+
+/**
+ * Construct a serialized page token from a consumer's page selector
+ */
+pub fn serialize_page_token<PageSelector: Serialize>(
+    page_start: PageSelector,
+) -> Result<String, HttpError> {
+    let token_bytes = {
+        let serialized_token = SerializedToken {
+            v: PaginationVersion::V1,
+            page_start: page_start,
+        };
+
+        let json_bytes =
+            serde_json::to_vec(&serialized_token).map_err(|e| {
+                HttpError::for_internal_error(format!(
+                    "failed to serialize token: {}",
+                    e
+                ))
+            })?;
+
+        base64::encode_config(json_bytes, URL_SAFE)
+    };
+
+    /*
+     * TODO-robustness is there a way for us to know at compile-time that
+     * this won't be a problem?  What if we say that PageSelector has to be
+     * Sized?  That won't guarantee that this will work, but wouldn't that
+     * mean that if it ever works, then it will always work?  But would that
+     * interface be a pain to use, given that variable-length strings are
+     * very common in the token?
+     */
+    if token_bytes.len() > MAX_TOKEN_LENGTH {
+        return Err(HttpError::for_internal_error(format!(
+            "serialized token is too large ({} bytes, max is {})",
+            token_bytes.len(),
+            MAX_TOKEN_LENGTH
+        )));
+    }
+
+    Ok(token_bytes)
+}
 
 /*
- * This enum definition looks a little strange because it's designed so that
- * serde will deserialize exactly the input we want to support.  In REST APIs,
- * callers typically provide either the parameters to resume a scan (in our
- * case, just "page_token") or the parameters to begin a new one (which can be
- * any set of parameters that our consumer wants).  There's generally no
- * separate field to indicate which case they're requesting.  Fortunately,
- * serde(untagged) implements this behavior precisely, with one caveat: the
- * variants below are tried in order until one succeeds.  So for this to work,
- * `Next` must be defined before `First`, since any set of parameters at all
- * (including no parameters at all) are valid for `First`.
+ * Deserialization for page tokens
  */
-#[derive(Deserialize, ExtractedParameter)]
-#[serde(untagged)]
-enum RawWhichPage<ScanParams>
-{
-    Next { page_token: String },
-    First(ScanParams),
-}
-
-#[derive(Deserialize, ExtractedParameter)]
-struct RawPaginationParams<ScanParams>
-{
-    #[serde(flatten)]
-    page_params: RawWhichPage<ScanParams>,
-    limit: Option<NonZeroU64>,
-}
-
 impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
     for PaginationParams<ScanParams, PageSelector>
 where
@@ -455,110 +530,33 @@ where
     }
 }
 
+/* See `PaginationParams` above for why this raw form exists. */
+#[derive(Deserialize, ExtractedParameter)]
+struct RawPaginationParams<ScanParams>
+{
+    #[serde(flatten)]
+    page_params: RawWhichPage<ScanParams>,
+    limit: Option<NonZeroU64>,
+}
+
 /*
- * Token serialization and deserialization
+ * See `PaginationParams` above for why this raw form exists.
  *
- * Page tokens essentially take the consumer's PageSelector struct, add a
- * version number, serialize that as JSON, and base64-encode the result.  This
- * token is returned in any response from a paginated API, and the client will
- * pass it back as a query parameter for subsequent pagination requests. This
- * approach allows us to rev the serialized form if needed (see
- * `PaginationVersion`) and add other metadata in a backwards-compatiable way.
- * It also emphasizes to clients that the token should be treated as opaque.
+ * This enum definition looks a little strange because it's designed so that
+ * serde will deserialize exactly the input we want to support.  In REST APIs,
+ * callers typically provide either the parameters to resume a scan (in our
+ * case, just "page_token") or the parameters to begin a new one (which can be
+ * any set of parameters that our consumer wants).  There's generally no
+ * separate field to indicate which case they're requesting.  Fortunately,
+ * serde(untagged) implements this behavior precisely, with one caveat: the
+ * variants below are tried in order until one succeeds.  So for this to work,
+ * `Next` must be defined before `First`, since any set of parameters at all
+ * (including no parameters at all) are valid for `First`.
  */
-
-/**
- * Maximum length of a page token once the consumer-provided type is serialized
- * and the result is base64-encoded
- *
- * We impose a maximum length primarily to prevent a client from making us parse
- * extremely large strings.  We apply this limit when we create tokens to avoid
- * handing out a token that can't be used.
- *
- * Note that these tokens are passed in the HTTP request line (before the
- * headers), and many HTTP implementations impose an implicit limit as low as
- * 8KiB on the size of the request line and headers together, so it's a good
- * idea to keep this as small as we can.
- */
-const MAX_TOKEN_LENGTH: usize = 512;
-
-/**
- * Version for the pagination token serialization format
- *
- * This may seem like overkill, but it allows us to rev this in a future version
- * of Dropshot without breaking any ongoing scans when the change is deployed.
- * If we rev this, we might need to provide a way for clients to request at
- * runtime which version of token to generate so that if they do a rolling
- * upgrade of multiple instances, they can configure the instances to generate
- * v1 tokens until the rollout is complete, then switch on the new token
- * version.  Obviously, it would be better to avoid revving this version if
- * possible!
- *
- * Note that consumers still need to consider compatibility if they change their
- * own `ScanParams` or `PageSelector` types.
- */
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Deserialize,
-    ExtractedParameter,
-    JsonSchema,
-    PartialEq,
-    Serialize,
-)]
-#[serde(rename_all = "lowercase")]
-enum PaginationVersion {
-    V1,
-}
-
-/**
- * Parts of the pagination token that actually get serialized.
- */
-#[derive(Debug, Deserialize, Serialize)]
-struct SerializedToken<PageSelector> {
-    v: PaginationVersion,
-    page_start: PageSelector,
-}
-
-/**
- * Construct a serialized page token from a consumer's page selector.
- */
-pub fn serialize_page_token<PageSelector: Serialize>(
-    page_start: PageSelector,
-) -> Result<String, HttpError> {
-    let token_bytes = {
-        let serialized_token = SerializedToken {
-            v: PaginationVersion::V1,
-            page_start: page_start,
-        };
-
-        let json_bytes =
-            serde_json::to_vec(&serialized_token).map_err(|e| {
-                HttpError::for_internal_error(format!(
-                    "failed to serialize token: {}",
-                    e
-                ))
-            })?;
-
-        base64::encode_config(json_bytes, URL_SAFE)
-    };
-
-    /*
-     * TODO-robustness is there a way for us to know at compile-time that
-     * this won't be a problem?  What if we say that PageSelector has to be
-     * Sized?  That won't guarantee that this will work, but wouldn't that
-     * mean that if it ever works, then it will always work?  But would that
-     * interface be a pain to use, given that variable-length strings are
-     * very common in the token?
-     */
-    if token_bytes.len() > MAX_TOKEN_LENGTH {
-        return Err(HttpError::for_internal_error(format!(
-            "serialized token is too large ({} bytes, max is {})",
-            token_bytes.len(),
-            MAX_TOKEN_LENGTH
-        )));
-    }
-
-    Ok(token_bytes)
+#[derive(Deserialize, ExtractedParameter)]
+#[serde(untagged)]
+enum RawWhichPage<ScanParams>
+{
+    Next { page_token: String },
+    First(ScanParams),
 }
