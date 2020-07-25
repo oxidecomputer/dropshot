@@ -252,7 +252,7 @@
  * [2]: https://www.citusdata.com/blog/2016/03/30/five-ways-to-paginate/
  */
 
-use crate as dropshot; // XXX needed for ExtractedParameter below
+use crate as dropshot; /* needed for ExtractedParameter macro */
 use crate::error::HttpError;
 use base64::URL_SAFE;
 use dropshot_endpoint::ExtractedParameter;
