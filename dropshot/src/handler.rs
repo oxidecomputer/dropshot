@@ -888,6 +888,13 @@ impl<I> HttpResponseOkPage<I>
 where
     I: JsonSchema + Serialize + Send + Sync + 'static,
 {
+    /*
+     * TODO-robustness It would be nice if we had the pagination parameters and
+     * request context here so that we could check the limit against the number
+     * of items provided here.  If the consumer provided too many items, we
+     * could return a 500 error, panic, drop the extra ones, log an error, or
+     * something else.
+     */
     pub fn new<F, ScanParams, PageSelector>(
         items: Vec<I>,
         scan_params: &ScanParams,
