@@ -277,22 +277,25 @@ pub struct ClientPage<ItemType> {
 
 /*
  * Generic pagination infrastructure
- * XXX need to better understand the trait bounds / serde bounds here.
  */
 
 /**
  * Query parameters provided by clients when scanning a paginated collection
- *
- * See `PaginatedResource` for more information.
  */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
                              DeserializeOwned"))]
+/*
+ * RawPaginationParams represents the structure the serde can actually decode
+ * from the querystring.  This is a little awkward for consumers to use, so we
+ * present a cleaner version here.  We populate this one from the raw version
+ * using the `TryFrom` implementation below.
+ */
 #[serde(try_from = "RawPaginationParams<ScanParams>")]
 pub struct PaginationParams<ScanParams, PageSelector>
 where
     ScanParams: Send + Sync + 'static,
-    PageSelector: Serialize + Send + Sync + 'static,
+    PageSelector: Send + Sync + 'static,
 {
     /**
      * Specifies either how the client wants to begin a new scan or how to
@@ -312,26 +315,18 @@ where
 
 /**
  * Indicates whether the client is beginning a new scan or resuming an existing
- * one and provides the corresponding parameters for each case
+ * one and provides the corresponding query parameters for each case
  */
 #[derive(Debug)]
 pub enum WhichPage<ScanParams, PageSelector>
 where
     ScanParams: Send + Sync + 'static,
-    PageSelector: Serialize + Send + Sync + 'static,
+    PageSelector: Send + Sync + 'static,
 {
-    /**
-     * Indicates that the client is resuming a previous scan.  The client
-     * provides `page_token`, an opaque value that wraps the consumer's
-     * `PageSelector` type.  Critically, this must provide enough information
-     * for the consumer to resume a scan.
-     */
-    Next(PageSelector),
-
-    /**
-     * Indicates that the client is beginning a new scan.
-     */
+    /** Indicates that the client is beginning a new scan */
     First(ScanParams),
+    /** Indicates that the client is resuming a previous scan */
+    Next(PageSelector),
 }
 
 impl<ScanParams, PageSelector> dropshot::ExtractedParameter
@@ -383,21 +378,15 @@ pub enum PaginationOrder {
  * (including no parameters at all) are valid for `First`.
  */
 #[derive(Deserialize, ExtractedParameter)]
-#[serde(bound(deserialize = "ScanParams: DeserializeOwned"))]
 #[serde(untagged)]
 enum RawWhichPage<ScanParams>
-where
-    ScanParams: Send + Sync + 'static,
 {
     Next { page_token: String },
     First(ScanParams),
 }
 
 #[derive(Deserialize, ExtractedParameter)]
-#[serde(bound(deserialize = "ScanParams: DeserializeOwned"))]
 struct RawPaginationParams<ScanParams>
-where
-    ScanParams: Send + Sync + 'static,
 {
     #[serde(flatten)]
     page_params: RawWhichPage<ScanParams>,
@@ -407,8 +396,8 @@ where
 impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
     for PaginationParams<ScanParams, PageSelector>
 where
-    ScanParams: DeserializeOwned + Send + Sync + 'static,
-    PageSelector: DeserializeOwned + Serialize + Send + Sync + 'static,
+    ScanParams: Send + Sync + 'static,
+    PageSelector: DeserializeOwned + Send + Sync + 'static,
 {
     type Error = String;
 
@@ -533,106 +522,43 @@ struct SerializedToken<PageSelector> {
 }
 
 /**
- * Describes the current scan and the client's position within it
+ * Construct a serialized page token from a consumer's page selector.
  */
-#[derive(Debug, Deserialize, ExtractedParameter)]
-#[serde(try_from = "String")]
-#[serde(bound(deserialize = "PageSelector: DeserializeOwned"))]
-pub struct PageToken<PageSelector> {
-    pub page_start: PageSelector,
-}
-
-impl<PageSelector> PageToken<PageSelector>
-where
-    PageSelector: Serialize,
-{
-    pub fn new(page_start: PageSelector) -> Self {
-        PageToken {
-            page_start,
-        }
-    }
-
-    pub(crate) fn to_serialized(self) -> Result<String, HttpError> {
-        let page_start = self.page_start;
-
-        let token_bytes = {
-            let serialized_token = SerializedToken {
-                v: PaginationVersion::V1,
-                page_start: page_start,
-            };
-
-            let json_bytes =
-                serde_json::to_vec(&serialized_token).map_err(|e| {
-                    HttpError::for_internal_error(format!(
-                        "failed to serialize token: {}",
-                        e
-                    ))
-                })?;
-
-            base64::encode_config(json_bytes, URL_SAFE)
+pub fn serialize_page_token<PageSelector: Serialize>(
+    page_start: PageSelector,
+) -> Result<String, HttpError> {
+    let token_bytes = {
+        let serialized_token = SerializedToken {
+            v: PaginationVersion::V1,
+            page_start: page_start,
         };
 
-        /*
-         * TODO-robustness is there a way for us to know at compile-time that
-         * this won't be a problem?  What if we say that PageSelector has to be
-         * Sized?  That won't guarantee that this will work, but wouldn't that
-         * mean that if it ever works, then it will always work?  But would that
-         * interface be a pain to use, given that variable-length strings are
-         * very common in the token?
-         */
-        if token_bytes.len() > MAX_TOKEN_LENGTH {
-            return Err(HttpError::for_internal_error(format!(
-                "serialized token is too large ({} bytes, max is {})",
-                token_bytes.len(),
-                MAX_TOKEN_LENGTH
-            )));
-        }
-
-        Ok(token_bytes)
-    }
-}
-
-impl<PageSelector> TryFrom<String> for PageToken<PageSelector>
-where
-    PageSelector: DeserializeOwned,
-{
-    type Error = String;
-
-    fn try_from(value: String) -> Result<PageToken<PageSelector>, String> {
-        if value.len() > MAX_TOKEN_LENGTH {
-            return Err(String::from(
-                "failed to parse pagination token: too large",
-            ));
-        }
-
-        let json_bytes = base64::decode_config(value.as_bytes(), URL_SAFE)
-            .map_err(|e| format!("failed to parse pagination token: {}", e))?;
-
-        /*
-         * TODO-debugging: we don't want the user to have to know about the
-         * internal structure of the token, so the error message here doesn't
-         * say anything about that.  However, it would be nice if we could
-         * create an internal error message that included the serde_json error,
-         * which would have more context for someone looking at the server logs
-         * to figure out what happened with this request.  Our own `HttpError`
-         * supports this, but it seems like serde only preserves the to_string()
-         * output of the error anyway.  It's not clear how else we could
-         * propagate this information out.
-         */
-        let deserialized: SerializedToken<PageSelector> =
-            serde_json::from_slice(&json_bytes).map_err(|_| {
-                format!("failed to parse pagination token: corrupted token")
+        let json_bytes =
+            serde_json::to_vec(&serialized_token).map_err(|e| {
+                HttpError::for_internal_error(format!(
+                    "failed to serialize token: {}",
+                    e
+                ))
             })?;
 
-        if deserialized.v != PaginationVersion::V1 {
-            return Err(format!(
-                "failed to parse pagination token: unsupported version: {:?}",
-                deserialized.v,
-            ));
-        }
+        base64::encode_config(json_bytes, URL_SAFE)
+    };
 
-        Ok(PageToken {
-            page_start: deserialized.page_start,
-        })
+    /*
+     * TODO-robustness is there a way for us to know at compile-time that
+     * this won't be a problem?  What if we say that PageSelector has to be
+     * Sized?  That won't guarantee that this will work, but wouldn't that
+     * mean that if it ever works, then it will always work?  But would that
+     * interface be a pain to use, given that variable-length strings are
+     * very common in the token?
+     */
+    if token_bytes.len() > MAX_TOKEN_LENGTH {
+        return Err(HttpError::for_internal_error(format!(
+            "serialized token is too large ({} bytes, max is {})",
+            token_bytes.len(),
+            MAX_TOKEN_LENGTH
+        )));
     }
+
+    Ok(token_bytes)
 }

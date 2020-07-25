@@ -316,7 +316,6 @@ pub use logging::ConfigLoggingIfExists;
 pub use logging::ConfigLoggingLevel;
 pub use pagination::ClientPage;
 pub use pagination::EmptyScanParams;
-pub use pagination::PageToken;
 pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::WhichPage;

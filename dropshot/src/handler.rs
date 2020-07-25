@@ -43,8 +43,8 @@ use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
+use crate::pagination::serialize_page_token;
 use crate::pagination::ClientPage;
-use crate::pagination::PageToken;
 use crate::pagination::PaginationParams;
 
 use async_trait::async_trait;
@@ -901,7 +901,7 @@ where
             .last()
             .map(|last_item| {
                 let selector = get_page_selector(last_item, scan_params);
-                PageToken::new(selector).to_serialized()
+                serialize_page_token(selector)
             })
             .transpose()?;
 
