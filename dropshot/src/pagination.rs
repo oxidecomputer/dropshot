@@ -313,7 +313,7 @@ where
  * Indicates whether the client is beginning a new scan or resuming an existing
  * one and provides the corresponding query parameters for each case
  */
-#[derive(Debug)]
+#[derive(Debug, ExtractedParameter)]
 pub enum WhichPage<ScanParams, PageSelector>
 where
     ScanParams: Send + Sync + 'static,
@@ -323,20 +323,6 @@ where
     First(ScanParams),
     /** Indicates that the client is resuming a previous scan */
     Next(PageSelector),
-}
-
-impl<ScanParams, PageSelector> dropshot::ExtractedParameter
-    for WhichPage<ScanParams, PageSelector>
-where
-    ScanParams: Send + Sync + 'static,
-    PageSelector: Serialize + Send + Sync + 'static,
-{
-    fn metadata(
-        inn: dropshot::ApiEndpointParameterLocation,
-    ) -> Vec<dropshot::ApiEndpointParameter> {
-        // XXX
-        todo!()
-    }
 }
 
 /**
