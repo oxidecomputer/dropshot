@@ -119,7 +119,11 @@ fn fixture(path: &str, actual: &str) -> Result<(), String> {
     if let Ok(_) = std::env::var("FIXTURE") {
         fs::write(path, actual).map_err(|e| e.to_string())?;
     } else {
-        let expected_s = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let mut expected_s =
+            fs::read_to_string(path).map_err(|e| e.to_string())?;
+        if cfg!(windows) {
+            expected_s = expected_s.replace("\r\n", "\n");
+        }
         let expected = expected_s.as_str();
 
         println!("set FIXTURE= if these changes are intentional");
