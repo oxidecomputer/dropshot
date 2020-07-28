@@ -1,0 +1,175 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "test",
+    "contact": {},
+    "version": "threeve"
+  },
+  "paths": {
+    "/test/camera": {
+      "post": {
+        "operationId": "handler4",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "_x": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "_x"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "TODO: placeholder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test/man/{x}": {
+      "delete": {
+        "operationId": "handler3",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "x",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "TODO: placeholder"
+          }
+        }
+      }
+    },
+    "/test/person": {
+      "get": {
+        "operationId": "handler1",
+        "responses": {
+          "200": {
+            "description": "TODO: placeholder"
+          }
+        }
+      }
+    },
+    "/test/tv/{x}": {
+      "post": {
+        "tags": [
+          "person",
+          "woman",
+          "man",
+          "camera",
+          "tv"
+        ],
+        "operationId": "handler5",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "x",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "_tomax",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "allowReserved": true,
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "_xamot",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "allowReserved": true,
+            "style": "form"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "_x": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "_x"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "TODO: placeholder"
+          }
+        }
+      }
+    },
+    "/test/woman": {
+      "get": {
+        "operationId": "handler2",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_tomax",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "allowReserved": true,
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "_xamot",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "allowReserved": true,
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TODO: placeholder"
+          }
+        }
+      }
+    }
+  },
+  "components": {}
+}

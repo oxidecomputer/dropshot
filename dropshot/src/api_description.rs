@@ -218,6 +218,7 @@ impl ApiDescription {
     // for duplicate parameter names.
     pub fn print_openapi(
         &self,
+        out: &mut dyn std::io::Write,
         title: &dyn ToString,
         description: Option<&dyn ToString>,
         terms_of_service: Option<&dyn ToString>,
@@ -227,7 +228,7 @@ impl ApiDescription {
         license_name: Option<&dyn ToString>,
         license_url: Option<&dyn ToString>,
         version: &dyn ToString,
-    ) {
+    ) -> serde_json::Result<()> {
         let mut openapi = openapiv3::OpenAPI::default();
 
         openapi.openapi = "3.0.3".to_string();
@@ -413,7 +414,7 @@ impl ApiDescription {
             schemas.insert(key.clone(), j2oas_schema(schema));
         });
 
-        println!("{}", serde_json::to_string_pretty(&openapi).unwrap());
+        serde_json::to_writer_pretty(out, &openapi)
     }
 
     /*
@@ -800,80 +801,18 @@ fn j2oas_object(
 #[cfg(test)]
 mod test {
     use super::super::error::HttpError;
-    use super::super::handler::HttpRouteHandler;
     use super::super::handler::RequestContext;
-    use super::super::handler::RouteHandler;
     use super::super::ExtractedParameter;
     use super::super::Path;
     use super::j2oas_schema;
     use super::ApiDescription;
     use super::ApiEndpoint;
-    use super::ApiEndpointResponse;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
     use schemars::JsonSchema;
     use serde::Deserialize;
     use std::sync::Arc;
-
-    async fn test_handler(
-        _: Arc<RequestContext>,
-    ) -> Result<Response<Body>, HttpError> {
-        panic!("test handler is not supposed to run");
-    }
-
-    fn new_handler_named(name: &str) -> Box<dyn RouteHandler> {
-        HttpRouteHandler::new_with_name(test_handler, name)
-    }
-
-    fn new_endpoint(
-        handler: Box<dyn RouteHandler>,
-        method: Method,
-        path: &str,
-    ) -> ApiEndpoint {
-        ApiEndpoint {
-            operation_id: "testOperation".to_string(),
-            handler: handler,
-            method: method,
-            path: path.to_string(),
-            parameters: vec![],
-            response: ApiEndpointResponse {
-                schema: None,
-                success: None,
-            },
-            description: None,
-            tags: vec!["six".to_string(), "helf_a_dozen".to_string()],
-        }
-    }
-
-    #[test]
-    fn test_openapi() -> Result<(), String> {
-        let mut api = ApiDescription::new();
-        api.register(new_endpoint(
-            new_handler_named("root_get"),
-            Method::GET,
-            "/",
-        ))?;
-        api.register(new_endpoint(
-            new_handler_named("root_post"),
-            Method::POST,
-            "/",
-        ))?;
-
-        api.print_openapi(
-            &"test API",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            &"9000",
-        );
-
-        Ok(())
-    }
 
     #[derive(Deserialize, ExtractedParameter)]
     #[dropshot(crate = "super::super")]
