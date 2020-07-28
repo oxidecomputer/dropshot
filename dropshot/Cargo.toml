@@ -51,3 +51,4 @@ features = [ "serde", "v4" ]
 
 [dev-dependencies]
 libc = "0.2.71"
+difference = "2.0.0"
