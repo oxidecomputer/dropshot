@@ -454,6 +454,44 @@ pub fn serialize_page_token<PageSelector: Serialize>(
 /*
  * Deserialization for page tokens
  */
+fn deserialize_page_token<PageSelector: DeserializeOwned>(
+    token_str: &str,
+) -> Result<PageSelector, String> {
+    if token_str.len() > MAX_TOKEN_LENGTH {
+        return Err(String::from(
+            "failed to parse pagination token: too large",
+        ));
+    }
+
+    let json_bytes = base64::decode_config(token_str.as_bytes(), URL_SAFE)
+        .map_err(|e| format!("failed to parse pagination token: {}", e))?;
+
+    /*
+     * TODO-debugging: we don't want the user to have to know about the
+     * internal structure of the token, so the error message here doesn't
+     * say anything about that.  However, it would be nice if we could
+     * create an internal error message that included the serde_json error,
+     * which would have more context for someone looking at the server logs
+     * to figure out what happened with this request.  Our own `HttpError`
+     * supports this, but it seems like serde only preserves the to_string()
+     * output of the error anyway.  It's not clear how else we could
+     * propagate this information out.
+     */
+    let deserialized: SerializedToken<PageSelector> =
+        serde_json::from_slice(&json_bytes).map_err(|_| {
+            format!("failed to parse pagination token: corrupted token")
+        })?;
+
+    if deserialized.v != PaginationVersion::V1 {
+        return Err(format!(
+            "failed to parse pagination token: unsupported version: {:?}",
+            deserialized.v,
+        ));
+    }
+
+    Ok(deserialized.page_start)
+}
+
 impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
     for PaginationParams<ScanParams, PageSelector>
 where
@@ -465,61 +503,27 @@ where
     fn try_from(
         raw: RawPaginationParams<ScanParams>,
     ) -> Result<PaginationParams<ScanParams, PageSelector>, String> {
-        let token_str = match raw.page_params {
-            RawWhichPage::First(scan_params) => {
-                return Ok(PaginationParams {
-                    page: WhichPage::First(scan_params),
+        match raw.page_params {
+            RawWhichPage::First(scan_params) => Ok(PaginationParams {
+                page: WhichPage::First(scan_params),
+                limit: raw.limit,
+            }),
+            RawWhichPage::Next {
+                page_token,
+            } => {
+                let page_start = deserialize_page_token(&page_token)?;
+                Ok(PaginationParams {
+                    page: WhichPage::Next(page_start),
                     limit: raw.limit,
                 })
             }
-            RawWhichPage::Next {
-                page_token,
-            } => page_token,
-        };
-
-        if token_str.len() > MAX_TOKEN_LENGTH {
-            return Err(String::from(
-                "failed to parse pagination token: too large",
-            ));
         }
-
-        let json_bytes = base64::decode_config(token_str.as_bytes(), URL_SAFE)
-            .map_err(|e| format!("failed to parse pagination token: {}", e))?;
-
-        /*
-         * TODO-debugging: we don't want the user to have to know about the
-         * internal structure of the token, so the error message here doesn't
-         * say anything about that.  However, it would be nice if we could
-         * create an internal error message that included the serde_json error,
-         * which would have more context for someone looking at the server logs
-         * to figure out what happened with this request.  Our own `HttpError`
-         * supports this, but it seems like serde only preserves the to_string()
-         * output of the error anyway.  It's not clear how else we could
-         * propagate this information out.
-         */
-        let deserialized: SerializedToken<PageSelector> =
-            serde_json::from_slice(&json_bytes).map_err(|_| {
-                format!("failed to parse pagination token: corrupted token")
-            })?;
-
-        if deserialized.v != PaginationVersion::V1 {
-            return Err(format!(
-                "failed to parse pagination token: unsupported version: {:?}",
-                deserialized.v,
-            ));
-        }
-
-        Ok(PaginationParams {
-            page: WhichPage::Next(deserialized.page_start),
-            limit: raw.limit,
-        })
     }
 }
 
 /* See `PaginationParams` above for why this raw form exists. */
 #[derive(Deserialize, ExtractedParameter)]
-struct RawPaginationParams<ScanParams>
-{
+struct RawPaginationParams<ScanParams> {
     #[serde(flatten)]
     page_params: RawWhichPage<ScanParams>,
     limit: Option<NonZeroU64>,
@@ -541,8 +545,7 @@ struct RawPaginationParams<ScanParams>
  */
 #[derive(Deserialize, ExtractedParameter)]
 #[serde(untagged)]
-enum RawWhichPage<ScanParams>
-{
+enum RawWhichPage<ScanParams> {
     Next { page_token: String },
     First(ScanParams),
 }

@@ -29,6 +29,7 @@ mod common;
 fn paginate_api() -> ApiDescription {
     let mut api = ApiDescription::new();
     api.register(demo_handler_integers).unwrap();
+    api.register(demo_handler_with_other_params).unwrap();
     api
 }
 
@@ -73,6 +74,45 @@ fn page_selector_for(
     _p: &IntegersScanParams,
 ) -> IntegersPageSelector {
     IntegersPageSelector::ByNum(*n)
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/more_ints",
+}]
+async fn demo_handler_with_other_params(
+    rqctx: Arc<RequestContext>,
+    query_pag: Query<
+        PaginationParams<IntegersScanParams, IntegersPageSelector>,
+    >,
+    query_extra: Query<ExtraQueryParams>,
+) -> Result<HttpResponseOkPage<usize>, HttpError> {
+    let pag_params = query_pag.into_inner();
+    let limit = rqctx.page_limit(&pag_params)?.get();
+    let extra_params = query_extra.into_inner();
+    let _debug = extra_params.debug.unwrap_or(false);
+
+    let start = match &pag_params.page {
+        WhichPage::First(..) => 0,
+        WhichPage::Next(IntegersPageSelector::ByNum(n)) => *n as usize,
+    };
+
+    let results = Range {
+        start: start + 1,
+        end: start + limit + 1,
+    }
+    .collect();
+
+    Ok(HttpResponseOkPage::new(
+        results,
+        &IntegersScanParams {},
+        page_selector_for,
+    )?)
+}
+
+#[derive(Deserialize, ExtractedParameter)]
+struct ExtraQueryParams {
+    debug: Option<bool>,
 }
 
 #[tokio::test]
@@ -132,6 +172,32 @@ async fn test_paginate_basic() {
 
     let page =
         objects_list_page::<usize>(&client, "/testing/intapi?limit=8").await;
+    assert_eq!(page.items, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_paginate_extra_params() {
+    let api = paginate_api();
+    let testctx = common::test_setup("demo1", api);
+    let client = &testctx.client_testctx;
+
+    let page =
+        objects_list_page::<usize>(&client, "/testing/more_ints?limit=5").await;
+    assert_eq!(page.items, vec![1, 2, 3, 4, 5]);
+    eprintln!("page: {:?}", page);
+
+    let page = objects_list_page::<usize>(
+        &client,
+        "/testing/more_ints?limit=5&debug=true",
+    )
+    .await;
+    assert_eq!(page.items, vec![1, 2, 3, 4, 5]);
+    eprintln!("page: {:?}", page);
+
+    let page =
+        objects_list_page::<usize>(&client, "/testing/more_ints?limit=8").await;
     assert_eq!(page.items, vec![1, 2, 3, 4, 5, 6, 7, 8]);
 
     testctx.teardown().await;
