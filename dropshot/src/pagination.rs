@@ -121,9 +121,10 @@
  * be serialized to JSON and base64-encoded to construct the page token.  This
  * will be automatically parsed on the way back in.
  *
- * For output, a paginated API endpoint's handler function should return
- * `Result<HttpResponseOkPage<ItemType>>`, where `ItemType` is whatever object
- * the API returns a list of.  In our case, `ItemType` would be `Animal`.
+ * For output, a paginated API endpoint's handler function can return the usual
+ * `Result<HttpResponseOkObject<T>, HttpError>`, using the [`ResultsPage`]
+ * structure for `T`.  You can also use any structure that contains `T`
+ * (possibly using `#[serde(flatten)]`, if that's the behavior you want).
  *
  * There are several complete, documented examples in the "examples" directory.
  *
@@ -131,30 +132,49 @@
  * ## Advanced usage notes
  *
  * It's possible to accept additional query parameters besides the pagination
- * parameters by creating your own struct `MyQueryParams` and embedding a
- * `PaginationParams` in it, like this:
+ * parameters by having your API endpoint handler function taking two different
+ * arguments using `Query`, like this:
  *
  * ```
  * use dropshot::ExtractedParameter;
+ * use dropshot::HttpError;
+ * use dropshot::HttpResponseOkObject;
  * use dropshot::PaginationParams;
  * use dropshot::Query;
+ * use dropshot::RequestContext;
+ * use dropshot::ResultsPage;
+ * use dropshot::endpoint;
  * use serde::Deserialize;
+ * use std::sync::Arc;
  * # use serde::Serialize;
  * # #[derive(Debug, Deserialize, ExtractedParameter)]
  * # enum MyScanParams { A };
  * # #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
  * # enum MyPageSelector { A(String) };
- * ##[derive(Deserialize, ExtractedParameter)]
- * struct MyQueryParams {
+ * #[derive(Deserialize, ExtractedParameter)]
+ * struct MyExtraQueryParams {
  *     do_extra_stuff: bool,
+ * }
  *
- *     ##[serde(flatten)]
- *     pagination_params: PaginationParams<MyScanParams, MyPageSelector>
+ * #[endpoint {
+ *     method = GET,
+ *     path = "/list_stuff"
+ * }]
+ * async fn my_list_api(
+ *     rqctx: Arc<RequestContext>,
+ *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
+ *     extra_params: Query<MyExtraQueryParams>,
+ * ) -> Result<HttpResponseOkObject<ResultsPage<String>>, HttpError>
+ * {
+ *  # unimplemented!();
+ *  /* ... */
  * }
  * ```
  *
- * We use `#[serde(flatten)]` here so that the pagination parameters don't wind
- * up nested under the name "pagination_params".
+ * You might expect that instead of doing this, you could define your own
+ * structure that includes a `PaginationParams` using `#[serde(flatten)]`, and
+ * this ought to work, but it currently doesn't due to serde_urlencoded#33,
+ * which is really serde#1183.
  *
  *
  * ## Background: patterns for pagination
@@ -265,14 +285,39 @@ use std::fmt::Debug;
 use std::num::NonZeroU64;
 
 /**
- * Client's view of a page of results from a paginated API
+ * Server-produced page of results from a paginated API
  */
 #[derive(Debug, Deserialize, JsonSchema, Serialize)]
-pub struct ClientPage<ItemType> {
+pub struct ResultsPage<ItemType> {
     /** token to be used in pagination params for the next page of results */
     pub next_page: Option<String>,
     /** list of items on this page of results */
     pub items: Vec<ItemType>,
+}
+
+impl<ItemType> ResultsPage<ItemType> {
+    pub fn new<F, ScanParams, PageSelector>(
+        items: Vec<ItemType>,
+        scan_params: &ScanParams,
+        get_page_selector: F,
+    ) -> Result<ResultsPage<ItemType>, HttpError>
+    where
+        F: Fn(&ItemType, &ScanParams) -> PageSelector,
+        PageSelector: Serialize,
+    {
+        let next_page = items
+            .last()
+            .map(|last_item| {
+                let selector = get_page_selector(last_item, scan_params);
+                serialize_page_token(selector)
+            })
+            .transpose()?;
+
+        Ok(ResultsPage {
+            next_page,
+            items,
+        })
+    }
 }
 
 /**
@@ -412,7 +457,7 @@ struct SerializedToken<PageSelector> {
 /**
  * Construct a serialized page token from a consumer's page selector
  */
-pub fn serialize_page_token<PageSelector: Serialize>(
+fn serialize_page_token<PageSelector: Serialize>(
     page_start: PageSelector,
 ) -> Result<String, HttpError> {
     let token_bytes = {

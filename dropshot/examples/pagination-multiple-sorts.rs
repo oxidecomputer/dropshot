@@ -100,7 +100,7 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkPage;
+use dropshot::HttpResponseOkObject;
 use dropshot::HttpServer;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
@@ -108,6 +108,7 @@ use dropshot::PaginationOrder::Descending;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::ResultsPage;
 use dropshot::WhichPage;
 use hyper::Uri;
 use schemars::JsonSchema;
@@ -236,7 +237,7 @@ async fn example_list_projects(
     query: Query<
         PaginationParams<ProjectScanParamsIncoming, ProjectScanPageSelector>,
     >,
-) -> Result<HttpResponseOkPage<Project>, HttpError> {
+) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -294,7 +295,11 @@ async fn example_list_projects(
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-    Ok(HttpResponseOkPage::new(projects, &scan_params, page_selector_for)?)
+    Ok(HttpResponseOkObject(ResultsPage::new(
+        projects,
+        &scan_params,
+        page_selector_for,
+    )?))
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {

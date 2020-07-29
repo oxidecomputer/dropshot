@@ -24,11 +24,12 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkPage;
+use dropshot::HttpResponseOkObject;
 use dropshot::HttpServer;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::ResultsPage;
 use dropshot::WhichPage;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -77,7 +78,7 @@ struct ProjectPage {
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
-) -> Result<HttpResponseOkPage<Project>, HttpError> {
+) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
@@ -100,13 +101,13 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkPage::new(
+    Ok(HttpResponseOkObject(ResultsPage::new(
         projects,
         &EmptyScanParams {},
         |p: &Project, _| ProjectPage {
             name: p.name.clone(),
         },
-    )?)
+    )?))
 }
 
 fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {

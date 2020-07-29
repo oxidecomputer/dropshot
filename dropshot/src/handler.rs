@@ -43,8 +43,6 @@ use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
-use crate::pagination::serialize_page_token;
-use crate::pagination::ClientPage;
 use crate::pagination::PaginationParams;
 
 use async_trait::async_trait;
@@ -865,66 +863,6 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
 {
     fn from(response: HttpResponseOkObject<T>) -> HttpHandlerResult {
         HttpResponseOkObject::for_object(&response.0)
-    }
-}
-
-/**
- * Wraps a list of items with a response intended for pagination.  See the
- * pagination documentation docs for more details.
- */
-pub struct HttpResponseOkPage<I>(ClientPage<I>)
-where
-    I: JsonSchema + Serialize + Send + Sync + 'static;
-
-impl<I> HttpTypedResponse for HttpResponseOkPage<I>
-where
-    I: JsonSchema + Serialize + Send + Sync + 'static,
-{
-    type Body = ClientPage<I>;
-    const STATUS_CODE: StatusCode = StatusCode::OK;
-}
-
-impl<I> HttpResponseOkPage<I>
-where
-    I: JsonSchema + Serialize + Send + Sync + 'static,
-{
-    /*
-     * TODO-robustness It would be nice if we had the pagination parameters and
-     * request context here so that we could check the limit against the number
-     * of items provided here.  If the consumer provided too many items, we
-     * could return a 500 error, panic, drop the extra ones, log an error, or
-     * something else.
-     */
-    pub fn new<F, ScanParams, PageSelector>(
-        items: Vec<I>,
-        scan_params: &ScanParams,
-        get_page_selector: F,
-    ) -> Result<HttpResponseOkPage<I>, HttpError>
-    where
-        F: Fn(&I, &ScanParams) -> PageSelector,
-        PageSelector: Serialize,
-    {
-        let next_page = items
-            .last()
-            .map(|last_item| {
-                let selector = get_page_selector(last_item, scan_params);
-                serialize_page_token(selector)
-            })
-            .transpose()?;
-
-        Ok(HttpResponseOkPage(ClientPage {
-            next_page,
-            items,
-        }))
-    }
-}
-
-impl<I> From<HttpResponseOkPage<I>> for HttpHandlerResult
-where
-    I: JsonSchema + Serialize + Send + Sync + 'static,
-{
-    fn from(response: HttpResponseOkPage<I>) -> HttpHandlerResult {
-        HttpResponseOkPage::<I>::for_object(&response.0)
     }
 }
 

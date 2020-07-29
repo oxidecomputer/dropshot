@@ -12,7 +12,7 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkPage;
+use dropshot::HttpResponseOkObject;
 use dropshot::HttpServer;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
@@ -20,6 +20,7 @@ use dropshot::PaginationOrder::Descending;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::ResultsPage;
 use dropshot::WhichPage;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -176,7 +177,7 @@ fn scan_params(
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
-) -> Result<HttpResponseOkPage<Project>, HttpError> {
+) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -192,11 +193,11 @@ async fn example_list_projects(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new(
+    Ok(HttpResponseOkObject(ResultsPage::new(
         items,
         &scan_params,
         page_selector,
-    )?)
+    )?))
 }
 
 #[endpoint {
@@ -206,7 +207,7 @@ async fn example_list_projects(
 async fn example_list_disks(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
-) -> Result<HttpResponseOkPage<Disk>, HttpError> {
+) -> Result<HttpResponseOkObject<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -222,11 +223,11 @@ async fn example_list_disks(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new(
+    Ok(HttpResponseOkObject(ResultsPage::new(
         items,
         &scan_params,
         page_selector,
-    )?)
+    )?))
 }
 
 #[endpoint {
@@ -236,7 +237,7 @@ async fn example_list_disks(
 async fn example_list_instances(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
-) -> Result<HttpResponseOkPage<Instance>, HttpError> {
+) -> Result<HttpResponseOkObject<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -252,11 +253,11 @@ async fn example_list_instances(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkPage::new(
+    Ok(HttpResponseOkObject(ResultsPage::new(
         items,
         &scan_params,
         page_selector,
-    )?)
+    )?))
 }
 
 fn do_list<'a, T>(

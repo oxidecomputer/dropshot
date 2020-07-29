@@ -35,7 +35,7 @@ use crate::api_description::ApiDescription;
 use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
 use crate::logging::ConfigLogging;
-use crate::pagination::ClientPage;
+use crate::pagination::ResultsPage;
 use crate::server::HttpServer;
 
 /**
@@ -582,7 +582,7 @@ pub async fn objects_list<T: DeserializeOwned>(
 pub async fn objects_list_page<ItemType>(
     client: &ClientTestContext,
     list_url: &str,
-) -> ClientPage<ItemType>
+) -> ResultsPage<ItemType>
 where
     ItemType: DeserializeOwned,
 {
@@ -596,7 +596,7 @@ where
         .await
         .unwrap();
 
-    read_json::<ClientPage<ItemType>>(&mut response).await
+    read_json::<ResultsPage<ItemType>>(&mut response).await
 }
 
 /**

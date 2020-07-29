@@ -4,18 +4,21 @@
  */
 
 use dropshot::endpoint;
+use dropshot::test_util::object_get;
 use dropshot::test_util::objects_list_page;
 use dropshot::test_util::ClientTestContext;
 use dropshot::ApiDescription;
 use dropshot::ExtractedParameter;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkPage;
+use dropshot::HttpResponseOkObject;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::ResultsPage;
 use dropshot::WhichPage;
 use http::Method;
 use http::StatusCode;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::ops::Range;
@@ -29,7 +32,7 @@ mod common;
 fn paginate_api() -> ApiDescription {
     let mut api = ApiDescription::new();
     api.register(demo_handler_integers).unwrap();
-    api.register(demo_handler_with_other_params).unwrap();
+    api.register(demo_handler_extra).unwrap();
     api
 }
 
@@ -40,7 +43,7 @@ fn paginate_api() -> ApiDescription {
 async fn demo_handler_integers(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<IntegersScanParams, IntegersPageSelector>>,
-) -> Result<HttpResponseOkPage<usize>, HttpError> {
+) -> Result<HttpResponseOkObject<ResultsPage<usize>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
 
@@ -55,11 +58,11 @@ async fn demo_handler_integers(
     }
     .collect();
 
-    Ok(HttpResponseOkPage::new(
+    Ok(HttpResponseOkObject(ResultsPage::new(
         results,
         &IntegersScanParams {},
         page_selector_for,
-    )?)
+    )?))
 }
 
 #[derive(Debug, Deserialize, ExtractedParameter)]
@@ -78,19 +81,18 @@ fn page_selector_for(
 
 #[endpoint {
     method = GET,
-    path = "/testing/more_ints",
+    path = "/testing/ints_extra",
 }]
-async fn demo_handler_with_other_params(
+async fn demo_handler_extra(
     rqctx: Arc<RequestContext>,
     query_pag: Query<
         PaginationParams<IntegersScanParams, IntegersPageSelector>,
     >,
     query_extra: Query<ExtraQueryParams>,
-) -> Result<HttpResponseOkPage<usize>, HttpError> {
+) -> Result<HttpResponseOkObject<ExtraResultsPage>, HttpError> {
     let pag_params = query_pag.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let extra_params = query_extra.into_inner();
-    let _debug = extra_params.debug.unwrap_or(false);
 
     let start = match &pag_params.page {
         WhichPage::First(..) => 0,
@@ -103,16 +105,30 @@ async fn demo_handler_with_other_params(
     }
     .collect();
 
-    Ok(HttpResponseOkPage::new(
-        results,
-        &IntegersScanParams {},
-        page_selector_for,
-    )?)
+    Ok(HttpResponseOkObject(ExtraResultsPage {
+        debug_was_set: extra_params.debug.is_some(),
+        debug_value: extra_params.debug.unwrap_or(false),
+        page: ResultsPage::new(
+            results,
+            &IntegersScanParams {},
+            page_selector_for,
+        )?,
+    }))
 }
 
+/* TODO-coverage check generated OpenAPI spec */
 #[derive(Deserialize, ExtractedParameter)]
 struct ExtraQueryParams {
     debug: Option<bool>,
+}
+
+/* TODO-coverage check generated OpenAPI spec */
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+struct ExtraResultsPage {
+    debug_was_set: bool,
+    debug_value: bool,
+    #[serde(flatten)]
+    page: ResultsPage<usize>,
 }
 
 #[tokio::test]
@@ -184,21 +200,37 @@ async fn test_paginate_extra_params() {
     let client = &testctx.client_testctx;
 
     let page =
-        objects_list_page::<usize>(&client, "/testing/more_ints?limit=5").await;
-    assert_eq!(page.items, vec![1, 2, 3, 4, 5]);
+        object_get::<ExtraResultsPage>(&client, "/testing/ints_extra?limit=5")
+            .await;
+    assert!(!page.debug_was_set);
+    assert!(!page.debug_value);
+    assert_eq!(page.page.items, vec![1, 2, 3, 4, 5]);
     eprintln!("page: {:?}", page);
 
-    let page = objects_list_page::<usize>(
+    let page = object_get::<ExtraResultsPage>(
         &client,
-        "/testing/more_ints?limit=5&debug=true",
+        "/testing/ints_extra?limit=5&debug=true",
     )
     .await;
-    assert_eq!(page.items, vec![1, 2, 3, 4, 5]);
+    assert!(page.debug_was_set);
+    assert!(page.debug_value);
+    assert_eq!(page.page.items, vec![1, 2, 3, 4, 5]);
+    eprintln!("page: {:?}", page);
+
+    let page = object_get::<ExtraResultsPage>(
+        &client,
+        "/testing/ints_extra?limit=5&debug=false",
+    )
+    .await;
+    assert!(page.debug_was_set);
+    assert!(!page.debug_value);
+    assert_eq!(page.page.items, vec![1, 2, 3, 4, 5]);
     eprintln!("page: {:?}", page);
 
     let page =
-        objects_list_page::<usize>(&client, "/testing/more_ints?limit=8").await;
-    assert_eq!(page.items, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        object_get::<ExtraResultsPage>(&client, "/testing/ints_extra?limit=8")
+            .await;
+    assert_eq!(page.page.items, vec![1, 2, 3, 4, 5, 6, 7, 8]);
 
     testctx.teardown().await;
 }
