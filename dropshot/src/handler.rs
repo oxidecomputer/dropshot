@@ -73,6 +73,8 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /**
  * Handle for various interfaces useful during request processing.
+ */
+/*
  * TODO-cleanup What's the right way to package up "request"?  The only time we
  * need it to be mutable is when we're reading the body (e.g., as part of the
  * JSON extractor).  In order to support that, we wrap it in something that

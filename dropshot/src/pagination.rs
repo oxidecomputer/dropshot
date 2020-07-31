@@ -1,188 +1,14 @@
 // Copyright 2020 Oxide Computer Company
-/*
- * TODO-doc this won't wind up in the public docs so some of this content should
- * go elsewhere.  Maybe on PaginationParams?
- */
 /*!
- * # Support for paginated resources
- *
- * "Pagination" here refers to the interface pattern where HTTP resources (or
- * API endpoints) that provide a list of the items in a collection return a
- * relatively small maximum number of items per request, often called a "page"
- * of results.  Each page includes some metadata that the client can use to make
- * another request for the next page of results.  The client can repeat this
- * until they've gotten all the results.  Limiting the number of results
- * returned per request helps bound the resource utilization and time required
- * for any request, which in turn facilities horizontal scalability, high
- * availability, and protection against some denial of service attacks
- * (intentional or otherwise).
- *
- *
- * ## Example of pagination in HTTP
- *
- * Pagination support in Dropshot implements this common pattern:
- *
- * * This server exposes an **API endpoint** that returns the **items**
- *   contained within a **collection**.
- * * The client is not allowed to list the entire collection in one request.
- *   Instead, they list the collection using a sequence of requests to the one
- *   endpoint.  We call this sequence of requests a **scan** of the collection,
- *   and we sometimes say that the client **pages through** the collection.
- * * The initial request in the scan may specify the **scan parameters**, which
- *   typically specify how the results are to be sorted (i.e., by which
- *   field(s) and whether the sort is ascending or descending), any filters to
- *   apply, etc.
- * * Each request returns a **page** of results at a time, along with a **page
- *   token** that's provided with the next request as a query parameter.
- * * The scan parameters cannot change between requests that are part of the
- *   same scan.
- * * With all requests: there's a default limit (e.g., 100 items returned at a
- *   time).  Clients can request a higher limit using a query parameter (e.g.,
- *   `limit=1000`).  This limit is capped by a hard limit on the server.  If the
- *   client asks for more than the hard limit, the server can use the hard limit
- *   or reject the request.
- *
- * As an example, imagine that we have an API endpoint called "/animals".  Each
- * item returned is an "Animal" object that might look like this:
- *
- * ```json
- * {
- *     "name": "aardvark",
- *     "class": "mammal",
- *     "max_weight": "80", /* kilograms, typical */
- * }
- * ```
- *
- * There are at least 1.5 million known species of animal -- too many to return
- * in one API call!  Our API supports paginating them by "name", which we'll say
- * is a unique field in our data set.
- *
- * The first request to the API fetches "/animals" (with no querystring
- * parameters) and returns:
- *
- * ```json
- * {
- *     "page_token": "abc123...",
- *     "items": [
- *         {
- *             "name": "aardvark",
- *             "class": "mammal",
- *             "max_weight": "80",
- *         },
- *         ...
- *         {
- *             "name": "badger",
- *             "class": "mammal",
- *             "max_weight": "12",
- *         }
- *     ]
- * }
- * ```
- *
- * The subsequent request to the API fetches "/animals?page_token=abc123...".
- * The page token `"abc123..."` is an opaque token to the client, but typically
- * encodes the scan parameters and the value of the last item seen
- * ("name=badger").  The client knows it has completed the scan when it receives
- * a response with no `page_token` in it.
- *
- * Our API endpoint can also support scanning in reverse order.  In this case,
- * when the client makes the first request, it should fetch
- * `"/animals?sort=name-descending".  Now the first result might be "zebra".
- * Again, the page token must include the scan parameters so that in subsequent
- * requests, the API endpoint knows that we're scanning backwards, not forwards,
- * from the value we were given.  It's not allowed to change directions or sort
- * order in the middle of a scan.  (You can always start a new scan, but you
- * can't pick up from where you were in the previous scan.)
- *
- * It's also possible to support sorting by multiple fields.  For example, we
- * could support `sort=class-name`, which we could define to mean that we'll
- * sort the results first by class, then by name.  Thus we'd get all the
- * amphibians in sorted order, then all the mammals, then all the reptiles.  The
- * main requirement is that the combination of fields used for pagination must
- * be unique.  We cannot paginate by the animal's class alone.  (To see why:
- * there are over 6,000 mammals.  If the page size is, say, 1000, then the
- * page_token would say "mammal", but there's not enough information there to
- * see where we are within the list of mammals.  It doesn't matter whether there
- * are 2 mammals or 6,000 because clients can limit the page size to just one
- * item if they want and that ought to work.)
- *
- *
- * ## Dropshot interfaces for pagination
- *
- * We can think of pagination in two parts: the input (handling the pagination
- * query parameters) and the output (emitting a page of results, including the
- * page token).
- *
- * For input, a paginated API endpoint's handler function should accept a
- * `Query<PaginationParams<ScanParams, PageSelector>>`, where `ScanParams` is a
- * consumer-defined type specifying the parameters of the scan (typically
- * including the sort fields, sort order, and filter options) and `PageSelector`
- * is a consumer-defined type describing the page token.  The PageSelector will
- * be serialized to JSON and base64-encoded to construct the page token.  This
- * will be automatically parsed on the way back in.
- *
- * For output, a paginated API endpoint's handler function can return the usual
- * `Result<HttpResponseOkObject<T>, HttpError>`, using the [`ResultsPage`]
- * structure for `T`.  You can also use any structure that contains `T`
- * (possibly using `#[serde(flatten)]`, if that's the behavior you want).
- *
- * There are several complete, documented examples in the "examples" directory.
- *
- *
- * ## Advanced usage notes
- *
- * It's possible to accept additional query parameters besides the pagination
- * parameters by having your API endpoint handler function taking two different
- * arguments using `Query`, like this:
- *
- * ```
- * use dropshot::ExtractedParameter;
- * use dropshot::HttpError;
- * use dropshot::HttpResponseOkObject;
- * use dropshot::PaginationParams;
- * use dropshot::Query;
- * use dropshot::RequestContext;
- * use dropshot::ResultsPage;
- * use dropshot::endpoint;
- * use serde::Deserialize;
- * use std::sync::Arc;
- * # use serde::Serialize;
- * # #[derive(Debug, Deserialize, ExtractedParameter)]
- * # enum MyScanParams { A };
- * # #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
- * # enum MyPageSelector { A(String) };
- * #[derive(Deserialize, ExtractedParameter)]
- * struct MyExtraQueryParams {
- *     do_extra_stuff: bool,
- * }
- *
- * #[endpoint {
- *     method = GET,
- *     path = "/list_stuff"
- * }]
- * async fn my_list_api(
- *     rqctx: Arc<RequestContext>,
- *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
- *     extra_params: Query<MyExtraQueryParams>,
- * ) -> Result<HttpResponseOkObject<ResultsPage<String>>, HttpError>
- * {
- *  # unimplemented!();
- *  /* ... */
- * }
- * ```
- *
- * You might expect that instead of doing this, you could define your own
- * structure that includes a `PaginationParams` using `#[serde(flatten)]`, and
- * this ought to work, but it currently doesn't due to serde_urlencoded#33,
- * which is really serde#1183.
- *
+ * Detailed end-user documentation for pagination lives in the Dropshot top-
+ * level block comment.  Here we discuss some of the design choices.
  *
  * ## Background: patterns for pagination
  *
- * [Google describes an approach similar to the one above in their own API
- * design guidelines][1].  There are many ways to implement the page token with
- * many different tradeoffs.  The one described above has a lot of nice
- * properties:
+ * [In their own API design guidelines, Google describes an approach similar to
+ * the one we use][1].  There are many ways to implement the page token with
+ * many different tradeoffs.  The one described in the Dropshot top-level block
+ * comment has a lot of nice properties:
  *
  * * For APIs backed by a database of some kind, it's usually straightforward to
  *   use an existing primary key or other unique, sortable field (or combination
@@ -254,11 +80,11 @@
  * Finally, bounding requests to O(1) work is a critical mitigation for common
  * (if basic) denial-of-service (DoS) attacks because it requires that clients
  * consume resources commensurate with the server costs that they're imposing.
- * If a service exposes an API that does an unbounded amount of work
- * proportional to some parameter, then it's cheap to launch a DoS on the
- * service by just invoking that API with a large parameter.  By contrast, if
- * the client has to do work that scales linearly with the work the server has
- * to do, then the client's costs go up in order to scale up the attack.
+ * If a service exposes an API that does work proportional to some parameter,
+ * then it's cheap to launch a DoS on the service by just invoking that API with
+ * a large parameter.  By contrast, if the client has to do work that scales
+ * linearly with the work the server has to do, then the client's costs go up in
+ * order to scale up the attack.
  *
  * Along these lines, connections and requests consume finite server resources
  * like open file descriptors and database connections.  If a service is built
@@ -285,17 +111,26 @@ use std::fmt::Debug;
 use std::num::NonZeroU64;
 
 /**
- * Server-produced page of results from a paginated API
+ * A page of results from a paginated API
+ *
+ * This structure is intended for use both on the server side (to generate the
+ * results page) and on the client side (to parse it).
  */
 #[derive(Debug, Deserialize, JsonSchema, Serialize)]
 pub struct ResultsPage<ItemType> {
-    /** token to be used in pagination params for the next page of results */
+    /** token used to fetch the next page of results (if any) */
     pub next_page: Option<String>,
     /** list of items on this page of results */
     pub items: Vec<ItemType>,
 }
 
 impl<ItemType> ResultsPage<ItemType> {
+    /**
+     * Construct a new results page from the list of `items`.  `page_selector`
+     * is a function used to construct the page token that clients will provide
+     * to fetch the next page of results.  `scan_params` is provided to the
+     * `page_selector` function, since the token may depend on the type of scan.
+     */
     pub fn new<F, ScanParams, PageSelector>(
         items: Vec<ItemType>,
         scan_params: &ScanParams,
@@ -321,7 +156,35 @@ impl<ItemType> ResultsPage<ItemType> {
 }
 
 /**
- * Query parameters provided by clients when scanning a paginated collection
+ * Querystring parameters provided by clients when scanning a paginated
+ * collection
+ *
+ * To build an API endpoint that paginates results, you have your handler
+ * function accept a `Query<PaginationParams<ScanParams, PageSelector>>` and
+ * return a [`ResultsPage`].  You define your own `ScanParams` and
+ * `PageSelector` types.
+ *
+ * `ScanParams` describes the set of querystring parameters that your endpoint
+ * accepts for the _first_ request of the scan (typically: filters and sort
+ * options).  This must be deserializable from a querystring.
+ *
+ * `PageSelector` describes the information your endpoint needs for requests
+ * after the first one.  Typically this would include an id of some sort for the
+ * last item on the previous page so that your function can resume the scan with
+ * the first item after that.  If your endpoint supports filters or multiple
+ * sort options, you probably want to include these, too.  The entire
+ * `PageSelector` will be serialized to an opaque string and included in the
+ * [`ResultsPage`].  The client is expected to provide this string as the
+ * `"page_token"` querystring parameter in the subsequent request.
+ * `PageSelector` must implement both [`Deserialize`] and [`Serialize`].
+ *
+ * There are several complete, documented examples in `dropshot/examples`.
+ *
+ * **NOTE:** Your choices of `ScanParams` and `PageSelector` determine the
+ * querystring parameters accepted by your endpoint and the structure of the
+ * page token.  Both of these are part of your API's public interface, though
+ * the page token won't appear in the OpenAPI spec.  Be careful when designing
+ * these structures to consider what you might want to support in the future.
  */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
@@ -339,24 +202,32 @@ where
     PageSelector: Send + Sync + 'static,
 {
     /**
-     * Specifies either how the client wants to begin a new scan or how to
-     * resume a previous scan.  This field is flattened by serde, so see the
-     * variants of [`WhichPage`] to see which fields actually show up in the
-     * serialized form.
+     * Specifies whether this is the first request in a scan or a subsequent
+     * request, as well as the parameters provided
+     *
+     * See [`WhichPage`] for details.  Note that this field is flattened by
+     * serde, so you have to look at the variants of [`WhichPage`] to see what
+     * query parameters are actually processed here.
      */
     #[serde(flatten)]
     pub page: WhichPage<ScanParams, PageSelector>,
 
     /**
-     * Optional client-requested limit on page size.  Consumers should use
-     * [`dropshot::RequestContext::page_limit()`] to access this value.
+     * Client-requested limit on page size (optional)
+     *
+     * Consumers should use [`dropshot::RequestContext::page_limit()`] to access
+     * this value.
      */
     pub(crate) limit: Option<NonZeroU64>,
 }
 
 /**
- * Indicates whether the client is beginning a new scan or resuming an existing
- * one and provides the corresponding query parameters for each case
+ * Describes whether the client is beginning a new scan or resuming an existing
+ * one
+ *
+ * In either case, this type provides access to consumer-defined parameters for
+ * the particular type of request.  See [`PaginationParams`] for more
+ * information.
  */
 #[derive(Debug, ExtractedParameter)]
 pub enum WhichPage<ScanParams, PageSelector>
@@ -364,9 +235,21 @@ where
     ScanParams: Send + Sync + 'static,
     PageSelector: Send + Sync + 'static,
 {
-    /** Indicates that the client is beginning a new scan */
+    /**
+     * Indicates that the client is beginning a new scan
+     *
+     * `ScanParams` are the consumer-defined parameters for beginning a new scan
+     * (e.g., filters, sort options, etc.)
+     */
     First(ScanParams),
-    /** Indicates that the client is resuming a previous scan */
+
+    /**
+     * Indicates that the client is resuming a previous scan
+     *
+     * `PageSelector` are the consumer-defined parameters for resuming a
+     * previous scan (e.g., any scan parameters, plus a marker to indicate the
+     * last result seen by the client).
+     */
     Next(PageSelector),
 }
 
@@ -397,7 +280,8 @@ pub enum PaginationOrder {
  * pass it back as a query parameter for subsequent pagination requests. This
  * approach allows us to rev the serialized form if needed (see
  * `PaginationVersion`) and add other metadata in a backwards-compatiable way.
- * It also emphasizes to clients that the token should be treated as opaque.
+ * It also emphasizes to clients that the token should be treated as opaque,
+ * though it's obviously not resistant to tampering.
  */
 
 /**
@@ -409,9 +293,9 @@ pub enum PaginationOrder {
  * handing out a token that can't be used.
  *
  * Note that these tokens are passed in the HTTP request line (before the
- * headers), and many HTTP implementations impose an implicit limit as low as
- * 8KiB on the size of the request line and headers together, so it's a good
- * idea to keep this as small as we can.
+ * headers), and many HTTP implementations impose a limit as low as 8KiB on the
+ * size of the request line and headers together, so it's a good idea to keep
+ * this as small as we can.
  */
 const MAX_TOKEN_LENGTH: usize = 512;
 
@@ -496,8 +380,9 @@ fn serialize_page_token<PageSelector: Serialize>(
     Ok(token_bytes)
 }
 
-/*
- * Deserialization for page tokens
+/**
+ * Deserialize a token from the given string into the consumer's page selector
+ * type
  */
 fn deserialize_page_token<PageSelector: DeserializeOwned>(
     token_str: &str,
@@ -537,6 +422,41 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
     Ok(deserialized.page_start)
 }
 
+/* See `PaginationParams` above for why this raw form exists. */
+#[derive(Deserialize, ExtractedParameter)]
+struct RawPaginationParams<ScanParams> {
+    #[serde(flatten)]
+    page_params: RawWhichPage<ScanParams>,
+    limit: Option<NonZeroU64>,
+}
+
+/*
+ * See `PaginationParams` above for why this raw form exists.
+ *
+ * This enum definition looks a little strange because it's designed so that
+ * serde will deserialize exactly the input we want to support.  In REST APIs,
+ * callers typically provide either the parameters to resume a scan (in our
+ * case, just "page_token") or the parameters to begin a new one (which can be
+ * any set of parameters that our consumer wants).  There's generally no
+ * separate field to indicate which case they're requesting.  Fortunately,
+ * serde(untagged) implements this behavior precisely, with one caveat: the
+ * variants below are tried in order until one succeeds.  So for this to work,
+ * `Next` must be defined before `First`, since any set of parameters at all
+ * (including no parameters at all) might be valid for `First`.
+ */
+#[derive(Deserialize, ExtractedParameter)]
+#[serde(untagged)]
+enum RawWhichPage<ScanParams> {
+    Next { page_token: String },
+    First(ScanParams),
+}
+
+/*
+ * Converts from `RawPaginationParams` (what actually comes in over the wire) to
+ * `PaginationParams` (what we expose to consumers).  This isn't wholly
+ * different, but it's more convenient for consumers to use and (somewhat)
+ * decouples our consumer interface from the on-the-wire representation.
+ */
 impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
     for PaginationParams<ScanParams, PageSelector>
 where
@@ -564,33 +484,4 @@ where
             }
         }
     }
-}
-
-/* See `PaginationParams` above for why this raw form exists. */
-#[derive(Deserialize, ExtractedParameter)]
-struct RawPaginationParams<ScanParams> {
-    #[serde(flatten)]
-    page_params: RawWhichPage<ScanParams>,
-    limit: Option<NonZeroU64>,
-}
-
-/*
- * See `PaginationParams` above for why this raw form exists.
- *
- * This enum definition looks a little strange because it's designed so that
- * serde will deserialize exactly the input we want to support.  In REST APIs,
- * callers typically provide either the parameters to resume a scan (in our
- * case, just "page_token") or the parameters to begin a new one (which can be
- * any set of parameters that our consumer wants).  There's generally no
- * separate field to indicate which case they're requesting.  Fortunately,
- * serde(untagged) implements this behavior precisely, with one caveat: the
- * variants below are tried in order until one succeeds.  So for this to work,
- * `Next` must be defined before `First`, since any set of parameters at all
- * (including no parameters at all) are valid for `First`.
- */
-#[derive(Deserialize, ExtractedParameter)]
-#[serde(untagged)]
-enum RawWhichPage<ScanParams> {
-    Next { page_token: String },
-    First(ScanParams),
 }

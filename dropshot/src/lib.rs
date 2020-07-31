@@ -93,7 +93,7 @@
  *
  * HTTP talks about **resources**.  For a REST API, we often talk about
  * **endpoints** or **operations**, which are identified by a combination of the
- * HTTP method and the URI path
+ * HTTP method and the URI path.
  *
  * Example endpoints for a resource called a "project" might include:
  *
@@ -255,7 +255,7 @@
  * Typically this should be a type that implements `HttpTypedResponse` (either
  * one of the Dropshot-provided ones or one of your own creation). In
  * situations where the response schema is not fixed, the endpoint should
- * return `Response<Body`>, which also implements `HttpResponse`.
+ * return `Response<Body>`, which also implements `HttpResponse`.
  *
  * The more specific a type returned by the handler function, the more can be
  * validated at build-time, and the more specific an OpenAPI schema can be
@@ -270,6 +270,178 @@
  * `Response<Body>`, it would be harder to tell what it actually produces (for
  * generating the OpenAPI spec), and no way to validate that it really does
  * that.
+ *
+ *
+ * ## Support for paginated resources
+ *
+ * "Pagination" here refers to the interface pattern where HTTP resources (or
+ * API endpoints) that provide a list of the items in a collection return a
+ * relatively small maximum number of items per request, often called a "page"
+ * of results.  Each page includes some metadata that the client can use to make
+ * another request for the next page of results.  The client can repeat this
+ * until they've gotten all the results.  Limiting the number of results
+ * returned per request helps bound the resource utilization and time required
+ * for any request, which in turn facilities horizontal scalability, high
+ * availability, and protection against some denial of service attacks
+ * (intentional or otherwise).  For more background, see the comments in
+ * dropshot/src/pagination.rs.
+ *
+ * Pagination support in Dropshot implements this common pattern:
+ *
+ * * This server exposes an **API endpoint** that returns the **items**
+ *   contained within a **collection**.
+ * * The client is not allowed to list the entire collection in one request.
+ *   Instead, they list the collection using a sequence of requests to the one
+ *   endpoint.  We call this sequence of requests a **scan** of the collection,
+ *   and we sometimes say that the client **pages through** the collection.
+ * * The initial request in the scan may specify the **scan parameters**, which
+ *   typically specify how the results are to be sorted (i.e., by which
+ *   field(s) and whether the sort is ascending or descending), any filters to
+ *   apply, etc.
+ * * Each request returns a **page** of results at a time, along with a **page
+ *   token** that's provided with the next request as a query parameter.
+ * * The scan parameters cannot change between requests that are part of the
+ *   same scan.
+ * * With all requests: there's a default limit (e.g., 100 items returned at a
+ *   time).  Clients can request a higher limit using a query parameter (e.g.,
+ *   `limit=1000`).  This limit is capped by a hard limit on the server.  If the
+ *   client asks for more than the hard limit, the server can use the hard limit
+ *   or reject the request.
+ *
+ * As an example, imagine that we have an API endpoint called `"/animals"`.  Each
+ * item returned is an `Animal` object that might look like this:
+ *
+ * ```json
+ * {
+ *     "name": "aardvark",
+ *     "class": "mammal",
+ *     "max_weight": "80", /* kilograms, typical */
+ * }
+ * ```
+ *
+ * There are at least 1.5 million known species of animal -- too many to return
+ * in one API call!  Our API supports paginating them by `"name"`, which we'll
+ * say is a unique field in our data set.
+ *
+ * The first request to the API fetches `"/animals"` (with no querystring
+ * parameters) and returns:
+ *
+ * ```json
+ * {
+ *     "page_token": "abc123...",
+ *     "items": [
+ *         {
+ *             "name": "aardvark",
+ *             "class": "mammal",
+ *             "max_weight": "80",
+ *         },
+ *         ...
+ *         {
+ *             "name": "badger",
+ *             "class": "mammal",
+ *             "max_weight": "12",
+ *         }
+ *     ]
+ * }
+ * ```
+ *
+ * The subsequent request to the API fetches `"/animals?page_token=abc123..."`.
+ * The page token `"abc123..."` is an opaque token to the client, but typically
+ * encodes the scan parameters and the value of the last item seen
+ * (`"name=badger"`).  The client knows it has completed the scan when it
+ * receives a response with no `page_token` in it.
+ *
+ * Our API endpoint can also support scanning in reverse order.  In this case,
+ * when the client makes the first request, it should fetch
+ * `"/animals?sort=name-descending"`.  Now the first result might be `"zebra"`.
+ * Again, the page token must include the scan parameters so that in subsequent
+ * requests, the API endpoint knows that we're scanning backwards, not forwards,
+ * from the value we were given.  It's not allowed to change directions or sort
+ * order in the middle of a scan.  (You can always start a new scan, but you
+ * can't pick up from where you were in the previous scan.)
+ *
+ * It's also possible to support sorting by multiple fields.  For example, we
+ * could support `sort=class-name`, which we could define to mean that we'll
+ * sort the results first by the animal's class, then by name.  Thus we'd get
+ * all the amphibians in sorted order, then all the mammals, then all the
+ * reptiles.  The main requirement is that the combination of fields used for
+ * pagination must be unique.  We cannot paginate by the animal's class alone.
+ * (To see why: there are over 6,000 mammals.  If the page size is, say, 1000,
+ * then the page_token would say `"mammal"`, but there's not enough information
+ * there to see where we are within the list of mammals.  It doesn't matter
+ * whether there are 2 mammals or 6,000 because clients can limit the page size
+ * to just one item if they want and that ought to work.)
+ *
+ *
+ * ### Dropshot interfaces for pagination
+ *
+ * We can think of pagination in two parts: the input (handling the pagination
+ * query parameters) and the output (emitting a page of results, including the
+ * page token).
+ *
+ * For input, a paginated API endpoint's handler function should accept a
+ * [`Query`]`<`[`PaginationParams`]`<ScanParams, PageSelector>>`, where
+ * `ScanParams` is a consumer-defined type specifying the parameters of the scan
+ * (typically including the sort fields, sort order, and filter options) and
+ * `PageSelector` is a consumer-defined type describing the page token.  The
+ * PageSelector will be serialized to JSON and base64-encoded to construct the
+ * page token.  This will be automatically parsed on the way back in.
+ *
+ * For output, a paginated API endpoint's handler function can return
+ * `Result<`[`HttpResponseOkObject`]<[`ResultsPage`]`<T>, HttpError>` where `T:
+ * Serialize` is the item listed by the endpoint.  You can also use your own
+ * structure that contains a [`ResultsPage`] (possibly using
+ * `#[serde(flatten)]`), if that's the behavior you want.
+ *
+ * There are several complete, documented examples in the "examples" directory.
+ *
+ *
+ * ### Advanced usage notes
+ *
+ * It's possible to accept additional query parameters besides the pagination
+ * parameters by having your API endpoint handler function take two different
+ * arguments using `Query`, like this:
+ *
+ * ```
+ * use dropshot::ExtractedParameter;
+ * use dropshot::HttpError;
+ * use dropshot::HttpResponseOkObject;
+ * use dropshot::PaginationParams;
+ * use dropshot::Query;
+ * use dropshot::RequestContext;
+ * use dropshot::ResultsPage;
+ * use dropshot::endpoint;
+ * use serde::Deserialize;
+ * use std::sync::Arc;
+ * # use serde::Serialize;
+ * # #[derive(Debug, Deserialize, ExtractedParameter)]
+ * # enum MyScanParams { A };
+ * # #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
+ * # enum MyPageSelector { A(String) };
+ * #[derive(Deserialize, ExtractedParameter)]
+ * struct MyExtraQueryParams {
+ *     do_extra_stuff: bool,
+ * }
+ *
+ * #[endpoint {
+ *     method = GET,
+ *     path = "/list_stuff"
+ * }]
+ * async fn my_list_api(
+ *     rqctx: Arc<RequestContext>,
+ *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
+ *     extra_params: Query<MyExtraQueryParams>,
+ * ) -> Result<HttpResponseOkObject<ResultsPage<String>>, HttpError>
+ * {
+ *  # unimplemented!();
+ *  /* ... */
+ * }
+ * ```
+ *
+ * You might expect that instead of doing this, you could define your own
+ * structure that includes a `PaginationParams` using `#[serde(flatten)]`, and
+ * this ought to work, but it currently doesn't due to serde_urlencoded#33,
+ * which is really serde#1183.
  */
 
 mod api_description;
