@@ -10,11 +10,9 @@ use quote::format_ident;
 use quote::quote;
 use quote::ToTokens;
 use serde::Deserialize;
-use serde_derive_internals::ast::Container;
-use serde_derive_internals::{Ctxt, Derive};
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
-use syn::{parse_macro_input, DeriveInput, ItemFn};
+use syn::ItemFn;
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
@@ -138,87 +136,6 @@ fn do_endpoint(
     Ok(stream)
 }
 
-/// Derive the implementation for dropshot::ExtractedParameter
-#[proc_macro_derive(ExtractedParameter, attributes(dropshot))]
-pub fn derive_parameter(
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(item as DeriveInput);
-    do_derive_parameter(&input).unwrap_or_else(to_compile_errors).into()
-}
-
-fn do_derive_parameter(
-    input: &DeriveInput,
-) -> Result<TokenStream, Vec<syn::Error>> {
-    let ctxt = Ctxt::new();
-
-    let cont = match Container::from_ast(&ctxt, input, Derive::Deserialize) {
-        Some(cont) => cont,
-        None => return Err(ctxt.check().unwrap_err()),
-    };
-
-    ctxt.check()?;
-
-    let dropshot = get_crate(get_crate_attr(&cont));
-
-    let fields = cont
-        .data
-        .all_fields()
-        .filter_map(|f| {
-            match &f.member {
-                syn::Member::Named(ident) => {
-                    let doc = extract_doc_from_attrs(&f.original.attrs)
-                        .map_or_else(
-                            || quote! { None },
-                            |s| quote! { Some(#s.to_string()) },
-                        );
-                    let name = ident.to_string();
-                    Some(quote! {
-                        #dropshot::ApiEndpointParameter {
-                            name: (_in.clone(), #name.to_string()).into(),
-                            description: #doc ,
-                            required: true, // TODO look for Option type
-                            schema: None,
-                            examples: vec![],
-                        }
-                    })
-                }
-                _ => None,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // Construct the appropriate where clause.
-    let name = cont.ident;
-    let mut generics = cont.generics.clone();
-
-    for tp in cont.generics.type_params() {
-        let ident = &tp.ident;
-        let pred: syn::WherePredicate = syn::parse2(quote! {
-            #ident : serde::de::DeserializeOwned
-        })
-        .map_err(|e| vec![e])?;
-        generics.make_where_clause().predicates.push(pred);
-    }
-
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    let stream = quote! {
-        impl #impl_generics #dropshot::ExtractedParameter for #name #ty_generics
-        #where_clause
-        {
-            fn metadata(
-                _in: #dropshot::ApiEndpointParameterLocation,
-            ) -> Vec<#dropshot::ApiEndpointParameter>
-            {
-                vec![ #(#fields,)* ]
-            }
-        }
-    };
-
-    Ok(stream)
-}
-
 fn get_crate(var: Option<String>) -> TokenStream {
     if let Some(s) = var {
         if let Ok(ts) = syn::parse_str(s.as_str()) {
@@ -226,39 +143,6 @@ fn get_crate(var: Option<String>) -> TokenStream {
         }
     }
     syn::Ident::new(DROPSHOT, proc_macro2::Span::call_site()).to_token_stream()
-}
-
-fn get_crate_attr(cont: &Container) -> Option<String> {
-    cont.original
-        .attrs
-        .iter()
-        .filter_map(|attr| {
-            if let Ok(meta) = attr.parse_meta() {
-                if let syn::Meta::List(list) = meta {
-                    if list.path.is_ident(&syn::Ident::new(
-                        "dropshot",
-                        proc_macro2::Span::call_site(),
-                    )) && list.nested.len() == 1
-                    {
-                        if let Some(syn::NestedMeta::Meta(
-                            syn::Meta::NameValue(nv),
-                        )) = list.nested.first()
-                        {
-                            if nv.path.is_ident(&syn::Ident::new(
-                                "crate",
-                                proc_macro2::Span::call_site(),
-                            )) {
-                                if let syn::Lit::Str(s) = &nv.lit {
-                                    return Some(s.value());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            None
-        })
-        .last()
 }
 
 #[allow(dead_code)]
@@ -467,47 +351,5 @@ mod tests {
 
         let msg = format!("{}", ret.err().unwrap());
         assert_eq!("extraneous member `methud`", msg);
-    }
-
-    /// This tests the actual generated output; while this is quite strict, it
-    /// is intended to require care when modifying the generated code.
-    #[test]
-    fn test_derive_parameter() {
-        let ret = do_derive_parameter(
-            &syn::parse2::<syn::DeriveInput>(quote! {
-                struct Foo {
-                    a: String,
-                    b: String,
-                }
-            })
-            .unwrap(),
-        );
-
-        let expected = quote! {
-            impl dropshot::ExtractedParameter for Foo {
-                fn metadata(
-                    _in: dropshot::ApiEndpointParameterLocation,
-                ) -> Vec<dropshot::ApiEndpointParameter> {
-                    vec![
-                        dropshot::ApiEndpointParameter {
-                            name: (_in.clone(), "a".to_string()).into(),
-                            description: None,
-                            required: true,
-                            schema: None,
-                            examples: vec![],
-                        },
-                        dropshot::ApiEndpointParameter {
-                            name: (_in.clone(), "b".to_string()).into(),
-                            description: None,
-                            required: true,
-                            schema: None,
-                            examples: vec![],
-                        },
-                    ]
-                }
-            }
-        };
-
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
     }
 }

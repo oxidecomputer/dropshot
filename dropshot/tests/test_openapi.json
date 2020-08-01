@@ -94,6 +94,21 @@
           },
           {
             "in": "query",
+            "name": "_destro",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0
+              }
+            },
+            "allowReserved": true,
+            "style": "form"
+          },
+          {
+            "in": "query",
             "name": "_tomax",
             "required": true,
             "schema": {
@@ -105,7 +120,6 @@
           {
             "in": "query",
             "name": "_xamot",
-            "required": true,
             "schema": {
               "type": "string"
             },
@@ -144,6 +158,21 @@
         "parameters": [
           {
             "in": "query",
+            "name": "_destro",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0
+              }
+            },
+            "allowReserved": true,
+            "style": "form"
+          },
+          {
+            "in": "query",
             "name": "_tomax",
             "required": true,
             "schema": {
@@ -155,7 +184,6 @@
           {
             "in": "query",
             "name": "_xamot",
-            "required": true,
             "schema": {
               "type": "string"
             },

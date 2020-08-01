@@ -150,11 +150,6 @@ impl_extractor_for_tuple!(T1);
 impl_extractor_for_tuple!(T1, T2);
 impl_extractor_for_tuple!(T1, T2, T3);
 
-pub trait ExtractedParameter: DeserializeOwned {
-    fn metadata(inn: ApiEndpointParameterLocation)
-        -> Vec<ApiEndpointParameter>;
-}
-
 /**
  * `HttpHandlerFunc` is a trait providing a single function, `handle_request()`,
  * which takes an HTTP request and produces an HTTP response (or
@@ -459,11 +454,11 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
-pub struct Query<QueryType: ExtractedParameter + Send + Sync> {
+pub struct Query<QueryType: JsonSchema + Send + Sync> {
     inner: QueryType,
 }
 
-impl<QueryType: ExtractedParameter + Send + Sync> Query<QueryType> {
+impl<QueryType: JsonSchema + Send + Sync> Query<QueryType> {
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
@@ -480,7 +475,7 @@ fn http_request_load_query<QueryType: Send + Sync>(
     request: &Request<Body>,
 ) -> Result<Query<QueryType>, HttpError>
 where
-    QueryType: ExtractedParameter,
+    QueryType: JsonSchema + DeserializeOwned,
 {
     let raw_query_string = request.uri().query().unwrap_or("");
     /*
@@ -508,7 +503,7 @@ where
 #[async_trait]
 impl<QueryType> Extractor for Query<QueryType>
 where
-    QueryType: ExtractedParameter + Send + Sync + 'static,
+    QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -532,11 +527,11 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
-pub struct Path<PathType: ExtractedParameter + Send + Sync> {
+pub struct Path<PathType: JsonSchema + Send + Sync> {
     inner: PathType,
 }
 
-impl<PathType: ExtractedParameter + Send + Sync> Path<PathType> {
+impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
@@ -553,7 +548,7 @@ impl<PathType: ExtractedParameter + Send + Sync> Path<PathType> {
 #[async_trait]
 impl<PathType> Extractor for Path<PathType>
 where
-    PathType: ExtractedParameter + Send + Sync + 'static,
+    PathType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -566,6 +561,54 @@ where
 
     fn metadata() -> Vec<ApiEndpointParameter> {
         PathType::metadata(ApiEndpointParameterLocation::Path)
+    }
+}
+
+/**
+ * Convenience trait to generate parameter metadata from types implementing
+ * `JsonSchema` for use with `Query` and `Path` `Extractors`.
+ */
+trait GetMetadata {
+    fn metadata(loc: ApiEndpointParameterLocation)
+        -> Vec<ApiEndpointParameter>;
+}
+
+impl<ParamType> GetMetadata for ParamType
+where
+    ParamType: JsonSchema,
+{
+    fn metadata(
+        loc: ApiEndpointParameterLocation,
+    ) -> Vec<ApiEndpointParameter> {
+        /*
+         * Generate the type for `ParamType` then pluck out each member of
+         * the structure to encode as an individual parameter.
+         */
+        let mut generator = schemars::gen::SchemaGenerator::new(
+            schemars::gen::SchemaSettings::openapi3(),
+        );
+        let schema = ParamType::json_schema(&mut generator);
+        match schema {
+            schemars::schema::Schema::Object(
+                schemars::schema::SchemaObject {
+                    object: Some(obj), ..
+                },
+            ) => obj
+                .properties
+                .iter()
+                .map(|(name, schema)| ApiEndpointParameter {
+                    name: (loc.clone(), name.to_string()).into(),
+                    description: None,
+                    required: obj.required.contains(name),
+                    schema: ApiSchemaGenerator::Static(schema.clone()),
+                    examples: vec![],
+                })
+                .collect::<Vec<_>>(),
+            /*
+             * The generated schema should be an object.
+             */
+            _ => panic!("invalid type"),
+        }
     }
 }
 
@@ -646,7 +689,7 @@ where
             name: ApiEndpointParameterName::Body,
             description: None,
             required: true,
-            schema: Some(ApiSchemaGenerator(JsonType::json_schema)),
+            schema: ApiSchemaGenerator::Gen(JsonType::json_schema),
             examples: vec![],
         }]
     }
@@ -739,7 +782,7 @@ where
     }
     fn metadata() -> ApiEndpointResponse {
         ApiEndpointResponse {
-            schema: Some(ApiSchemaGenerator(T::Body::json_schema)),
+            schema: Some(ApiSchemaGenerator::Gen(T::Body::json_schema)),
             success: Some(T::STATUS_CODE),
         }
     }

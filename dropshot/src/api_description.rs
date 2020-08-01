@@ -80,7 +80,7 @@ pub struct ApiEndpointParameter {
     pub name: ApiEndpointParameterName,
     pub description: Option<String>,
     pub required: bool,
-    pub schema: Option<ApiSchemaGenerator>,
+    pub schema: ApiSchemaGenerator,
     pub examples: Vec<String>,
 }
 
@@ -120,15 +120,21 @@ pub struct ApiEndpointResponse {
 }
 
 /**
- * Wrapper for our schema generator callback so that we can impl Debug
+ * Wrapper for both dynamically generated and pre-generated schemas.
  */
-pub struct ApiSchemaGenerator(
-    pub fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
-);
+pub enum ApiSchemaGenerator {
+    Gen(fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema),
+    Static(schemars::schema::Schema),
+}
 
 impl std::fmt::Debug for ApiSchemaGenerator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("[schema generator]")
+        match self {
+            ApiSchemaGenerator::Gen(_) => f.write_str("[schema generator]"),
+            ApiSchemaGenerator::Static(schema) => {
+                f.write_str(format!("{:?}", schema).as_str())
+            }
+        }
     }
 }
 
@@ -290,21 +296,23 @@ impl ApiDescription {
                             (name, ApiEndpointParameterLocation::Query)
                         }
                     };
+
+                    let schema = match &param.schema {
+                        ApiSchemaGenerator::Static(schema) => {
+                            j2oas_schema(schema)
+                        }
+                        _ => {
+                            unimplemented!("this may happen for complex types")
+                        }
+                    };
+
                     let parameter_data = openapiv3::ParameterData {
                         name: name.clone(),
                         description: param.description.clone(),
-                        required: true,
+                        required: param.required,
                         deprecated: None,
                         format: openapiv3::ParameterSchemaOrContent::Schema(
-                            openapiv3::ReferenceOr::Item(openapiv3::Schema {
-                                schema_data: openapiv3::SchemaData::default(),
-                                // TODO we shouldn't be hard-coding string here
-                                schema_kind: openapiv3::SchemaKind::Type(
-                                    openapiv3::Type::String(
-                                        openapiv3::StringType::default(),
-                                    ),
-                                ),
-                            }),
+                            schema,
                         ),
                         example: None,
                         examples: indexmap::IndexMap::new(),
@@ -341,16 +349,17 @@ impl ApiDescription {
                         _ => return None,
                     }
 
-                    let schema = param.schema.as_ref().map(|schema| {
-                        let js = schema.0(&mut generator);
-                        j2oas_schema(&js)
-                    });
+                    let js = match &param.schema {
+                        ApiSchemaGenerator::Gen(gen) => gen(&mut generator),
+                        ApiSchemaGenerator::Static(schema) => schema.clone(),
+                    };
+                    let schema = j2oas_schema(&js);
 
                     let mut content = indexmap::IndexMap::new();
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
-                            schema: schema,
+                            schema: Some(schema),
                             example: None,
                             examples: indexmap::IndexMap::new(),
                             encoding: indexmap::IndexMap::new(),
@@ -366,7 +375,10 @@ impl ApiDescription {
                 .next();
 
             if let Some(schema) = &endpoint.response.schema {
-                let js = schema.0(&mut generator);
+                let js = match schema {
+                    ApiSchemaGenerator::Gen(gen) => gen(&mut generator),
+                    ApiSchemaGenerator::Static(s) => s.clone(),
+                };
                 let mut content = indexmap::IndexMap::new();
                 if !is_null(&js) {
                     content.insert(
@@ -802,7 +814,6 @@ fn j2oas_object(
 mod test {
     use super::super::error::HttpError;
     use super::super::handler::RequestContext;
-    use super::super::ExtractedParameter;
     use super::super::Path;
     use super::j2oas_schema;
     use super::ApiDescription;
@@ -814,8 +825,7 @@ mod test {
     use serde::Deserialize;
     use std::sync::Arc;
 
-    #[derive(Deserialize, ExtractedParameter)]
-    #[dropshot(crate = "super::super")]
+    #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
     struct TestPath {
         a: String,

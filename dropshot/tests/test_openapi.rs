@@ -2,9 +2,9 @@
 
 use difference::assert_diff;
 use dropshot::{
-    endpoint, ApiDescription, ExtractedParameter, HttpError,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseOkObject, Json, Path,
-    Query, RequestContext,
+    endpoint, ApiDescription, HttpError, HttpResponseCreated,
+    HttpResponseDeleted, HttpResponseOkObject, Json, Path, Query,
+    RequestContext,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,10 +20,11 @@ async fn handler1(
     Ok(HttpResponseOkObject(()))
 }
 
-#[derive(Deserialize, ExtractedParameter)]
+#[derive(Deserialize, JsonSchema)]
 struct QueryArgs {
     _tomax: String,
     _xamot: Option<String>,
+    _destro: Vec<u16>,
 }
 
 #[endpoint {
@@ -37,7 +38,7 @@ async fn handler2(
     Ok(HttpResponseOkObject(()))
 }
 
-#[derive(Deserialize, ExtractedParameter)]
+#[derive(Deserialize, JsonSchema)]
 #[allow(dead_code)]
 struct PathArgs {
     x: String,
@@ -127,7 +128,7 @@ fn fixture(path: &str, actual: &str) -> Result<(), String> {
         let expected = expected_s.as_str();
 
         println!("set FIXTURE= if these changes are intentional");
-        assert_diff!(actual, expected, "\n", 0);
+        assert_diff!(expected, actual, "\n", 0);
     }
 
     Ok(())

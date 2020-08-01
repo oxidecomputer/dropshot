@@ -31,7 +31,6 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::CONTENT_TYPE_JSON;
 use dropshot_endpoint::endpoint;
-use dropshot_endpoint::ExtractedParameter;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Method;
@@ -507,7 +506,7 @@ async fn demo_handler_args_1(
     http_echo(&"demo_handler_args_1")
 }
 
-#[derive(Serialize, Deserialize, ExtractedParameter)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct DemoQueryArgs {
     pub test1: String,
     pub test2: Option<u32>,
@@ -539,7 +538,7 @@ async fn demo_handler_args_2json(
     http_echo(&json.into_inner())
 }
 
-#[derive(Deserialize, Serialize, ExtractedParameter)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoJsonAndQuery {
     pub query: DemoQueryArgs,
     pub json: DemoJsonBody,
@@ -560,7 +559,7 @@ async fn demo_handler_args_3(
     http_echo(&combined)
 }
 
-#[derive(Deserialize, Serialize, ExtractedParameter)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoPathString {
     pub test1: String,
 }
@@ -575,7 +574,7 @@ async fn demo_handler_path_param_string(
     http_echo(&path_params.into_inner())
 }
 
-#[derive(Deserialize, Serialize, ExtractedParameter)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoPathUuid {
     pub test1: Uuid,
 }
@@ -590,7 +589,7 @@ async fn demo_handler_path_param_uuid(
     http_echo(&path_params.into_inner())
 }
 
-#[derive(Deserialize, Serialize, ExtractedParameter)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoPathImpossible {
     pub test1: String,
 }

@@ -202,10 +202,10 @@
  *
  * * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
  *   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
- *   `dropshot::ExtractedParameter`.
+ *   `schemars::JsonSchema`.
  * * [`Path`]`<P>` extracts parameters from HTTP path, deserializing them into
  *    an instance of type `P`. `P` must implement `serde::Deserialize` and
- *    `dropshot::ExtractedParameter`.
+ *    `schemars::JsonSchema`.
  * * [`Json`]`<J>` extracts content from the request body by parsing the body as
  *   JSON and deserializing it into an instance of type `J`. `J` must implement
  *   `serde::Deserialize` and `schemars::JsonSchema`.
@@ -221,16 +221,16 @@
  *
  * ```
  * use http::StatusCode;
- * use dropshot::ExtractedParameter;
  * use dropshot::HttpError;
  * use dropshot::Json;
  * use dropshot::Query;
  * use dropshot::RequestContext;
  * use hyper::Body;
  * use hyper::Response;
+ * use schemars::JsonSchema;
  * use std::sync::Arc;
  *
- * #[derive(serde::Deserialize, ExtractedParameter)]
+ * #[derive(serde::Deserialize, JsonSchema)]
  * struct MyQueryArgs {
  *     limit: u32,
  *     marker: Option<String>
@@ -299,7 +299,6 @@ pub use api_description::ApiEndpointResponse;
 pub use config::ConfigDropshot;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
-pub use handler::ExtractedParameter;
 pub use handler::Extractor;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
@@ -327,4 +326,3 @@ pub use http::Method;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::endpoint;
-pub use dropshot_endpoint::ExtractedParameter;
