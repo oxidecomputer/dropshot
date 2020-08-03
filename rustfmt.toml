@@ -2,7 +2,7 @@
 # Stable features that we customize locally
 # ---------------------------------------------------------------------------
 max_width = 80
-use_small_heuristics = "max"
+width_heuristics = "max"
 unstable_features = true
 
 #
@@ -66,7 +66,7 @@ struct_field_align_threshold = 0
 enum_discrim_align_threshold = 0
 match_arm_blocks = true
 force_multiline_blocks = false
-fn_args_layout = "Tall"
+fn_params_layout = "Tall"
 brace_style = "SameLineWhere"
 control_brace_style = "AlwaysSameLine"
 trailing_semicolon = true
@@ -75,22 +75,14 @@ match_block_trailing_comma = false
 blank_lines_upper_bound = 1
 blank_lines_lower_bound = 0
 edition = "2018"
-version = "One"
 inline_attribute_width = 0
 merge_derives = true
 use_try_shorthand = false
 use_field_init_shorthand = false
 force_explicit_abi = true
 condense_wildcard_suffixes = false
-color = "Auto"
-required_version = "1.4.15"
-disable_all_formatting = false
-skip_children = false
+required_version = "2.0.0-rc.2"
 hide_parse_errors = false
 error_on_line_overflow = false
 error_on_unformatted = false
-report_todo = "Never"
-report_fixme = "Never"
 ignore = []
-emit_mode = "Files"
-make_backup = false

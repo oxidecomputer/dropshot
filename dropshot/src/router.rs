@@ -842,9 +842,11 @@ mod test {
             "project_id"
         ]);
         assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
-        assert!(router
-            .lookup_route(&Method::GET, "/projects/p12345/child")
-            .is_err());
+        assert!(
+            router
+                .lookup_route(&Method::GET, "/projects/p12345/child")
+                .is_err()
+        );
         let result =
             router.lookup_route(&Method::GET, "/projects/p12345/").unwrap();
         assert_eq!(result.handler.label(), "h5");
@@ -902,15 +904,15 @@ mod test {
             Method::GET,
             "/projects/{project_id}/instances",
         ));
-        assert!(router
-            .lookup_route(&Method::GET, "/projects/instances")
-            .is_err());
-        assert!(router
-            .lookup_route(&Method::GET, "/projects//instances")
-            .is_err());
-        assert!(router
-            .lookup_route(&Method::GET, "/projects///instances")
-            .is_err());
+        assert!(
+            router.lookup_route(&Method::GET, "/projects/instances").is_err()
+        );
+        assert!(
+            router.lookup_route(&Method::GET, "/projects//instances").is_err()
+        );
+        assert!(
+            router.lookup_route(&Method::GET, "/projects///instances").is_err()
+        );
         let result = router
             .lookup_route(&Method::GET, "/projects/foo/instances")
             .unwrap();

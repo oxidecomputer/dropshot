@@ -570,7 +570,7 @@ where
  */
 trait GetMetadata {
     fn metadata(loc: ApiEndpointParameterLocation)
-        -> Vec<ApiEndpointParameter>;
+    -> Vec<ApiEndpointParameter>;
 }
 
 impl<ParamType> GetMetadata for ParamType

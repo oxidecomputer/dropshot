@@ -345,7 +345,7 @@ impl ApiDescription {
                 .iter()
                 .filter_map(|param| {
                     match &param.name {
-                        ApiEndpointParameterName::Body => (),
+                        ApiEndpointParameterName::Body => {}
                         _ => return None,
                     }
 
