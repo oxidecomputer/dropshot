@@ -170,21 +170,23 @@ impl<ItemType> ResultsPage<ItemType> {
  *
  * `PageSelector` describes the information your endpoint needs for requests
  * after the first one.  Typically this would include an id of some sort for the
- * last item on the previous page so that your function can resume the scan with
- * the first item after that.  If your endpoint supports filters or multiple
- * sort options, you probably want to include these, too.  The entire
+ * last item on the previous page as well as any parameters related to filtering
+ * or sorting so that your function can apply those, too.  The entire
  * `PageSelector` will be serialized to an opaque string and included in the
  * [`ResultsPage`].  The client is expected to provide this string as the
  * `"page_token"` querystring parameter in the subsequent request.
  * `PageSelector` must implement both [`Deserialize`] and [`Serialize`].
+ * (Unlike `ScanParams`, `PageSelector` will not be deserialized directly from
+ * the querystring.)
  *
  * There are several complete, documented examples in `dropshot/examples`.
  *
  * **NOTE:** Your choices of `ScanParams` and `PageSelector` determine the
  * querystring parameters accepted by your endpoint and the structure of the
- * page token.  Both of these are part of your API's public interface, though
- * the page token won't appear in the OpenAPI spec.  Be careful when designing
- * these structures to consider what you might want to support in the future.
+ * page token, respectively.  Both of these are part of your API's public
+ * interface, though the page token won't appear in the OpenAPI spec.  Be
+ * careful when designing these structures to consider what you might want to
+ * support in the future.
  */
 #[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
