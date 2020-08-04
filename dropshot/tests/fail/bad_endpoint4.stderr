@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
+   --> $DIR/bad_endpoint4.rs:22:14
+    |
+22  |     _params: Query<QueryParams>,
+    |              ^^^^^^^^^^^^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+    |
+   ::: $WORKSPACE/dropshot/src/handler.rs
+    |
+    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+    |                                                ---------- required by this bound in `dropshot::handler::Query`
+
+error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+   --> $DIR/bad_endpoint4.rs:22:14
+    |
+22  |     _params: Query<QueryParams>,
+    |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+    |
+   ::: $WORKSPACE/dropshot/src/handler.rs
+    |
+    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+    |                             ---------------- required by this bound in `dropshot::handler::Query`
+    |
+    = note: required because of the requirements on the impl of `serde::de::DeserializeOwned` for `QueryParams`

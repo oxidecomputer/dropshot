@@ -1,0 +1,10 @@
+error[E0277]: the trait bound `fn(std::sync::Arc<dropshot::handler::RequestContext>, std::string::String) -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::api_description::ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
+  --> $DIR/bad_endpoint3.rs:13:10
+   |
+13 | async fn bad_endpoint(
+   |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn(std::sync::Arc<dropshot::handler::RequestContext>, std::string::String) -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::api_description::ApiEndpoint>::from::bad_endpoint}`
+   |
+  ::: $WORKSPACE/dropshot/src/api_description.rs
+   |
+   |         HandlerType: HttpHandlerFunc<FuncParams, ResponseType>,
+   |                      ----------------------------------------- required by this bound in `dropshot::api_description::ApiEndpoint::new`
