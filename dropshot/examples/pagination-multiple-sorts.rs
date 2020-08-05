@@ -149,14 +149,14 @@ struct Project {
  * serialize it using `serde_querystring`.  That code could fail at runtime for
  * certain types of values (e.g., enum variants that contain data).
  */
-#[derive(Deserialize, Clone, ExtractedParameter)]
-struct ProjectScanParamsIncoming {
-    sort: Option<ProjectSort>,
+#[derive(Clone, Deserialize, ExtractedParameter, JsonSchema, Serialize)]
+struct ProjectScanParams {
+    #[serde(default = "default_project_sort")]
+    sort: ProjectSort,
 }
 
-#[derive(JsonSchema, Serialize)]
-struct ProjectScanParams {
-    sort: ProjectSort,
+fn default_project_sort() -> ProjectSort {
+    ProjectSort::ByNameAscending
 }
 
 #[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
@@ -235,22 +235,16 @@ fn page_selector_for(
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<
-        PaginationParams<ProjectScanParamsIncoming, ProjectScanPageSelector>,
-    >,
+    query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
     let scan_params = ProjectScanParams {
         sort: match &pag_params.page {
-            WhichPage::First(ProjectScanParamsIncoming {
-                sort: None,
-            }) => ProjectSort::ByNameAscending,
-
-            WhichPage::First(ProjectScanParamsIncoming {
-                sort: Some(p),
-            }) => p.clone(),
+            WhichPage::First(ProjectScanParams {
+                sort,
+            }) => sort.clone(),
 
             WhichPage::Next(ProjectScanPageSelector::Name(Ascending, ..)) => {
                 ProjectSort::ByNameAscending

@@ -91,12 +91,12 @@ impl_HasIdentity!(Instance);
  */
 #[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
 struct ExScanParams {
+    #[serde(default = "default_sort_mode")]
     sort: ExSortMode,
 }
 
-#[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
-struct ExScanParamsIncoming {
-    sort: Option<ExSortMode>,
+fn default_sort_mode() -> ExSortMode {
+    ExSortMode::ByNameAscending
 }
 
 #[derive(Deserialize, Clone, ExtractedParameter, JsonSchema, Serialize)]
@@ -135,18 +135,12 @@ fn page_selector<T: HasIdentity>(
     }
 }
 
-fn scan_params(
-    p: &WhichPage<ExScanParamsIncoming, ExPageSelector>,
-) -> ExScanParams {
+fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
     ExScanParams {
         sort: match p {
-            WhichPage::First(ExScanParamsIncoming {
-                sort: None,
-            }) => ExSortMode::ByNameAscending,
-
-            WhichPage::First(ExScanParamsIncoming {
-                sort: Some(p),
-            }) => p.clone(),
+            WhichPage::First(ExScanParams {
+                sort,
+            }) => sort.clone(),
 
             WhichPage::Next(ExPageSelector::Id(Ascending, ..)) => {
                 ExSortMode::ByIdAscending
@@ -178,7 +172,7 @@ fn scan_params(
 }]
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
+    query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -208,7 +202,7 @@ async fn example_list_projects(
 }]
 async fn example_list_disks(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
+    query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOkObject<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -238,7 +232,7 @@ async fn example_list_disks(
 }]
 async fn example_list_instances(
     rqctx: Arc<RequestContext>,
-    query: Query<PaginationParams<ExScanParamsIncoming, ExPageSelector>>,
+    query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOkObject<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
@@ -265,7 +259,7 @@ async fn example_list_instances(
 fn do_list<'a, T>(
     data: &'a Arc<DataCollection>,
     scan_params: &ExScanParams,
-    p: &'a WhichPage<ExScanParamsIncoming, ExPageSelector>,
+    p: &'a WhichPage<ExScanParams, ExPageSelector>,
     by_name: &'a BTreeMap<String, Arc<T>>,
     by_id: &'a BTreeMap<Uuid, Arc<T>>,
 ) -> ItemIter<'a, T>

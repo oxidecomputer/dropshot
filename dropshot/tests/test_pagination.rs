@@ -203,6 +203,7 @@ fn paginate_api() -> ApiDescription {
     api.register(api_integers).unwrap();
     api.register(api_empty).unwrap();
     api.register(api_with_extra_params).unwrap();
+    api.register(api_with_required_params).unwrap();
     api.register(api_dictionary).unwrap();
     api
 }
@@ -569,6 +570,93 @@ async fn test_paginate_extra_params() {
     assert!(page.debug_was_set);
     assert!(!page.debug_value);
     assert!(page.page.next_page.is_some());
+
+    testctx.teardown().await;
+}
+
+/*
+ * Test an endpoint that requires scan parameters.
+ */
+
+#[derive(Deserialize)]
+struct ReqScanParams {
+    /* Work around serde-rs/serde#1183 */
+    #[serde(with = "serde_with::rust::display_fromstr")]
+    doit: bool,
+}
+
+/**
+ * "/required": similar to "/intapi", but with a required start parameter
+ */
+#[endpoint {
+    method = GET,
+    path = "/required",
+}]
+async fn api_with_required_params(
+    rqctx: Arc<RequestContext>,
+    query: Query<PaginationParams<ReqScanParams, IntegersPageSelector>>,
+) -> Result<HttpResponseOkObject<ResultsPage<u16>>, HttpError> {
+    let pag_params = query.into_inner();
+    let limit = rqctx.page_limit(&pag_params)?.get() as u16;
+
+    let start = match &pag_params.page {
+        WhichPage::First(ReqScanParams {
+            doit,
+        }) => {
+            if !doit {
+                return Err(HttpError::for_bad_request(
+                    None,
+                    String::from("you did not say to do it"),
+                ));
+            }
+
+            0
+        }
+        WhichPage::Next(IntegersPageSelector {
+            last_seen,
+        }) => *last_seen,
+    };
+
+    Ok(HttpResponseOkObject(ResultsPage::new(
+        range_u16(start, limit),
+        &EmptyScanParams {},
+        page_selector_for,
+    )?))
+}
+
+#[tokio::test]
+async fn test_paginate_with_required_params() {
+    let api = paginate_api();
+    let testctx = common::test_setup("required_params", api);
+    let client = &testctx.client_testctx;
+
+    /* Test that the extra query parameter is optional... */
+    let error = client
+        .make_request_error(
+            Method::GET,
+            "/required?limit=3",
+            StatusCode::BAD_REQUEST,
+        )
+        .await;
+    /*
+     * TODO-polish the message here is pretty poor.  See comments in the
+     * automated tests in src/pagination.rs.
+     */
+    assert!(error.message.starts_with("unable to parse query string"));
+
+    /* ... and that it's getting passed through to the handler function */
+    let error = client
+        .make_request_error(
+            Method::GET,
+            "/required?limit=3&doit=false",
+            StatusCode::BAD_REQUEST,
+        )
+        .await;
+    assert_eq!(error.message, "you did not say to do it");
+
+    let page =
+        objects_list_page::<u16>(&client, "/required?limit=3&doit=true").await;
+    assert_eq!(page.items.len(), 3);
 
     testctx.teardown().await;
 }
@@ -1031,6 +1119,12 @@ async fn test_example_multiple_resources() {
 
     let resources = ["/projects", "/disks", "/instances"];
     for resource in &resources[..] {
+        /* Scan parameters are not necessary. */
+        let no_args =
+            objects_list_page::<ExampleObject>(&client, "/projects?limit=3")
+                .await;
+        assert_eq!(no_args.items.len(), 3);
+
         let by_name_asc = assert_collection_iter::<ExampleObject>(
             &client,
             resource,
