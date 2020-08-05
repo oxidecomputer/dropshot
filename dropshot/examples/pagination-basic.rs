@@ -35,6 +35,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
 use std::ops::Bound;
 use std::sync::Arc;
 
@@ -117,6 +119,13 @@ fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+    let port = std::env::args()
+        .nth(1)
+        .map(|p| p.parse::<u16>())
+        .transpose()
+        .map_err(|e| format!("failed to parse \"port\" argument: {}", e))?
+        .unwrap_or(0);
+
     /*
      * Create 1000 projects up front.
      */
@@ -134,7 +143,7 @@ async fn main() -> Result<(), String> {
      */
     let ctx = Arc::new(tree);
     let config_dropshot = ConfigDropshot {
-        bind_address: "127.0.0.1:0".parse().unwrap(),
+        bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
     };
     let config_logging = ConfigLogging::StderrTerminal {
         level: ConfigLoggingLevel::Debug,

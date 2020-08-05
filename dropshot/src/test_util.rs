@@ -76,7 +76,7 @@ impl ClientTestContext {
      * appends the path to a base URL constructed from the server's IP address
      * and port.
      */
-    fn url(&self, path: &str) -> Uri {
+    pub fn url(&self, path: &str) -> Uri {
         Uri::builder()
             .scheme("http")
             .authority(format!("{}", self.bind_address).as_str())
@@ -249,8 +249,8 @@ impl ClientTestContext {
             .to_string();
 
         /*
-         * For "204 No Content" responses, validate that we got no content in the
-         * body.
+         * For "204 No Content" responses, validate that we got no content in
+         * the body.
          */
         if status == StatusCode::NO_CONTENT {
             let body_bytes = to_bytes(response.body_mut())

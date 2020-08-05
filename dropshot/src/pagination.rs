@@ -198,11 +198,7 @@ impl<ItemType> ResultsPage<ItemType> {
  * using the `TryFrom` implementation below.
  */
 #[serde(try_from = "RawPaginationParams<ScanParams>")]
-pub struct PaginationParams<ScanParams, PageSelector>
-where
-    ScanParams: Send + Sync + 'static,
-    PageSelector: Send + Sync + 'static,
-{
+pub struct PaginationParams<ScanParams, PageSelector> {
     /**
      * Specifies whether this is the first request in a scan or a subsequent
      * request, as well as the parameters provided
@@ -232,11 +228,7 @@ where
  * information.
  */
 #[derive(Debug, ExtractedParameter)]
-pub enum WhichPage<ScanParams, PageSelector>
-where
-    ScanParams: Send + Sync + 'static,
-    PageSelector: Send + Sync + 'static,
-{
+pub enum WhichPage<ScanParams, PageSelector> {
     /**
      * Indicates that the client is beginning a new scan
      *
@@ -446,7 +438,7 @@ struct RawPaginationParams<ScanParams> {
  * `Next` must be defined before `First`, since any set of parameters at all
  * (including no parameters at all) might be valid for `First`.
  */
-#[derive(Deserialize, ExtractedParameter)]
+#[derive(Debug, Deserialize, ExtractedParameter)]
 #[serde(untagged)]
 enum RawWhichPage<ScanParams> {
     Next { page_token: String },
@@ -462,8 +454,7 @@ enum RawWhichPage<ScanParams> {
 impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
     for PaginationParams<ScanParams, PageSelector>
 where
-    ScanParams: Send + Sync + 'static,
-    PageSelector: DeserializeOwned + Send + Sync + 'static,
+    PageSelector: DeserializeOwned,
 {
     type Error = String;
 
@@ -485,5 +476,337 @@ where
                 })
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::deserialize_page_token;
+    use super::serialize_page_token;
+    use super::PaginationParams;
+    use super::ResultsPage;
+    use super::WhichPage;
+    use serde::de::DeserializeOwned;
+    use serde::Deserialize;
+    use serde::Serialize;
+    use std::num::NonZeroU64;
+
+    #[test]
+    fn test_page_token_serialization() {
+        #[derive(Deserialize, Serialize)]
+        struct MyToken {
+            x: u16,
+        }
+
+        #[derive(Debug, Deserialize, Serialize)]
+        struct MyOtherToken {
+            x: u8,
+        }
+
+        /*
+         * The most basic functionality is that if we serialize something and
+         * then deserialize the result of that, we get back the original thing.
+         */
+        let before = MyToken {
+            x: 1025,
+        };
+        let serialized = serialize_page_token(&before).unwrap();
+        let after: MyToken = deserialize_page_token(&serialized).unwrap();
+        assert_eq!(after.x, 1025);
+
+        /*
+         * We should also sanity-check that if we try to deserialize it as the
+         * wrong type, that will fail.
+         */
+        let error =
+            deserialize_page_token::<MyOtherToken>(&serialized).unwrap_err();
+        assert!(error.contains("corrupted token"));
+
+        /*
+         * Try serializing the maximum possible size.  (This was empirically
+         * determined at the time of this writing.)
+         */
+        #[derive(Debug, Deserialize, Serialize)]
+        struct TokenWithStr {
+            s: String,
+        }
+        let input = TokenWithStr {
+            s: String::from_utf8(vec![b'e'; 352]).unwrap(),
+        };
+        let serialized = serialize_page_token(&input).unwrap();
+        assert_eq!(serialized.len(), super::MAX_TOKEN_LENGTH);
+        let output: TokenWithStr = deserialize_page_token(&serialized).unwrap();
+        assert_eq!(input.s, output.s);
+
+        /*
+         * Error cases make up the rest of this test.
+         *
+         * Start by attempting to serialize a token larger than the maximum
+         * allowed size.
+         */
+        let input = TokenWithStr {
+            s: String::from_utf8(vec![b'e'; 353]).unwrap(),
+        };
+        let error = serialize_page_token(&input).unwrap_err();
+        assert_eq!(error.status_code, http::StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(error.external_message, "Internal Server Error");
+        assert!(error
+            .internal_message
+            .contains("serialized token is too large"));
+
+        /* Non-base64 */
+        let error =
+            deserialize_page_token::<TokenWithStr>("not base 64").unwrap_err();
+        assert!(error.contains("failed to parse"));
+
+        /* Non-JSON */
+        let error =
+            deserialize_page_token::<TokenWithStr>(&base64::encode("{"))
+                .unwrap_err();
+        assert!(error.contains("corrupted token"));
+
+        /* Wrong top-level JSON type */
+        let error =
+            deserialize_page_token::<TokenWithStr>(&base64::encode("[]"))
+                .unwrap_err();
+        assert!(error.contains("corrupted token"));
+
+        /* Structure does not match our general Dropshot schema. */
+        let error =
+            deserialize_page_token::<TokenWithStr>(&base64::encode("{}"))
+                .unwrap_err();
+        assert!(error.contains("corrupted token"));
+
+        /* Bad version */
+        let error = deserialize_page_token::<TokenWithStr>(&base64::encode(
+            "{\"v\":11}",
+        ))
+        .unwrap_err();
+        assert!(error.contains("corrupted token"));
+    }
+
+    /*
+     * It's worth testing parsing around PaginationParams and WhichPage because
+     * is a little non-trivial, owing to the use of untagged enums (which rely
+     * on the ordering of fields), some optional fields, an extra layer of
+     * indirection using `TryFrom`, etc.
+     *
+     * This is also the primary place where we test things like non-positive
+     * values of "limit" being rejected, so even though the implementation in
+     * our code is trivial, this functions more like an integration or system
+     * test for those parameters.
+     */
+    #[test]
+    fn test_pagparams_parsing() {
+        /*
+         * TODO-correctness Recall that `RawWhichPage` is an untagged enum in
+         * order to support idiomatic querystring parameters for HTTP.  Namely,
+         * we want the behavior that if "page_token" is present, then we treat
+         * it as a NextPage.  Otherwise, it's a FirstPage.  The user's
+         * `ScanParams` type essentially becomes a variant of the untagged enum.
+         * Due to nox/serde_urlencoded#66 (which is really serde-rs/serde#1183),
+         * the user's `ScanParams` type does not support any types other than
+         * String.  We should fix this and then add tests for it here.
+         */
+        #[derive(Debug, Deserialize, Serialize)]
+        struct MyScanParams {
+            the_field: String,
+            only_good: Option<String>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct MyOptionalScanParams {
+            the_field: Option<String>,
+            only_good: Option<String>,
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct MyPageSelector {
+            the_page: u8,
+        }
+
+        /*
+         * "First page" cases
+         */
+
+        fn parse_as_first_page<T: DeserializeOwned>(
+            querystring: &str,
+        ) -> (T, Option<NonZeroU64>) {
+            let pagparams: PaginationParams<T, MyPageSelector> =
+                serde_urlencoded::from_str(querystring).unwrap();
+            let limit = pagparams.limit;
+            let scan_params = match pagparams.page {
+                WhichPage::Next(..) => panic!("expected first page"),
+                WhichPage::First(x) => x,
+            };
+            (scan_params, limit)
+        }
+
+        /* basic case: optional boolean specified, limit unspecified */
+        let (scan, limit) = parse_as_first_page::<MyScanParams>(
+            "the_field=name&only_good=true",
+        );
+        assert_eq!(scan.the_field, "name".to_string());
+        assert_eq!(scan.only_good, Some("true".to_string()));
+        assert_eq!(limit, None);
+
+        /* optional boolean specified but false, limit unspecified */
+        let (scan, limit) =
+            parse_as_first_page::<MyScanParams>("the_field=&only_good=false");
+        assert_eq!(scan.the_field, "".to_string());
+        assert_eq!(scan.only_good, Some("false".to_string()));
+        assert_eq!(limit, None);
+
+        /* optional boolean unspecified, limit is valid */
+        let (scan, limit) =
+            parse_as_first_page::<MyScanParams>("the_field=name&limit=3");
+        assert_eq!(scan.the_field, "name".to_string());
+        assert_eq!(scan.only_good, None);
+        assert_eq!(limit.unwrap().get(), 3);
+
+        /* empty query string when all parameters are optional */
+        let (scan, limit) = parse_as_first_page::<MyOptionalScanParams>("");
+        assert_eq!(scan.the_field, None);
+        assert_eq!(scan.only_good, None);
+        assert_eq!(limit, None);
+
+        /* extra parameters are fine */
+        let (scan, limit) = parse_as_first_page::<MyOptionalScanParams>(
+            "the_field=name&limit=17&boomtown=okc",
+        );
+        assert_eq!(scan.the_field, Some("name".to_string()));
+        assert_eq!(scan.only_good, None);
+        assert_eq!(limit.unwrap().get(), 17);
+
+        /*
+         * Error cases, including errors parsing first page parameters.
+         *
+         * TODO-polish The actual error messages for the following cases are
+         * pretty poor, so we don't test them here, but we should clean these
+         * up.
+         */
+        fn parse_as_error(querystring: &str) -> serde_urlencoded::de::Error {
+            serde_urlencoded::from_str::<
+                PaginationParams<MyScanParams, MyPageSelector>,
+            >(querystring)
+            .unwrap_err()
+        }
+
+        /* missing required field ("the_field") */
+        parse_as_error("");
+        /* invalid limit (number out of range) */
+        parse_as_error("the_field=name&limit=0");
+        parse_as_error("the_field=name&limit=-3");
+        /* invalid limit (not a number) */
+        parse_as_error("the_field=name&limit=abcd");
+        /*
+         * Invalid page token (bad base64 length)
+         * Other test cases for deserializing tokens are tested elsewhere.
+         */
+        parse_as_error("page_token=q");
+
+        /*
+         * "Next page" cases
+         */
+
+        fn parse_as_next_page(
+            querystring: &str,
+        ) -> (MyPageSelector, Option<NonZeroU64>) {
+            let pagparams: PaginationParams<MyScanParams, MyPageSelector> =
+                serde_urlencoded::from_str(querystring).unwrap();
+            let limit = pagparams.limit;
+            let page_selector = match pagparams.page {
+                WhichPage::Next(x) => x,
+                WhichPage::First(_) => panic!("expected next page"),
+            };
+            (page_selector, limit)
+        }
+
+        /* basic case */
+        let token = serialize_page_token(&MyPageSelector {
+            the_page: 123,
+        })
+        .unwrap();
+        let (page_selector, limit) =
+            parse_as_next_page(&format!("page_token={}", token));
+        assert_eq!(page_selector.the_page, 123);
+        assert_eq!(limit, None);
+
+        /* limit is also accepted */
+        let (page_selector, limit) =
+            parse_as_next_page(&format!("page_token={}&limit=12", token));
+        assert_eq!(page_selector.the_page, 123);
+        assert_eq!(limit.unwrap().get(), 12);
+
+        /*
+         * Having parameters appropriate to the scan params doesn't change the
+         * way this is interpreted.
+         */
+        let (page_selector, limit) = parse_as_next_page(&format!(
+            "the_field=name&page_token={}&limit=3",
+            token
+        ));
+        assert_eq!(page_selector.the_page, 123);
+        assert_eq!(limit.unwrap().get(), 3);
+
+        /* invalid limits (same as above) */
+        parse_as_error(&format!("page_token={}&limit=0", token));
+        parse_as_error(&format!("page_token={}&limit=-3", token));
+
+        /*
+         * We ought not to promise much about what happens if the user's
+         * ScanParams has a "page_token" field.  In practice, ours always takes
+         * precedence (and it's not clear how else this could work).
+         */
+        #[derive(Debug, Deserialize)]
+        struct SketchyScanParams {
+            page_token: String,
+        }
+
+        let pagparams: PaginationParams<SketchyScanParams, MyPageSelector> =
+            serde_urlencoded::from_str(&format!("page_token={}", token))
+                .unwrap();
+        assert_eq!(pagparams.limit, None);
+        match &pagparams.page {
+            WhichPage::First(..) => {
+                panic!("expected NextPage even with page_token in ScanParams")
+            }
+            WhichPage::Next(p) => {
+                assert_eq!(p.the_page, 123);
+            }
+        }
+    }
+
+    #[test]
+    fn test_results_page() {
+        /*
+         * It would be a neat paginated fibonacci API if the page selector was
+         * just the last two numbers!  Dropshot doesn't support that and it's
+         * not clear that's a practical use case anyway.
+         */
+        let items = vec![1, 1, 2, 3, 5, 8, 13];
+        let dummy_scan_params = 21;
+        #[derive(Debug, Deserialize, Serialize)]
+        struct FibPageSelector {
+            prev: usize,
+        }
+        let get_page = |item: &usize, scan_params: &usize| FibPageSelector {
+            prev: *item + *scan_params,
+        };
+
+        let results =
+            ResultsPage::new(items.clone(), &dummy_scan_params, get_page)
+                .unwrap();
+        assert_eq!(results.items, items);
+        assert!(results.next_page.is_some());
+        let token = results.next_page.unwrap();
+        let deserialized: FibPageSelector =
+            deserialize_page_token(&token).unwrap();
+        assert_eq!(deserialized.prev, 34);
+
+        let results =
+            ResultsPage::new(Vec::new(), &dummy_scan_params, get_page).unwrap();
+        assert_eq!(results.items.len(), 0);
+        assert!(results.next_page.is_none());
     }
 }

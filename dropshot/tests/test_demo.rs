@@ -420,6 +420,8 @@ async fn test_demo_path_param_string() {
         let json: DemoPathString = read_json(&mut response).await;
         assert_eq!(json.test1, matched_part);
     }
+
+    testctx.teardown().await;
 }
 
 /*
@@ -463,6 +465,8 @@ async fn test_demo_path_param_uuid() {
         .unwrap();
     let json: DemoPathUuid = read_json(&mut response).await;
     assert_eq!(json.test1.to_string(), uuid_str);
+
+    testctx.teardown().await;
 }
 
 /*
