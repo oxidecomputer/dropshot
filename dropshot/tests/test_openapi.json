@@ -6,6 +6,54 @@
     "version": "threeve"
   },
   "paths": {
+    "/impairment": {
+      "get": {
+        "operationId": "handler6",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Client-requested limit on page size (optional)\n\nConsumers should use [`dropshot::RequestContext::page_limit()`] to access this value.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 1
+            },
+            "allowReserved": true,
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TODO: placeholder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "A page of results from a paginated API\n\nThis structure is intended for use both on the server side (to generate the results page) and on the client side (to parse it).",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "description": "list of items on this page of results",
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ResponseItem"
+                      }
+                    },
+                    "next_page": {
+                      "description": "token used to fetch the next page of results (if any)",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/test/camera": {
       "post": {
         "operationId": "handler4",
@@ -199,5 +247,19 @@
       }
     }
   },
-  "components": {}
+  "components": {
+    "schemas": {
+      "ResponseItem": {
+        "type": "object",
+        "properties": {
+          "word": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "word"
+        ]
+      }
+    }
+  }
 }

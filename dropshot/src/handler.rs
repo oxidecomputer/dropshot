@@ -37,18 +37,15 @@ use super::error::HttpError;
 use super::http_util::http_extract_path_params;
 use super::http_util::http_read_body;
 use super::http_util::CONTENT_TYPE_JSON;
-use super::http_util::CONTENT_TYPE_NDJSON;
 use super::server::DropshotState;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
+use crate::pagination::PaginationParams;
 
 use async_trait::async_trait;
-use bytes::BufMut;
-use bytes::Bytes;
-use bytes::BytesMut;
 use futures::lock::Mutex;
 use http::StatusCode;
 use hyper::Body;
@@ -58,12 +55,15 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use slog::Logger;
+use std::cmp::min;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 /**
@@ -73,6 +73,8 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /**
  * Handle for various interfaces useful during request processing.
+ */
+/*
  * TODO-cleanup What's the right way to package up "request"?  The only time we
  * need it to be mutable is when we're reading the body (e.g., as part of the
  * JSON extractor).  In order to support that, we wrap it in something that
@@ -92,6 +94,61 @@ pub struct RequestContext {
     pub request_id: String,
     /** logger for this specific request */
     pub log: Logger,
+}
+
+impl RequestContext {
+    /**
+     * Returns the appropriate count of items to return for a paginated request
+     *
+     * This first looks at any client-requested limit and clamps it based on the
+     * server-configured maximum page size.  If the client did not request any
+     * particular limit, this function returns the server-configured default
+     * page size.
+     */
+    pub fn page_limit<ScanParams, PageSelector>(
+        &self,
+        pag_params: &PaginationParams<ScanParams, PageSelector>,
+    ) -> Result<NonZeroUsize, HttpError>
+    where
+        ScanParams: DeserializeOwned + 'static,
+        PageSelector: DeserializeOwned + Serialize + 'static,
+    {
+        let server_config = &self.server.config;
+
+        Ok(pag_params
+            .limit
+            /*
+             * Convert the client-provided limit from a NonZeroU64 to a
+             * usize.  That's because internally, we want the limit to be a
+             * "usize" so we can use functions like `iter.take()` with it (as an
+             * example).  We could put "usize" in the public interface, but that
+             * would cause the server's exported interface to change when it was
+             * built differently, although that's arguably correct.  Instead, we
+             * essentially validate here that the client gave us a value that we
+             * can support.
+             */
+            .map(|limit_nzu64| usize::try_from(limit_nzu64.get()))
+            .transpose()
+            .map_err(|_| {
+                HttpError::for_bad_request(
+                    None,
+                    String::from("unsupported pagination limit: too large"),
+                )
+            })?
+            /*
+             * Compare the client-provided limit to the configured max for the
+             * server and take the smaller one.
+             */
+            .map(|limit_usize| {
+                let limit_nzusize = NonZeroUsize::new(limit_usize).unwrap();
+                min(limit_nzusize, server_config.page_max_nitems)
+            })
+            /*
+             * If no limit was provided by the client, use the configured
+             * default.
+             */
+            .unwrap_or(server_config.page_default_nitems))
+    }
 }
 
 /**
@@ -454,11 +511,11 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
-pub struct Query<QueryType: JsonSchema + Send + Sync> {
+pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
     inner: QueryType,
 }
 
-impl<QueryType: JsonSchema + Send + Sync> Query<QueryType> {
+impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
@@ -471,11 +528,11 @@ impl<QueryType: JsonSchema + Send + Sync> Query<QueryType> {
  * Given an HTTP request, pull out the query string and attempt to deserialize
  * it as an instance of `QueryType`.
  */
-fn http_request_load_query<QueryType: Send + Sync>(
+fn http_request_load_query<QueryType>(
     request: &Request<Body>,
 ) -> Result<Query<QueryType>, HttpError>
 where
-    QueryType: JsonSchema + DeserializeOwned,
+    QueryType: DeserializeOwned + JsonSchema + Send + Sync,
 {
     let raw_query_string = request.uri().query().unwrap_or("");
     /*
@@ -548,7 +605,7 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
 #[async_trait]
 impl<PathType> Extractor for Path<PathType>
 where
-    PathType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
+    PathType: DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -761,8 +818,9 @@ pub trait HttpTypedResponse:
      * and the STATUS_CODE specified by the implementing type. This is a default
      * trait method to allow callers to avoid redundant type specification.
      */
-    fn for_object(&self, body_object: &Self::Body) -> HttpHandlerResult {
-        let serialized = serde_json::to_string(&body_object)?;
+    fn for_object(body_object: &Self::Body) -> HttpHandlerResult {
+        let serialized = serde_json::to_string(&body_object)
+            .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
         Ok(Response::builder()
             .status(Self::STATUS_CODE)
             .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -811,7 +869,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
 {
     fn from(response: HttpResponseCreated<T>) -> HttpHandlerResult {
         /* TODO-correctness (or polish?): add Location header */
-        response.for_object(&response.0)
+        HttpResponseCreated::for_object(&response.0)
     }
 }
 
@@ -833,7 +891,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
     From<HttpResponseAccepted<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseAccepted<T>) -> HttpHandlerResult {
-        response.for_object(&response.0)
+        HttpResponseAccepted::for_object(&response.0)
     }
 }
 
@@ -855,43 +913,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
     From<HttpResponseOkObject<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseOkObject<T>) -> HttpHandlerResult {
-        response.for_object(&response.0)
-    }
-}
-
-/**
- * `HttpResponseOkObjectList<T: Serialize>` wraps a collection of serializable
- * types.  It denotes an HTTP 200 "OK" response whose body is generated by
- * serializing the sequence of objects.
- * TODO-polish We will probably want to add headers for the total result set
- * size and the number of results that we're returning here, plus the marker.
- * TODO-cleanup move/copy the type aliases from src/api_model.rs?
- */
-pub struct HttpResponseOkObjectList<T: Serialize + Send + Sync + 'static>(
-    pub Vec<T>,
-);
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
-    for HttpResponseOkObjectList<T>
-{
-    type Body = Vec<T>;
-    const STATUS_CODE: StatusCode = StatusCode::OK;
-}
-impl<T: JsonSchema + Serialize + Send + Sync + 'static>
-    From<HttpResponseOkObjectList<T>> for HttpHandlerResult
-{
-    fn from(list_wrap: HttpResponseOkObjectList<T>) -> HttpHandlerResult {
-        let list = list_wrap.0;
-        let buffer_list = list.iter().map(serialize_json_stream_element);
-        let mut bytebuf = BytesMut::new();
-        for maybe_buffer in buffer_list {
-            let buffer = maybe_buffer?;
-            bytebuf.put(buffer);
-        }
-
-        Ok(Response::builder()
-            .status(HttpResponseOkObjectList::<T>::STATUS_CODE)
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_NDJSON)
-            .body(bytebuf.freeze().into())?)
+        HttpResponseOkObject::for_object(&response.0)
     }
 }
 
@@ -929,19 +951,4 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
             .status(HttpResponseUpdatedNoContent::STATUS_CODE)
             .body(Body::empty())?)
     }
-}
-
-/**
- * Given a Rust object representing an object in the API, serialize the object
- * to JSON bytes for inclusion in a newline-delimited-JSON ("ndjson") payload.
- * TODO-hardening: consider proceeding with the response even if one or more of
- * the objects fails to be serialized.  Otherwise, one bad database record (for
- * example) could cause us to be unable to list a whole class of items.
- */
-fn serialize_json_stream_element<T: Serialize>(
-    object: &T,
-) -> Result<Bytes, HttpError> {
-    let mut object_json_bytes = serde_json::to_vec(object)?;
-    object_json_bytes.push(b'\n');
-    Ok(object_json_bytes.into())
 }

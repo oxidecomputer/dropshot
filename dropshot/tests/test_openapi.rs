@@ -3,8 +3,8 @@
 use difference::assert_diff;
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseOkObject, Json, Path, Query,
-    RequestContext,
+    HttpResponseDeleted, HttpResponseOkObject, Json, PaginationParams, Path,
+    Query, RequestContext, ResultsPage,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -88,6 +88,34 @@ async fn handler5(
     Ok(HttpResponseOkObject(()))
 }
 
+#[derive(JsonSchema, Serialize)]
+struct ResponseItem {
+    word: String,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct ExampleScanParams {
+    #[serde(default)]
+    a_number: u16,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct ExamplePageSelector {
+    scan: ExampleScanParams,
+    last_seen: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/impairment",
+}]
+async fn handler6(
+    _rqctx: Arc<RequestContext>,
+    _query: Query<PaginationParams<ExampleScanParams, ExamplePageSelector>>,
+) -> Result<HttpResponseOkObject<ResultsPage<ResponseItem>>, HttpError> {
+    unimplemented!();
+}
+
 #[test]
 fn test_openapi() -> Result<(), String> {
     let mut api = ApiDescription::new();
@@ -96,6 +124,7 @@ fn test_openapi() -> Result<(), String> {
     api.register(handler3)?;
     api.register(handler4)?;
     api.register(handler5)?;
+    api.register(handler6)?;
 
     let mut output = Cursor::new(Vec::new());
 

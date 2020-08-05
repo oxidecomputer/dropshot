@@ -20,6 +20,7 @@ use hyper::Request;
 use hyper::Response;
 use std::any::Any;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -51,6 +52,10 @@ pub struct DropshotState {
 pub struct ServerConfig {
     /** maximum allowed size of a request body */
     pub request_body_max_bytes: usize,
+    /** maximum size of any page of results */
+    pub page_max_nitems: NonZeroUsize,
+    /** default size for a page of results */
+    pub page_default_nitems: NonZeroUsize,
 }
 
 /**
@@ -129,6 +134,8 @@ impl HttpServer {
             config: ServerConfig {
                 /* We start aggressively to ensure test coverage. */
                 request_body_max_bytes: 1024,
+                page_max_nitems: NonZeroUsize::new(10000).unwrap(),
+                page_default_nitems: NonZeroUsize::new(100).unwrap(),
             },
             router: api.into_router(),
             log: log.new(o!()),
