@@ -306,15 +306,7 @@ const MAX_TOKEN_LENGTH: usize = 512;
  * Note that consumers still need to consider compatibility if they change their
  * own `ScanParams` or `PageSelector` types.
  */
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Deserialize,
-    JsonSchema,
-    PartialEq,
-    Serialize,
-)]
+#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum PaginationVersion {
     V1,
