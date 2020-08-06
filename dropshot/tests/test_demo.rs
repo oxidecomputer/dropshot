@@ -17,13 +17,7 @@
 
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
-use dropshot::test_util::LogContext;
-use dropshot::test_util::TestContext;
 use dropshot::ApiDescription;
-use dropshot::ConfigDropshot;
-use dropshot::ConfigLogging;
-use dropshot::ConfigLoggingIfExists;
-use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::Json;
 use dropshot::Path;
@@ -44,38 +38,29 @@ use uuid::Uuid;
 #[macro_use]
 extern crate slog;
 
-fn test_setup(test_name: &str) -> TestContext {
-    /*
-     * The IP address to which we bind can be any local IP, but we use
-     * 127.0.0.1 because we know it's present, it shouldn't expose this server
-     * on any external network, and we don't have to go looking for some other
-     * local IP (likely in a platform-specific way).  We specify port 0 to
-     * request any available port.  This is important because we may run
-     * multiple concurrent tests, so any fixed port could result in spurious
-     * failures due to port conflicts.
-     */
-    let config_dropshot = ConfigDropshot {
-        bind_address: "127.0.0.1:0".parse().unwrap(),
-    };
+mod common;
 
-    let config_logging = ConfigLogging::File {
-        level: ConfigLoggingLevel::Debug,
-        path: "UNUSED".to_string(),
-        if_exists: ConfigLoggingIfExists::Fail,
-    };
-
+fn demo_api() -> ApiDescription {
     let mut api = ApiDescription::new();
-    register_test_endpoints(&mut api);
-    let logctx = LogContext::new(test_name, &config_logging);
+    api.register(demo_handler_args_1).unwrap();
+    api.register(demo_handler_args_2query).unwrap();
+    api.register(demo_handler_args_2json).unwrap();
+    api.register(demo_handler_args_3).unwrap();
+    api.register(demo_handler_path_param_string).unwrap();
+    api.register(demo_handler_path_param_uuid).unwrap();
 
-    let log = logctx.log.new(o!());
-    TestContext::new(
-        api,
-        Arc::new(0 as usize),
-        &config_dropshot,
-        Some(logctx),
-        log,
-    )
+    /*
+     * We don't need to exhaustively test these cases, as they're tested by unit
+     * tests.
+     */
+    let error = api.register(demo_handler_path_param_impossible).unwrap_err();
+    assert_eq!(
+        error,
+        "path parameters are not consumed (different_param_name) and \
+         specified parameters do not appear in the path (test1)"
+    );
+
+    api
 }
 
 /*
@@ -84,7 +69,8 @@ fn test_setup(test_name: &str) -> TestContext {
  */
 #[tokio::test]
 async fn test_demo1() {
-    let testctx = test_setup("demo1");
+    let api = demo_api();
+    let testctx = common::test_setup("demo1", api);
 
     let private = testctx.server.app_private();
     let p = private.downcast::<usize>().expect("wrong type for private data");
@@ -114,7 +100,8 @@ async fn test_demo1() {
  */
 #[tokio::test]
 async fn test_demo2query() {
-    let testctx = test_setup("demo2query");
+    let api = demo_api();
+    let testctx = common::test_setup("demo2query", api);
 
     /* Test case: optional field missing */
     let mut response = testctx
@@ -204,7 +191,8 @@ async fn test_demo2query() {
  */
 #[tokio::test]
 async fn test_demo2json() {
-    let testctx = test_setup("demo2json");
+    let api = demo_api();
+    let testctx = common::test_setup("demo2json", api);
 
     /* Test case: optional field */
     let input = DemoJsonBody {
@@ -297,7 +285,8 @@ async fn test_demo2json() {
  */
 #[tokio::test]
 async fn test_demo3json() {
-    let testctx = test_setup("demo3json");
+    let api = demo_api();
+    let testctx = common::test_setup("demo3json", api);
 
     /* Test case: everything filled in. */
     let json_input = DemoJsonBody {
@@ -363,7 +352,8 @@ async fn test_demo3json() {
  */
 #[tokio::test]
 async fn test_demo_path_param_string() {
-    let testctx = test_setup("demo_path_param_string");
+    let api = demo_api();
+    let testctx = common::test_setup("demo_path_param_string", api);
 
     /*
      * Simple error cases.  All of these should produce 404 "Not Found" errors.
@@ -429,6 +419,8 @@ async fn test_demo_path_param_string() {
         let json: DemoPathString = read_json(&mut response).await;
         assert_eq!(json.test1, matched_part);
     }
+
+    testctx.teardown().await;
 }
 
 /*
@@ -436,7 +428,8 @@ async fn test_demo_path_param_string() {
  */
 #[tokio::test]
 async fn test_demo_path_param_uuid() {
-    let testctx = test_setup("demo_path_param_uuid");
+    let api = demo_api();
+    let testctx = common::test_setup("demo_path_param_uuid", api);
 
     /*
      * Error case: not a valid uuid.  The other error cases are the same as for
@@ -471,30 +464,13 @@ async fn test_demo_path_param_uuid() {
         .unwrap();
     let json: DemoPathUuid = read_json(&mut response).await;
     assert_eq!(json.test1.to_string(), uuid_str);
+
+    testctx.teardown().await;
 }
 
 /*
  * Demo handler functions
  */
-pub fn register_test_endpoints(api: &mut ApiDescription) {
-    api.register(demo_handler_args_1).unwrap();
-    api.register(demo_handler_args_2query).unwrap();
-    api.register(demo_handler_args_2json).unwrap();
-    api.register(demo_handler_args_3).unwrap();
-    api.register(demo_handler_path_param_string).unwrap();
-    api.register(demo_handler_path_param_uuid).unwrap();
-
-    /*
-     * We don't need to exhaustively test these cases, as they're tested by unit
-     * tests.
-     */
-    let error = api.register(demo_handler_path_param_impossible).unwrap_err();
-    assert_eq!(
-        error,
-        "path parameters are not consumed (different_param_name) and \
-         specified parameters do not appear in the path (test1)"
-    );
-}
 
 #[endpoint {
     method = GET,

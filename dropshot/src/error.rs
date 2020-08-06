@@ -47,7 +47,6 @@
 use hyper::error::Error as HyperError;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::error::Error as SerdeError;
 
 /**
  * `HttpError` represents an error generated as part of handling an API
@@ -111,16 +110,6 @@ pub struct HttpErrorResponseBody {
     pub request_id: String,
     pub error_code: Option<String>,
     pub message: String,
-}
-
-impl From<SerdeError> for HttpError {
-    fn from(error: SerdeError) -> Self {
-        /*
-         * TODO-polish it would really be much better to annotate this with
-         * context about what we were parsing.
-         */
-        HttpError::for_bad_request(None, format!("invalid input: {}", error))
-    }
 }
 
 impl From<HyperError> for HttpError {
