@@ -65,7 +65,7 @@ struct Instance {
  */
 trait HasIdentity {
     fn id(&self) -> &Uuid;
-    fn name(&self) -> &String;
+    fn name(&self) -> &str;
 }
 
 macro_rules! impl_HasIdentity {
@@ -74,7 +74,7 @@ macro_rules! impl_HasIdentity {
             fn id(&self) -> &Uuid {
                 &self.id
             }
-            fn name(&self) -> &String {
+            fn name(&self) -> &str {
                 &self.name
             }
         }
@@ -127,10 +127,10 @@ fn page_selector<T: HasIdentity>(
         } => ExPageSelector::Id(Descending, *item.id()),
         ExScanParams {
             sort: ExSortMode::ByNameAscending,
-        } => ExPageSelector::Name(Ascending, item.name().clone()),
+        } => ExPageSelector::Name(Ascending, item.name().to_string()),
         ExScanParams {
             sort: ExSortMode::ByNameDescending,
-        } => ExPageSelector::Name(Descending, item.name().clone()),
+        } => ExPageSelector::Name(Descending, item.name().to_string()),
     }
 }
 

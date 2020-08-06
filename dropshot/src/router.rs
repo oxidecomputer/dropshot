@@ -109,7 +109,7 @@ pub enum PathSegment {
 
 impl PathSegment {
     /**
-     * Given a `&String` representing a path segment from a Uri, return a
+     * Given a `&str` representing a path segment from a Uri, return a
      * PathSegment.  This is used to parse a sequence of path segments to the
      * corresponding `PathSegment`, which basically means determining whether
      * it's a variable or a literal.
