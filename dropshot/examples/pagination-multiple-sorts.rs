@@ -99,7 +99,7 @@ use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkObject;
+use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
@@ -235,7 +235,7 @@ fn page_selector_for(
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -289,7 +289,7 @@ async fn example_list_projects(
     };
 
     let projects = iter.take(limit).map(|p| (*p).clone()).collect();
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         projects,
         &scan_params,
         page_selector_for,

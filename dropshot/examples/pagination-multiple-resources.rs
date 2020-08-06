@@ -11,7 +11,7 @@ use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkObject;
+use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
@@ -172,7 +172,7 @@ fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -188,7 +188,7 @@ async fn example_list_projects(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         items,
         &scan_params,
         page_selector,
@@ -202,7 +202,7 @@ async fn example_list_projects(
 async fn example_list_disks(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<Disk>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -218,7 +218,7 @@ async fn example_list_disks(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         items,
         &scan_params,
         page_selector,
@@ -232,7 +232,7 @@ async fn example_list_disks(
 async fn example_list_instances(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<Instance>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let data = rqctx_to_data(rqctx);
@@ -248,7 +248,7 @@ async fn example_list_instances(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         items,
         &scan_params,
         page_selector,
