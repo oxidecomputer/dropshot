@@ -3,8 +3,8 @@
 use difference::assert_diff;
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseOk, TypedBody, PaginationParams, Path,
-    Query, RequestContext, ResultsPage,
+    HttpResponseDeleted, HttpResponseOk, PaginationParams, Path, Query,
+    RequestContext, ResultsPage, TypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

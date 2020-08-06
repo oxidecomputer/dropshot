@@ -188,11 +188,7 @@ async fn example_list_projects(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOk(ResultsPage::new(
-        items,
-        &scan_params,
-        page_selector,
-    )?))
+    Ok(HttpResponseOk(ResultsPage::new(items, &scan_params, page_selector)?))
 }
 
 #[endpoint {
@@ -218,11 +214,7 @@ async fn example_list_disks(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOk(ResultsPage::new(
-        items,
-        &scan_params,
-        page_selector,
-    )?))
+    Ok(HttpResponseOk(ResultsPage::new(items, &scan_params, page_selector)?))
 }
 
 #[endpoint {
@@ -248,11 +240,7 @@ async fn example_list_instances(
 
     let items = iter.take(limit).map(|p| (*p).clone()).collect();
 
-    Ok(HttpResponseOk(ResultsPage::new(
-        items,
-        &scan_params,
-        page_selector,
-    )?))
+    Ok(HttpResponseOk(ResultsPage::new(items, &scan_params, page_selector)?))
 }
 
 fn do_list<'a, T>(
