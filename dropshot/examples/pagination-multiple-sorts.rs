@@ -414,16 +414,16 @@ impl ProjectCollection {
     pub fn iter_by_name_desc(&self) -> ProjectIter {
         self.make_iter(self.by_name.iter().rev())
     }
-    pub fn iter_by_name_asc_from(&self, last_seen: &String) -> ProjectIter {
+    pub fn iter_by_name_asc_from(&self, last_seen: &str) -> ProjectIter {
         let iter = self
             .by_name
-            .range((Bound::Excluded(last_seen.clone()), Bound::Unbounded));
+            .range((Bound::Excluded(last_seen.to_string()), Bound::Unbounded));
         self.make_iter(iter)
     }
-    pub fn iter_by_name_desc_from(&self, last_seen: &String) -> ProjectIter {
+    pub fn iter_by_name_desc_from(&self, last_seen: &str) -> ProjectIter {
         let iter = self
             .by_name
-            .range((Bound::Unbounded, Bound::Excluded(last_seen.clone())))
+            .range((Bound::Unbounded, Bound::Excluded(last_seen.to_string())))
             .rev();
         self.make_iter(iter)
     }
@@ -441,9 +441,9 @@ impl ProjectCollection {
     pub fn iter_by_mtime_asc_from(
         &self,
         last_mtime: &DateTime<Utc>,
-        last_name: &String,
+        last_name: &str,
     ) -> ProjectIter {
-        let last_seen = &(*last_mtime, last_name.clone());
+        let last_seen = &(*last_mtime, last_name.to_string());
         let iter =
             self.by_mtime.range((Bound::Excluded(last_seen), Bound::Unbounded));
         self.make_iter(iter)
@@ -451,9 +451,9 @@ impl ProjectCollection {
     pub fn iter_by_mtime_desc_from(
         &self,
         last_mtime: &DateTime<Utc>,
-        last_name: &String,
+        last_name: &str,
     ) -> ProjectIter {
-        let last_seen = &(*last_mtime, last_name.clone());
+        let last_seen = &(*last_mtime, last_name.to_string());
         let iter = self
             .by_mtime
             .range((Bound::Unbounded, Bound::Excluded(last_seen)))

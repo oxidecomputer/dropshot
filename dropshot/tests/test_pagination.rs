@@ -740,7 +740,7 @@ async fn api_dictionary(
     let iter = iter.filter_map(|word| {
         if word.len() >= scan_params.min_length {
             Some(DictionaryWord {
-                word: word.clone(),
+                word: word.to_string(),
                 length: word.len(),
             })
         } else {
