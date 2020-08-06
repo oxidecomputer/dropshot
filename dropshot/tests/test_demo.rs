@@ -19,7 +19,7 @@ use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
-use dropshot::Json;
+use dropshot::TypedBody;
 use dropshot::Path;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -509,7 +509,7 @@ pub struct DemoJsonBody {
 }]
 async fn demo_handler_args_2json(
     _rqctx: Arc<RequestContext>,
-    json: Json<DemoJsonBody>,
+    json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&json.into_inner())
 }
@@ -526,7 +526,7 @@ pub struct DemoJsonAndQuery {
 async fn demo_handler_args_3(
     _rqctx: Arc<RequestContext>,
     query: Query<DemoQueryArgs>,
-    json: Json<DemoJsonBody>,
+    json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
     let combined = DemoJsonAndQuery {
         query: query.into_inner(),

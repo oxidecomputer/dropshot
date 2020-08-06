@@ -12,7 +12,7 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::HttpServer;
-use dropshot::Json;
+use dropshot::TypedBody;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -141,7 +141,7 @@ async fn example_api_get_counter(
 }]
 async fn example_api_put_counter(
     rqctx: Arc<RequestContext>,
-    update: Json<CounterValue>,
+    update: TypedBody<CounterValue>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let api_context = ExampleContext::from_rqctx(&rqctx);
     let updated_value = update.into_inner();

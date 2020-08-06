@@ -3,7 +3,7 @@
 use difference::assert_diff;
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseOk, Json, PaginationParams, Path,
+    HttpResponseDeleted, HttpResponseOk, TypedBody, PaginationParams, Path,
     Query, RequestContext, ResultsPage,
 };
 use schemars::JsonSchema;
@@ -69,7 +69,7 @@ struct Response {}
 }]
 async fn handler4(
     _rqctx: Arc<RequestContext>,
-    _body: Json<BodyParam>,
+    _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
 }
@@ -83,7 +83,7 @@ async fn handler5(
     _rqctx: Arc<RequestContext>,
     _path: Path<PathArgs>,
     _query: Query<QueryArgs>,
-    _body: Json<BodyParam>,
+    _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }

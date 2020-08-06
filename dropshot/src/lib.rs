@@ -186,12 +186,12 @@
  *      rqctx: Arc<RequestContext>,
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
- *      [body_param: Json<J>,]
+ *      [body_param: TypedBody<J>,]
  * ) -> Result< SomeResponseType , HttpError>
  * ```
  *
  * Other than the RequestContext, parameters may appear in any order.  The types
- * `Query`, `Path`, and `Json` are called **Extractors** because they cause
+ * `Query`, `Path`, and `TypedBody` are called **Extractors** because they cause
  * information to be pulled out of the request and made available to the handler
  * function.
  *
@@ -199,13 +199,13 @@
  *   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
  *   `schemars::JsonSchema`.
  * * [`Path`]`<P>` extracts parameters from HTTP path, deserializing them into
- *    an instance of type `P`. `P` must implement `serde::Deserialize` and
- *    `schemars::JsonSchema`.
- * * [`Json`]`<J>` extracts content from the request body by parsing the body as
- *   JSON and deserializing it into an instance of type `J`. `J` must implement
- *   `serde::Deserialize` and `schemars::JsonSchema`.
+ *   an instance of type `P`. `P` must implement `serde::Deserialize` and
+ *   `schemars::JsonSchema`.
+ * * [`TypedBody`]`<J>` extracts content from the request body by parsing the
+ *   body as JSON and deserializing it into an instance of type `J`. `J` must
+ *   implement `serde::Deserialize` and `schemars::JsonSchema`.
  *
- * If the handler takes a `Query<Q>`, `Path<P>`, or a `Json<J>` and the
+ * If the handler takes a `Query<Q>`, `Path<P>`, or a `TypedBody<J>` and the
  * corresponding extraction cannot be completed, the request fails with status
  * code 400 and an error message reflecting a validation error.
  *
@@ -217,7 +217,7 @@
  * ```
  * use http::StatusCode;
  * use dropshot::HttpError;
- * use dropshot::Json;
+ * use dropshot::TypedBody;
  * use dropshot::Query;
  * use dropshot::RequestContext;
  * use hyper::Body;
@@ -474,7 +474,6 @@ pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
 pub use handler::HttpResponseOk;
 pub use handler::HttpResponseUpdatedNoContent;
-pub use handler::Json;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;
