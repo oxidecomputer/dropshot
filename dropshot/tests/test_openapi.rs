@@ -3,8 +3,8 @@
 use difference::assert_diff;
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseOkObject, Json, PaginationParams, Path,
-    Query, RequestContext, ResultsPage,
+    HttpResponseDeleted, HttpResponseOk, PaginationParams, Path, Query,
+    RequestContext, ResultsPage, TypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -16,8 +16,8 @@ use std::{fs, io::Cursor, str::from_utf8, sync::Arc};
 }]
 async fn handler1(
     _rqctx: Arc<RequestContext>,
-) -> Result<HttpResponseOkObject<()>, HttpError> {
-    Ok(HttpResponseOkObject(()))
+) -> Result<HttpResponseOk<()>, HttpError> {
+    Ok(HttpResponseOk(()))
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -34,8 +34,8 @@ struct QueryArgs {
 async fn handler2(
     _rqctx: Arc<RequestContext>,
     _query: Query<QueryArgs>,
-) -> Result<HttpResponseOkObject<()>, HttpError> {
-    Ok(HttpResponseOkObject(()))
+) -> Result<HttpResponseOk<()>, HttpError> {
+    Ok(HttpResponseOk(()))
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -69,7 +69,7 @@ struct Response {}
 }]
 async fn handler4(
     _rqctx: Arc<RequestContext>,
-    _body: Json<BodyParam>,
+    _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
 }
@@ -83,9 +83,9 @@ async fn handler5(
     _rqctx: Arc<RequestContext>,
     _path: Path<PathArgs>,
     _query: Query<QueryArgs>,
-    _body: Json<BodyParam>,
-) -> Result<HttpResponseOkObject<()>, HttpError> {
-    Ok(HttpResponseOkObject(()))
+    _body: TypedBody<BodyParam>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    Ok(HttpResponseOk(()))
 }
 
 #[derive(JsonSchema, Serialize)]
@@ -112,7 +112,7 @@ struct ExamplePageSelector {
 async fn handler6(
     _rqctx: Arc<RequestContext>,
     _query: Query<PaginationParams<ExampleScanParams, ExamplePageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<ResponseItem>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<ResponseItem>>, HttpError> {
     unimplemented!();
 }
 

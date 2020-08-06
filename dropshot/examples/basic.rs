@@ -9,11 +9,11 @@ use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkObject;
+use dropshot::HttpResponseOk;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::HttpServer;
-use dropshot::Json;
 use dropshot::RequestContext;
+use dropshot::TypedBody;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -123,10 +123,10 @@ struct CounterValue {
 }]
 async fn example_api_get_counter(
     rqctx: Arc<RequestContext>,
-) -> Result<HttpResponseOkObject<CounterValue>, HttpError> {
+) -> Result<HttpResponseOk<CounterValue>, HttpError> {
     let api_context = ExampleContext::from_rqctx(&rqctx);
 
-    Ok(HttpResponseOkObject(CounterValue {
+    Ok(HttpResponseOk(CounterValue {
         counter: api_context.counter.load(Ordering::SeqCst),
     }))
 }
@@ -141,7 +141,7 @@ async fn example_api_get_counter(
 }]
 async fn example_api_put_counter(
     rqctx: Arc<RequestContext>,
-    update: Json<CounterValue>,
+    update: TypedBody<CounterValue>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let api_context = ExampleContext::from_rqctx(&rqctx);
     let updated_value = update.into_inner();

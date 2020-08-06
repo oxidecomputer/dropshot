@@ -156,7 +156,7 @@ impl RequestContext {
  * `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
  * constructor function, not instance functions.
  *
- * The extractors that we provide (`Query`, `Path`, `Json`) implement
+ * The extractors that we provide (`Query`, `Path`, `TypedBody`) implement
  * `Extractor` in order to construct themselves from the request. For example,
  * `Extractor` is implemented for `Query<Q>` with a function that reads the
  * query string from the request, parses it, and constructs a `Query<Q>` with
@@ -439,17 +439,17 @@ where
          * This is where the magic happens: in the code below, `funcparams` has
          * type `FuncParams`, which is a tuple type describing the extractor
          * arguments to the handler function.  This could be `()`, `(Query<Q>)`,
-         * `(Json<J>)`, `(Query<Q>, Json<J>)`, or any other combination of
-         * extractors we decide to support in the future.  Whatever it is must
-         * implement `Extractor`, which means we can invoke
-         * `Extractor::from_request()` to construct the argument tuple, generally
-         * from information available in the `request` object.  We pass this
-         * down to the `HttpHandlerFunc`, for which there's a different
-         * implementation for each value of `FuncParams`.  The `HttpHandlerFunc`
-         * for each `FuncParams` just pulls the arguments out of the
-         * `funcparams` tuple and makes them actual function arguments for the
-         * actual handler function.  From this point down, all of this is
-         * resolved statically.makes them actual function arguments for the
+         * `(TypedBody<J>)`, `(Query<Q>, TypedBody<J>)`, or any other
+         * combination of extractors we decide to support in the future.
+         * Whatever it is must implement `Extractor`, which means we can invoke
+         * `Extractor::from_request()` to construct the argument tuple,
+         * generally from information available in the `request` object.  We
+         * pass this down to the `HttpHandlerFunc`, for which there's a
+         * different implementation for each value of `FuncParams`.  The
+         * `HttpHandlerFunc` for each `FuncParams` just pulls the arguments out
+         * of the `funcparams` tuple and makes them actual function arguments
+         * for the actual handler function.  From this point down, all of this
+         * is resolved statically.makes them actual function arguments for the
          * actual handler function.  From this point down, all of this is
          * resolved statically.
          */
@@ -674,33 +674,35 @@ where
  */
 
 /**
- * `Json<JsonType>` is an extractor used to deserialize an instance of
- * `JsonType` from an HTTP request body.  `JsonType` is any structure of yours
+ * `TypedBody<BodyType>` is an extractor used to deserialize an instance of
+ * `BodyType` from an HTTP request body.  `BodyType` is any structure of yours
  * that implements `serde::Deserialize`.  See this module's documentation for
  * more information.
  */
-pub struct Json<JsonType: JsonSchema + DeserializeOwned + Send + Sync> {
-    inner: JsonType,
+pub struct TypedBody<BodyType: JsonSchema + DeserializeOwned + Send + Sync> {
+    inner: BodyType,
 }
 
-impl<JsonType: JsonSchema + DeserializeOwned + Send + Sync> Json<JsonType> {
+impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
+    TypedBody<BodyType>
+{
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
-    pub fn into_inner(self) -> JsonType {
+    pub fn into_inner(self) -> BodyType {
         self.inner
     }
 }
 
 /**
  * Given an HTTP request, attempt to read the body, parse it as JSON, and
- * deserialize an instance of `JsonType` from it.
+ * deserialize an instance of `BodyType` from it.
  */
-async fn http_request_load_json_body<JsonType>(
+async fn http_request_load_json_body<BodyType>(
     rqctx: Arc<RequestContext>,
-) -> Result<Json<JsonType>, HttpError>
+) -> Result<TypedBody<BodyType>, HttpError>
 where
-    JsonType: JsonSchema + DeserializeOwned + Send + Sync,
+    BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
     let mut request = rqctx.request.lock().await;
@@ -709,10 +711,10 @@ where
         server.config.request_body_max_bytes,
     )
     .await?;
-    let value: Result<JsonType, serde_json::Error> =
+    let value: Result<BodyType, serde_json::Error> =
         serde_json::from_slice(&body_bytes);
     match value {
-        Ok(j) => Ok(Json {
+        Ok(j) => Ok(TypedBody {
             inner: j,
         }),
         Err(e) => Err(HttpError::for_bad_request(
@@ -723,21 +725,21 @@ where
 }
 
 /*
- * The `Extractor` implementation for Json<JsonType> describes how to construct
- * an instance of `Json<JsonType>` from an HTTP request: namely, by reading the
- * request body and parsing it as JSON into type `JsonType`.
- * TODO-cleanup We shouldn't have to use the "'static" bound on `JsonType` here.
+ * The `Extractor` implementation for TypedBody<BodyType> describes how to
+ * construct an instance of `TypedBody<BodyType>` from an HTTP request: namely,
+ * by reading the request body and parsing it as JSON into type `BodyType`.
+ * TODO-cleanup We shouldn't have to use the "'static" bound on `BodyType` here.
  * It seems like we ought to be able to use 'async_trait, but that doesn't seem
  * to be defined.
  */
 #[async_trait]
-impl<JsonType> Extractor for Json<JsonType>
+impl<BodyType> Extractor for TypedBody<BodyType>
 where
-    JsonType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
+    BodyType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
-    ) -> Result<Json<JsonType>, HttpError> {
+    ) -> Result<TypedBody<BodyType>, HttpError> {
         http_request_load_json_body(rqctx).await
     }
 
@@ -746,7 +748,7 @@ where
             name: ApiEndpointParameterName::Body,
             description: None,
             required: true,
-            schema: ApiSchemaGenerator::Gen(JsonType::json_schema),
+            schema: ApiSchemaGenerator::Gen(BodyType::json_schema),
             examples: vec![],
         }]
     }
@@ -896,24 +898,24 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
 }
 
 /**
- * `HttpResponseOkObject<T: Serialize>` wraps an object of any serializable
- * type.  It denotes an HTTP 200 "OK" response whose body is generated by
- * serializing the object.
+ * `HttpResponseOk<T: Serialize>` wraps an object of any serializable type.  It
+ * denotes an HTTP 200 "OK" response whose body is generated by serializing the
+ * object.
  */
-pub struct HttpResponseOkObject<
-    T: JsonSchema + Serialize + Send + Sync + 'static,
->(pub T);
+pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
+    pub T,
+);
 impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
-    for HttpResponseOkObject<T>
+    for HttpResponseOk<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::OK;
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static>
-    From<HttpResponseOkObject<T>> for HttpHandlerResult
+impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
+    for HttpHandlerResult
 {
-    fn from(response: HttpResponseOkObject<T>) -> HttpHandlerResult {
-        HttpResponseOkObject::for_object(&response.0)
+    fn from(response: HttpResponseOk<T>) -> HttpHandlerResult {
+        HttpResponseOk::for_object(&response.0)
     }
 }
 

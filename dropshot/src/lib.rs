@@ -117,7 +117,7 @@
  * use dropshot::endpoint;
  * use dropshot::ApiDescription;
  * use dropshot::HttpError;
- * use dropshot::HttpResponseOkObject;
+ * use dropshot::HttpResponseOk;
  * use dropshot::RequestContext;
  * use http::Method;
  * use schemars::JsonSchema;
@@ -138,10 +138,10 @@
  * }]
  * async fn myapi_projects_get_project(
  *     rqctx: Arc<RequestContext>,
- * ) -> Result<HttpResponseOkObject<Project>, HttpError>
+ * ) -> Result<HttpResponseOk<Project>, HttpError>
  * {
  *    let project = Project { name: String::from("project1") };
- *    Ok(HttpResponseOkObject(project))
+ *    Ok(HttpResponseOk(project))
  * }
  *
  * fn main() {
@@ -165,7 +165,7 @@
  *   invoke `ApiDescription::register()`, this information is used to register
  *   the endpoint that will be handled by our function.
  * * The signature of our function indicates that on success, it returns a
- *   `HttpResponseOkObject<Project>`.  This means that the function will
+ *   `HttpResponseOk<Project>`.  This means that the function will
  *   return an HTTP 200 status code ("OK") with an object of type `Project`.
  * * The function itself has a Rustdoc comment that will be used to document
  *   this _endpoint_ in the OpenAPI schema.
@@ -186,12 +186,12 @@
  *      rqctx: Arc<RequestContext>,
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
- *      [body_param: Json<J>,]
+ *      [body_param: TypedBody<J>,]
  * ) -> Result< SomeResponseType , HttpError>
  * ```
  *
  * Other than the RequestContext, parameters may appear in any order.  The types
- * `Query`, `Path`, and `Json` are called **Extractors** because they cause
+ * `Query`, `Path`, and `TypedBody` are called **Extractors** because they cause
  * information to be pulled out of the request and made available to the handler
  * function.
  *
@@ -199,13 +199,13 @@
  *   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
  *   `schemars::JsonSchema`.
  * * [`Path`]`<P>` extracts parameters from HTTP path, deserializing them into
- *    an instance of type `P`. `P` must implement `serde::Deserialize` and
- *    `schemars::JsonSchema`.
- * * [`Json`]`<J>` extracts content from the request body by parsing the body as
- *   JSON and deserializing it into an instance of type `J`. `J` must implement
- *   `serde::Deserialize` and `schemars::JsonSchema`.
+ *   an instance of type `P`. `P` must implement `serde::Deserialize` and
+ *   `schemars::JsonSchema`.
+ * * [`TypedBody`]`<J>` extracts content from the request body by parsing the
+ *   body as JSON and deserializing it into an instance of type `J`. `J` must
+ *   implement `serde::Deserialize` and `schemars::JsonSchema`.
  *
- * If the handler takes a `Query<Q>`, `Path<P>`, or a `Json<J>` and the
+ * If the handler takes a `Query<Q>`, `Path<P>`, or a `TypedBody<J>` and the
  * corresponding extraction cannot be completed, the request fails with status
  * code 400 and an error message reflecting a validation error.
  *
@@ -217,7 +217,7 @@
  * ```
  * use http::StatusCode;
  * use dropshot::HttpError;
- * use dropshot::Json;
+ * use dropshot::TypedBody;
  * use dropshot::Query;
  * use dropshot::RequestContext;
  * use hyper::Body;
@@ -388,7 +388,7 @@
  * page token.  This will be automatically parsed on the way back in.
  *
  * For output, a paginated API endpoint's handler function can return
- * `Result<`[`HttpResponseOkObject`]<[`ResultsPage`]`<T>, HttpError>` where `T:
+ * `Result<`[`HttpResponseOk`]<[`ResultsPage`]`<T>, HttpError>` where `T:
  * Serialize` is the item listed by the endpoint.  You can also use your own
  * structure that contains a [`ResultsPage`] (possibly using
  * `#[serde(flatten)]`), if that's the behavior you want.
@@ -404,7 +404,7 @@
  *
  * ```
  * use dropshot::HttpError;
- * use dropshot::HttpResponseOkObject;
+ * use dropshot::HttpResponseOk;
  * use dropshot::PaginationParams;
  * use dropshot::Query;
  * use dropshot::RequestContext;
@@ -431,7 +431,7 @@
  *     rqctx: Arc<RequestContext>,
  *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
  *     extra_params: Query<MyExtraQueryParams>,
- * ) -> Result<HttpResponseOkObject<ResultsPage<String>>, HttpError>
+ * ) -> Result<HttpResponseOk<ResultsPage<String>>, HttpError>
  * {
  *  # unimplemented!();
  *  /* ... */
@@ -472,12 +472,12 @@ pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
-pub use handler::HttpResponseOkObject;
+pub use handler::HttpResponseOk;
 pub use handler::HttpResponseUpdatedNoContent;
-pub use handler::Json;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;
+pub use handler::TypedBody;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_NDJSON;
 pub use http_util::HEADER_REQUEST_ID;

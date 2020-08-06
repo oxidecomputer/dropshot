@@ -23,7 +23,7 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkObject;
+use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
 use dropshot::PaginationParams;
 use dropshot::Query;
@@ -79,7 +79,7 @@ struct ProjectPage {
 async fn example_list_projects(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
-) -> Result<HttpResponseOkObject<ResultsPage<Project>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let tree = rqctx_to_tree(rqctx);
@@ -102,7 +102,7 @@ async fn example_list_projects(
         }
     };
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         projects,
         &EmptyScanParams {},
         |p: &Project, _| ProjectPage {

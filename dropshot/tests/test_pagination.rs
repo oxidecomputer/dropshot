@@ -16,7 +16,7 @@ use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
 use dropshot::HttpError;
-use dropshot::HttpResponseOkObject;
+use dropshot::HttpResponseOk;
 use dropshot::PaginationOrder;
 use dropshot::PaginationParams;
 use dropshot::Query;
@@ -232,7 +232,7 @@ fn range_u16(start: u16, limit: u16) -> Vec<u16> {
 async fn api_integers(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<EmptyScanParams, IntegersPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<u16>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<u16>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get() as u16;
 
@@ -243,7 +243,7 @@ async fn api_integers(
         }) => *last_seen,
     };
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         range_u16(start, limit),
         &EmptyScanParams {},
         page_selector_for,
@@ -433,8 +433,8 @@ async fn test_paginate_basic() {
 async fn api_empty(
     _rqctx: Arc<RequestContext>,
     _query: Query<PaginationParams<EmptyScanParams, IntegersPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<u16>>, HttpError> {
-    Ok(HttpResponseOkObject(ResultsPage::new(
+) -> Result<HttpResponseOk<ResultsPage<u16>>, HttpError> {
+    Ok(HttpResponseOk(ResultsPage::new(
         Vec::new(),
         &EmptyScanParams {},
         page_selector_for,
@@ -496,7 +496,7 @@ async fn api_with_extra_params(
     rqctx: Arc<RequestContext>,
     query_pag: Query<PaginationParams<EmptyScanParams, IntegersPageSelector>>,
     query_extra: Query<ExtraQueryParams>,
-) -> Result<HttpResponseOkObject<ExtraResultsPage>, HttpError> {
+) -> Result<HttpResponseOk<ExtraResultsPage>, HttpError> {
     let pag_params = query_pag.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get() as u16;
     let extra_params = query_extra.into_inner();
@@ -508,7 +508,7 @@ async fn api_with_extra_params(
         }) => *last_seen,
     };
 
-    Ok(HttpResponseOkObject(ExtraResultsPage {
+    Ok(HttpResponseOk(ExtraResultsPage {
         debug_was_set: extra_params.debug.is_some(),
         debug_value: extra_params.debug.unwrap_or(false),
         page: ResultsPage::new(
@@ -595,7 +595,7 @@ struct ReqScanParams {
 async fn api_with_required_params(
     rqctx: Arc<RequestContext>,
     query: Query<PaginationParams<ReqScanParams, IntegersPageSelector>>,
-) -> Result<HttpResponseOkObject<ResultsPage<u16>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<u16>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get() as u16;
 
@@ -617,7 +617,7 @@ async fn api_with_required_params(
         }) => *last_seen,
     };
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         range_u16(start, limit),
         &EmptyScanParams {},
         page_selector_for,
@@ -716,7 +716,7 @@ async fn api_dictionary(
     query: Query<
         PaginationParams<DictionaryScanParams, DictionaryPageSelector>,
     >,
-) -> Result<HttpResponseOkObject<ResultsPage<DictionaryWord>>, HttpError> {
+) -> Result<HttpResponseOk<ResultsPage<DictionaryWord>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
     let dictionary: &BTreeSet<String> = &*WORD_LIST;
@@ -748,7 +748,7 @@ async fn api_dictionary(
         }
     });
 
-    Ok(HttpResponseOkObject(ResultsPage::new(
+    Ok(HttpResponseOk(ResultsPage::new(
         iter.take(limit).collect(),
         scan_params,
         |item: &DictionaryWord, scan_params: &DictionaryScanParams| {
