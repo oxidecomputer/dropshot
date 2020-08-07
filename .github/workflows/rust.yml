@@ -34,4 +34,4 @@ jobs:
     - name: Build
       run: cargo build --tests --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: while cargo test --test=test_config test_config_bind_address; do :; done
