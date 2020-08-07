@@ -126,6 +126,7 @@ async fn test_config_bind_address() {
      * Make another request to make sure it fails now that we've shut down
      * the server.
      */
+    let client = hyper::Client::new();
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
     println!("{:?}", error);
     assert!(error.is_connect());
