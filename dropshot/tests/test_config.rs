@@ -127,6 +127,7 @@ async fn test_config_bind_address() {
      * the server.
      */
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
+    println!("{:?}", error);
     assert!(error.is_connect());
 
     /*
