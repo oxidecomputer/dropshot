@@ -54,7 +54,7 @@ version = "0.7.0"
 features = [ "uuid" ]
 
 [dev-dependencies]
-difference = "2.0.0"
+expectorate = "1.0.1"
 lazy_static = "1.4.0"
 libc = "0.2.71"
 serde_with = "1.4.0"
