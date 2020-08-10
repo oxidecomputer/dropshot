@@ -144,7 +144,7 @@ fn do_endpoint(
                                 }
                                 fn need_arc_requestcontext<T>()
                                 where
-                                    T: ?Sized + TypeEq<This = #req>
+                                    T: ?Sized + TypeEq<This = #req>,
                                 {
                                 }
                                 need_arc_requestcontext::<#ty>();
@@ -155,7 +155,7 @@ fn do_endpoint(
                             const _: fn() = ||{
                                 fn need_extractor<T>()
                                 where
-                                    T: ?Sized + #req
+                                    T: ?Sized + #req,
                                 {
                                 }
                                 need_extractor::<#ty>();
@@ -264,8 +264,9 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn test_endpoint() {
+    fn test_endpoint1() {
         let ret = do_endpoint(
             quote! {
                 method = GET,
@@ -277,16 +278,110 @@ mod tests {
             }
             .into(),
         );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
         let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
+
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
+
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
                     fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
+                }
+            }
+        };
+
+        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_endpoint2() {
+        let ret = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            }
+            .into(),
+            quote! {
+                fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
+            }
+            .into(),
+        );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
+        let query = quote! {
+            Query<Q>
+        };
+        let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
+            const _: fn() = || {
+                fn need_extractor<T>()
+                where
+                    T: ?Sized + dropshot::Extractor,
+                {
+                }
+                need_extractor::<#query>();
+            };
+
+            #[allow(non_camel_case_types, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub struct handler_xyz {}
+
+            #[allow(non_upper_case_globals, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            const handler_xyz: handler_xyz = handler_xyz {};
+
+            impl From<handler_xyz> for dropshot::ApiEndpoint {
+                fn from(_: handler_xyz) -> Self {
+                    fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -314,7 +409,28 @@ mod tests {
             }
             .into(),
         );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
         let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
@@ -353,7 +469,28 @@ mod tests {
             }
             .into(),
         );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
         let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             pub struct handler_xyz {}
