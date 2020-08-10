@@ -30,7 +30,7 @@ version = "0.4.0"
 features = [ "serde" ]
 
 [dependencies.dropshot_endpoint]
-version = "0.2.0"
+version = "0.3.0"
 path = "../dropshot_endpoint"
 
 [dependencies.serde]
@@ -59,6 +59,7 @@ lazy_static = "1.4.0"
 libc = "0.2.71"
 serde_with = "1.4.0"
 subprocess = "0.2.4"
+trybuild = "1.0.31"
 
 [dev-dependencies.schemars]
 version = "0.7.0"

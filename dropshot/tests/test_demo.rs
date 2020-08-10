@@ -15,6 +15,7 @@
  * JSON body length)
  */
 
+use dropshot::endpoint;
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
 use dropshot::ApiDescription;
@@ -24,7 +25,6 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
 use dropshot::CONTENT_TYPE_JSON;
-use dropshot_endpoint::endpoint;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Method;

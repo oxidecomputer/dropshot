@@ -8,7 +8,7 @@ extern crate proc_macro;
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
-use quote::ToTokens;
+use quote::{quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
@@ -68,7 +68,7 @@ fn do_endpoint(
     let method = metadata.method.as_str();
     let path = metadata.path;
 
-    let ast: ItemFn = syn::parse2(item)?;
+    let ast: ItemFn = syn::parse2(item.clone())?;
 
     let name = &ast.sig.ident;
     let name_str = name.to_string();
@@ -103,9 +103,88 @@ fn do_endpoint(
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
+    // When the user attaches this proc macro to a function with the wrong type
+    // signature, the resulting errors are deeply inscrutable. To attempt to
+    // make failures easier to understand, we inject code that asserts the types
+    // of the various parameters. For the first parameter of type
+    // Arc<RequestContext>, we turn that type into a trait and then construct
+    // a dummy function that requires a type match. It will fail for anything
+    // of the wrong type. Subsequent parameters are simpler: we simply need to
+    // call a dummy function that requires a type that satisfies the trait
+    // Extractor.
+    let mut checks = ast
+        .sig
+        .inputs
+        .iter()
+        .enumerate()
+        .map(|(i, arg)| {
+            let req = if i == 0 {
+                quote! { std::sync::Arc<#dropshot::RequestContext> }
+            } else {
+                quote! { #dropshot::Extractor }
+            };
+
+            match arg {
+                syn::FnArg::Receiver(_) => {
+                    // The compiler failure here is already comprehensible.
+                    quote! {}
+                }
+                syn::FnArg::Typed(pat) => {
+                    let span = Error::new_spanned(pat.ty.as_ref(), "").span();
+                    let ty = pat.ty.as_ref().into_token_stream();
+
+                    if i == 0 {
+                        quote_spanned! { span=>
+                            const _: fn() = ||{
+                                trait TypeEq {
+                                    type This: ?Sized;
+                                }
+                                impl<T: ?Sized> TypeEq for T {
+                                    type This = Self;
+                                }
+                                fn need_arc_requestcontext<T>()
+                                where
+                                    T: ?Sized + TypeEq<This = #req>,
+                                {
+                                }
+                                need_arc_requestcontext::<#ty>();
+                            };
+                        }
+                    } else {
+                        quote_spanned! { span=>
+                            const _: fn() = ||{
+                                fn need_extractor<T>()
+                                where
+                                    T: ?Sized + #req,
+                                {
+                                }
+                                need_extractor::<#ty>();
+                            };
+                        }
+                    }
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Help the user if they don't give any parameters.
+    if ast.sig.inputs.len() == 0 {
+        checks.push(
+            Error::new_spanned(
+                (&ast.sig).into_token_stream(),
+                "incompatible function signature; expected async fn \
+                 (Arc<RequestContext>(, Extractor)*) -> Result<HttpResponse, \
+                 HttpError>",
+            )
+            .to_compile_error(),
+        );
+    }
+
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the method to which this macro was applied...
     let stream = quote! {
+        #(#checks)*
+
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
         #description_doc_comment
@@ -119,7 +198,7 @@ fn do_endpoint(
         // `#name` to be passed into `ApiDescription::register()`
         impl From<#name> for #dropshot::ApiEndpoint {
             fn from(_: #name) -> Self {
-                #ast
+                #item
 
                 #dropshot::ApiEndpoint::new(
                     #name_str.to_string(),
@@ -185,8 +264,9 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn test_endpoint() {
+    fn test_endpoint1() {
         let ret = do_endpoint(
             quote! {
                 method = GET,
@@ -194,20 +274,114 @@ mod tests {
             }
             .into(),
             quote! {
-                fn handler_xyz() {}
+                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
         let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
+
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
+
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
-                    fn handler_xyz() {}
+                    fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
+                }
+            }
+        };
+
+        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_endpoint2() {
+        let ret = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            }
+            .into(),
+            quote! {
+                fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
+            }
+            .into(),
+        );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
+        let query = quote! {
+            Query<Q>
+        };
+        let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
+            const _: fn() = || {
+                fn need_extractor<T>()
+                where
+                    T: ?Sized + dropshot::Extractor,
+                {
+                }
+                need_extractor::<#query>();
+            };
+
+            #[allow(non_camel_case_types, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub struct handler_xyz {}
+
+            #[allow(non_upper_case_globals, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            const handler_xyz: handler_xyz = handler_xyz {};
+
+            impl From<handler_xyz> for dropshot::ApiEndpoint {
+                fn from(_: handler_xyz) -> Self {
+                    fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -231,11 +405,32 @@ mod tests {
             }
             .into(),
             quote! {
-                fn handler_xyz() {}
+                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
         let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
@@ -244,7 +439,7 @@ mod tests {
             const handler_xyz: handler_xyz = handler_xyz {};
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
-                    fn handler_xyz() {}
+                    fn handler_xyz(_rqctx: Arc<RequestContext>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -270,11 +465,32 @@ mod tests {
             .into(),
             quote! {
                 /** handle "xyz" requests */
-                fn handler_xyz() {}
+                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
         let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             pub struct handler_xyz {}
@@ -284,7 +500,7 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
-                    fn handler_xyz() {}
+                    fn handler_xyz(_rqctx: Arc<RequestContext>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,

@@ -20,6 +20,7 @@ async fn handler1(
 }
 
 #[derive(Deserialize, JsonSchema)]
+#[allow(dead_code)]
 struct QueryArgs {
     _tomax: String,
     _xamot: Option<String>,
