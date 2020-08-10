@@ -1,3 +1,18 @@
+error[E0277]: the trait bound `std::string::String: dropshot::handler::Extractor` is not satisfied
+  --> $DIR/bad_endpoint3.rs:15:12
+   |
+9  | / #[endpoint {
+10 | |     method = GET,
+11 | |     path = "/test",
+12 | | }]
+   | |__- required by this bound in `_::{{closure}}#0::need_extractor`
+...
+15 |       param: String,
+   |              ^^^^^^
+   |              |
+   |              the trait `dropshot::handler::Extractor` is not implemented for `std::string::String`
+   |              required by a bound in this
+
 error[E0277]: the trait bound `fn(std::sync::Arc<dropshot::handler::RequestContext>, std::string::String) -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::api_description::ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
   --> $DIR/bad_endpoint3.rs:13:10
    |
