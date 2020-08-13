@@ -48,6 +48,7 @@ fn demo_api() -> ApiDescription {
     api.register(demo_handler_args_3).unwrap();
     api.register(demo_handler_path_param_string).unwrap();
     api.register(demo_handler_path_param_uuid).unwrap();
+    api.register(demo_handler_path_param_u32).unwrap();
 
     /*
      * We don't need to exhaustively test these cases, as they're tested by unit
@@ -469,6 +470,51 @@ async fn test_demo_path_param_uuid() {
 }
 
 /*
+ * The "demo_path_param_u32" handler takes just a single u32 path parameter.
+ */
+#[tokio::test]
+async fn test_demo_path_param_u32() {
+    let api = demo_api();
+    let testctx = common::test_setup("demo_path_param_u32", api);
+
+    /*
+     * Error case: not a valid u32.  Other error cases are the same as for the
+     * string-valued path parameter and they're tested above.
+     */
+    let error = testctx
+        .client_testctx
+        .make_request_with_body(
+            Method::GET,
+            "/testing/demo_path_u32/abcd",
+            Body::empty(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert!(error.message.starts_with("bad parameter in URL path:"));
+
+    /*
+     * Success case (use the number)
+     */
+    let u32_str = "37";
+    let valid_path = format!("/testing/demo_path_u32/{}", u32_str);
+    let mut response = testctx
+        .client_testctx
+        .make_request_with_body(
+            Method::GET,
+            &valid_path,
+            Body::empty(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoPathU32 = read_json(&mut response).await;
+    assert_eq!(json.test1, 37);
+
+    testctx.teardown().await;
+}
+
+/*
  * Demo handler functions
  */
 
@@ -561,6 +607,24 @@ pub struct DemoPathUuid {
 async fn demo_handler_path_param_uuid(
     _rqctx: Arc<RequestContext>,
     path_params: Path<DemoPathUuid>,
+) -> Result<Response<Body>, HttpError> {
+    http_echo(&path_params.into_inner())
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct DemoPathU32 {
+    /* Work around serde-rs/serde#1183 */
+    #[schemars(with = "u32")]
+    #[serde(with = "serde_with::rust::display_fromstr")]
+    pub test1: u32,
+}
+#[endpoint {
+    method = GET,
+    path = "/testing/demo_path_u32/{test1}",
+}]
+async fn demo_handler_path_param_u32(
+    _rqctx: Arc<RequestContext>,
+    path_params: Path<DemoPathU32>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
 }
