@@ -40,7 +40,6 @@ use super::http_util::CONTENT_TYPE_JSON;
 use super::server::DropshotState;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiEndpointParameterLocation;
-use crate::api_description::ApiEndpointParameterName;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::PaginationParams;
@@ -570,7 +569,7 @@ where
     }
 
     fn metadata() -> Vec<ApiEndpointParameter> {
-        QueryType::metadata(ApiEndpointParameterLocation::Query)
+        QueryType::metadata(&ApiEndpointParameterLocation::Query)
     }
 }
 
@@ -617,7 +616,7 @@ where
     }
 
     fn metadata() -> Vec<ApiEndpointParameter> {
-        PathType::metadata(ApiEndpointParameterLocation::Path)
+        PathType::metadata(&ApiEndpointParameterLocation::Path)
     }
 }
 
@@ -625,9 +624,10 @@ where
  * Convenience trait to generate parameter metadata from types implementing
  * `JsonSchema` for use with `Query` and `Path` `Extractors`.
  */
-trait GetMetadata {
-    fn metadata(loc: ApiEndpointParameterLocation)
-        -> Vec<ApiEndpointParameter>;
+pub(crate) trait GetMetadata {
+    fn metadata(
+        loc: &ApiEndpointParameterLocation,
+    ) -> Vec<ApiEndpointParameter>;
 }
 
 impl<ParamType> GetMetadata for ParamType
@@ -635,37 +635,173 @@ where
     ParamType: JsonSchema,
 {
     fn metadata(
-        loc: ApiEndpointParameterLocation,
+        loc: &ApiEndpointParameterLocation,
     ) -> Vec<ApiEndpointParameter> {
         /*
          * Generate the type for `ParamType` then pluck out each member of
          * the structure to encode as an individual parameter.
          */
         let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
+            schemars::gen::SchemaSettings::openapi3().with(|settings| {
+                /*
+                 * Strip off any definitions prefix so that we can lookup
+                 * references simply. Ideally we would force no references to
+                 * be generated, but that doesn't seem to be an option.
+                 */
+                settings.definitions_path = String::new();
+            }),
         );
         let schema = ParamType::json_schema(&mut generator);
-        match schema {
-            schemars::schema::Schema::Object(
-                schemars::schema::SchemaObject {
-                    object: Some(obj), ..
-                },
-            ) => obj
-                .properties
-                .iter()
-                .map(|(name, schema)| ApiEndpointParameter {
-                    name: (loc.clone(), name.to_string()).into(),
-                    description: None,
-                    required: obj.required.contains(name),
-                    schema: ApiSchemaGenerator::Static(schema.clone()),
-                    examples: vec![],
-                })
-                .collect::<Vec<_>>(),
-            /*
-             * The generated schema should be an object.
-             */
-            _ => panic!("invalid type"),
+        schema2parameters(loc, &schema, generator.definitions(), true)
+    }
+}
+
+/**
+ * This helper function produces a list of parameters. It is invoked
+ * recursively with subschemas, which we will encounter in the case of enums
+ * and structs that have been flattened into the containing structure. The
+ * top-level structure must be flat--unflattened substructures will result
+ * in an error.
+ *
+ * - `loc` is the input to GetMetadata::metadata, query or path parameters.
+ * - `schema`, is what we're processing.
+ * - `definitions` is the map of referenced schemas created in the generation
+ * step (as noted above, we would ideally just have these all inline).
+ * - `required` defines whether parameters are required. In the case of an
+ * enum (which results in an `any_of` subschema) we set this as `false` for
+ * all subschemas. There doesn't seem to be a way to express in OpenAPI
+ * collections of co-required or mutually exclusive parameters.
+ */
+fn schema2parameters(
+    loc: &ApiEndpointParameterLocation,
+    schema: &schemars::schema::Schema,
+    definitions: &schemars::Map<String, schemars::schema::Schema>,
+    required: bool,
+) -> Vec<ApiEndpointParameter> {
+    /*
+     * We ignore schema.metadata, which includes things like doc comments, and
+     * schema.extensions. We call these out explicitly rather than .. since we
+     * match all other fields in the structure.
+     */
+    match schema {
+        /* We expect references to be on their own. */
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: None,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: Some(refstr),
+            extensions: _,
+        }) => match definitions.get(refstr) {
+            // Recur on the referenced type.
+            Some(refschema) => {
+                schema2parameters(loc, refschema, definitions, required)
+            }
+            // This should not be possible.
+            None => panic!("invalid reference {}", refstr),
+        },
+
+        // Match objects and subschemas.
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            // TODO: should be Some(schemars::schema::SingleOrVec::Single(_))
+            instance_type: _,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas,
+            number: None,
+            string: None,
+            array: None,
+            object,
+            reference: None,
+            extensions: _,
+        }) => {
+            let mut parameters = vec![];
+
+            // If there's a local object, add its members to the list of
+            // parameters.
+            if let Some(object) = object {
+                parameters.extend(object.properties.iter().map(
+                    |(name, schema)| {
+                        ApiEndpointParameter::new_named(
+                            loc,
+                            name.clone(),
+                            None,
+                            required && object.required.contains(name),
+                            ApiSchemaGenerator::Static(schema.clone()),
+                            vec![],
+                        )
+                    },
+                ));
+            }
+
+            // We might see subschemas here in the case of flattened enums
+            // or flattened structures that have associated doc comments.
+            if let Some(subschemas) = subschemas {
+                match subschemas.as_ref() {
+                    // We expect any_of in the case of an enum.
+                    // TODO make them optional
+                    schemars::schema::SubschemaValidation {
+                        all_of: None,
+                        any_of: Some(schemas),
+                        one_of: None,
+                        not: None,
+                        if_schema: None,
+                        then_schema: None,
+                        else_schema: None,
+                    } => parameters.extend(schemas.iter().flat_map(
+                        |subschema| {
+                            // Note that all these parameters will be optional.
+                            schema2parameters(
+                                loc,
+                                subschema,
+                                definitions,
+                                false,
+                            )
+                        },
+                    )),
+
+                    // With an all_of, there should be a single element. We
+                    // typically see this in the case where there is a doc
+                    // comment on a structure as OpenAPI 3.0.x doesn't have
+                    // a description field directly on schemas.
+                    schemars::schema::SubschemaValidation {
+                        all_of: Some(schemas),
+                        any_of: None,
+                        one_of: None,
+                        not: None,
+                        if_schema: None,
+                        then_schema: None,
+                        else_schema: None,
+                    } if schemas.len() == 1 => parameters.extend(
+                        schemas.iter().flat_map(|subschema| {
+                            schema2parameters(
+                                loc,
+                                subschema,
+                                definitions,
+                                required,
+                            )
+                        }),
+                    ),
+
+                    // We don't expect any other types of subschemas.
+                    invalid => panic!("invalid subschema {:#?}", invalid),
+                }
+            }
+
+            parameters
         }
+        /*
+         * The generated schema should be an object.
+         */
+        invalid => panic!("invalid type {:#?}", invalid),
     }
 }
 
@@ -744,13 +880,12 @@ where
     }
 
     fn metadata() -> Vec<ApiEndpointParameter> {
-        vec![ApiEndpointParameter {
-            name: ApiEndpointParameterName::Body,
-            description: None,
-            required: true,
-            schema: ApiSchemaGenerator::Gen(BodyType::json_schema),
-            examples: vec![],
-        }]
+        vec![ApiEndpointParameter::new_body(
+            None,
+            true,
+            ApiSchemaGenerator::Gen(BodyType::json_schema),
+            vec![],
+        )]
     }
 }
 
@@ -952,5 +1087,113 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
         Ok(Response::builder()
             .status(HttpResponseUpdatedNoContent::STATUS_CODE)
             .body(Body::empty())?)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::GetMetadata;
+    use crate::{
+        api_description::ApiEndpointParameterName, ApiEndpointParameter,
+        ApiEndpointParameterLocation, PaginationParams,
+    };
+    use schemars::JsonSchema;
+
+    #[derive(JsonSchema)]
+    #[allow(dead_code)]
+    struct A {
+        foo: String,
+        bar: u32,
+        baz: Option<String>,
+    }
+
+    #[derive(JsonSchema)]
+    #[allow(dead_code)]
+    struct B<T> {
+        #[serde(flatten)]
+        page: T,
+
+        limit: Option<u64>,
+    }
+
+    #[derive(JsonSchema)]
+    #[allow(dead_code)]
+    #[schemars(untagged)]
+    enum C<T> {
+        First(T),
+        Next { page_token: String },
+    }
+
+    fn compare(actual: Vec<ApiEndpointParameter>, expected: Vec<(&str, bool)>) {
+        /*
+         * This is order-dependent. We might not really care if the order
+         * changes, but it will be interesting to understand why if it does.
+         */
+        actual.iter().zip(expected.iter()).for_each(
+            |(param, (name, required))| {
+                if let ApiEndpointParameter {
+                    name: ApiEndpointParameterName::Path(aname),
+                    required: arequired,
+                    ..
+                } = param
+                {
+                    assert_eq!(aname, name);
+                    assert_eq!(arequired, required);
+                } else {
+                    panic!();
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn test_metadata_simple() {
+        let params = A::metadata(&ApiEndpointParameterLocation::Path);
+        let expected = vec![("bar", true), ("baz", false), ("foo", true)];
+
+        compare(params, expected);
+    }
+
+    #[test]
+    fn test_metadata_flattened() {
+        let params = B::<A>::metadata(&ApiEndpointParameterLocation::Path);
+        let expected = vec![
+            ("bar", true),
+            ("baz", false),
+            ("foo", true),
+            ("limit", false),
+        ];
+
+        compare(params, expected);
+    }
+
+    #[test]
+    fn test_metadata_flattened_enum() {
+        let params = B::<C<A>>::metadata(&ApiEndpointParameterLocation::Path);
+        let expected = vec![
+            ("limit", false),
+            ("bar", false),
+            ("baz", false),
+            ("foo", false),
+            ("page_token", false),
+        ];
+
+        compare(params, expected);
+    }
+
+    #[test]
+    fn test_metadata_pagination() {
+        let params = PaginationParams::<A, A>::metadata(
+            &ApiEndpointParameterLocation::Path,
+        );
+        let expected = vec![
+            ("limit", false),
+            ("page_token", false),
+            ("bar", false),
+            ("baz", false),
+            ("foo", false),
+        ];
+
+        compare(params, expected);
     }
 }

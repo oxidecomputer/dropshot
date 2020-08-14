@@ -84,6 +84,47 @@ pub struct ApiEndpointParameter {
     pub examples: Vec<String>,
 }
 
+impl ApiEndpointParameter {
+    pub fn new_named(
+        loc: &ApiEndpointParameterLocation,
+        name: String,
+        description: Option<String>,
+        required: bool,
+        schema: ApiSchemaGenerator,
+        examples: Vec<String>,
+    ) -> Self {
+        Self {
+            name: match loc {
+                ApiEndpointParameterLocation::Path => {
+                    ApiEndpointParameterName::Path(name)
+                }
+                ApiEndpointParameterLocation::Query => {
+                    ApiEndpointParameterName::Query(name)
+                }
+            },
+            description,
+            required,
+            schema,
+            examples,
+        }
+    }
+
+    pub fn new_body(
+        description: Option<String>,
+        required: bool,
+        schema: ApiSchemaGenerator,
+        examples: Vec<String>,
+    ) -> Self {
+        Self {
+            name: ApiEndpointParameterName::Body,
+            description,
+            required,
+            schema,
+            examples,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ApiEndpointParameterLocation {
     Path,
@@ -95,19 +136,6 @@ pub enum ApiEndpointParameterName {
     Path(String),
     Query(String),
     Body,
-}
-
-impl From<(ApiEndpointParameterLocation, String)> for ApiEndpointParameterName {
-    fn from((location, name): (ApiEndpointParameterLocation, String)) -> Self {
-        match location {
-            ApiEndpointParameterLocation::Path => {
-                ApiEndpointParameterName::Path(name)
-            }
-            ApiEndpointParameterLocation::Query => {
-                ApiEndpointParameterName::Query(name)
-            }
-        }
-    }
 }
 
 /**
