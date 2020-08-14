@@ -664,7 +664,7 @@ where
  * in an error.
  *
  * - `loc` is the input to GetMetadata::metadata, query or path parameters.
- * - `schema`, is what we're processing.
+ * - `schema` is what we're processing.
  * - `definitions` is the map of referenced schemas created in the generation
  * step (as noted above, we would ideally just have these all inline).
  * - `required` defines whether parameters are required. In the case of an
@@ -747,7 +747,6 @@ fn schema2parameters(
             if let Some(subschemas) = subschemas {
                 match subschemas.as_ref() {
                     // We expect any_of in the case of an enum.
-                    // TODO make them optional
                     schemars::schema::SubschemaValidation {
                         all_of: None,
                         any_of: Some(schemas),
