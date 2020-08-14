@@ -186,7 +186,7 @@ impl<ItemType> ResultsPage<ItemType> {
  * careful when designing these structures to consider what you might want to
  * support in the future.
  */
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize)]
 #[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
                              DeserializeOwned"))]
 /*
@@ -217,6 +217,25 @@ pub struct PaginationParams<ScanParams, PageSelector> {
     pub(crate) limit: Option<NonZeroU64>,
 }
 
+/*
+ * We use the JsonSchema from `RawPaginationParams` which obscures the contents
+ * of `PageSelector` (vid `RawWhichPage`).
+ */
+impl<ScanParams, PageSelector> JsonSchema
+    for PaginationParams<ScanParams, PageSelector>
+where
+    ScanParams: JsonSchema,
+{
+    fn schema_name() -> String {
+        unimplemented!();
+    }
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        RawPaginationParams::<ScanParams>::json_schema(gen)
+    }
+}
+
 /**
  * Describes whether the client is beginning a new scan or resuming an existing
  * one
@@ -225,7 +244,7 @@ pub struct PaginationParams<ScanParams, PageSelector> {
  * the particular type of request.  See [`PaginationParams`] for more
  * information.
  */
-#[derive(Debug, JsonSchema)]
+#[derive(Debug)]
 pub enum WhichPage<ScanParams, PageSelector> {
     /**
      * Indicates that the client is beginning a new scan
