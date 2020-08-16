@@ -577,9 +577,8 @@ async fn test_paginate_extra_params() {
  * Test an endpoint that requires scan parameters.
  */
 
-#[derive(Deserialize, JsonSchema, Debug)]
+#[derive(Deserialize, JsonSchema)]
 struct ReqScanParams {
-    /* Work around serde-rs/serde#1183 */
     doit: bool,
 }
 
@@ -684,7 +683,7 @@ struct DictionaryWord {
     length: usize,
 }
 
-#[derive(Clone, Deserialize, JsonSchema, Serialize, Debug)]
+#[derive(Clone, Deserialize, JsonSchema, Serialize)]
 struct DictionaryScanParams {
     #[serde(default = "ascending")]
     order: PaginationOrder,

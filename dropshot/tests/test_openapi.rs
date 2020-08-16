@@ -93,7 +93,7 @@ struct ResponseItem {
     word: String,
 }
 
-#[derive(Deserialize, JsonSchema, Serialize, Debug)]
+#[derive(Deserialize, JsonSchema, Serialize)]
 struct ExampleScanParams {
     #[serde(default)]
     a_number: u16,
