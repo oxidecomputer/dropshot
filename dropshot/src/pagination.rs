@@ -105,9 +105,10 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
-use std::{collections::BTreeMap, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 /**
  * A page of results from a paginated API

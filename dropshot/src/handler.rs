@@ -1092,10 +1092,10 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 #[cfg(test)]
 mod test {
     use super::GetMetadata;
-    use crate::{
-        api_description::ApiEndpointParameterName, ApiEndpointParameter,
-        ApiEndpointParameterLocation, PaginationParams,
-    };
+    use crate::api_description::ApiEndpointParameterName;
+    use crate::ApiEndpointParameter;
+    use crate::ApiEndpointParameterLocation;
+    use crate::PaginationParams;
     use schemars::JsonSchema;
 
     #[derive(JsonSchema)]

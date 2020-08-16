@@ -1,11 +1,16 @@
 // Copyright 2020 Oxide Computer Company
 
 use paste::paste;
-use serde::de::{
-    DeserializeSeed, EnumAccess, MapAccess, VariantAccess, Visitor,
-};
-use serde::{Deserialize, Deserializer};
-use std::{any::type_name, collections::BTreeMap, fmt::Display};
+use serde::de::DeserializeSeed;
+use serde::de::EnumAccess;
+use serde::de::MapAccess;
+use serde::de::VariantAccess;
+use serde::de::Visitor;
+use serde::Deserialize;
+use serde::Deserializer;
+use std::any::type_name;
+use std::collections::BTreeMap;
+use std::fmt::Display;
 
 /**
  * Deserialize a BTreeMap<String, String> into a type, invoking String::parse()
