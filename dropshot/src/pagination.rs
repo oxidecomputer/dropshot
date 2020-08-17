@@ -104,9 +104,9 @@ use base64::URL_SAFE;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::num::NonZeroU64;
 
@@ -200,7 +200,7 @@ pub struct PaginationParams<ScanParams, PageSelector> {
      * serde, so you have to look at the variants of [`WhichPage`] to see what
      * query parameters are actually processed here.
      */
-    #[serde(flatten)]
+    #[serde(flatten, deserialize_with = "deserialize_whichpage")]
     pub page: WhichPage<ScanParams, PageSelector>,
 
     /**
@@ -212,6 +212,39 @@ pub struct PaginationParams<ScanParams, PageSelector> {
     pub(crate) limit: Option<NonZeroU64>,
 }
 
+/*
+ * Deserialize `WhichPage` for `PaginationParams`. We In REST APIs, callers
+ * typically provide either the parameters to resume a scan (in our case, just
+ * "page_token") or the parameters to begin a new one (which can be
+ * any set of parameters that our consumer wants).  There's generally no
+ * separate field to indicate which case they're requesting. We deserialize into
+ * a generic map first and then either interpret the page token or deserialize
+ * the map into ScanParams.
+ */
+fn deserialize_whichpage<'de, D, ScanParams, PageSelector>(
+    deserializer: D,
+) -> Result<WhichPage<ScanParams, PageSelector>, D::Error>
+where
+    D: Deserializer<'de>,
+    ScanParams: DeserializeOwned,
+    PageSelector: DeserializeOwned,
+{
+    let raw_params = BTreeMap::<String, String>::deserialize(deserializer)?;
+
+    match raw_params.get("page_token") {
+        Some(page_token) => {
+            let page_start = deserialize_page_token(&page_token)
+                .map_err(serde::de::Error::custom)?;
+            Ok(WhichPage::Next(page_start))
+        }
+        None => {
+            let scan_params =
+                from_map(&raw_params).map_err(serde::de::Error::custom)?;
+            Ok(WhichPage::First(scan_params))
+        }
+    }
+}
+
 /**
  * Describes whether the client is beginning a new scan or resuming an existing
  * one
@@ -220,10 +253,7 @@ pub struct PaginationParams<ScanParams, PageSelector> {
  * the particular type of request.  See [`PaginationParams`] for more
  * information.
  */
-#[derive(Debug, Deserialize)]
-#[serde(try_from = "InputWhichPage")]
-#[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
-                             DeserializeOwned"))]
+#[derive(Debug)]
 pub enum WhichPage<ScanParams, PageSelector> {
     /**
      * Indicates that the client is beginning a new scan
@@ -422,27 +452,6 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
 }
 
 /*
- * See `PaginationParams` above for why this raw form exists.
- *
- * This enum definition looks a little strange because it's designed so that
- * serde will deserialize exactly the input we want to support.  In REST APIs,
- * callers typically provide either the parameters to resume a scan (in our
- * case, just "page_token") or the parameters to begin a new one (which can be
- * any set of parameters that our consumer wants).  There's generally no
- * separate field to indicate which case they're requesting.  Fortunately,
- * serde(untagged) implements this behavior precisely, with one caveat: the
- * variants below are tried in order until one succeeds.  So for this to work,
- * `Next` must be defined before `First`, since any set of parameters at all
- * (including no parameters at all) might be valid for `First`.
- */
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(untagged)]
-enum InputWhichPage {
-    Next { page_token: String },
-    First(BTreeMap<String, String>),
-}
-
-/*
  * This is the on-the-wire protocol; we use this solely to generate the schema.
  */
 #[derive(JsonSchema)]
@@ -451,36 +460,6 @@ enum InputWhichPage {
 enum SchemaWhichPage<ScanParams> {
     Next { page_token: String },
     First(ScanParams),
-}
-
-/*
-* Converts from `InputWhichPage` to `WhichPage`. The former uses a k-v map
-* in place of the user-defined object in order to delay interpretation and to
-* work around serde-rs/serde#1183. The latter is the interface we expose to
-* consumers.
-*/
-impl<ScanParams, PageSelector> TryFrom<InputWhichPage>
-    for WhichPage<ScanParams, PageSelector>
-where
-    ScanParams: DeserializeOwned,
-    PageSelector: DeserializeOwned,
-{
-    type Error = String;
-
-    fn try_from(value: InputWhichPage) -> Result<Self, Self::Error> {
-        match value {
-            InputWhichPage::First(raw_params) => {
-                let scan_params = from_map(&raw_params);
-                Ok(WhichPage::First(scan_params?))
-            }
-            InputWhichPage::Next {
-                page_token,
-            } => {
-                let page_start = deserialize_page_token(&page_token)?;
-                Ok(WhichPage::Next(page_start))
-            }
-        }
-    }
 }
 
 #[cfg(test)]
