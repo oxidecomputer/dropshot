@@ -42,6 +42,10 @@ impl<'de> MapDeserializer<'de> {
         MapDeserializer::Map(input)
     }
 
+    /**
+     * Helper function to extract pattern match for Value. Fail if we're
+     * expecting a Map or return the result of the provided function.
+     */
     fn value<VV, F>(&self, deserialize: F) -> Result<VV, MapError>
     where
         F: FnOnce(&String) -> Result<VV, MapError>,
@@ -53,22 +57,6 @@ impl<'de> MapDeserializer<'de> {
                     .to_string(),
             )),
         }
-    }
-
-    fn deserialize_value<T, VV, F>(&self, visit: F) -> Result<VV, MapError>
-    where
-        F: FnOnce(T) -> Result<VV, MapError>,
-        T: std::str::FromStr,
-        T::Err: Display,
-    {
-        self.value(|raw_value| match raw_value.parse::<T>() {
-            Ok(value) => visit(value),
-            Err(_) => Err(MapError(format!(
-                "unable to parse '{}' as {}",
-                raw_value,
-                type_name::<T>()
-            ))),
-        })
     }
 }
 
@@ -92,7 +80,9 @@ impl serde::de::Error for MapError {
 
 impl std::error::Error for MapError {}
 
-/// Stub out Deserializer trait functions that aren't applicable
+/**
+ * Stub out Deserializer trait functions that aren't applicable.
+ */
 macro_rules! de_unimp {
     ($i:ident $(, $p:ident : $t:ty )*) => {
         fn $i<V>(self $(, $p: $t)*, _visitor: V) -> Result<V::Value, MapError>
@@ -108,6 +98,11 @@ macro_rules! de_unimp {
     };
 }
 
+/*
+ * Generate handlers for primitive types using FromStr::parse() to deserialize
+ * from the string form. Note that for integral types parse does not accept
+ * prefixes such as "0x", but we could add this easily with a custom handler.
+ */
 macro_rules! de_value {
     ($i:ident) => {
         paste! {
@@ -116,7 +111,14 @@ macro_rules! de_value {
             where
                 V: Visitor<'de>,
             {
-                self.deserialize_value(|value| visitor.[<visit_ $i>](value))
+                self.value(|raw_value| match raw_value.parse::<$i>() {
+                    Ok(value) => visitor.[<visit_ $i>](value),
+                    Err(_) => Err(MapError(format!(
+                        "unable to parse '{}' as {}",
+                        raw_value,
+                        type_name::<$i>()
+                    ))),
+                })
             }
         }
     };
@@ -188,7 +190,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
                 })
             }
             MapDeserializer::Value(_) => Err(MapError(
-                "destination struct much be fully flattened".to_string(),
+                "destination struct must be fully flattened".to_string(),
             )),
         }
     }
@@ -401,7 +403,7 @@ mod test {
         map.insert("b".to_string(), "B".to_string());
         match from_map::<A>(&map) {
             Err(s) => {
-                assert_eq!(s, "destination struct much be fully flattened")
+                assert_eq!(s, "destination struct must be fully flattened")
             }
             Ok(_) => panic!("unexpected success"),
         }
@@ -461,6 +463,7 @@ mod test {
         struct B {
             bstring: String,
             boption: Option<String>,
+            // bbool: bool,
         }
         let mut map = BTreeMap::new();
         map.insert("astring".to_string(), "A string".to_string());
