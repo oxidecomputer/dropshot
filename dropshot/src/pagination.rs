@@ -99,12 +99,14 @@
  */
 
 use crate::error::HttpError;
+use crate::from_map::from_map;
 use base64::URL_SAFE;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
-use std::convert::TryFrom;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::num::NonZeroU64;
 
@@ -186,16 +188,9 @@ impl<ItemType> ResultsPage<ItemType> {
  * careful when designing these structures to consider what you might want to
  * support in the future.
  */
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
                              DeserializeOwned"))]
-/*
- * RawPaginationParams represents the structure the serde can actually decode
- * from the querystring.  This is a little awkward for consumers to use, so we
- * present a cleaner version here.  We populate this one from the raw version
- * using the `TryFrom` implementation below.
- */
-#[serde(try_from = "RawPaginationParams<ScanParams>")]
 pub struct PaginationParams<ScanParams, PageSelector> {
     /**
      * Specifies whether this is the first request in a scan or a subsequent
@@ -205,7 +200,7 @@ pub struct PaginationParams<ScanParams, PageSelector> {
      * serde, so you have to look at the variants of [`WhichPage`] to see what
      * query parameters are actually processed here.
      */
-    #[serde(flatten)]
+    #[serde(flatten, deserialize_with = "deserialize_whichpage")]
     pub page: WhichPage<ScanParams, PageSelector>,
 
     /**
@@ -218,21 +213,35 @@ pub struct PaginationParams<ScanParams, PageSelector> {
 }
 
 /*
- * We use the JsonSchema from `RawPaginationParams` which obscures the contents
- * of `PageSelector` (vid `RawWhichPage`).
+ * Deserialize `WhichPage` for `PaginationParams`. We In REST APIs, callers
+ * typically provide either the parameters to resume a scan (in our case, just
+ * "page_token") or the parameters to begin a new one (which can be
+ * any set of parameters that our consumer wants).  There's generally no
+ * separate field to indicate which case they're requesting. We deserialize into
+ * a generic map first and then either interpret the page token or deserialize
+ * the map into ScanParams.
  */
-impl<ScanParams, PageSelector> JsonSchema
-    for PaginationParams<ScanParams, PageSelector>
+fn deserialize_whichpage<'de, D, ScanParams, PageSelector>(
+    deserializer: D,
+) -> Result<WhichPage<ScanParams, PageSelector>, D::Error>
 where
-    ScanParams: JsonSchema,
+    D: Deserializer<'de>,
+    ScanParams: DeserializeOwned,
+    PageSelector: DeserializeOwned,
 {
-    fn schema_name() -> String {
-        unimplemented!();
-    }
-    fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        RawPaginationParams::<ScanParams>::json_schema(gen)
+    let raw_params = BTreeMap::<String, String>::deserialize(deserializer)?;
+
+    match raw_params.get("page_token") {
+        Some(page_token) => {
+            let page_start = deserialize_page_token(&page_token)
+                .map_err(serde::de::Error::custom)?;
+            Ok(WhichPage::Next(page_start))
+        }
+        None => {
+            let scan_params =
+                from_map(&raw_params).map_err(serde::de::Error::custom)?;
+            Ok(WhichPage::First(scan_params))
+        }
     }
 }
 
@@ -262,6 +271,24 @@ pub enum WhichPage<ScanParams, PageSelector> {
      * last result seen by the client).
      */
     Next(PageSelector),
+}
+
+/*
+ * Generate the JsonSchema for WhichPage from SchemaWhichPage.
+ */
+impl<ScanParams, PageSelector> JsonSchema
+    for WhichPage<ScanParams, PageSelector>
+where
+    ScanParams: JsonSchema,
+{
+    fn schema_name() -> String {
+        unimplemented!();
+    }
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        SchemaWhichPage::<ScanParams>::json_schema(gen)
+    }
 }
 
 /**
@@ -424,67 +451,15 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
     Ok(deserialized.page_start)
 }
 
-/* See `PaginationParams` above for why this raw form exists. */
-#[derive(Deserialize, JsonSchema)]
-struct RawPaginationParams<ScanParams> {
-    #[serde(flatten)]
-    page_params: RawWhichPage<ScanParams>,
-    limit: Option<NonZeroU64>,
-}
-
 /*
- * See `PaginationParams` above for why this raw form exists.
- *
- * This enum definition looks a little strange because it's designed so that
- * serde will deserialize exactly the input we want to support.  In REST APIs,
- * callers typically provide either the parameters to resume a scan (in our
- * case, just "page_token") or the parameters to begin a new one (which can be
- * any set of parameters that our consumer wants).  There's generally no
- * separate field to indicate which case they're requesting.  Fortunately,
- * serde(untagged) implements this behavior precisely, with one caveat: the
- * variants below are tried in order until one succeeds.  So for this to work,
- * `Next` must be defined before `First`, since any set of parameters at all
- * (including no parameters at all) might be valid for `First`.
+ * This is the on-the-wire protocol; we use this solely to generate the schema.
  */
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(JsonSchema)]
+#[allow(dead_code)]
 #[serde(untagged)]
-enum RawWhichPage<ScanParams> {
+enum SchemaWhichPage<ScanParams> {
     Next { page_token: String },
     First(ScanParams),
-}
-
-/*
- * Converts from `RawPaginationParams` (what actually comes in over the wire) to
- * `PaginationParams` (what we expose to consumers).  This isn't wholly
- * different, but it's more convenient for consumers to use and (somewhat)
- * decouples our consumer interface from the on-the-wire representation.
- */
-impl<ScanParams, PageSelector> TryFrom<RawPaginationParams<ScanParams>>
-    for PaginationParams<ScanParams, PageSelector>
-where
-    PageSelector: DeserializeOwned,
-{
-    type Error = String;
-
-    fn try_from(
-        raw: RawPaginationParams<ScanParams>,
-    ) -> Result<PaginationParams<ScanParams, PageSelector>, String> {
-        match raw.page_params {
-            RawWhichPage::First(scan_params) => Ok(PaginationParams {
-                page: WhichPage::First(scan_params),
-                limit: raw.limit,
-            }),
-            RawWhichPage::Next {
-                page_token,
-            } => {
-                let page_start = deserialize_page_token(&page_token)?;
-                Ok(PaginationParams {
-                    page: WhichPage::Next(page_start),
-                    limit: raw.limit,
-                })
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -497,7 +472,7 @@ mod test {
     use serde::de::DeserializeOwned;
     use serde::Deserialize;
     use serde::Serialize;
-    use std::num::NonZeroU64;
+    use std::{fmt::Debug, num::NonZeroU64};
 
     #[test]
     fn test_page_token_serialization() {
@@ -606,26 +581,20 @@ mod test {
      */
     #[test]
     fn test_pagparams_parsing() {
-        /*
-         * TODO-correctness Recall that `RawWhichPage` is an untagged enum in
-         * order to support idiomatic querystring parameters for HTTP.  Namely,
-         * we want the behavior that if "page_token" is present, then we treat
-         * it as a NextPage.  Otherwise, it's a FirstPage.  The user's
-         * `ScanParams` type essentially becomes a variant of the untagged enum.
-         * Due to nox/serde_urlencoded#66 (which is really serde-rs/serde#1183),
-         * the user's `ScanParams` type does not support any types other than
-         * String.  We should fix this and then add tests for it here.
-         */
         #[derive(Debug, Deserialize, Serialize)]
         struct MyScanParams {
             the_field: String,
             only_good: Option<String>,
+            how_many: u32,
+            really: bool,
         }
 
         #[derive(Debug, Deserialize)]
         struct MyOptionalScanParams {
             the_field: Option<String>,
             only_good: Option<String>,
+            how_many: Option<i32>,
+            for_reals: Option<bool>,
         }
 
         #[derive(Debug, Serialize, Deserialize)]
@@ -637,7 +606,7 @@ mod test {
          * "First page" cases
          */
 
-        fn parse_as_first_page<T: DeserializeOwned>(
+        fn parse_as_first_page<T: DeserializeOwned + Debug>(
             querystring: &str,
         ) -> (T, Option<NonZeroU64>) {
             let pagparams: PaginationParams<T, MyPageSelector> =
@@ -652,24 +621,32 @@ mod test {
 
         /* basic case: optional boolean specified, limit unspecified */
         let (scan, limit) = parse_as_first_page::<MyScanParams>(
-            "the_field=name&only_good=true",
+            "the_field=name&only_good=true&how_many=42&really=false",
         );
         assert_eq!(scan.the_field, "name".to_string());
         assert_eq!(scan.only_good, Some("true".to_string()));
+        assert_eq!(scan.how_many, 42);
+        assert_eq!(scan.really, false);
         assert_eq!(limit, None);
 
         /* optional boolean specified but false, limit unspecified */
-        let (scan, limit) =
-            parse_as_first_page::<MyScanParams>("the_field=&only_good=false");
+        let (scan, limit) = parse_as_first_page::<MyScanParams>(
+            "the_field=&only_good=false&how_many=42&really=false",
+        );
         assert_eq!(scan.the_field, "".to_string());
         assert_eq!(scan.only_good, Some("false".to_string()));
+        assert_eq!(scan.how_many, 42);
+        assert_eq!(scan.really, false);
         assert_eq!(limit, None);
 
         /* optional boolean unspecified, limit is valid */
-        let (scan, limit) =
-            parse_as_first_page::<MyScanParams>("the_field=name&limit=3");
+        let (scan, limit) = parse_as_first_page::<MyScanParams>(
+            "the_field=name&limit=3&how_many=42&really=false",
+        );
         assert_eq!(scan.the_field, "name".to_string());
         assert_eq!(scan.only_good, None);
+        assert_eq!(scan.how_many, 42);
+        assert_eq!(scan.really, false);
         assert_eq!(limit.unwrap().get(), 3);
 
         /* empty query string when all parameters are optional */
@@ -680,10 +657,11 @@ mod test {
 
         /* extra parameters are fine */
         let (scan, limit) = parse_as_first_page::<MyOptionalScanParams>(
-            "the_field=name&limit=17&boomtown=okc",
+            "the_field=name&limit=17&boomtown=okc&how_many=42",
         );
         assert_eq!(scan.the_field, Some("name".to_string()));
         assert_eq!(scan.only_good, None);
+        assert_eq!(scan.how_many, Some(42));
         assert_eq!(limit.unwrap().get(), 17);
 
         /*

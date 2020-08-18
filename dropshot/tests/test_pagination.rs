@@ -579,9 +579,6 @@ async fn test_paginate_extra_params() {
 
 #[derive(Deserialize, JsonSchema)]
 struct ReqScanParams {
-    /* Work around serde-rs/serde#1183 */
-    #[schemars(with = "bool")]
-    #[serde(with = "serde_with::rust::display_fromstr")]
     doit: bool,
 }
 
@@ -691,9 +688,6 @@ struct DictionaryScanParams {
     #[serde(default = "ascending")]
     order: PaginationOrder,
     #[serde(default)]
-    /* Work around serde-rs/serde#1183 */
-    #[serde(with = "serde_with::rust::display_fromstr")]
-    #[schemars(with = "usize")]
     min_length: usize,
 }
 

@@ -14,6 +14,7 @@
             "in": "query",
             "name": "limit",
             "schema": {
+              "description": "Client-requested limit on page size (optional)\n\nConsumers should use [`dropshot::RequestContext::page_limit()`] to access this value.",
               "type": "integer",
               "format": "uint64",
               "minimum": 1

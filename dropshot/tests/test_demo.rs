@@ -613,9 +613,6 @@ async fn demo_handler_path_param_uuid(
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoPathU32 {
-    /* Work around serde-rs/serde#1183 */
-    #[schemars(with = "u32")]
-    #[serde(with = "serde_with::rust::display_fromstr")]
     pub test1: u32,
 }
 #[endpoint {

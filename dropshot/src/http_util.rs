@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 
 use super::error::HttpError;
+use crate::from_map::from_map;
 
 /** header name for conveying request ids ("x-request-id") */
 pub const HEADER_REQUEST_ID: &str = "x-request-id";
@@ -133,21 +134,7 @@ where
 pub fn http_extract_path_params<T: DeserializeOwned>(
     path_params: &BTreeMap<String, String>,
 ) -> Result<T, HttpError> {
-    /*
-     * TODO-cleanup This implementation is a bit janky, constructing an untyped
-     * Serde Json value that we can then parse into an instance of T.  It might
-     * be more efficient to implement a Deserializer for a path string.
-     */
-    let mut jmap = serde_json::map::Map::new();
-    for (key, value) in path_params.iter() {
-        jmap.insert(
-            key.clone(),
-            serde_json::value::Value::String(value.clone()),
-        );
-    }
-
-    let json_value = serde_json::value::Value::Object(jmap);
-    serde_json::from_value::<T>(json_value).map_err(|e| {
+    from_map(path_params).map_err(|message| {
         /*
          * TODO-correctness We'd like to assert that the error here is a bad
          * type, not a missing field.  If it's a missing field, then we somehow
@@ -155,14 +142,13 @@ pub fn http_extract_path_params<T: DeserializeOwned>(
          * handler function's path parameters are inconsistent with the actual
          * path registered.  Unfortunately, we don't have a way to
          * programmatically distinguish these values at this point.  In fact,
-         * even if we built our own deserializer, we'd also have to build our
+         * even with our own deserializer, we'd also have to build our
          * own serde::de::Error impl in order to distinguish this particular
          * case.  For now, we resort to parsing the error message.
          * TODO-correctness The error message produced in the type-error case
          * (that end users will see) does not indicate which path parameter was
          * invalid.  That's pretty bad for end users.
          */
-        let message = e.to_string();
         assert!(!message.starts_with("missing field: "));
         HttpError::for_bad_request(
             None,

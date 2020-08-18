@@ -223,9 +223,10 @@
  * use hyper::Body;
  * use hyper::Response;
  * use schemars::JsonSchema;
+ * use serde::Deserialize;
  * use std::sync::Arc;
  *
- * #[derive(serde::Deserialize, JsonSchema)]
+ * #[derive(Deserialize, JsonSchema)]
  * struct MyQueryArgs {
  *     limit: u32,
  *     marker: Option<String>
@@ -447,6 +448,7 @@
 mod api_description;
 mod config;
 mod error;
+mod from_map;
 mod handler;
 mod http_util;
 mod logging;
