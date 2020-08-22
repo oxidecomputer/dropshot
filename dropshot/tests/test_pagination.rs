@@ -6,6 +6,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use dropshot::endpoint;
+use dropshot::test_util::iter_collection;
 use dropshot::test_util::object_get;
 use dropshot::test_util::objects_list_page;
 use dropshot::test_util::ClientTestContext;
@@ -87,39 +88,6 @@ fn assert_sequence_from(items: &Vec<u16>, offset: u16, count: u16) {
     });
     assert_eq!(nchecked.load(Ordering::SeqCst) as usize, items.len());
     assert_eq!(count as usize, items.len());
-}
-
-/**
- * Iterate a paginated collection.
- */
-async fn iter_collection<T: Clone + DeserializeOwned>(
-    client: &ClientTestContext,
-    path: &str,
-    initial_params: &str,
-    limit: usize,
-) -> (Vec<T>, usize) {
-    let mut page = objects_list_page::<T>(
-        &client,
-        &format!("{}?limit={}&{}", path, limit, initial_params),
-    )
-    .await;
-    assert!(page.items.len() <= limit);
-
-    let mut rv = page.items.clone();
-    let mut npages = 1;
-
-    while let Some(token) = page.next_page {
-        page = objects_list_page::<T>(
-            &client,
-            &format!("{}?limit={}&page_token={}", path, limit, token),
-        )
-        .await;
-        assert!(page.items.len() <= limit);
-        rv.extend_from_slice(&page.items);
-        npages += 1
-    }
-
-    (rv, npages)
 }
 
 /**

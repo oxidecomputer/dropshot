@@ -619,6 +619,39 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
     read_json::<T>(&mut response).await
 }
 
+/**
+ * Iterate a paginated collection.
+ */
+pub async fn iter_collection<T: Clone + DeserializeOwned>(
+    client: &ClientTestContext,
+    collection_url: &str,
+    initial_params: &str,
+    limit: usize,
+) -> (Vec<T>, usize) {
+    let mut page = objects_list_page::<T>(
+        &client,
+        &format!("{}?limit={}&{}", collection_url, limit, initial_params),
+    )
+    .await;
+    assert!(page.items.len() <= limit);
+
+    let mut rv = page.items.clone();
+    let mut npages = 1;
+
+    while let Some(token) = page.next_page {
+        page = objects_list_page::<T>(
+            &client,
+            &format!("{}?limit={}&page_token={}", collection_url, limit, token),
+        )
+        .await;
+        assert!(page.items.len() <= limit);
+        rv.extend_from_slice(&page.items);
+        npages += 1
+    }
+
+    (rv, npages)
+}
+
 static TEST_SUITE_LOGGER_ID: AtomicU32 = AtomicU32::new(0);
 
 /**
