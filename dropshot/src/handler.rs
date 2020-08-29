@@ -925,6 +925,7 @@ impl HttpResponse for Response<Body> {
         ApiEndpointResponse {
             schema: None,
             success: None,
+            description: None,
         }
     }
 }
@@ -947,6 +948,7 @@ pub trait HttpTypedResponse:
 {
     type Body: JsonSchema + Serialize;
     const STATUS_CODE: StatusCode;
+    const DESCRIPTION: &'static str;
 
     /**
      * Convenience method to produce a response based on the input
@@ -978,6 +980,7 @@ where
         ApiEndpointResponse {
             schema: Some(ApiSchemaGenerator::Gen(T::Body::json_schema)),
             success: Some(T::STATUS_CODE),
+            description: Some(T::DESCRIPTION.to_string()),
         }
     }
 }
@@ -999,6 +1002,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::CREATED;
+    const DESCRIPTION: &'static str = "successful creation";
 }
 impl<T: JsonSchema + Serialize + Send + Sync + 'static>
     From<HttpResponseCreated<T>> for HttpHandlerResult
@@ -1022,6 +1026,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::ACCEPTED;
+    const DESCRIPTION: &'static str = "successful operation";
 }
 impl<T: JsonSchema + Serialize + Send + Sync + 'static>
     From<HttpResponseAccepted<T>> for HttpHandlerResult
@@ -1044,6 +1049,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::OK;
+    const DESCRIPTION: &'static str = "successful operation";
 }
 impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
     for HttpHandlerResult
@@ -1062,6 +1068,7 @@ pub struct HttpResponseDeleted();
 impl HttpTypedResponse for HttpResponseDeleted {
     type Body = ();
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
+    const DESCRIPTION: &'static str = "successful deletion";
 }
 impl From<HttpResponseDeleted> for HttpHandlerResult {
     fn from(_: HttpResponseDeleted) -> HttpHandlerResult {
@@ -1080,6 +1087,7 @@ pub struct HttpResponseUpdatedNoContent();
 impl HttpTypedResponse for HttpResponseUpdatedNoContent {
     type Body = ();
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
+    const DESCRIPTION: &'static str = "successful operation";
 }
 impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     fn from(_: HttpResponseUpdatedNoContent) -> HttpHandlerResult {
