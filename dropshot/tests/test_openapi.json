@@ -45,7 +45,7 @@
         ],
         "responses": {
           "200": {
-            "description": "TODO: placeholder",
+            "description": "successful operation",
             "content": {
               "application/json": {
                 "schema": {
@@ -97,7 +97,7 @@
         },
         "responses": {
           "201": {
-            "description": "TODO: placeholder",
+            "description": "successful creation",
             "content": {
               "application/json": {
                 "schema": {
@@ -125,7 +125,7 @@
         ],
         "responses": {
           "204": {
-            "description": "TODO: placeholder"
+            "description": "successful deletion"
           }
         }
       }
@@ -135,7 +135,7 @@
         "operationId": "handler1",
         "responses": {
           "200": {
-            "description": "TODO: placeholder"
+            "description": "successful operation"
           }
         }
       }
@@ -214,14 +214,14 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "TODO: placeholder"
+          "202": {
+            "description": "successfully enqueued operation"
           }
         }
       }
     },
     "/test/woman": {
-      "get": {
+      "put": {
         "operationId": "handler2",
         "parameters": [
           {
@@ -260,8 +260,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "TODO: placeholder"
+          "204": {
+            "description": "resource updated"
           }
         }
       }

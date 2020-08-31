@@ -1,8 +1,9 @@
 // Copyright 2020 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseOk, PaginationParams, Path, Query,
+    endpoint, ApiDescription, HttpError, HttpResponseAccepted,
+    HttpResponseCreated, HttpResponseDeleted, HttpResponseOk,
+    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TypedBody,
 };
 use schemars::JsonSchema;
@@ -28,14 +29,14 @@ struct QueryArgs {
 }
 
 #[endpoint {
-    method = GET,
+    method = PUT,
     path = "/test/woman",
 }]
 async fn handler2(
     _rqctx: Arc<RequestContext>,
     _query: Query<QueryArgs>,
-) -> Result<HttpResponseOk<()>, HttpError> {
-    Ok(HttpResponseOk(()))
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    Ok(HttpResponseUpdatedNoContent())
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -84,8 +85,8 @@ async fn handler5(
     _path: Path<PathArgs>,
     _query: Query<QueryArgs>,
     _body: TypedBody<BodyParam>,
-) -> Result<HttpResponseOk<()>, HttpError> {
-    Ok(HttpResponseOk(()))
+) -> Result<HttpResponseAccepted<()>, HttpError> {
+    Ok(HttpResponseAccepted(()))
 }
 
 #[derive(JsonSchema, Serialize)]

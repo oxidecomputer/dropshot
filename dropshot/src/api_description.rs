@@ -145,6 +145,7 @@ pub enum ApiEndpointParameterName {
 pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
     pub success: Option<StatusCode>,
+    pub description: Option<String>,
 }
 
 /**
@@ -421,7 +422,16 @@ impl ApiDescription {
                 }
 
                 let response = openapiv3::Response {
-                    description: "TODO: placeholder".to_string(), // TODO
+                    description: if let Some(description) =
+                        &endpoint.response.description
+                    {
+                        description.clone()
+                    } else {
+                        // TODO: perhaps we should require even free-form
+                        // responses to have a description since it's required
+                        // by OpenAPI.
+                        "".to_string()
+                    },
                     headers: indexmap::IndexMap::new(),
                     content: content,
                     links: indexmap::IndexMap::new(),

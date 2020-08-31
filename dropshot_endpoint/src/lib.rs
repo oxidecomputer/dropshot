@@ -1,5 +1,6 @@
 // Copyright 2020 Oxide Computer Company
-//! This macro defines attributes associated with HTTP handlers. These
+
+//! This package defines macro attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
 //! Spec (OAS) v3 document that describes the API.
 
@@ -104,7 +105,7 @@ fn do_endpoint(
     let dropshot = get_crate(metadata._dropshot_crate);
 
     // When the user attaches this proc macro to a function with the wrong type
-    // signature, the resulting errors are deeply inscrutable. To attempt to
+    // signature, the resulting errors can be deeply inscrutable. To attempt to
     // make failures easier to understand, we inject code that asserts the types
     // of the various parameters. For the first parameter of type
     // Arc<RequestContext>, we turn that type into a trait and then construct

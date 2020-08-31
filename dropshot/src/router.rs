@@ -541,6 +541,7 @@ mod test {
             response: ApiEndpointResponse {
                 schema: None,
                 success: None,
+                description: None,
             },
             description: None,
             tags: vec![],
