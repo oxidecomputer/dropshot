@@ -1026,7 +1026,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::ACCEPTED;
-    const DESCRIPTION: &'static str = "successful operation";
+    const DESCRIPTION: &'static str = "successfully enqueued operation";
 }
 impl<T: JsonSchema + Serialize + Send + Sync + 'static>
     From<HttpResponseAccepted<T>> for HttpHandlerResult
@@ -1087,7 +1087,7 @@ pub struct HttpResponseUpdatedNoContent();
 impl HttpTypedResponse for HttpResponseUpdatedNoContent {
     type Body = ();
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
-    const DESCRIPTION: &'static str = "successful operation";
+    const DESCRIPTION: &'static str = "resource updated";
 }
 impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     fn from(_: HttpResponseUpdatedNoContent) -> HttpHandlerResult {
