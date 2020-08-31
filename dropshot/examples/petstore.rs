@@ -1,6 +1,6 @@
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseOk, Path, RequestContext,
-    TypedBody,
+    endpoint, ApiDescription, HttpError, HttpResponseOk, PaginationParams,
+    Path, Query, RequestContext, ResultsPage, TypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ fn main() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(get_pet_by_id).unwrap();
     api.register(update_pet_with_form).unwrap();
+    api.register(find_pets_by_tags).unwrap();
 
     api.print_openapi(
         &mut std::io::stdout(),
@@ -80,6 +81,7 @@ struct PathParams {
     path = "/pet/{petId}",
     tags = [ "pet" ],
 }]
+/// Get the pet with the specified ID
 async fn get_pet_by_id(
     rqctx: Arc<RequestContext>,
     path_params: Path<PathParams>,
@@ -96,6 +98,7 @@ async fn get_pet_by_id(
     Ok(HttpResponseOk(pet))
 }
 
+#[allow(unused_variables)]
 #[endpoint {
     method = POST,
     path = "/pet",
@@ -103,8 +106,78 @@ async fn get_pet_by_id(
 }]
 /// Add a new pet to the store
 async fn update_pet_with_form(
-    _rqctx: Arc<RequestContext>,
-    _body: TypedBody<Pet>,
+    rqctx: Arc<RequestContext>,
+    body: TypedBody<Pet>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
-    Ok(HttpResponseOk(()))
+    unimplemented!()
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct FindByTagsScanParams {
+    /// Tags to filter for
+    tags: String,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct FindByTagsPageSelector {
+    tags: String,
+    last: String,
+}
+
+// TODO update when we have array query params
+#[allow(unused_variables)]
+#[endpoint {
+    method = GET,
+    path = "/findPetsByTags",
+    tags = [ "pet" ],
+}]
+/// Find pets by tags
+async fn find_pets_by_tags(
+    rqctx: Arc<RequestContext>,
+    query: Query<
+        PaginationParams<FindByTagsScanParams, FindByTagsPageSelector>,
+    >,
+) -> Result<HttpResponseOk<ResultsPage<Pet>>, HttpError> {
+    let pag_params = query.into_inner();
+    let limit = rqctx.page_limit(&pag_params)?.get();
+    let tmp;
+    let (pets, scan_params) = match &pag_params.page {
+        dropshot::WhichPage::First(scan_params) => {
+            let pet = Pet {
+                id: None,
+                category: None,
+                name: "Brickley".to_string(),
+                photo_urls: vec![],
+                tags: None,
+                status: None,
+            };
+            (vec![pet], scan_params.clone())
+        }
+        dropshot::WhichPage::Next(page_selector) => {
+            let pet = Pet {
+                id: None,
+                category: None,
+                name: "Lizzie".to_string(),
+                photo_urls: vec![],
+                tags: None,
+                status: None,
+            };
+            tmp = FindByTagsScanParams {
+                tags: page_selector.tags.clone(),
+            };
+            (vec![pet], &tmp)
+        }
+    };
+    Ok(HttpResponseOk(ResultsPage::new(
+        pets,
+        scan_params,
+        |last, scan_params| FindByTagsPageSelector {
+            tags: scan_params.tags.clone(),
+            last: last.name.clone(),
+        },
+    )?))
 }

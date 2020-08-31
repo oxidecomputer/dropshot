@@ -351,7 +351,7 @@ impl ApiDescription {
                             Some(openapiv3::ReferenceOr::Item(
                                 openapiv3::Parameter::Query {
                                     parameter_data: parameter_data,
-                                    allow_reserved: true,
+                                    allow_reserved: false,
                                     style: openapiv3::QueryStyle::Form,
                                     allow_empty_value: None,
                                 },

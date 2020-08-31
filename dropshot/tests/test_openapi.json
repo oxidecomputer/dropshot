@@ -14,12 +14,11 @@
             "in": "query",
             "name": "limit",
             "schema": {
-              "description": "Client-requested limit on page size (optional)\n\nConsumers should use [`dropshot::RequestContext::page_limit()`] to access this value.",
+              "description": "Maximum number of items returned by a single call",
               "type": "integer",
               "format": "uint64",
               "minimum": 1
             },
-            "allowReserved": true,
             "style": "form"
           },
           {
@@ -28,7 +27,6 @@
             "schema": {
               "type": "string"
             },
-            "allowReserved": true,
             "style": "form"
           },
           {
@@ -39,7 +37,6 @@
               "format": "uint16",
               "minimum": 0
             },
-            "allowReserved": true,
             "style": "form"
           }
         ],
@@ -49,7 +46,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "A page of results from a paginated API\n\nThis structure is intended for use both on the server side (to generate the results page) and on the client side (to parse it).",
+                  "description": "A single page of results",
                   "type": "object",
                   "properties": {
                     "items": {
@@ -172,7 +169,6 @@
                 "minimum": 0
               }
             },
-            "allowReserved": true,
             "style": "form"
           },
           {
@@ -182,7 +178,6 @@
             "schema": {
               "type": "string"
             },
-            "allowReserved": true,
             "style": "form"
           },
           {
@@ -191,7 +186,6 @@
             "schema": {
               "type": "string"
             },
-            "allowReserved": true,
             "style": "form"
           }
         ],
@@ -236,7 +230,6 @@
                 "minimum": 0
               }
             },
-            "allowReserved": true,
             "style": "form"
           },
           {
@@ -246,7 +239,6 @@
             "schema": {
               "type": "string"
             },
-            "allowReserved": true,
             "style": "form"
           },
           {
@@ -255,7 +247,6 @@
             "schema": {
               "type": "string"
             },
-            "allowReserved": true,
             "style": "form"
           }
         ],
