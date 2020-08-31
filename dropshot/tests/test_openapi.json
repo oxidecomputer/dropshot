@@ -214,14 +214,14 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "202": {
+            "description": "successfully enqueued operation"
           }
         }
       }
     },
     "/test/woman": {
-      "get": {
+      "put": {
         "operationId": "handler2",
         "parameters": [
           {
@@ -260,8 +260,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
