@@ -1105,8 +1105,9 @@ mod test {
         ApiEndpointParameterLocation, PaginationParams,
     };
     use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
 
-    #[derive(JsonSchema)]
+    #[derive(Deserialize, Serialize, JsonSchema)]
     #[allow(dead_code)]
     struct A {
         foo: String,

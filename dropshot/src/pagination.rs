@@ -117,6 +117,7 @@ use std::num::NonZeroU64;
  * results page) and on the client side (to parse it).
  */
 #[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[schemars(description = "A single page of results")]
 pub struct ResultsPage<ItemType> {
     /** token used to fetch the next page of results (if any) */
     pub next_page: Option<String>,
@@ -189,9 +190,11 @@ impl<ItemType> ResultsPage<ItemType> {
  * support in the future.
  */
 #[derive(Debug, Deserialize, JsonSchema)]
-#[serde(bound(deserialize = "PageSelector: DeserializeOwned, ScanParams: \
-                             DeserializeOwned"))]
-pub struct PaginationParams<ScanParams, PageSelector> {
+pub struct PaginationParams<ScanParams, PageSelector>
+where
+    ScanParams: DeserializeOwned,
+    PageSelector: DeserializeOwned + Serialize,
+{
     /**
      * Specifies whether this is the first request in a scan or a subsequent
      * request, as well as the parameters provided
@@ -209,6 +212,9 @@ pub struct PaginationParams<ScanParams, PageSelector> {
      * Consumers should use [`dropshot::RequestContext::page_limit()`] to access
      * this value.
      */
+    #[schemars(
+        description = "Maximum number of items returned by a single call"
+    )]
     pub(crate) limit: Option<NonZeroU64>,
 }
 
