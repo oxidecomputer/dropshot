@@ -47,12 +47,11 @@ struct Metadata {
 
 const DROPSHOT: &str = "dropshot";
 
-/// This attribute transforms a hander function into a Dropshot endpoint
-/// suitable to used a parameter to
+/// This attribute transforms a handler function into a Dropshot endpoint
+/// suitable to be used as a parameter to
 /// [`ApiDescription::register()`](../dropshot/struct.ApiDescription.html#method.register).
-/// It is used to encode information relevant to the operation of an API
-/// endpoint outside of what is expressed by the parameter and return types of
-/// a handler function.
+/// It encodes information relevant to the operation of an API endpoint beyond
+/// what is expressed by the parameter and return types of a handler function.
 ///
 /// ```ignore
 /// #[endpoint {
@@ -67,7 +66,7 @@ const DROPSHOT: &str = "dropshot";
 ///
 /// See the dropshot documentation for
 /// [how to specify an endpoint](../dropshot/index.html#api-handler-functions)
-/// or for
+/// or
 /// [a description of the attribute parameters](../dropshot/index.html#endpoint----attribute-parameters)
 #[proc_macro_attribute]
 pub fn endpoint(

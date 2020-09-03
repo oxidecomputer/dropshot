@@ -195,7 +195,11 @@
  * ```
  *
  * This is where you specify the HTTP method and path (including path variables)
- * for the API endpoint.
+ * for the API endpoint. These are used as part of endpoint registration and
+ * appear in the OpenAPI spec output.
+ *
+ * The tags field is used to categorize API endpoints and only impacts the
+ * OpenAPI spec output.
  *
  *
  * ### Function parameters
