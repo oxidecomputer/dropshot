@@ -47,8 +47,27 @@ struct Metadata {
 
 const DROPSHOT: &str = "dropshot";
 
-/// Attribute to apply to an HTTP endpoint.
-/// TODO(doc) explain intended use
+/// This attribute transforms a handler function into a Dropshot endpoint
+/// suitable to be used as a parameter to
+/// [`ApiDescription::register()`](../dropshot/struct.ApiDescription.html#method.register).
+/// It encodes information relevant to the operation of an API endpoint beyond
+/// what is expressed by the parameter and return types of a handler function.
+///
+/// ```ignore
+/// #[endpoint {
+///     // Required fields
+///     method = { DELETE | GET | PATCH | POST | PUT },
+///     path = "/path/name/with/{named}/{variables}",
+///
+///     // Optional fields
+///     tags = [ "all", "your", "OpenAPI", "tags" ],
+/// }]
+/// ```
+///
+/// See the dropshot documentation for
+/// [how to specify an endpoint](../dropshot/index.html#api-handler-functions)
+/// or
+/// [a description of the attribute parameters](../dropshot/index.html#endpoint----attribute-parameters)
 #[proc_macro_attribute]
 pub fn endpoint(
     attr: proc_macro::TokenStream,

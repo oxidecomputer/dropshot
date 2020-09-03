@@ -109,8 +109,8 @@
  * server, you configure the set of available API endpoints and which functions
  * will handle each one by setting up an [`ApiDescription`].
  *
- * The most convenient way to define an endpoint with a handler function uses
- * the `endpoint!` macro.  Here's an example of a single endpoint that lists
+ * Typically, you define an endpoint with a handler function by using the
+ * [`endpoint`] macro. Here's an example of a single endpoint that lists
  * a hardcoded project:
  *
  * ```
@@ -177,7 +177,32 @@
  * largely known statically, though generated at runtime.
  *
  *
- * ### Function arguments
+ * ### `#[endpoint { ... }]` attribute parameters
+ *
+ * The `endpoint` attribute accepts parameters the affect the operation of
+ * the endpoint as well as metadata that appears in the OpenAPI description
+ * of it.
+ *
+ * ```ignore
+ * #[endpoint {
+ *     // Required fields
+ *     method = { DELETE | GET | PATCH | POST | PUT },
+ *     path = "/path/name/with/{named}/{variables}",
+ *
+ *     // Optional fields
+ *     tags = [ "all", "your", "OpenAPI", "tags" ],
+ * }]
+ * ```
+ *
+ * This is where you specify the HTTP method and path (including path variables)
+ * for the API endpoint. These are used as part of endpoint registration and
+ * appear in the OpenAPI spec output.
+ *
+ * The tags field is used to categorize API endpoints and only impacts the
+ * OpenAPI spec output.
+ *
+ *
+ * ### Function parameters
  *
  * In general, a handler function looks like this:
  *
@@ -187,7 +212,7 @@
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
- * ) -> Result< SomeResponseType , HttpError>
+ * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
  * Other than the RequestContext, parameters may appear in any order.  The types
@@ -254,9 +279,7 @@
  *
  * An endpoint function must return a type that implements `HttpResponse`.
  * Typically this should be a type that implements `HttpTypedResponse` (either
- * one of the Dropshot-provided ones or one of your own creation). In
- * situations where the response schema is not fixed, the endpoint should
- * return `Response<Body>`, which also implements `HttpResponse`.
+ * one of the Dropshot-provided ones or one of your own creation).
  *
  * The more specific a type returned by the handler function, the more can be
  * validated at build-time, and the more specific an OpenAPI schema can be
@@ -267,10 +290,24 @@
  * example, OpenAPI tooling can identify at build time that this function
  * produces a 201 "Created" response on success with a body whose schema matches
  * `Project` (which we already said implements `Serialize`), and there would be
- * no way to violate this contract at runtime.  If the function just returned
- * `Response<Body>`, it would be harder to tell what it actually produces (for
- * generating the OpenAPI spec), and no way to validate that it really does
- * that.
+ * no way to violate this contract at runtime.
+ *
+ * These are the implementations of `HttpTypedResponse` with their associated
+ * HTTP response code
+ * on the HTTP method:
+ *
+ * | Return Type | HTTP status code |
+ * | ----------- | ---------------- |
+ * | [`HttpResponseOk`] | 200 |
+ * | [`HttpResponseCreated`] | 201 |
+ * | [`HttpResponseAccepted`] | 202 |
+ * | [`HttpResponseDeleted`] | 204 |
+ * | [`HttpResponseUpdatedNoContent`] | 204 |
+ *
+ * In situations where the response schema is not fixed, the endpoint should
+ * return `Response<Body>`, which also implements `HttpResponse`. Note that
+ * the OpenAPI spec will not include any status code or type information in
+ * this case.
  *
  *
  * ## Support for paginated resources
