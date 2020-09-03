@@ -209,8 +209,9 @@ where
     /**
      * Client-requested limit on page size (optional)
      *
-     * Consumers should use [`dropshot::RequestContext::page_limit()`] to access
-     * this value.
+     * Consumers should use
+     * [`RequestContext`][crate::handler::RequestContext::page_limit()]
+     * to access this value.
      */
     #[schemars(
         description = "Maximum number of items returned by a single call"
