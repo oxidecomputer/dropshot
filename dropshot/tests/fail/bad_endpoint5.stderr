@@ -7,6 +7,6 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
    ::: $WORKSPACE/dropshot/src/handler.rs
     |
     | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
-    |                             ---------------- required by this bound in `dropshot::handler::Query`
+    |                             ---------------- required by this bound in `dropshot::Query`
     |
     = note: required because of the requirements on the impl of `serde::de::DeserializeOwned` for `QueryParams`
