@@ -113,7 +113,7 @@ async fn test_config_bind_address() {
      * should have successfully made the request.)
      */
     let config_text =
-        format!("bind_address = \"{}:{}\"\n", bind_ip_str, bind_port);
+        format!("bind_address = \"{}:{}\"\nrequest_body_max_bytes = 1024", bind_ip_str, bind_port);
     let config =
         read_config::<ConfigDropshot>("bind_address", &config_text).unwrap();
     let mut server = make_server(&config, &log);
@@ -139,7 +139,7 @@ async fn test_config_bind_address() {
      * one (and NOT the one we just shut down).
      */
     let config_text =
-        format!("bind_address = \"{}:{}\"\n", bind_ip_str, bind_port + 1,);
+        format!("bind_address = \"{}:{}\"\nrequest_body_max_bytes = 1024", bind_ip_str, bind_port + 1,);
     let config =
         read_config::<ConfigDropshot>("bind_address", &config_text).unwrap();
     let mut server = make_server(&config, &log);
