@@ -30,6 +30,7 @@ use std::net::SocketAddr;
  *         r##"
  *             [http_api_server]
  *             bind_address = "127.0.0.1:12345"
+ *             request_body_max_bytes = 1024
  *
  *             ## ... (other app-specific config)
  *         "##
