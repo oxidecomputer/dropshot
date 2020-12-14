@@ -30,9 +30,7 @@ async fn main() -> Result<(), String> {
      * request port 0, which allows the operating system to pick any available
      * port.
      */
-    let config_dropshot = ConfigDropshot {
-        bind_address: "127.0.0.1:0".parse().unwrap(),
-    };
+    let config_dropshot: ConfigDropshot = Default::default();
 
     /*
      * For simplicity, we'll configure an "info"-level logger that writes to

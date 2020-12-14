@@ -316,6 +316,7 @@ async fn main() -> Result<(), String> {
     let ctx = Arc::new(ProjectCollection::new());
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        request_body_max_bytes: 1024,
     };
     let config_logging = ConfigLogging::StderrTerminal {
         level: ConfigLoggingLevel::Debug,

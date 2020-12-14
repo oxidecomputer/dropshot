@@ -22,9 +22,7 @@ pub fn test_setup(test_name: &str, api: ApiDescription) -> TestContext {
      * multiple concurrent tests, so any fixed port could result in spurious
      * failures due to port conflicts.
      */
-    let config_dropshot = ConfigDropshot {
-        bind_address: "127.0.0.1:0".parse().unwrap(),
-    };
+    let config_dropshot: ConfigDropshot = Default::default();
 
     let config_logging = ConfigLogging::File {
         level: ConfigLoggingLevel::Debug,
