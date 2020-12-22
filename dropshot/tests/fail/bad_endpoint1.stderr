@@ -4,13 +4,13 @@ error: incompatible function signature; expected async fn (Arc<RequestContext>(,
 11 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error[E0277]: the trait bound `fn() -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
+error[E0277]: the trait bound `fn() -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
   --> $DIR/bad_endpoint1.rs:11:10
    |
 11 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
-   |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn() -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::ApiEndpoint>::from::bad_endpoint}`
+   |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn() -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
    |         HandlerType: HttpHandlerFunc<FuncParams, ResponseType>,
-   |                      ----------------------------------------- required by this bound in `dropshot::ApiEndpoint::new`
+   |                      ----------------------------------------- required by this bound in `ApiEndpoint::new`

@@ -133,7 +133,7 @@ impl HttpServer {
             private,
             config: ServerConfig {
                 /* We start aggressively to ensure test coverage. */
-                request_body_max_bytes: 1024,
+                request_body_max_bytes: config.request_body_max_bytes,
                 page_max_nitems: NonZeroUsize::new(10000).unwrap(),
                 page_default_nitems: NonZeroUsize::new(100).unwrap(),
             },

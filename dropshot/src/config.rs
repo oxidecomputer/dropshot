@@ -30,6 +30,7 @@ use std::net::SocketAddr;
  *         r##"
  *             [http_api_server]
  *             bind_address = "127.0.0.1:12345"
+ *             request_body_max_bytes = 1024
  *
  *             ## ... (other app-specific config)
  *         "##
@@ -45,4 +46,15 @@ use std::net::SocketAddr;
 pub struct ConfigDropshot {
     /** IP address and TCP port to which to bind for accepting connections */
     pub bind_address: SocketAddr,
+    /** maximum allowed size of a request body, defaults to 1024 */
+    pub request_body_max_bytes: usize,
+}
+
+impl Default for ConfigDropshot {
+    fn default() -> Self {
+        ConfigDropshot {
+            bind_address: "127.0.0.1:0".parse().unwrap(),
+            request_body_max_bytes: 1024,
+        }
+    }
 }

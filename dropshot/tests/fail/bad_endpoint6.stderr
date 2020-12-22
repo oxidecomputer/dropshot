@@ -32,18 +32,18 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
 20 | | }]
    | |__^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
-   = note: required by `dropshot::HttpResponseOk`
+   = note: required by `HttpResponseOk`
 
-error[E0277]: the trait bound `fn(std::sync::Arc<dropshot::RequestContext>) -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
+error[E0277]: the trait bound `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
   --> $DIR/bad_endpoint6.rs:17:1
    |
 17 | / #[endpoint {
 18 | |     method = GET,
 19 | |     path = "/test",
 20 | | }]
-   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn(std::sync::Arc<dropshot::RequestContext>) -> impl std::future::Future {<impl std::convert::From<bad_endpoint> for dropshot::ApiEndpoint>::from::bad_endpoint}`
+   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
    |           HandlerType: HttpHandlerFunc<FuncParams, ResponseType>,
-   |                        ----------------------------------------- required by this bound in `dropshot::ApiEndpoint::new`
+   |                        ----------------------------------------- required by this bound in `ApiEndpoint::new`
