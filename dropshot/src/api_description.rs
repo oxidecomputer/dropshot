@@ -856,14 +856,14 @@ mod test {
     use super::j2oas_schema;
     use super::ApiDescription;
     use super::ApiEndpoint;
+    use crate::ExtractedParameter;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
-    use schemars::JsonSchema;
     use serde::Deserialize;
     use std::sync::Arc;
 
-    #[derive(Deserialize, JsonSchema)]
+    #[derive(Deserialize, ExtractedParameter)]
     #[allow(dead_code)]
     struct TestPath {
         a: String,
@@ -927,7 +927,7 @@ mod test {
 
     #[test]
     fn test_empty_struct() {
-        #[derive(JsonSchema)]
+        #[derive(ExtractedParameter)]
         struct Empty {}
 
         let settings = schemars::gen::SchemaSettings::openapi3();
@@ -940,7 +940,7 @@ mod test {
     #[test]
     fn test_garbage_barge_structure_conversion() {
         #[allow(dead_code)]
-        #[derive(JsonSchema)]
+        #[derive(ExtractedParameter)]
         struct SuperGarbage {
             string: String,
             strings: Vec<String>,
@@ -952,7 +952,7 @@ mod test {
         }
 
         #[allow(dead_code)]
-        #[derive(JsonSchema)]
+        #[derive(ExtractedParameter)]
         struct Substruct {
             ii32: i32,
             uu64: u64,
@@ -962,7 +962,7 @@ mod test {
         }
 
         #[allow(dead_code)]
-        #[derive(JsonSchema)]
+        #[derive(ExtractedParameter)]
         enum Union {
             A { a: u32 },
             B { b: f32 },

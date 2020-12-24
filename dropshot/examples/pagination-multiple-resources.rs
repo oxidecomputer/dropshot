@@ -10,6 +10,7 @@ use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
+use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
@@ -21,7 +22,6 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::ResultsPage;
 use dropshot::WhichPage;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -36,21 +36,21 @@ use uuid::Uuid;
  * "name".  We'll have one endpoint for each resource to list it.
  */
 
-#[derive(Clone, JsonSchema, Serialize)]
+#[derive(Clone, ExtractedParameter, Serialize)]
 struct Project {
     id: Uuid,
     name: String,
     // lots more project-like fields
 }
 
-#[derive(Clone, JsonSchema, Serialize)]
+#[derive(Clone, ExtractedParameter, Serialize)]
 struct Disk {
     id: Uuid,
     name: String,
     // lots more disk-like fields
 }
 
-#[derive(Clone, JsonSchema, Serialize)]
+#[derive(Clone, ExtractedParameter, Serialize)]
 struct Instance {
     id: Uuid,
     name: String,
@@ -88,7 +88,7 @@ impl_HasIdentity!(Instance);
 /*
  * Pagination-related types
  */
-#[derive(Deserialize, Clone, JsonSchema, Serialize)]
+#[derive(Deserialize, Clone, ExtractedParameter, Serialize)]
 struct ExScanParams {
     #[serde(default = "default_sort_mode")]
     sort: ExSortMode,
@@ -98,7 +98,7 @@ fn default_sort_mode() -> ExSortMode {
     ExSortMode::ByNameAscending
 }
 
-#[derive(Deserialize, Clone, JsonSchema, Serialize)]
+#[derive(Deserialize, Clone, ExtractedParameter, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ExSortMode {
     ByIdAscending,
@@ -107,7 +107,7 @@ enum ExSortMode {
     ByNameDescending,
 }
 
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ExPageSelector {
     Id(PaginationOrder, Uuid),
@@ -251,7 +251,7 @@ fn do_list<'a, T>(
     by_id: &'a BTreeMap<Uuid, Arc<T>>,
 ) -> ItemIter<'a, T>
 where
-    T: Clone + JsonSchema + Serialize + Send + Sync + 'static,
+    T: Clone + ExtractedParameter + Serialize + Send + Sync + 'static,
 {
     match p {
         WhichPage::First(_) => match scan_params.sort {

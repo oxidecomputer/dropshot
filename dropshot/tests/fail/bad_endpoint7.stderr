@@ -22,8 +22,8 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
      |
-     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                             --------- required by this bound in `HttpResponseOk`
+     |       T: ExtractedParameter + Serialize + Send + Sync + 'static,
+     |                               --------- required by this bound in `HttpResponseOk`
 
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
     --> $DIR/bad_endpoint7.rs:24:5
@@ -36,8 +36,8 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
      |
-     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                             --------- required by this bound in `HttpResponseOk`
+     |       T: ExtractedParameter + Serialize + Send + Sync + 'static,
+     |                               --------- required by this bound in `HttpResponseOk`
 
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
     --> $DIR/bad_endpoint7.rs:23:45
@@ -53,8 +53,8 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
      |
-     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                             --------- required by this bound in `HttpResponseOk`
+     |       T: ExtractedParameter + Serialize + Send + Sync + 'static,
+     |                               --------- required by this bound in `HttpResponseOk`
 
 error[E0277]: the trait bound `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
   --> $DIR/bad_endpoint7.rs:21:10

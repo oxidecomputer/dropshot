@@ -1,13 +1,13 @@
 // Copyright 2020 Oxide Computer Company
 
 use dropshot::endpoint;
+use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
-use schemars::JsonSchema;
 use std::sync::Arc;
 
-#[derive(JsonSchema)]
+#[derive(ExtractedParameter)]
 #[allow(dead_code)]
 struct Ret {
     x: String,

@@ -22,6 +22,7 @@ use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
+use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
@@ -30,7 +31,6 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::ResultsPage;
 use dropshot::WhichPage;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -42,10 +42,10 @@ use std::sync::Arc;
 /**
  * Object returned by our paginated endpoint
  *
- * Like anything returned by Dropshot, we must implement `JsonSchema` and
+ * Like anything returned by Dropshot, we must implement `ExtractedParameter` and
  * `Serialize`.  We also implement `Clone` to simplify the example.
  */
-#[derive(Clone, JsonSchema, Serialize)]
+#[derive(Clone, ExtractedParameter, Serialize)]
 struct Project {
     name: String,
     // lots more fields
@@ -61,7 +61,7 @@ struct Project {
  * include with each page of results, and it must be `Deserialize` to get it
  * back in a querystring.
  */
-#[derive(Deserialize, JsonSchema, Serialize)]
+#[derive(Deserialize, ExtractedParameter, Serialize)]
 struct ProjectPage {
     name: String,
 }

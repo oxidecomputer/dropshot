@@ -100,8 +100,8 @@
 
 use crate::error::HttpError;
 use crate::from_map::from_map;
+use crate::ExtractedParameter;
 use base64::URL_SAFE;
-use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -116,7 +116,7 @@ use std::num::NonZeroU64;
  * This structure is intended for use both on the server side (to generate the
  * results page) and on the client side (to parse it).
  */
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 #[schemars(description = "A single page of results")]
 pub struct ResultsPage<ItemType> {
     /** token used to fetch the next page of results (if any) */
@@ -189,7 +189,7 @@ impl<ItemType> ResultsPage<ItemType> {
  * careful when designing these structures to consider what you might want to
  * support in the future.
  */
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, ExtractedParameter)]
 pub struct PaginationParams<ScanParams, PageSelector>
 where
     ScanParams: DeserializeOwned,
@@ -281,12 +281,12 @@ pub enum WhichPage<ScanParams, PageSelector> {
 }
 
 /*
- * Generate the JsonSchema for WhichPage from SchemaWhichPage.
+ * Generate the ExtractedParameter for WhichPage from SchemaWhichPage.
  */
-impl<ScanParams, PageSelector> JsonSchema
+impl<ScanParams, PageSelector> ExtractedParameter
     for WhichPage<ScanParams, PageSelector>
 where
-    ScanParams: JsonSchema,
+    ScanParams: ExtractedParameter,
 {
     fn schema_name() -> String {
         unimplemented!();
@@ -303,13 +303,15 @@ where
  * scan parameters (i.e., it always iterates items in the collection in the same
  * way).
  */
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, ExtractedParameter)]
 pub struct EmptyScanParams {}
 
 /**
  * The order in which the client wants to page through the requested collection
  */
-#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[derive(
+    Copy, Clone, Debug, Deserialize, ExtractedParameter, PartialEq, Serialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum PaginationOrder {
     Ascending,
@@ -359,7 +361,9 @@ const MAX_TOKEN_LENGTH: usize = 512;
  * Note that consumers still need to consider compatibility if they change their
  * own `ScanParams` or `PageSelector` types.
  */
-#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[derive(
+    Copy, Clone, Debug, Deserialize, ExtractedParameter, PartialEq, Serialize,
+)]
 #[serde(rename_all = "lowercase")]
 enum PaginationVersion {
     V1,
@@ -461,7 +465,7 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
 /*
  * This is the on-the-wire protocol; we use this solely to generate the schema.
  */
-#[derive(JsonSchema)]
+#[derive(ExtractedParameter)]
 #[allow(dead_code)]
 #[serde(untagged)]
 enum SchemaWhichPage<ScanParams> {

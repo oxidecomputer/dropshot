@@ -16,6 +16,7 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
+use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::PaginationOrder;
@@ -29,7 +30,6 @@ use http::StatusCode;
 use hyper::Body;
 use hyper::Client;
 use hyper::Request;
-use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -150,7 +150,7 @@ where
  *
  * This is used for several resources below.
  */
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 struct IntegersPageSelector {
     last_seen: u16,
 }
@@ -488,13 +488,13 @@ async fn api_with_extra_params(
 }
 
 /* TODO-coverage check generated OpenAPI spec */
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, ExtractedParameter)]
 struct ExtraQueryParams {
     debug: Option<bool>,
 }
 
 /* TODO-coverage check generated OpenAPI spec */
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
 struct ExtraResultsPage {
     debug_was_set: bool,
     debug_value: bool,
@@ -545,7 +545,7 @@ async fn test_paginate_extra_params() {
  * Test an endpoint that requires scan parameters.
  */
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, ExtractedParameter)]
 struct ReqScanParams {
     doit: bool,
 }
@@ -645,13 +645,15 @@ fn make_word_list() -> BTreeSet<String> {
  * The use of a structure here is kind of pointless except to exercise the case
  * of endpoints that return a custom structure.
  */
-#[derive(Debug, Deserialize, Clone, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(
+    Debug, Deserialize, Clone, Eq, ExtractedParameter, PartialEq, Serialize,
+)]
 struct DictionaryWord {
     word: String,
     length: usize,
 }
 
-#[derive(Clone, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Deserialize, ExtractedParameter, Serialize)]
 struct DictionaryScanParams {
     #[serde(default = "ascending")]
     order: PaginationOrder,
@@ -663,7 +665,7 @@ fn ascending() -> PaginationOrder {
     PaginationOrder::Ascending
 }
 
-#[derive(Deserialize, JsonSchema, Serialize)]
+#[derive(Deserialize, ExtractedParameter, Serialize)]
 struct DictionaryPageSelector {
     scan: DictionaryScanParams,
     last_seen: String,

@@ -1,12 +1,11 @@
 // Copyright 2020 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseOk,
-    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
-    RequestContext, ResultsPage, TypedBody,
+    endpoint, ApiDescription, ExtractedParameter, HttpError,
+    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
+    HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
+    Query, RequestContext, ResultsPage, TypedBody,
 };
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{io::Cursor, str::from_utf8, sync::Arc};
 
@@ -20,7 +19,7 @@ async fn handler1(
     Ok(HttpResponseOk(()))
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, ExtractedParameter)]
 #[allow(dead_code)]
 struct QueryArgs {
     _tomax: String,
@@ -39,7 +38,7 @@ async fn handler2(
     Ok(HttpResponseUpdatedNoContent())
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, ExtractedParameter)]
 #[allow(dead_code)]
 struct PathArgs {
     x: String,
@@ -56,12 +55,12 @@ async fn handler3(
     Ok(HttpResponseDeleted())
 }
 
-#[derive(JsonSchema, Deserialize)]
+#[derive(ExtractedParameter, Deserialize)]
 struct BodyParam {
     _x: String,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, ExtractedParameter)]
 struct Response {}
 
 #[endpoint {
@@ -89,18 +88,18 @@ async fn handler5(
     Ok(HttpResponseAccepted(()))
 }
 
-#[derive(JsonSchema, Serialize)]
+#[derive(ExtractedParameter, Serialize)]
 struct ResponseItem {
     word: String,
 }
 
-#[derive(Deserialize, JsonSchema, Serialize)]
+#[derive(Deserialize, ExtractedParameter, Serialize)]
 struct ExampleScanParams {
     #[serde(default)]
     a_number: u16,
 }
 
-#[derive(Deserialize, JsonSchema, Serialize)]
+#[derive(Deserialize, ExtractedParameter, Serialize)]
 struct ExamplePageSelector {
     scan: ExampleScanParams,
     last_seen: String,

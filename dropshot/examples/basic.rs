@@ -8,13 +8,13 @@ use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
+use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::HttpServer;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::any::Any;
@@ -107,7 +107,7 @@ impl ExampleContext {
  * response to a GET request to fetch the counter or as the body of a PUT
  * request to update the counter.
  */
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Deserialize, Serialize, ExtractedParameter)]
 struct CounterValue {
     counter: u64,
 }

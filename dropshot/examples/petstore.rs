@@ -1,8 +1,7 @@
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseOk, PaginationParams,
-    Path, Query, RequestContext, ResultsPage, TypedBody,
+    endpoint, ApiDescription, ExtractedParameter, HttpError, HttpResponseOk,
+    PaginationParams, Path, Query, RequestContext, ResultsPage, TypedBody,
 };
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -33,7 +32,7 @@ fn main() -> Result<(), String> {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Deserialize, Serialize, ExtractedParameter)]
 #[serde(rename_all = "camelCase")]
 struct Pet {
     id: Option<i64>,
@@ -47,7 +46,7 @@ struct Pet {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Deserialize, Serialize, ExtractedParameter)]
 #[serde(rename_all = "camelCase")]
 struct Category {
     id: i64,
@@ -55,12 +54,12 @@ struct Category {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Deserialize, Serialize, ExtractedParameter)]
 #[serde(rename_all = "camelCase")]
 struct Tag {}
 
 #[allow(dead_code)]
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Deserialize, Serialize, ExtractedParameter)]
 #[serde(rename_all = "lowercase")]
 enum PetStatus {
     Available,
@@ -69,7 +68,7 @@ enum PetStatus {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, ExtractedParameter)]
 #[serde(rename_all = "camelCase")]
 struct PathParams {
     pet_id: i64,
@@ -113,7 +112,7 @@ async fn update_pet_with_form(
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, ExtractedParameter)]
 #[serde(rename_all = "camelCase")]
 struct FindByTagsScanParams {
     /// Tags to filter for
@@ -121,7 +120,7 @@ struct FindByTagsScanParams {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, ExtractedParameter)]
 #[serde(rename_all = "camelCase")]
 struct FindByTagsPageSelector {
     tags: String,

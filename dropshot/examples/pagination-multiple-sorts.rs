@@ -98,6 +98,7 @@ use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
+use dropshot::ExtractedParameter;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
@@ -110,7 +111,6 @@ use dropshot::RequestContext;
 use dropshot::ResultsPage;
 use dropshot::WhichPage;
 use hyper::Uri;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -125,10 +125,10 @@ extern crate slog;
 /**
  * Item returned by our paginated endpoint
  *
- * Like anything returned by Dropshot, we must implement `JsonSchema` and
+ * Like anything returned by Dropshot, we must implement `ExtractedParameter` and
  * `Serialize`.  We also implement `Clone` to simplify the example.
  */
-#[derive(Clone, JsonSchema, Serialize)]
+#[derive(Clone, ExtractedParameter, Serialize)]
 struct Project {
     name: String,
     mtime: DateTime<Utc>,
@@ -148,7 +148,7 @@ struct Project {
  * serialize it using `serde_querystring`.  That code could fail at runtime for
  * certain types of values (e.g., enum variants that contain data).
  */
-#[derive(Clone, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Deserialize, ExtractedParameter, Serialize)]
 struct ProjectScanParams {
     #[serde(default = "default_project_sort")]
     sort: ProjectSort,
@@ -158,7 +158,7 @@ fn default_project_sort() -> ProjectSort {
     ProjectSort::ByNameAscending
 }
 
-#[derive(Deserialize, Clone, JsonSchema, Serialize)]
+#[derive(Deserialize, Clone, ExtractedParameter, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectSort {
     /** by name ascending */
@@ -186,7 +186,7 @@ enum ProjectSort {
  * selector back, you find the object having the next value after the one stored
  * in the token and start returning results from there.
  */
-#[derive(Deserialize, JsonSchema, Serialize)]
+#[derive(Deserialize, ExtractedParameter, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectScanPageSelector {
     Name(PaginationOrder, String),

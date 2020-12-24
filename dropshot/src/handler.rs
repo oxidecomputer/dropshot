@@ -500,6 +500,9 @@ where
  * Extractors
  */
 
+pub trait ExtractedParameter: JsonSchema {}
+impl<T: JsonSchema> ExtractedParameter for T {}
+
 /*
  * Query: query string extractor
  */
@@ -510,11 +513,14 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
-pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+pub struct Query<QueryType: DeserializeOwned + ExtractedParameter + Send + Sync>
+{
     inner: QueryType,
 }
 
-impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
+impl<QueryType: DeserializeOwned + ExtractedParameter + Send + Sync>
+    Query<QueryType>
+{
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
@@ -531,7 +537,7 @@ fn http_request_load_query<QueryType>(
     request: &Request<Body>,
 ) -> Result<Query<QueryType>, HttpError>
 where
-    QueryType: DeserializeOwned + JsonSchema + Send + Sync,
+    QueryType: DeserializeOwned + ExtractedParameter + Send + Sync,
 {
     let raw_query_string = request.uri().query().unwrap_or("");
     /*
@@ -559,7 +565,7 @@ where
 #[async_trait]
 impl<QueryType> Extractor for Query<QueryType>
 where
-    QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
+    QueryType: ExtractedParameter + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -583,11 +589,11 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
-pub struct Path<PathType: JsonSchema + Send + Sync> {
+pub struct Path<PathType: ExtractedParameter + Send + Sync> {
     inner: PathType,
 }
 
-impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
+impl<PathType: ExtractedParameter + Send + Sync> Path<PathType> {
     /*
      * TODO drop this in favor of Deref?  + Display and Debug for convenience?
      */
@@ -604,7 +610,7 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
 #[async_trait]
 impl<PathType> Extractor for Path<PathType>
 where
-    PathType: DeserializeOwned + JsonSchema + Send + Sync + 'static,
+    PathType: DeserializeOwned + ExtractedParameter + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -622,7 +628,7 @@ where
 
 /**
  * Convenience trait to generate parameter metadata from types implementing
- * `JsonSchema` for use with `Query` and `Path` `Extractors`.
+ * `ExtractedParameter` for use with `Query` and `Path` `Extractors`.
  */
 pub(crate) trait GetMetadata {
     fn metadata(
@@ -632,7 +638,7 @@ pub(crate) trait GetMetadata {
 
 impl<ParamType> GetMetadata for ParamType
 where
-    ParamType: JsonSchema,
+    ParamType: ExtractedParameter,
 {
     fn metadata(
         loc: &ApiEndpointParameterLocation,
@@ -814,11 +820,13 @@ fn schema2parameters(
  * that implements `serde::Deserialize`.  See this module's documentation for
  * more information.
  */
-pub struct TypedBody<BodyType: JsonSchema + DeserializeOwned + Send + Sync> {
+pub struct TypedBody<
+    BodyType: ExtractedParameter + DeserializeOwned + Send + Sync,
+> {
     inner: BodyType,
 }
 
-impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
+impl<BodyType: ExtractedParameter + DeserializeOwned + Send + Sync>
     TypedBody<BodyType>
 {
     /*
@@ -837,7 +845,7 @@ async fn http_request_load_json_body<BodyType>(
     rqctx: Arc<RequestContext>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
-    BodyType: JsonSchema + DeserializeOwned + Send + Sync,
+    BodyType: ExtractedParameter + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
     let mut request = rqctx.request.lock().await;
@@ -870,7 +878,7 @@ where
 #[async_trait]
 impl<BodyType> Extractor for TypedBody<BodyType>
 where
-    BodyType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
+    BodyType: ExtractedParameter + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request(
         rqctx: Arc<RequestContext>,
@@ -946,7 +954,7 @@ impl HttpResponse for Response<Body> {
 pub trait HttpTypedResponse:
     Into<HttpHandlerResult> + Send + Sync + 'static
 {
-    type Body: JsonSchema + Serialize;
+    type Body: ExtractedParameter + Serialize;
     const STATUS_CODE: StatusCode;
     const DESCRIPTION: &'static str;
 
@@ -995,16 +1003,16 @@ where
  * field having type T::View).
  */
 pub struct HttpResponseCreated<
-    T: JsonSchema + Serialize + Send + Sync + 'static,
+    T: ExtractedParameter + Serialize + Send + Sync + 'static,
 >(pub T);
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
-    for HttpResponseCreated<T>
+impl<T: ExtractedParameter + Serialize + Send + Sync + 'static>
+    HttpTypedResponse for HttpResponseCreated<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::CREATED;
     const DESCRIPTION: &'static str = "successful creation";
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static>
+impl<T: ExtractedParameter + Serialize + Send + Sync + 'static>
     From<HttpResponseCreated<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseCreated<T>) -> HttpHandlerResult {
@@ -1019,16 +1027,16 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * generated by serializing the object.
  */
 pub struct HttpResponseAccepted<
-    T: JsonSchema + Serialize + Send + Sync + 'static,
+    T: ExtractedParameter + Serialize + Send + Sync + 'static,
 >(pub T);
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
-    for HttpResponseAccepted<T>
+impl<T: ExtractedParameter + Serialize + Send + Sync + 'static>
+    HttpTypedResponse for HttpResponseAccepted<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::ACCEPTED;
     const DESCRIPTION: &'static str = "successfully enqueued operation";
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static>
+impl<T: ExtractedParameter + Serialize + Send + Sync + 'static>
     From<HttpResponseAccepted<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseAccepted<T>) -> HttpHandlerResult {
@@ -1041,18 +1049,18 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * denotes an HTTP 200 "OK" response whose body is generated by serializing the
  * object.
  */
-pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-    pub T,
-);
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
-    for HttpResponseOk<T>
+pub struct HttpResponseOk<
+    T: ExtractedParameter + Serialize + Send + Sync + 'static,
+>(pub T);
+impl<T: ExtractedParameter + Serialize + Send + Sync + 'static>
+    HttpTypedResponse for HttpResponseOk<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::OK;
     const DESCRIPTION: &'static str = "successful operation";
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
-    for HttpHandlerResult
+impl<T: ExtractedParameter + Serialize + Send + Sync + 'static>
+    From<HttpResponseOk<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseOk<T>) -> HttpHandlerResult {
         HttpResponseOk::for_object(&response.0)
@@ -1102,12 +1110,11 @@ mod test {
     use super::GetMetadata;
     use crate::{
         api_description::ApiEndpointParameterName, ApiEndpointParameter,
-        ApiEndpointParameterLocation, PaginationParams,
+        ApiEndpointParameterLocation, ExtractedParameter, PaginationParams,
     };
-    use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Deserialize, Serialize, JsonSchema)]
+    #[derive(Deserialize, Serialize, ExtractedParameter)]
     #[allow(dead_code)]
     struct A {
         foo: String,
@@ -1115,7 +1122,7 @@ mod test {
         baz: Option<String>,
     }
 
-    #[derive(JsonSchema)]
+    #[derive(ExtractedParameter)]
     #[allow(dead_code)]
     struct B<T> {
         #[serde(flatten)]
@@ -1124,7 +1131,7 @@ mod test {
         limit: Option<u64>,
     }
 
-    #[derive(JsonSchema)]
+    #[derive(ExtractedParameter)]
     #[allow(dead_code)]
     #[schemars(untagged)]
     enum C<T> {

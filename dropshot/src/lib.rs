@@ -117,16 +117,16 @@
  * ```
  * use dropshot::endpoint;
  * use dropshot::ApiDescription;
+ * use dropshot::ExtractedParameter;
  * use dropshot::HttpError;
  * use dropshot::HttpResponseOk;
  * use dropshot::RequestContext;
  * use http::Method;
- * use schemars::JsonSchema;
  * use serde::Serialize;
  * use std::sync::Arc;
  *
  * /** Represents a project in our API */
- * #[derive(Serialize, JsonSchema)]
+ * #[derive(Serialize, ExtractedParameter)]
  * struct Project {
  *     /** name of the project */
  *     name: String,
@@ -223,13 +223,13 @@
  *
  * * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
  *   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
- *   `schemars::JsonSchema`.
+ *   `dropshot::ExtractedParameter`.
  * * [`Path`]`<P>` extracts parameters from HTTP path, deserializing them into
  *   an instance of type `P`. `P` must implement `serde::Deserialize` and
- *   `schemars::JsonSchema`.
+ *   `dropshot::ExtractedParameter`.
  * * [`TypedBody`]`<J>` extracts content from the request body by parsing the
  *   body as JSON and deserializing it into an instance of type `J`. `J` must
- *   implement `serde::Deserialize` and `schemars::JsonSchema`.
+ *   implement `serde::Deserialize` and `dropshot::ExtractedParameter`.
  *
  * If the handler takes a `Query<Q>`, `Path<P>`, or a `TypedBody<J>` and the
  * corresponding extraction cannot be completed, the request fails with status
@@ -242,17 +242,17 @@
  *
  * ```
  * use http::StatusCode;
+ * use dropshot::ExtractedParameter;
  * use dropshot::HttpError;
  * use dropshot::TypedBody;
  * use dropshot::Query;
  * use dropshot::RequestContext;
  * use hyper::Body;
  * use hyper::Response;
- * use schemars::JsonSchema;
  * use serde::Deserialize;
  * use std::sync::Arc;
  *
- * #[derive(Deserialize, JsonSchema)]
+ * #[derive(Deserialize, ExtractedParameter)]
  * struct MyQueryArgs {
  *     limit: u32,
  *     marker: Option<String>
@@ -442,6 +442,7 @@
  * arguments using `Query`, like this:
  *
  * ```
+ * use dropshot::ExtractedParameter;
  * use dropshot::HttpError;
  * use dropshot::HttpResponseOk;
  * use dropshot::PaginationParams;
@@ -449,15 +450,14 @@
  * use dropshot::RequestContext;
  * use dropshot::ResultsPage;
  * use dropshot::endpoint;
- * use schemars::JsonSchema;
  * use serde::Deserialize;
  * use std::sync::Arc;
  * # use serde::Serialize;
- * # #[derive(Debug, Deserialize, JsonSchema)]
+ * # #[derive(Debug, Deserialize, ExtractedParameter)]
  * # enum MyScanParams { A };
- * # #[derive(Debug, Deserialize, JsonSchema, Serialize)]
+ * # #[derive(Debug, Deserialize, ExtractedParameter, Serialize)]
  * # enum MyPageSelector { A(String) };
- * #[derive(Deserialize, JsonSchema)]
+ * #[derive(Deserialize, ExtractedParameter)]
  * struct MyExtraQueryParams {
  *     do_extra_stuff: bool,
  * }
@@ -538,3 +538,5 @@ pub use http::Method;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::endpoint;
+
+pub use schemars::JsonSchema as ExtractedParameter;

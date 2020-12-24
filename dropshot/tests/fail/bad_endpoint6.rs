@@ -4,10 +4,10 @@ use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
-use schemars::JsonSchema;
+use dropshot::ExtractedParameter;
 use std::sync::Arc;
 
-#[derive(JsonSchema)]
+#[derive(ExtractedParameter)]
 #[allow(dead_code)]
 struct Ret {
     x: String,
