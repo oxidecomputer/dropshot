@@ -94,9 +94,7 @@ impl HttpServer {
      * TODO-cleanup is it more accurate to call this start() and say it returns
      * a Future that resolves when the server is finished?
      */
-    pub fn run(
-        &mut self,
-    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
+    pub fn run(&mut self) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
         let future =
             self.server_future.take().expect("cannot run() more than once");
         tokio::spawn(async { future.await })
