@@ -46,6 +46,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "title": "ResultsPage_for_ResponseItem",
                   "description": "A single page of results",
                   "type": "object",
                   "properties": {
@@ -78,6 +79,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "title": "BodyParam",
                 "type": "object",
                 "properties": {
                   "_x": {
@@ -98,6 +100,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "title": "Response",
                   "type": "object"
                 }
               }
@@ -193,6 +196,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "title": "BodyParam",
                 "type": "object",
                 "properties": {
                   "_x": {

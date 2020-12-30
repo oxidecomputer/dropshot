@@ -882,7 +882,10 @@ where
         vec![ApiEndpointParameter::new_body(
             None,
             true,
-            ApiSchemaGenerator::Gen(BodyType::json_schema),
+            ApiSchemaGenerator::Gen {
+                name: BodyType::schema_name,
+                schema: BodyType::json_schema,
+            },
             vec![],
         )]
     }
@@ -978,7 +981,10 @@ where
     }
     fn metadata() -> ApiEndpointResponse {
         ApiEndpointResponse {
-            schema: Some(ApiSchemaGenerator::Gen(T::Body::json_schema)),
+            schema: Some(ApiSchemaGenerator::Gen {
+                name: T::Body::schema_name,
+                schema: T::Body::json_schema,
+            }),
             success: Some(T::STATUS_CODE),
             description: Some(T::DESCRIPTION.to_string()),
         }
