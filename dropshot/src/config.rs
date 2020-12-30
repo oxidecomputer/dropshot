@@ -43,6 +43,7 @@ use std::net::SocketAddr;
  * ```
  */
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(default)]
 pub struct ConfigDropshot {
     /** IP address and TCP port to which to bind for accepting connections */
     pub bind_address: SocketAddr,
