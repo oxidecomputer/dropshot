@@ -68,7 +68,7 @@ pub struct ServerConfig {
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
-    server_future: Option<BoxFuture<'static, Result<(), hyper::error::Error>>>,
+    server_future: Option<BoxFuture<'static, Result<(), hyper::Error>>>,
     local_addr: SocketAddr,
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -96,7 +96,7 @@ impl HttpServer {
      */
     pub fn run(
         &mut self,
-    ) -> tokio::task::JoinHandle<Result<(), hyper::error::Error>> {
+    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
         let future =
             self.server_future.take().expect("cannot run() more than once");
         tokio::spawn(async { future.await })
@@ -104,7 +104,7 @@ impl HttpServer {
 
     pub async fn wait_for_shutdown(
         &mut self,
-        join_handle: tokio::task::JoinHandle<Result<(), hyper::error::Error>>,
+        join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>,
     ) -> Result<(), String> {
         let join_result = join_handle
             .await
@@ -126,7 +126,7 @@ impl HttpServer {
         api: ApiDescription,
         private: Arc<dyn Any + Send + Sync + 'static>,
         log: &Logger,
-    ) -> Result<HttpServer, hyper::error::Error> {
+    ) -> Result<HttpServer, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
         let log_close = log.new(o!());
         let app_state = Arc::new(DropshotState {
