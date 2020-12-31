@@ -152,14 +152,20 @@ pub struct ApiEndpointResponse {
  * Wrapper for both dynamically generated and pre-generated schemas.
  */
 pub enum ApiSchemaGenerator {
-    Gen(fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema),
+    Gen {
+        name: fn() -> String,
+        schema:
+            fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
+    },
     Static(schemars::schema::Schema),
 }
 
 impl std::fmt::Debug for ApiSchemaGenerator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ApiSchemaGenerator::Gen(_) => f.write_str("[schema generator]"),
+            ApiSchemaGenerator::Gen {
+                ..
+            } => f.write_str("[schema generator]"),
             ApiSchemaGenerator::Static(schema) => {
                 f.write_str(format!("{:?}", schema).as_str())
             }
@@ -328,7 +334,7 @@ impl ApiDescription {
 
                     let schema = match &param.schema {
                         ApiSchemaGenerator::Static(schema) => {
-                            j2oas_schema(schema)
+                            j2oas_schema(None, schema)
                         }
                         _ => {
                             unimplemented!("this may happen for complex types")
@@ -378,11 +384,16 @@ impl ApiDescription {
                         _ => return None,
                     }
 
-                    let js = match &param.schema {
-                        ApiSchemaGenerator::Gen(gen) => gen(&mut generator),
-                        ApiSchemaGenerator::Static(schema) => schema.clone(),
+                    let (name, js) = match &param.schema {
+                        ApiSchemaGenerator::Gen {
+                            name,
+                            schema,
+                        } => (Some(name()), schema(&mut generator)),
+                        ApiSchemaGenerator::Static(schema) => {
+                            (None, schema.clone())
+                        }
                     };
-                    let schema = j2oas_schema(&js);
+                    let schema = j2oas_schema(name.as_ref(), &js);
 
                     let mut content = indexmap::IndexMap::new();
                     content.insert(
@@ -404,16 +415,21 @@ impl ApiDescription {
                 .next();
 
             if let Some(schema) = &endpoint.response.schema {
-                let js = match schema {
-                    ApiSchemaGenerator::Gen(gen) => gen(&mut generator),
-                    ApiSchemaGenerator::Static(s) => s.clone(),
+                let (name, js) = match schema {
+                    ApiSchemaGenerator::Gen {
+                        name,
+                        schema,
+                    } => (Some(name()), schema(&mut generator)),
+                    ApiSchemaGenerator::Static(schema) => {
+                        (None, schema.clone())
+                    }
                 };
                 let mut content = indexmap::IndexMap::new();
                 if !is_null(&js) {
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
-                            schema: Some(j2oas_schema(&js)),
+                            schema: Some(j2oas_schema(name.as_ref(), &js)),
                             example: None,
                             examples: indexmap::IndexMap::new(),
                             encoding: indexmap::IndexMap::new(),
@@ -461,7 +477,7 @@ impl ApiDescription {
             .get_or_insert_with(openapiv3::Components::default)
             .schemas;
         generator.definitions().iter().for_each(|(key, schema)| {
-            schemas.insert(key.clone(), j2oas_schema(schema));
+            schemas.insert(key.clone(), j2oas_schema(None, schema));
         });
 
         serde_json::to_writer_pretty(out, &openapi)
@@ -506,15 +522,17 @@ fn is_null(schema: &schemars::schema::Schema) -> bool {
  * schema is generated wrt references vs. inline types.
  */
 fn j2oas_schema(
+    name: Option<&String>,
     schema: &schemars::schema::Schema,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     match schema {
         schemars::schema::Schema::Bool(_) => todo!(),
-        schemars::schema::Schema::Object(obj) => j2oas_schema_object(obj),
+        schemars::schema::Schema::Object(obj) => j2oas_schema_object(name, obj),
     }
 }
 
 fn j2oas_schema_object(
+    name: Option<&String>,
     obj: &schemars::schema::SchemaObject,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     if let Some(reference) = &obj.reference {
@@ -567,6 +585,10 @@ fn j2oas_schema_object(
         data.write_only = metadata.write_only;
     }
 
+    if let Some(name) = name {
+        data.title = Some(name.clone());
+    }
+
     openapiv3::ReferenceOr::Item(openapiv3::Schema {
         schema_data: data,
         schema_kind: kind,
@@ -580,19 +602,19 @@ fn j2oas_subschemas(
         (Some(all_of), None, None) => openapiv3::SchemaKind::AllOf {
             all_of: all_of
                 .iter()
-                .map(|schema| j2oas_schema(schema))
+                .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
         (None, Some(any_of), None) => openapiv3::SchemaKind::AnyOf {
             any_of: any_of
                 .iter()
-                .map(|schema| j2oas_schema(schema))
+                .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
         (None, None, Some(one_of)) => openapiv3::SchemaKind::OneOf {
             one_of: one_of
                 .iter()
-                .map(|schema| j2oas_schema(schema))
+                .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
         (None, None, None) => todo!("missed a valid case"),
@@ -792,7 +814,7 @@ fn j2oas_array(
     openapiv3::SchemaKind::Type(openapiv3::Type::Array(openapiv3::ArrayType {
         items: match &arr.items {
             Some(schemars::schema::SingleOrVec::Single(schema)) => {
-                box_reference_or(j2oas_schema(&schema))
+                box_reference_or(j2oas_schema(None, &schema))
             }
             _ => unimplemented!("don't think this is valid"),
         },
@@ -830,14 +852,17 @@ fn j2oas_object(
                     .properties
                     .iter()
                     .map(|(prop, schema)| {
-                        (prop.clone(), box_reference_or(j2oas_schema(schema)))
+                        (
+                            prop.clone(),
+                            box_reference_or(j2oas_schema(None, schema)),
+                        )
                     })
                     .collect::<_>(),
                 required: obj.required.iter().cloned().collect::<_>(),
                 additional_properties: obj.additional_properties.as_ref().map(
                     |schema| {
                         openapiv3::AdditionalProperties::Schema(Box::new(
-                            j2oas_schema(schema),
+                            j2oas_schema(None, schema),
                         ))
                     },
                 ),
@@ -934,7 +959,7 @@ mod test {
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
 
         let schema = Empty::json_schema(&mut generator);
-        let _ = j2oas_schema(&schema);
+        let _ = j2oas_schema(None, &schema);
     }
 
     #[test]
@@ -972,9 +997,9 @@ mod test {
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
 
         let schema = SuperGarbage::json_schema(&mut generator);
-        let _ = j2oas_schema(&schema);
-        for (_, schema) in generator.definitions().iter() {
-            let _ = j2oas_schema(&schema);
+        let _ = j2oas_schema(None, &schema);
+        for (key, schema) in generator.definitions().iter() {
+            let _ = j2oas_schema(Some(key), schema);
         }
     }
 }
