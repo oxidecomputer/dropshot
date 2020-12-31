@@ -90,6 +90,13 @@ fn do_endpoint(
 
     let ast: ItemFn = syn::parse2(item.clone())?;
 
+    if ast.sig.asyncness.is_none() {
+        return Err(Error::new_spanned(
+            ast.sig.fn_token,
+            "endpoint handler functions must be async",
+        ));
+    }
+
     let name = &ast.sig.ident;
     let name_str = name.to_string();
     let method_ident = format_ident!("{}", method);
@@ -294,7 +301,7 @@ mod tests {
             }
             .into(),
             quote! {
-                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
@@ -330,7 +337,7 @@ mod tests {
 
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
-                    fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                    async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -353,7 +360,7 @@ mod tests {
             }
             .into(),
             quote! {
-                fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
+                async fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
             }
             .into(),
         );
@@ -401,7 +408,7 @@ mod tests {
 
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
-                    fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
+                    async fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -425,7 +432,7 @@ mod tests {
             }
             .into(),
             quote! {
-                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
@@ -459,7 +466,7 @@ mod tests {
             const handler_xyz: handler_xyz = handler_xyz {};
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
-                    fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                    async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -485,7 +492,7 @@ mod tests {
             .into(),
             quote! {
                 /** handle "xyz" requests */
-                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
@@ -520,7 +527,7 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
-                    fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                    async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -587,5 +594,23 @@ mod tests {
 
         let msg = format!("{}", ret.err().unwrap());
         assert_eq!("extraneous member `methud`", msg);
+    }
+
+    #[test]
+    fn test_endpoint_not_async() {
+        let ret = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+            }
+            .into(),
+            quote! {
+                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+            }
+            .into(),
+        );
+
+        let msg = format!("{}", ret.err().unwrap());
+        assert_eq!("endpoint handler functions must be async", msg);
     }
 }
