@@ -14,6 +14,9 @@ use std::{io::Cursor, str::from_utf8, sync::Arc};
     method = GET,
     path = "/test/person",
 }]
+/// This is a multi-
+/// line comment.
+/// It uses Rust-style.
 async fn handler1(
     _rqctx: Arc<RequestContext>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -32,6 +35,11 @@ struct QueryArgs {
     method = PUT,
     path = "/test/woman",
 }]
+/**
+ * This is a multi-
+ * line comment.
+ * It uses C-style.
+ */
 async fn handler2(
     _rqctx: Arc<RequestContext>,
     _query: Query<QueryArgs>,

@@ -260,25 +260,35 @@ fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
                 if let syn::Meta::NameValue(nv) = meta {
                     if nv.path.is_ident(&doc) {
                         if let syn::Lit::Str(s) = nv.lit {
-                            let comment = s.value();
-                            if comment.starts_with(" ")
-                                && !comment.starts_with("  ")
-                            {
-                                // Trim off the first character if the comment
-                                // begins with a single space.
-                                return Some(comment.as_str()[1..].to_string());
-                            } else {
-                                return Some(comment);
-                            }
+                            return Some(normalize_comment_string(s.value()));
                         }
                     }
                 }
             }
             None
         })
-        .fold(None, |acc, comment| {
-            Some(format!("{}{}", acc.unwrap_or_default(), comment))
+        .fold(None, |acc, comment| match acc {
+            None => Some(comment),
+            Some(prev) if prev.ends_with('-') => {
+                Some(format!("{}{}", prev, comment))
+            }
+            Some(prev) => Some(format!("{} {}", prev, comment)),
         })
+}
+
+fn normalize_comment_string(s: String) -> String {
+    let ret = s
+        .replace("-\n * ", "-")
+        .replace("\n * ", " ")
+        .trim_end_matches(&[' ', '\n'] as &[char])
+        .to_string();
+    if ret.starts_with(" ") && !ret.starts_with("  ") {
+        // Trim off the first character if the comment
+        // begins with a single space.
+        ret.as_str()[1..].to_string()
+    } else {
+        ret
+    }
 }
 
 #[cfg(test)]
@@ -527,7 +537,7 @@ mod tests {
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
-                    .description("handle \"xyz\" requests ")
+                    .description("handle \"xyz\" requests")
                 }
             }
         };
