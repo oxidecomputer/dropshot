@@ -87,7 +87,7 @@
  * provides a few resources using shared state.
  *
  * For a given `ApiDescription`, you can also print out an OpenAPI spec
- * describing the API.  See [`ApiDescription::print_openapi`].
+ * describing the API.  See [`ApiDescription::openapi`].
  *
  *
  * ## API Handler Functions
@@ -504,6 +504,7 @@ pub use api_description::ApiEndpoint;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
+pub use api_description::OpenApiDefinition;
 pub use config::ConfigDropshot;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;

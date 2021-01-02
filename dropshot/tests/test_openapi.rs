@@ -126,7 +126,7 @@ async fn handler6(
 }
 
 #[test]
-fn test_openapi() -> Result<(), String> {
+fn test_openapi_old() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
     api.register(handler2)?;
@@ -137,6 +137,7 @@ fn test_openapi() -> Result<(), String> {
 
     let mut output = Cursor::new(Vec::new());
 
+    #[allow(deprecated)]
     let _ = api.print_openapi(
         &mut output,
         &"test",
@@ -152,5 +153,49 @@ fn test_openapi() -> Result<(), String> {
     let actual = from_utf8(&output.get_ref()).unwrap();
 
     expectorate::assert_contents("tests/test_openapi.json", actual);
+    Ok(())
+}
+
+#[test]
+fn test_openapi() -> Result<(), String> {
+    let mut api = ApiDescription::new();
+    api.register(handler1)?;
+    api.register(handler2)?;
+    api.register(handler3)?;
+    api.register(handler4)?;
+    api.register(handler5)?;
+    api.register(handler6)?;
+
+    let mut output = Cursor::new(Vec::new());
+
+    let _ = api.openapi("test", "threeve").write(&mut output);
+    let actual = from_utf8(&output.get_ref()).unwrap();
+
+    expectorate::assert_contents("tests/test_openapi.json", actual);
+    Ok(())
+}
+
+#[test]
+fn test_openapi_fuller() -> Result<(), String> {
+    let mut api = ApiDescription::new();
+    api.register(handler1)?;
+    api.register(handler2)?;
+    api.register(handler3)?;
+    api.register(handler4)?;
+    api.register(handler5)?;
+    api.register(handler6)?;
+
+    let mut output = Cursor::new(Vec::new());
+
+    let _ = api
+        .openapi("test", "1985.7")
+        .description("gusty winds may exist")
+        .contact_name("old mate")
+        .license_name("CDDL")
+        .terms_of_service("no hat, no cane? no service!")
+        .write(&mut output);
+    let actual = from_utf8(&output.get_ref()).unwrap();
+
+    expectorate::assert_contents("tests/test_openapi_fuller.json", actual);
     Ok(())
 }

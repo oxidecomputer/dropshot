@@ -253,10 +253,29 @@ impl ApiDescription {
     }
 
     /**
-     * Emit the OpenAPI Spec document describing this API in its JSON form.
+     * Build the OpenAPI definition describing this API.  Returns an
+     * [`OpenApiDefinition`] which can be used to specify the contents of the
+     * definition and select an output format.
+     *
+     * The arguments to this function will be used for the mandatory `title` and
+     * `version` properties that the `Info` object in an OpenAPI definition must
+     * contain.
      */
-    // TODO: There's a bunch of error handling we need here such as checking
-    // for duplicate parameter names.
+    pub fn openapi<S1, S2>(&self, title: S1, version: S2) -> OpenApiDefinition
+    where
+        S1: AsRef<str>,
+        S2: AsRef<str>,
+    {
+        OpenApiDefinition::new(self, title.as_ref(), version.as_ref())
+    }
+
+    /**
+     * Emit the OpenAPI Spec document describing this API in its JSON form.
+     *
+     * This routine is deprecated in favour of the new openapi() builder
+     * routine.
+     */
+    #[deprecated(note = "switch to openapi()")]
     pub fn print_openapi(
         &self,
         out: &mut dyn std::io::Write,
@@ -270,24 +289,42 @@ impl ApiDescription {
         license_url: Option<&dyn ToString>,
         version: &dyn ToString,
     ) -> serde_json::Result<()> {
+        let mut oapi = self.openapi(title.to_string(), version.to_string());
+        if let Some(s) = description {
+            oapi.description(s.to_string());
+        }
+        if let Some(s) = terms_of_service {
+            oapi.terms_of_service(s.to_string());
+        }
+        if let Some(s) = contact_name {
+            oapi.contact_name(s.to_string());
+        }
+        if let Some(s) = contact_url {
+            oapi.contact_url(s.to_string());
+        }
+        if let Some(s) = contact_email {
+            oapi.contact_email(s.to_string());
+        }
+        if let (Some(name), Some(url)) = (license_name, license_url) {
+            oapi.license(name.to_string(), url.to_string());
+        } else if let Some(name) = license_name {
+            oapi.license_name(name.to_string());
+        }
+
+        oapi.write(out)
+    }
+
+    /**
+     * Internal routine for constructing the OpenAPI definition describing this
+     * API in its JSON form.
+     */
+    // TODO: There's a bunch of error handling we need here such as checking
+    // for duplicate parameter names.
+    fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
         openapi.openapi = "3.0.3".to_string();
-        openapi.info = openapiv3::Info {
-            title: title.to_string(),
-            description: description.map(ToString::to_string),
-            terms_of_service: terms_of_service.map(ToString::to_string),
-            contact: Some(openapiv3::Contact {
-                name: contact_name.map(ToString::to_string),
-                url: contact_url.map(ToString::to_string),
-                email: contact_email.map(ToString::to_string),
-            }),
-            license: license_name.map(|name| openapiv3::License {
-                name: name.to_string(),
-                url: license_url.map(ToString::to_string),
-            }),
-            version: version.to_string(),
-        };
+        openapi.info = info;
 
         let settings = schemars::gen::SchemaSettings::openapi3();
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
@@ -480,7 +517,7 @@ impl ApiDescription {
             schemas.insert(key.clone(), j2oas_schema(None, schema));
         });
 
-        serde_json::to_writer_pretty(out, &openapi)
+        openapi
     }
 
     /*
@@ -870,6 +907,160 @@ fn j2oas_object(
                 max_properties: obj.max_properties.map(|n| n as usize),
             },
         )),
+    }
+}
+
+/**
+ * This object is used to specify configuration for building an OpenAPI
+ * definition document.  It is constructed using [`ApiDescription::openapi()`].
+ * Additional optional properties may be added and then the OpenAPI definition
+ * document may be generated via [`write()`](`OpenApiDefinition::write`) or
+ * [`json()`](`OpenApiDefinition::json`).
+ */
+pub struct OpenApiDefinition<'a> {
+    api: &'a ApiDescription,
+    info: openapiv3::Info,
+}
+
+impl<'a> OpenApiDefinition<'a> {
+    fn new(
+        api: &'a ApiDescription,
+        title: &str,
+        version: &str,
+    ) -> OpenApiDefinition<'a> {
+        let info = openapiv3::Info {
+            title: title.to_string(),
+            version: version.to_string(),
+            ..Default::default()
+        };
+        OpenApiDefinition {
+            api,
+            info,
+        }
+    }
+
+    /**
+     * Provide a short description of the API.  CommonMark syntax may be
+     * used for rich text representation.
+     *
+     * This routine will set the `description` field of the `Info` object in the
+     * OpenAPI definition.
+     */
+    pub fn description<S: AsRef<str>>(&mut self, description: S) -> &mut Self {
+        self.info.description = Some(description.as_ref().to_string());
+        self
+    }
+
+    /**
+     * Include a Terms of Service URL for the API.  Must be in the format of a
+     * URL.
+     *
+     * This routine will set the `termsOfService` field of the `Info` object in
+     * the OpenAPI definition.
+     */
+    pub fn terms_of_service<S: AsRef<str>>(&mut self, url: S) -> &mut Self {
+        self.info.terms_of_service = Some(url.as_ref().to_string());
+        self
+    }
+
+    fn contact_mut(&mut self) -> &mut openapiv3::Contact {
+        if self.info.contact.is_none() {
+            self.info.contact = Some(openapiv3::Contact::default());
+        }
+        self.info.contact.as_mut().unwrap()
+    }
+
+    /**
+     * Set the identifying name of the contact person or organisation
+     * responsible for the API.
+     *
+     * This routine will set the `name` property of the `Contact` object within
+     * the `Info` object in the OpenAPI definition.
+     */
+    pub fn contact_name<S: AsRef<str>>(&mut self, name: S) -> &mut Self {
+        self.contact_mut().name = Some(name.as_ref().to_string());
+        self
+    }
+
+    /**
+     * Set a contact URL for the API.  Must be in the format of a URL.
+     *
+     * This routine will set the `url` property of the `Contact` object within
+     * the `Info` object in the OpenAPI definition.
+     */
+    pub fn contact_url<S: AsRef<str>>(&mut self, url: S) -> &mut Self {
+        self.contact_mut().url = Some(url.as_ref().to_string());
+        self
+    }
+
+    /**
+     * Set the email address of the contact person or organisation responsible
+     * for the API.  Must be in the format of an email address.
+     *
+     * This routine will set the `email` property of the `Contact` object within
+     * the `Info` object in the OpenAPI definition.
+     */
+    pub fn contact_email<S: AsRef<str>>(&mut self, email: S) -> &mut Self {
+        self.contact_mut().email = Some(email.as_ref().to_string());
+        self
+    }
+
+    fn license_mut(&mut self, name: &str) -> &mut openapiv3::License {
+        if self.info.license.is_none() {
+            self.info.license = Some(openapiv3::License {
+                name: name.to_string(),
+                url: None,
+            })
+        }
+        self.info.license.as_mut().unwrap()
+    }
+
+    /**
+     * Provide the name of the licence used for the API, and a URL (must be in
+     * URL format) displaying the licence text.
+     *
+     * This routine will set the `name` and optional `url` properties of the
+     * `License` object within the `Info` object in the OpenAPI definition.
+     */
+    pub fn license<S1, S2>(&mut self, name: S1, url: S2) -> &mut Self
+    where
+        S1: AsRef<str>,
+        S2: AsRef<str>,
+    {
+        self.license_mut(name.as_ref()).url = Some(url.as_ref().to_string());
+        self
+    }
+
+    /**
+     * Provide the name of the licence used for the API.
+     *
+     * This routine will set the `name` property of the License object within
+     * the `Info` object in the OpenAPI definition.
+     */
+    pub fn license_name<S: AsRef<str>>(&mut self, name: S) -> &mut Self {
+        self.license_mut(name.as_ref());
+        self
+    }
+
+    /**
+     * Build a JSON object containing the OpenAPI definition for this API.
+     */
+    pub fn json(&self) -> serde_json::Result<serde_json::Value> {
+        serde_json::to_value(&self.api.gen_openapi(self.info.clone()))
+    }
+
+    /**
+     * Build a JSON object containing the OpenAPI definition for this API and
+     * write it to the provided stream.
+     */
+    pub fn write(
+        &self,
+        out: &mut dyn std::io::Write,
+    ) -> serde_json::Result<()> {
+        serde_json::to_writer_pretty(
+            out,
+            &self.api.gen_openapi(self.info.clone()),
+        )
     }
 }
 
