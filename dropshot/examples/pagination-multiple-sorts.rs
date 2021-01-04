@@ -241,9 +241,7 @@ async fn example_list_projects(
     let data = rqctx_to_data(rqctx);
     let scan_params = ProjectScanParams {
         sort: match &pag_params.page {
-            WhichPage::First(ProjectScanParams {
-                sort,
-            }) => sort.clone(),
+            WhichPage::First(ProjectScanParams { sort }) => sort.clone(),
 
             WhichPage::Next(ProjectScanPageSelector::Name(Ascending, ..)) => {
                 ProjectSort::ByNameAscending
@@ -318,9 +316,8 @@ async fn main() -> Result<(), String> {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,
     };
-    let config_logging = ConfigLogging::StderrTerminal {
-        level: ConfigLoggingLevel::Debug,
-    };
+    let config_logging =
+        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Debug };
     let log = config_logging
         .to_logger("example-pagination-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
@@ -346,9 +343,7 @@ fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
         ProjectSort::ByMtimeDescending,
     ];
     for mode in all_modes {
-        let to_print = ProjectScanParams {
-            sort: mode,
-        };
+        let to_print = ProjectScanParams { sort: mode };
         let query_string = serde_urlencoded::to_string(to_print).unwrap();
         let uri = Uri::builder()
             .scheme("http")

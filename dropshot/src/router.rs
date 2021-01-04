@@ -152,10 +152,7 @@ pub struct RouterLookupResult<'a> {
 
 impl HttpRouterNode {
     pub fn new() -> Self {
-        HttpRouterNode {
-            methods: BTreeMap::new(),
-            edges: None,
-        }
+        HttpRouterNode { methods: BTreeMap::new(), edges: None }
     }
 }
 
@@ -164,9 +161,7 @@ impl HttpRouter {
      * Returns a new `HttpRouter` with no routes configured.
      */
     pub fn new() -> Self {
-        HttpRouter {
-            root: Box::new(HttpRouterNode::new()),
-        }
+        HttpRouter { root: Box::new(HttpRouterNode::new()) }
     }
 
     /**
@@ -841,9 +836,10 @@ mod test {
         let result =
             router.lookup_route(&Method::GET, "/projects/p12345").unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.keys().collect::<Vec<&String>>(), vec![
-            "project_id"
-        ]);
+        assert_eq!(
+            result.variables.keys().collect::<Vec<&String>>(),
+            vec!["project_id"]
+        );
         assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
         assert!(router
             .lookup_route(&Method::GET, "/projects/p12345/child")
@@ -883,11 +879,10 @@ mod test {
             )
             .unwrap();
         assert_eq!(result.handler.label(), "h6");
-        assert_eq!(result.variables.keys().collect::<Vec<&String>>(), vec![
-            "fwrule_id",
-            "instance_id",
-            "project_id"
-        ]);
+        assert_eq!(
+            result.variables.keys().collect::<Vec<&String>>(),
+            vec!["fwrule_id", "instance_id", "project_id"]
+        );
         assert_eq!(result.variables.get("project_id").unwrap(), "p1");
         assert_eq!(result.variables.get("instance_id").unwrap(), "i2");
         assert_eq!(result.variables.get("fwrule_id").unwrap(), "fw3");
@@ -941,10 +936,16 @@ mod test {
             "/projects/{project_id}/instances",
         ));
         let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
-        assert_eq!(ret, vec![
-            ("/".to_string(), "GET".to_string(),),
-            ("/projects/{project_id}/instances".to_string(), "GET".to_string(),),
-        ]);
+        assert_eq!(
+            ret,
+            vec![
+                ("/".to_string(), "GET".to_string(),),
+                (
+                    "/projects/{project_id}/instances".to_string(),
+                    "GET".to_string(),
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -961,9 +962,12 @@ mod test {
             "/",
         ));
         let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
-        assert_eq!(ret, vec![
-            ("/".to_string(), "GET".to_string(),),
-            ("/".to_string(), "POST".to_string(),),
-        ]);
+        assert_eq!(
+            ret,
+            vec![
+                ("/".to_string(), "GET".to_string(),),
+                ("/".to_string(), "POST".to_string(),),
+            ]
+        );
     }
 }

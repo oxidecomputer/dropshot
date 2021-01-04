@@ -184,10 +184,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
         match self {
             MapDeserializer::Map(map) => {
                 let x = Box::new(map.clone().into_iter());
-                visitor.visit_map(MapMapAccess {
-                    iter: x,
-                    value: None,
-                })
+                visitor.visit_map(MapMapAccess { iter: x, value: None })
             }
             MapDeserializer::Value(_) => Err(MapError(
                 "destination struct must be fully flattened".to_string(),

@@ -36,9 +36,8 @@ async fn main() -> Result<(), String> {
      * For simplicity, we'll configure an "info"-level logger that writes to
      * stderr assuming that it's a terminal.
      */
-    let config_logging = ConfigLogging::StderrTerminal {
-        level: ConfigLoggingLevel::Info,
-    };
+    let config_logging =
+        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
         .to_logger("example-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
@@ -82,9 +81,7 @@ impl ExampleContext {
      * Return a new ExampleContext.
      */
     pub fn new() -> Arc<ExampleContext> {
-        Arc::new(ExampleContext {
-            counter: AtomicU64::new(0),
-        })
+        Arc::new(ExampleContext { counter: AtomicU64::new(0) })
     }
 
     /**

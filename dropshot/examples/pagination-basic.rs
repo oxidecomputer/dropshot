@@ -91,9 +91,7 @@ async fn example_list_projects(
                 .map(|(_, project)| project.clone())
                 .collect()
         }
-        WhichPage::Next(ProjectPage {
-            name: last_seen,
-        }) => {
+        WhichPage::Next(ProjectPage { name: last_seen }) => {
             /* Return a list of the first "limit" projects after this name. */
             tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
                 .take(limit)
@@ -105,9 +103,7 @@ async fn example_list_projects(
     Ok(HttpResponseOk(ResultsPage::new(
         projects,
         &EmptyScanParams {},
-        |p: &Project, _| ProjectPage {
-            name: p.name.clone(),
-        },
+        |p: &Project, _| ProjectPage { name: p.name.clone() },
     )?))
 }
 
@@ -131,9 +127,7 @@ async fn main() -> Result<(), String> {
     let mut tree = BTreeMap::new();
     for n in 1..1000 {
         let name = format!("project{:03}", n);
-        let project = Project {
-            name: name.clone(),
-        };
+        let project = Project { name: name.clone() };
         tree.insert(name, project);
     }
 
@@ -145,9 +139,8 @@ async fn main() -> Result<(), String> {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,
     };
-    let config_logging = ConfigLogging::StderrTerminal {
-        level: ConfigLoggingLevel::Debug,
-    };
+    let config_logging =
+        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Debug };
     let log = config_logging
         .to_logger("example-pagination-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;

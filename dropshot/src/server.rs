@@ -311,9 +311,7 @@ impl ServerConnectionHandler {
      * will be made available to the handler.
      */
     fn new(server: Arc<DropshotState>) -> Self {
-        ServerConnectionHandler {
-            server: Arc::clone(&server),
-        }
+        ServerConnectionHandler { server: Arc::clone(&server) }
     }
 }
 
@@ -372,9 +370,7 @@ impl ServerRequestHandler {
      * will be provided to the handler function.
      */
     fn new(server: Arc<DropshotState>) -> Self {
-        ServerRequestHandler {
-            server: Arc::clone(&server),
-        }
+        ServerRequestHandler { server: Arc::clone(&server) }
     }
 }
 

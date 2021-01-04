@@ -163,9 +163,7 @@ pub enum ApiSchemaGenerator {
 impl std::fmt::Debug for ApiSchemaGenerator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ApiSchemaGenerator::Gen {
-                ..
-            } => f.write_str("[schema generator]"),
+            ApiSchemaGenerator::Gen { .. } => f.write_str("[schema generator]"),
             ApiSchemaGenerator::Static(schema) => {
                 f.write_str(format!("{:?}", schema).as_str())
             }
@@ -185,9 +183,7 @@ pub struct ApiDescription {
 
 impl ApiDescription {
     pub fn new() -> Self {
-        ApiDescription {
-            router: HttpRouter::new(),
-        }
+        ApiDescription { router: HttpRouter::new() }
     }
 
     /**
@@ -385,10 +381,9 @@ impl ApiDescription {
                     }
 
                     let (name, js) = match &param.schema {
-                        ApiSchemaGenerator::Gen {
-                            name,
-                            schema,
-                        } => (Some(name()), schema(&mut generator)),
+                        ApiSchemaGenerator::Gen { name, schema } => {
+                            (Some(name()), schema(&mut generator))
+                        }
                         ApiSchemaGenerator::Static(schema) => {
                             (None, schema.clone())
                         }
@@ -416,10 +411,9 @@ impl ApiDescription {
 
             if let Some(schema) = &endpoint.response.schema {
                 let (name, js) = match schema {
-                    ApiSchemaGenerator::Gen {
-                        name,
-                        schema,
-                    } => (Some(name()), schema(&mut generator)),
+                    ApiSchemaGenerator::Gen { name, schema } => {
+                        (Some(name()), schema(&mut generator))
+                    }
                     ApiSchemaGenerator::Static(schema) => {
                         (None, schema.clone())
                     }
@@ -831,11 +825,9 @@ fn box_reference_or<T>(
         openapiv3::ReferenceOr::Item(schema) => {
             openapiv3::ReferenceOr::boxed_item(schema)
         }
-        openapiv3::ReferenceOr::Reference {
-            reference,
-        } => openapiv3::ReferenceOr::Reference {
-            reference,
-        },
+        openapiv3::ReferenceOr::Reference { reference } => {
+            openapiv3::ReferenceOr::Reference { reference }
+        }
     }
 }
 

@@ -166,9 +166,7 @@ async fn find_pets_by_tags(
                 tags: None,
                 status: None,
             };
-            tmp = FindByTagsScanParams {
-                tags: page_selector.tags.clone(),
-            };
+            tmp = FindByTagsScanParams { tags: page_selector.tags.clone() };
             (vec![pet], &tmp)
         }
     };
