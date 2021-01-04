@@ -16,13 +16,28 @@ $ cargo +nightly doc
 ----
 
 
-== Build and run
+== Contributing
+
+=== Building and testing
 
 You can **build and run the whole test suite** with `cargo test`.  The test
 suite runs cleanly and should remain clean.
 
-You can **format the code** using `cargo +nightly fmt`.  Make sure to run this
-before pushing changes.  The CI checks that the code is correctly formatted.
+=== Code formatting
+
+Dropshot works with stable Rust versions, but for consistency the code is
+_formatted_ with a specific version of `rustfmt`.  To contribute to Dropshot,
+you will need to have installed the `nightly-2020-07-26` version of the Rust
+toolchain:
+
+----
+$ rustup install nightly-2020-07-26
+----
+
+You can then **format the code** using `cargo +nightly-2020-07-26 fmt` or
+`rustfmt +nightly-2020-07-26`.  Make sure to run this before pushing changes.
+The CI uses this version of `rustfmt` to check that the code is correctly
+formatted.
 
 
 == Configuration reference
