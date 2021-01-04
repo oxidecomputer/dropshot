@@ -29,7 +29,7 @@ pub async fn http_read_body<T>(
     cap: usize,
 ) -> Result<Bytes, HttpError>
 where
-    T: HttpBody<Data = Bytes, Error = hyper::error::Error> + std::marker::Unpin,
+    T: HttpBody<Data = Bytes, Error = hyper::Error> + std::marker::Unpin,
 {
     /*
      * This looks a lot like the implementation of hyper::body::to_bytes(), but

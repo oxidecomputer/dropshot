@@ -942,7 +942,7 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
             return rv;
         }
 
-        tokio::time::delay_for(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
     panic!(

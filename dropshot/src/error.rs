@@ -44,7 +44,7 @@
  * errors into HttpErrors.
  */
 
-use hyper::error::Error as HyperError;
+use hyper::Error as HyperError;
 use serde::Deserialize;
 use serde::Serialize;
 

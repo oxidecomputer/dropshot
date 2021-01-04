@@ -411,7 +411,7 @@ pub struct TestContext {
     pub client_testctx: ClientTestContext,
     pub server: HttpServer,
     pub log: Logger,
-    server_task: JoinHandle<Result<(), hyper::error::Error>>,
+    server_task: JoinHandle<Result<(), hyper::Error>>,
     log_context: Option<LogContext>,
 }
 
