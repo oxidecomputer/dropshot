@@ -15,19 +15,9 @@ fn main() -> Result<(), String> {
     api.register(update_pet_with_form).unwrap();
     api.register(find_pets_by_tags).unwrap();
 
-    api.print_openapi(
-        &mut std::io::stdout(),
-        &"Pet Shop",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        &"",
-    )
-    .map_err(|e| e.to_string())?;
+    api.openapi("Pet Shop", "")
+        .write(&mut std::io::stdout())
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }

@@ -2,7 +2,15 @@
   "openapi": "3.0.3",
   "info": {
     "title": "test",
-    "version": "threeve"
+    "description": "gusty winds may exist",
+    "termsOfService": "no hat, no cane? no service!",
+    "contact": {
+      "name": "old mate"
+    },
+    "license": {
+      "name": "CDDL"
+    },
+    "version": "1985.7"
   },
   "paths": {
     "/impairment": {
