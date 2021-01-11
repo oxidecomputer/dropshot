@@ -100,6 +100,7 @@ fn do_endpoint(
     let name = &ast.sig.ident;
     let name_str = name.to_string();
     let method_ident = format_ident!("{}", method);
+    let visibility = &ast.vis;
 
     let description_text_provided = extract_doc_from_attrs(&ast.attrs);
     let description_text_annotated = format!(
@@ -215,11 +216,11 @@ fn do_endpoint(
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
         #description_doc_comment
-        pub struct #name {}
+        #visibility struct #name {}
         // ... a constant of type `#name` whose identifier is also #name
         #[allow(non_upper_case_globals, missing_docs)]
         #description_doc_comment
-        const #name: #name = #name {};
+        #visibility const #name: #name = #name {};
 
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`
@@ -311,7 +312,7 @@ mod tests {
             }
             .into(),
             quote! {
-                async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                pub async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             }
             .into(),
         );
@@ -343,11 +344,11 @@ mod tests {
 
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
-            const handler_xyz: handler_xyz = handler_xyz {};
+            pub const handler_xyz: handler_xyz = handler_xyz {};
 
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                    pub async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -410,7 +411,7 @@ mod tests {
 
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
-            pub struct handler_xyz {}
+            struct handler_xyz {}
 
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
@@ -419,6 +420,77 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
+                }
+            }
+        };
+
+        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_endpoint3_pub_crate() {
+        let ret = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            }
+            .into(),
+            quote! {
+                pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
+            }
+            .into(),
+        );
+        let full = quote! {
+            std::sync::Arc< dropshot::RequestContext>
+        };
+        let short = quote! {
+            Arc<RequestContext>
+        };
+        let query = quote! {
+            Query<Q>
+        };
+        let expected = quote! {
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn need_arc_requestcontext<T>()
+                where
+                    T: ?Sized + TypeEq<This = #full>,
+                {
+                }
+                need_arc_requestcontext::<#short>();
+            };
+
+            const _: fn() = || {
+                fn need_extractor<T>()
+                where
+                    T: ?Sized + dropshot::Extractor,
+                {
+                }
+                need_extractor::<#query>();
+            };
+
+            #[allow(non_camel_case_types, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub(crate) struct handler_xyz {}
+
+            #[allow(non_upper_case_globals, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub(crate) const handler_xyz: handler_xyz = handler_xyz {};
+
+            impl From<handler_xyz> for dropshot::ApiEndpoint {
+                fn from(_: handler_xyz) -> Self {
+                    pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -470,7 +542,7 @@ mod tests {
 
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
-            pub struct handler_xyz {}
+            struct handler_xyz {}
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
@@ -530,7 +602,7 @@ mod tests {
 
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
-            pub struct handler_xyz {}
+            struct handler_xyz {}
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             const handler_xyz: handler_xyz = handler_xyz {};
