@@ -310,6 +310,12 @@
  * the OpenAPI spec will not include any status code or type information in
  * this case.
  *
+ * ## What about generic handlers that run on all requests?
+ *
+ * There's no mechanism in Dropshot for this.  Instead, it's recommended that
+ * users commonize code using regular Rust functions and calling them.  See the
+ * design notes in the README for more on this.
+ *
  *
  * ## Support for paginated resources
  *
