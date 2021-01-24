@@ -106,6 +106,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::num::NonZeroU64;
@@ -189,7 +190,7 @@ impl<ItemType> ResultsPage<ItemType> {
  * careful when designing these structures to consider what you might want to
  * support in the future.
  */
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize)]
 pub struct PaginationParams<ScanParams, PageSelector>
 where
     ScanParams: DeserializeOwned,
@@ -213,14 +214,60 @@ where
      * [`RequestContext`][crate::handler::RequestContext::page_limit()]
      * to access this value.
      */
-    #[schemars(
-        description = "Maximum number of items returned by a single call"
-    )]
     pub(crate) limit: Option<NonZeroU64>,
 }
 
+pub(crate) const PAGINATION_PARAM_SENTINEL: &str =
+    "x-dropshot-pagination-param";
+
+impl<ScanParams, PageSelector> JsonSchema
+    for PaginationParams<ScanParams, PageSelector>
+where
+    ScanParams: DeserializeOwned + JsonSchema,
+    PageSelector: DeserializeOwned + Serialize,
+{
+    fn schema_name() -> String {
+        unimplemented!()
+    }
+
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        /*
+         * We use `SchemaPaginationParams to generate an intuitive schema and
+         * we use the JSON schema extensions mechanism to communicate the fact
+         * that this is a pagination parameter. We'll later use this to tag
+         * its associated operation as paginated.
+         * TODO we would ideally like to verify that both parameters *and*
+         * response structure are properly configured for pagination.
+         */
+        let mut schema = SchemaPaginationParams::<ScanParams>::json_schema(gen)
+            .into_object();
+        schema
+            .extensions
+            .insert(PAGINATION_PARAM_SENTINEL.to_string(), json!(true));
+        schemars::schema::Schema::Object(schema)
+    }
+}
+
 /*
- * Deserialize `WhichPage` for `PaginationParams`. We In REST APIs, callers
+ * This is the API consumer-visible interface for paginated endpoints. We use
+ * this solely to generate the schema. User-specified paratemers appear before
+ * pagination boilerplate.
+ */
+#[derive(JsonSchema)]
+#[allow(dead_code)]
+struct SchemaPaginationParams<ScanParams> {
+    #[schemars(flatten)]
+    params: Option<ScanParams>,
+    /** Maximum number of items returned by a single call */
+    limit: Option<NonZeroU64>,
+    /** Token returned by previous call to retreive the subsequent page */
+    page_token: Option<String>,
+}
+
+/*
+ * Deserialize `WhichPage` for `PaginationParams`. In REST APIs, callers
  * typically provide either the parameters to resume a scan (in our case, just
  * "page_token") or the parameters to begin a new one (which can be
  * any set of parameters that our consumer wants).  There's generally no
@@ -278,24 +325,6 @@ pub enum WhichPage<ScanParams, PageSelector> {
      * last result seen by the client).
      */
     Next(PageSelector),
-}
-
-/*
- * Generate the JsonSchema for WhichPage from SchemaWhichPage.
- */
-impl<ScanParams, PageSelector> JsonSchema
-    for WhichPage<ScanParams, PageSelector>
-where
-    ScanParams: JsonSchema,
-{
-    fn schema_name() -> String {
-        unimplemented!();
-    }
-    fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        SchemaWhichPage::<ScanParams>::json_schema(gen)
-    }
 }
 
 /**
@@ -458,17 +487,6 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
     Ok(deserialized.page_start)
 }
 
-/*
- * This is the on-the-wire protocol; we use this solely to generate the schema.
- */
-#[derive(JsonSchema)]
-#[allow(dead_code)]
-#[serde(untagged)]
-enum SchemaWhichPage<ScanParams> {
-    Next { page_token: String },
-    First(ScanParams),
-}
-
 #[cfg(test)]
 mod test {
     use super::deserialize_page_token;
@@ -476,9 +494,12 @@ mod test {
     use super::PaginationParams;
     use super::ResultsPage;
     use super::WhichPage;
+    use super::PAGINATION_PARAM_SENTINEL;
+    use schemars::JsonSchema;
     use serde::de::DeserializeOwned;
     use serde::Deserialize;
     use serde::Serialize;
+    use serde_json::json;
     use std::{fmt::Debug, num::NonZeroU64};
 
     #[test]
@@ -801,5 +822,27 @@ mod test {
             ResultsPage::new(Vec::new(), &dummy_scan_params, get_page).unwrap();
         assert_eq!(results.items.len(), 0);
         assert!(results.next_page.is_none());
+    }
+
+    #[derive(Deserialize, Serialize, JsonSchema)]
+    struct Name {
+        name: String,
+    }
+
+    #[test]
+    fn test_pagination_schema() {
+        let settings = schemars::gen::SchemaSettings::openapi3();
+        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let schema =
+            PaginationParams::<Name, Name>::json_schema(&mut generator)
+                .into_object();
+
+        assert_eq!(
+            *schema
+                .extensions
+                .get(&(PAGINATION_PARAM_SENTINEL.to_string()))
+                .unwrap(),
+            json!(true)
+        );
     }
 }
