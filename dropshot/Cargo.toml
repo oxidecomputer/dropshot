@@ -61,7 +61,6 @@ features = [ "uuid" ]
 expectorate = "1.0.2"
 lazy_static = "1.4.0"
 libc = "0.2.71"
-serde_with = "1.4.0"
 subprocess = "0.2.4"
 trybuild = "1.0.31"
 
