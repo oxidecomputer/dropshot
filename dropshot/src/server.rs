@@ -18,6 +18,7 @@ use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use std::any::Any;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -59,7 +60,7 @@ pub struct ServerConfig {
 
 /**
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
- * we find useful (e.g., close()).
+ * we find useful.
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
@@ -72,12 +73,8 @@ impl HttpServer {
         self.local_addr
     }
 
-    /*
-     * TODO-cleanup is it more accurate to call this start() and say it returns
-     * a Future that resolves when the server is finished?
-     *
-     * Related: Should the type system expect that the server will "finish"
-     * without being prompted by a close?
+    /**
+     * Begins execution of the underlying Http server.
      */
     pub fn run(self) -> RunningHttpServer {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
@@ -102,9 +99,8 @@ impl HttpServer {
     /**
      * Set up an HTTP server bound on the specified address that runs registered
      * handlers.  You must invoke `run()` on the returned instance of
-     * `HttpServer` (and await the result) to actually start the server.  You
-     * can call `close()` to begin a graceful shutdown of the server, which will
-     * be complete when the `run()` Future is resolved.
+     * `HttpServer` (and await the result) to actually start the server.
+     *
      * TODO-cleanup We should be able to take a reference to the ApiDescription.
      * We currently can't because we need to hang onto the router.
      */
@@ -153,7 +149,7 @@ impl HttpServer {
 }
 
 /**
- * A connection to a currently running `HttpServer`.
+ * A connection to a currently running Hyper Server.
  */
 pub struct RunningHttpServer {
     app_state: Arc<DropshotState>,
@@ -162,6 +158,11 @@ pub struct RunningHttpServer {
     close_channel: tokio::sync::oneshot::Sender<()>,
 }
 
+/*
+ * This struct would be a great target for async drop, if that happens - it
+ * would be great to have a drop implementation which can invoke terminate if
+ * the caller has not done so explicitly.
+ */
 impl RunningHttpServer {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
@@ -172,7 +173,7 @@ impl RunningHttpServer {
     }
 
     /**
-     * Signals the currently running server to temrinate (if it hasn't
+     * Signals the currently running server to terminate (if it hasn't
      * stopped already) and waits for it to exit.
      */
     pub async fn terminate(self) -> Result<(), String> {
@@ -182,6 +183,20 @@ impl RunningHttpServer {
             .await
             .map_err(|error| format!("waiting for server: {}", error))?;
         join_result.map_err(|error| format!("server stopped: {}", error))
+    }
+
+    /**
+     * Signals the currently running server to terminate, and waits for it to
+     * exit.
+     *
+     * * `signal` - Once this future completes, the server is instructed to
+     * terminate.
+     */
+    pub async fn with_graceful_shutdown<F>(self, signal: F) -> Result<(), String>
+    where F: Future<Output = ()>
+    {
+        signal.await;
+        self.terminate().await
     }
 }
 

@@ -59,7 +59,7 @@ async fn main() -> Result<(), String> {
      * Wait for the server to stop.  Note that there's not any code to shut down
      * this server, so we should never get past this point.
      */
-    server_task.terminate().await
+    server_task.with_graceful_shutdown(std::future::pending()).await
 }
 
 /**
