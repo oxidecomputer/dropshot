@@ -60,10 +60,6 @@ pub struct ServerConfig {
 /**
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
  * we find useful (e.g., close()).
- * TODO-cleanup: this mechanism should probably do better with types.  In
- * particular, once you call run(), you shouldn't be able to call it again
- * (i.e., it should consume self).  But you should be able to close() it.  Once
- * you've called close(), you shouldn't be able to call it again.
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
@@ -79,6 +75,9 @@ impl HttpServer {
     /*
      * TODO-cleanup is it more accurate to call this start() and say it returns
      * a Future that resolves when the server is finished?
+     *
+     * Related: Should the type system expect that the server will "finish"
+     * without being prompted by a close?
      */
     pub fn run(self) -> RunningHttpServer {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
@@ -172,10 +171,14 @@ impl RunningHttpServer {
         Arc::clone(&self.app_state.private)
     }
 
+    /**
+     * Signals the currently running server to temrinate (if it hasn't
+     * stopped already) and waits for it to exit.
+     */
     pub async fn terminate(self) -> Result<(), String> {
-        let handle = self.join_handle;
         self.close_channel.send(()).expect("failed to send close signal");
-        let join_result = handle
+        let join_result = self
+            .join_handle
             .await
             .map_err(|error| format!("waiting for server: {}", error))?;
         join_result.map_err(|error| format!("server stopped: {}", error))
