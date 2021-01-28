@@ -78,7 +78,7 @@
  *         .map_err(|error| format!("failed to start server: {}", error))?;
  *
  *     let server_task = server.run();
- *     server_task.terminate().await
+ *     server_task.with_graceful_shutdown(std::future::pending()).await
  * }
  * ```
  *

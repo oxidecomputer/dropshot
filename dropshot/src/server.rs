@@ -152,7 +152,7 @@ impl HttpServer {
 }
 
 /**
- * A connection to a currently running Hyper Server.
+ * A connection to a currently running Dropshot server.
  */
 pub struct RunningHttpServer {
     app_state: Arc<DropshotState>,
@@ -162,7 +162,7 @@ pub struct RunningHttpServer {
 }
 
 /*
- * This struct would be a great target for async drop, if that happens - it
+ * TODO: This struct would be a great target for async drop, if that happens - it
  * would be great to have a drop implementation which can invoke terminate if
  * the caller has not done so explicitly.
  */

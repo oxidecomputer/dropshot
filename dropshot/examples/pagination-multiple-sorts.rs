@@ -335,7 +335,7 @@ async fn main() -> Result<(), String> {
      */
     print_example_requests(log, &server_task.local_addr());
 
-    server_task.terminate().await
+    server_task.with_graceful_shutdown(std::future::pending()).await
 }
 
 fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {

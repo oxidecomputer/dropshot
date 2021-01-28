@@ -310,7 +310,7 @@ async fn main() -> Result<(), String> {
     let server = HttpServer::new(&config_dropshot, api, ctx, &log)
         .map_err(|error| format!("failed to create server: {}", error))?;
     let server_task = server.run();
-    server_task.terminate().await
+    server_task.with_graceful_shutdown(std::future::pending()).await
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<DataCollection> {
