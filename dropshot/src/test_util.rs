@@ -439,8 +439,8 @@ impl TestContext {
         /*
          * Set up the server itself.
          */
-        let server =
-            HttpServer::new(&config_dropshot, api, private, &log).unwrap()
+        let server = HttpServer::new(&config_dropshot, api, private, &log)
+            .unwrap()
             .run();
 
         let server_addr = server.local_addr();

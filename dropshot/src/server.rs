@@ -12,7 +12,10 @@ use super::router::HttpRouter;
 
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
-use hyper::server::{Server, conn::{AddrIncoming, AddrStream}};
+use hyper::server::{
+    conn::{AddrIncoming, AddrStream},
+    Server,
+};
 use hyper::service::Service;
 use hyper::Body;
 use hyper::Request;
@@ -192,8 +195,12 @@ impl RunningHttpServer {
      * * `signal` - Once this future completes, the server is instructed to
      * terminate.
      */
-    pub async fn with_graceful_shutdown<F>(self, signal: F) -> Result<(), String>
-    where F: Future<Output = ()>
+    pub async fn with_graceful_shutdown<F>(
+        self,
+        signal: F,
+    ) -> Result<(), String>
+    where
+        F: Future<Output = ()>,
     {
         signal.await;
         self.terminate().await
