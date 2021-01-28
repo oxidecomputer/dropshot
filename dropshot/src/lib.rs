@@ -78,7 +78,7 @@
  *         .map_err(|error| format!("failed to start server: {}", error))?;
  *
  *     let server_task = server.run();
- *     server.wait_for_shutdown(server_task).await
+ *     server_task.terminate().await
  * }
  * ```
  *
