@@ -307,10 +307,10 @@ async fn main() -> Result<(), String> {
     api.register(example_list_projects).unwrap();
     api.register(example_list_disks).unwrap();
     api.register(example_list_instances).unwrap();
-    let mut server = HttpServer::new(&config_dropshot, api, ctx, &log)
+    let server = HttpServer::new(&config_dropshot, api, ctx, &log)
         .map_err(|error| format!("failed to create server: {}", error))?;
     let server_task = server.run();
-    server.wait_for_shutdown(server_task).await
+    server_task.terminate().await
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<DataCollection> {

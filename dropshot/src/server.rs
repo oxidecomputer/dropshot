@@ -12,8 +12,7 @@ use super::router::HttpRouter;
 
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
-use futures::FutureExt;
-use hyper::server::conn::AddrStream;
+use hyper::server::{Server, conn::{AddrIncoming, AddrStream}};
 use hyper::service::Service;
 use hyper::Body;
 use hyper::Request;
@@ -68,9 +67,8 @@ pub struct ServerConfig {
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
-    server_future: Option<BoxFuture<'static, Result<(), hyper::Error>>>,
+    server: Server<AddrIncoming, ServerConnectionHandler>,
     local_addr: SocketAddr,
-    close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl HttpServer {
@@ -78,36 +76,28 @@ impl HttpServer {
         self.local_addr
     }
 
-    pub fn close(mut self) {
-        /*
-         * It should be impossible to close a channel that's already been closed
-         * because close() consumes self.  It should also be impossible to fail
-         * to send the close signal because nothing else can cause the server to
-         * exit.
-         */
-        let channel =
-            self.close_channel.take().expect("already closed somehow");
-        channel.send(()).expect("failed to send close signal");
-    }
-
     /*
      * TODO-cleanup is it more accurate to call this start() and say it returns
      * a Future that resolves when the server is finished?
      */
-    pub fn run(&mut self) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
-        let future =
-            self.server_future.take().expect("cannot run() more than once");
-        tokio::spawn(async { future.await })
-    }
+    pub fn run(self) -> RunningHttpServer {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let log_close = self.app_state.log.new(o!());
+        let graceful = self.server.with_graceful_shutdown(async move {
+            rx.await.expect(
+                "dropshot server shutting down without invoking close()",
+            );
+            info!(log_close, "received request to begin graceful shutdown");
+        });
 
-    pub async fn wait_for_shutdown(
-        &mut self,
-        join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>,
-    ) -> Result<(), String> {
-        let join_result = join_handle
-            .await
-            .map_err(|error| format!("waiting for server: {}", error))?;
-        join_result.map_err(|error| format!("server stopped: {}", error))
+        let join_handle = tokio::spawn(async { graceful.await });
+
+        RunningHttpServer {
+            app_state: self.app_state,
+            local_addr: self.local_addr,
+            join_handle,
+            close_channel: tx,
+        }
     }
 
     /**
@@ -126,7 +116,6 @@ impl HttpServer {
         log: &Logger,
     ) -> Result<HttpServer, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
-        let log_close = log.new(o!());
         let app_state = Arc::new(DropshotState {
             private,
             config: ServerConfig {
@@ -152,24 +141,44 @@ impl HttpServer {
         let local_addr = server.local_addr();
         info!(app_state.log, "listening"; "local_addr" => %local_addr);
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let graceful = server.with_graceful_shutdown(async move {
-            rx.await.expect(
-                "dropshot server shutting down without invoking close()",
-            );
-            info!(log_close, "received request to begin graceful shutdown");
-        });
-
         Ok(HttpServer {
             app_state,
-            server_future: Some(graceful.boxed()),
+            server,
             local_addr,
-            close_channel: Some(tx),
         })
     }
 
     pub fn app_private(&self) -> Arc<dyn Any + Send + Sync + 'static> {
         Arc::clone(&self.app_state.private)
+    }
+}
+
+/**
+ * A connection to a currently running `HttpServer`.
+ */
+pub struct RunningHttpServer {
+    app_state: Arc<DropshotState>,
+    local_addr: SocketAddr,
+    join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>,
+    close_channel: tokio::sync::oneshot::Sender<()>,
+}
+
+impl RunningHttpServer {
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+
+    pub fn app_private(&self) -> Arc<dyn Any + Send + Sync + 'static> {
+        Arc::clone(&self.app_state.private)
+    }
+
+    pub async fn terminate(self) -> Result<(), String> {
+        let handle = self.join_handle;
+        self.close_channel.send(()).expect("failed to send close signal");
+        let join_result = handle
+            .await
+            .map_err(|error| format!("waiting for server: {}", error))?;
+        join_result.map_err(|error| format!("server stopped: {}", error))
     }
 }
 
