@@ -1,0 +1,29 @@
+:showtitle:
+:toc: left
+:icons: font
+
+= Dropshot Changelog
+
+// cargo-release: next header goes here (do not change this line)
+
+== Unreleased changes (release date TBD)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.3.0\...HEAD[Full list of commits]
+
+=== Breaking changes
+
+* Dropshot now uses tokio 1.0 and hyper 0.14.  tokio 1.0 is incompatible at runtime with previous versions (0.2 and earlier).  Consumers must update to tokio 1.0 when updating to Dropshot {{version}}.  tokio does not expect to introduce new breaking changes in the foreseeable future.
+
+=== Deprecated
+
+* `ApiDescription::print_openapi()`, replaced with `ApiDescription::openapi()`.  See #68 below.
+
+=== Other notable changes
+
+* #68 Improve ergonomics of OpenAPI definition generation.  This change deprecates `ApiDescription::print_openapi()`, replacing it with the easier-to-use `ApiDescription::openapi()`, which provides a builder interface.
+* #64 The maximum request size is now configurable.  It defaults to the previously hardcoded value of 1024 bytes.  (The default is aggressive just to ensure test coverage.)
+* #61 The schemars dependency is updated to 0.8
+
+== Prior to 0.3.0
+
+Changes not documented.
