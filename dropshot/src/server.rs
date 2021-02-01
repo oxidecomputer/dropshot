@@ -12,8 +12,6 @@ use super::router::HttpRouter;
 
 use futures::future::BoxFuture;
 use futures::future::FutureExt;
-use futures::select;
-use futures::pin_mut;
 use futures::lock::Mutex;
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
@@ -27,9 +25,9 @@ use std::any::Any;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
+use std::task::{Context, Poll};
 use uuid::Uuid;
 
 use slog::Logger;
@@ -182,61 +180,39 @@ impl HttpServer {
      * Signals the currently running server to stop (if it hasn't
      * stopped already) and waits for it to exit.
      */
-    pub async fn shutdown(mut self) -> Result<(), String> {
+    pub async fn shutdown(self) -> Result<(), String> {
         self.close_channel.send(()).expect("failed to send close signal");
-        HttpServer::await_join(self.join_handle.take().unwrap()).await
-    }
-
-    /**
-     * Waits for the currently running server to stop, without sending
-     * a signal to terminate.
-     *
-     * Note: If the server chooses to not exit, this function will never return.
-     */
-    pub async fn wait(mut self) -> Result<(), String> {
-        HttpServer::await_join(self.join_handle.take().unwrap()).await
-    }
-
-    // TODO: "run_until", move signal above into HttpServerStarter???
-    /**
-     * Waits until either the server terminates on its own, or a client-provided
-     * signal instructs it to terminate.
-     *
-     * * `signal` - Once this future completes, the server is instructed to
-     * shut down.
-     */
-    pub async fn shutdown_upon<F>(
-        mut self,
-        signal: F,
-    ) -> Result<(), String>
-    where
-        F: Future<Output = ()>,
-    {
-        let fused_signal = signal.fuse();
-        pin_mut!(fused_signal);
-
-        let fused_join = HttpServer::await_join(self.join_handle.take().unwrap()).fuse();
-        pin_mut!(fused_join);
-
-        select! {
-            _ = fused_signal => {
-                // Server closed because caller requested it close.
-                self.close_channel.send(()).expect("failed to send close signal");
-                return fused_join.await;
-            }
-            result = fused_join => {
-                // Server exited on its own, before the caller requested
-                // anything.
-                return result;
-            }
+        if let Some(handle) = self.join_handle {
+            let join_result = handle
+                .await
+                .map_err(|error| format!("waiting for server: {}", error))?;
+            join_result.map_err(|error| format!("server stopped: {}", error))
+        } else {
+            Ok(())
         }
     }
+}
 
-    async fn await_join(join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>) -> Result<(), String> {
-        let join_result = join_handle
-            .await
-            .map_err(|error| format!("waiting for server: {}", error))?;
-        join_result.map_err(|error| format!("server stopped: {}", error))
+impl Future for HttpServer {
+    type Output = Result<(), String>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let server = Pin::into_inner(self);
+        let mut handle = server
+            .join_handle
+            .take()
+            .expect("polling a server future which has already completed");
+        let poll = handle
+            .poll_unpin(cx)
+            .map(|result| {
+                let result = result.map_err(|error| format!("waiting for server: {}", error))?;
+                result.map_err(|error| format!("server stopped: {}", error))
+            });
+
+        if poll.is_pending() {
+            server.join_handle.replace(handle);
+        }
+        return poll;
     }
 }
 

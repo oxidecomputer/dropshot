@@ -311,7 +311,7 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create server: {}", error))?
         .start();
 
-    server.wait().await
+    server.await
 }
 
 fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<DataCollection> {

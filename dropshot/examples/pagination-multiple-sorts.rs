@@ -335,7 +335,7 @@ async fn main() -> Result<(), String> {
      */
     print_example_requests(log, &server.local_addr());
 
-    server.wait().await
+    server.await
 }
 
 fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
