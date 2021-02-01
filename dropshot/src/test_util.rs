@@ -35,7 +35,7 @@ use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
-use crate::server::{HttpServer, RunningHttpServer};
+use crate::server::{HttpServerStarter, HttpServer};
 
 /**
  * List of allowed HTTP headers in responses.  This is used to make sure we
@@ -408,7 +408,7 @@ impl LogContext {
  */
 pub struct TestContext {
     pub client_testctx: ClientTestContext,
-    pub server: RunningHttpServer,
+    pub server: HttpServer,
     pub log: Logger,
     log_context: Option<LogContext>,
 }
@@ -439,9 +439,9 @@ impl TestContext {
         /*
          * Set up the server itself.
          */
-        let server = HttpServer::new(&config_dropshot, api, private, &log)
+        let server = HttpServerStarter::new(&config_dropshot, api, private, &log)
             .unwrap()
-            .run();
+            .start();
 
         let server_addr = server.local_addr();
         let client_log = log.new(o!("http_client" => "dropshot test suite"));
@@ -461,7 +461,7 @@ impl TestContext {
      */
     /* TODO-cleanup: is there an async analog to Drop? */
     pub async fn teardown(self) {
-        self.server.terminate().await.expect("server stopped with an error");
+        self.server.shutdown().await.expect("server stopped with an error");
         if let Some(log_context) = self.log_context {
             log_context.cleanup_successful();
         }

@@ -5,7 +5,7 @@
 
 use dropshot::test_util::read_config;
 use dropshot::ConfigDropshot;
-use dropshot::HttpServer;
+use dropshot::HttpServerStarter;
 use slog::Logger;
 use std::fs;
 use std::sync::Arc;
@@ -53,8 +53,8 @@ fn test_config_bad_bind_address_garbage() {
     );
 }
 
-fn make_server(config: &ConfigDropshot, log: &Logger) -> HttpServer {
-    HttpServer::new(&config, dropshot::ApiDescription::new(), Arc::new(0), log)
+fn make_server(config: &ConfigDropshot, log: &Logger) -> HttpServerStarter {
+    HttpServerStarter::new(&config, dropshot::ApiDescription::new(), Arc::new(0), log)
         .unwrap()
 }
 
@@ -119,9 +119,9 @@ async fn test_config_bind_address() {
     let config =
         read_config::<ConfigDropshot>("bind_address", &config_text).unwrap();
     let server = make_server(&config, &log);
-    let task = server.run();
+    let task = server.start();
     client.request(cons_request(bind_port)).await.unwrap();
-    task.terminate().await.unwrap();
+    task.shutdown().await.unwrap();
 
     /*
      * Make another request to make sure it fails now that we've shut down
@@ -147,11 +147,11 @@ async fn test_config_bind_address() {
     let config =
         read_config::<ConfigDropshot>("bind_address", &config_text).unwrap();
     let server = make_server(&config, &log);
-    let task = server.run();
+    let task = server.start();
     client.request(cons_request(bind_port + 1)).await.unwrap();
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
-    task.terminate().await.unwrap();
+    task.shutdown().await.unwrap();
 
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
     assert!(error.is_connect());

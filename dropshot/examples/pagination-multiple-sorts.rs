@@ -100,7 +100,7 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServer;
+use dropshot::HttpServerStarter;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
 use dropshot::PaginationOrder::Descending;
@@ -326,16 +326,16 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
-    let server = HttpServer::new(&config_dropshot, api, ctx, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?;
-    let server_task = server.run();
+    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
+        .map_err(|error| format!("failed to create server: {}", error))?
+        .start();
 
     /*
      * Print out some example requests to start with.
      */
-    print_example_requests(log, &server_task.local_addr());
+    print_example_requests(log, &server.local_addr());
 
-    server_task.with_graceful_shutdown(std::future::pending()).await
+    server.wait().await
 }
 
 fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {

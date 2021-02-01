@@ -227,7 +227,7 @@ async fn test_paginate_errors() {
     struct ErrorTestCase {
         path: String,
         message: &'static str,
-    }
+    };
     let test_cases = vec![
         ErrorTestCase {
             path: "/intapi?limit=0".to_string(),

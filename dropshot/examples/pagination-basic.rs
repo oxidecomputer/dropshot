@@ -24,7 +24,7 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServer;
+use dropshot::HttpServerStarter;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -153,8 +153,8 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
-    let server = HttpServer::new(&config_dropshot, api, ctx, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?;
-    let server_task = server.run();
-    server_task.with_graceful_shutdown(std::future::pending()).await
+    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
+        .map_err(|error| format!("failed to create server: {}", error))?
+        .start();
+    server.wait().await
 }

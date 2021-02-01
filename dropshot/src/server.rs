@@ -11,6 +11,9 @@ use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 
 use futures::future::BoxFuture;
+use futures::future::FutureExt;
+use futures::select;
+use futures::pin_mut;
 use futures::lock::Mutex;
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
@@ -65,13 +68,13 @@ pub struct ServerConfig {
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
  * we find useful.
  */
-pub struct HttpServer {
+pub struct HttpServerStarter {
     app_state: Arc<DropshotState>,
     server: Server<AddrIncoming, ServerConnectionHandler>,
     local_addr: SocketAddr,
 }
 
-impl HttpServer {
+impl HttpServerStarter {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -79,30 +82,30 @@ impl HttpServer {
     /**
      * Begins execution of the underlying Http server.
      */
-    pub fn run(self) -> RunningHttpServer {
+    pub fn start(self) -> HttpServer {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let log_close = self.app_state.log.new(o!());
         let graceful = self.server.with_graceful_shutdown(async move {
             rx.await.expect(
-                "dropshot server shutting down without invoking close()",
+                "dropshot server shutting down without invoking shutdown()",
             );
             info!(log_close, "received request to begin graceful shutdown");
         });
 
         let join_handle = tokio::spawn(async { graceful.await });
 
-        RunningHttpServer {
+        HttpServer {
             app_state: self.app_state,
             local_addr: self.local_addr,
-            join_handle,
+            join_handle: Some(join_handle),
             close_channel: tx,
         }
     }
 
     /**
      * Set up an HTTP server bound on the specified address that runs registered
-     * handlers.  You must invoke `run()` on the returned instance of
-     * `HttpServer` (and await the result) to actually start the server.
+     * handlers.  You must invoke `start()` on the returned instance of
+     * `HttpServerStarter` (and await the result) to actually start the server.
      *
      * TODO-cleanup We should be able to take a reference to the ApiDescription.
      * We currently can't because we need to hang onto the router.
@@ -112,7 +115,7 @@ impl HttpServer {
         api: ApiDescription,
         private: Arc<dyn Any + Send + Sync + 'static>,
         log: &Logger,
-    ) -> Result<HttpServer, hyper::Error> {
+    ) -> Result<HttpServerStarter, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
@@ -139,7 +142,7 @@ impl HttpServer {
         let local_addr = server.local_addr();
         info!(app_state.log, "listening"; "local_addr" => %local_addr);
 
-        Ok(HttpServer {
+        Ok(HttpServerStarter {
             app_state,
             server,
             local_addr,
@@ -152,21 +155,21 @@ impl HttpServer {
 }
 
 /**
- * A connection to a currently running Dropshot server.
+ * A running Dropshot HTTP server.
  */
-pub struct RunningHttpServer {
+pub struct HttpServer {
     app_state: Arc<DropshotState>,
     local_addr: SocketAddr,
-    join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>,
+    join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
     close_channel: tokio::sync::oneshot::Sender<()>,
 }
 
 /*
  * TODO: This struct would be a great target for async drop, if that happens - it
- * would be great to have a drop implementation which can invoke terminate if
+ * would be great to have a drop implementation which can invoke shutdown if
  * the caller has not done so explicitly.
  */
-impl RunningHttpServer {
+impl HttpServer {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -176,34 +179,64 @@ impl RunningHttpServer {
     }
 
     /**
-     * Signals the currently running server to terminate (if it hasn't
+     * Signals the currently running server to stop (if it hasn't
      * stopped already) and waits for it to exit.
      */
-    pub async fn terminate(self) -> Result<(), String> {
+    pub async fn shutdown(mut self) -> Result<(), String> {
         self.close_channel.send(()).expect("failed to send close signal");
-        let join_result = self
-            .join_handle
-            .await
-            .map_err(|error| format!("waiting for server: {}", error))?;
-        join_result.map_err(|error| format!("server stopped: {}", error))
+        HttpServer::await_join(self.join_handle.take().unwrap()).await
     }
 
     /**
-     * Signals the currently running server to terminate, and waits for it to
-     * exit.
+     * Waits for the currently running server to stop, without sending
+     * a signal to terminate.
+     *
+     * Note: If the server chooses to not exit, this function will never return.
+     */
+    pub async fn wait(mut self) -> Result<(), String> {
+        HttpServer::await_join(self.join_handle.take().unwrap()).await
+    }
+
+    // TODO: "run_until", move signal above into HttpServerStarter???
+    /**
+     * Waits until either the server terminates on its own, or a client-provided
+     * signal instructs it to terminate.
      *
      * * `signal` - Once this future completes, the server is instructed to
-     * terminate.
+     * shut down.
      */
-    pub async fn with_graceful_shutdown<F>(
-        self,
+    pub async fn shutdown_upon<F>(
+        mut self,
         signal: F,
     ) -> Result<(), String>
     where
         F: Future<Output = ()>,
     {
-        signal.await;
-        self.terminate().await
+        let fused_signal = signal.fuse();
+        pin_mut!(fused_signal);
+
+        let fused_join = HttpServer::await_join(self.join_handle.take().unwrap()).fuse();
+        pin_mut!(fused_join);
+
+        select! {
+            _ = fused_signal => {
+                // Server closed because caller requested it close.
+                self.close_channel.send(()).expect("failed to send close signal");
+                return fused_join.await;
+            }
+            result = fused_join => {
+                // Server exited on its own, before the caller requested
+                // anything.
+                return result;
+            }
+        }
+    }
+
+    async fn await_join(join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>) -> Result<(), String> {
+        let join_result = join_handle
+            .await
+            .map_err(|error| format!("waiting for server: {}", error))?;
+        join_result.map_err(|error| format!("server stopped: {}", error))
     }
 }
 
