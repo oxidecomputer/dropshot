@@ -155,7 +155,7 @@
  *      */
  *     api.register(myapi_projects_get_project).unwrap();
  *
- *     /* ... (use `api` to set up an `HttpServerStarter` ) */
+ *     /* ... (use `api` to set up an `HttpServer` ) */
  * }
  *
  * ```

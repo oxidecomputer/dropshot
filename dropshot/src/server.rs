@@ -177,8 +177,10 @@ impl HttpServer {
      */
     pub async fn close(mut self) -> Result<(), String> {
         self.close_channel
-            .take().expect("cannnot close twice")
-            .send(()).expect("failed to send close signal");
+            .take()
+            .expect("cannot close twice")
+            .send(())
+            .expect("failed to send close signal");
         if let Some(handle) = self.join_handle.take() {
             let join_result = handle
                 .await
@@ -216,12 +218,11 @@ impl Future for HttpServer {
             .join_handle
             .take()
             .expect("polling a server future which has already completed");
-        let poll = handle
-            .poll_unpin(cx)
-            .map(|result| {
-                let result = result.map_err(|error| format!("waiting for server: {}", error))?;
-                result.map_err(|error| format!("server stopped: {}", error))
-            });
+        let poll = handle.poll_unpin(cx).map(|result| {
+            let result = result
+                .map_err(|error| format!("waiting for server: {}", error))?;
+            result.map_err(|error| format!("server stopped: {}", error))
+        });
 
         if poll.is_pending() {
             server.join_handle.replace(handle);

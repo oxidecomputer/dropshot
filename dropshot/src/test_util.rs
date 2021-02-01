@@ -35,7 +35,7 @@ use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
-use crate::server::{HttpServerStarter, HttpServer};
+use crate::server::{HttpServer, HttpServerStarter};
 
 /**
  * List of allowed HTTP headers in responses.  This is used to make sure we
@@ -439,9 +439,10 @@ impl TestContext {
         /*
          * Set up the server itself.
          */
-        let server = HttpServerStarter::new(&config_dropshot, api, private, &log)
-            .unwrap()
-            .start();
+        let server =
+            HttpServerStarter::new(&config_dropshot, api, private, &log)
+                .unwrap()
+                .start();
 
         let server_addr = server.local_addr();
         let client_log = log.new(o!("http_client" => "dropshot test suite"));
