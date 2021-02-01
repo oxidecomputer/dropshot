@@ -536,7 +536,7 @@ pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
-pub use server::HttpServerStarter;
+pub use server::{HttpServer, HttpServerStarter};
 
 /*
  * Users of the `endpoint` macro need `http::Method` available.
