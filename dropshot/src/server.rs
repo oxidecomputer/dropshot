@@ -190,6 +190,12 @@ impl HttpServer {
     }
 }
 
+/**
+ * Dropping the HttpServer will terminate the server, without actually waiting
+ * for it to stop.
+ *
+ * For graceful termination, use the `close` function instead.
+ */
 impl Drop for HttpServer {
     // This implementation of drop is "best-effort"; dropping the HttpServer
     // will inform the tokio::spawn-ed server to terminate eventually if
