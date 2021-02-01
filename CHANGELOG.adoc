@@ -7,13 +7,17 @@
 
 // cargo-release: next header goes here (do not change this line)
 
+== Unreleased changes (release date TBD)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...HEAD[Full list of commits]
+
 // WARNING: This file is modified programmatically by `cargo release` as
 // configured in release.toml.  DO NOT change the format of the headers or the
 // list of raw commits.
 
-== Unreleased changes (release date TBD)
+== 0.4.0 (released 2021-02-01)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.3.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.3.0...v0.4.0[Full list of commits]
 
 === Breaking changes
 
