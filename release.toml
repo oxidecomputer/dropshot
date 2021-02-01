@@ -1,0 +1,19 @@
+# This file is used by cargo-release.
+
+# Update the change log to reflect the new release and set us up for the next release.
+pre-release-replacements = [
+  # First, replace the current "Unreleased changes" header with one reflecting the new release version and date.
+  {file="../CHANGELOG.adoc", search="Unreleased changes \\(release date TBD\\)", replace="{{version}} (released {{date}})", exactly=1},
+  # Update the link to the list of raw commits in the formerly "Unreleased changes" section.  It should end at the tag for the newly-released version.
+  {file="../CHANGELOG.adoc", search="\\\\.\\.\\.HEAD", replace="...{{tag_name}}", exactly=1},
+  # Next, append a new "Unreleased changes" header beneath the sentinel line.
+  {file="../CHANGELOG.adoc", search="// cargo-release: next header goes here \\(do not change this line\\)", replace="// cargo-release: next header goes here (do not change this line)\n\n== Unreleased changes (release date TBD)\n\nhttps://github.com/oxidecomputer/dropshot/compare/{{tag_name}}\\...HEAD[Full list of commits]", exactly=1},
+]
+
+disable-push = true
+consolidate-commits = true
+pre-release-commit-message = "release {{version}}"
+post-release-commit-message = "starting {{next_version}} after releasing {{version}}"
+tag-message = "release {{version}}"
+tag-prefix=""
+dev-version-ext = "dev"
