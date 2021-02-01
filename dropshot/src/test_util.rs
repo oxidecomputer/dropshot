@@ -461,7 +461,7 @@ impl TestContext {
      */
     /* TODO-cleanup: is there an async analog to Drop? */
     pub async fn teardown(self) {
-        self.server.shutdown().await.expect("server stopped with an error");
+        self.server.close().await.expect("server stopped with an error");
         if let Some(log_context) = self.log_context {
             log_context.cleanup_successful();
         }

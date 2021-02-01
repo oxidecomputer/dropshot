@@ -78,7 +78,7 @@
  *         .map_err(|error| format!("failed to start server: {}", error))?
  *         .start();
  *
- *     server.wait().await
+ *     server.await
  * }
  * ```
  *

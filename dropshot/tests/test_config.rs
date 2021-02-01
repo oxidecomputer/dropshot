@@ -118,10 +118,9 @@ async fn test_config_bind_address() {
     );
     let config =
         read_config::<ConfigDropshot>("bind_address", &config_text).unwrap();
-    let server = make_server(&config, &log);
-    let task = server.start();
+    let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port)).await.unwrap();
-    task.shutdown().await.unwrap();
+    server.close().await.unwrap();
 
     /*
      * Make another request to make sure it fails now that we've shut down
@@ -146,12 +145,11 @@ async fn test_config_bind_address() {
     );
     let config =
         read_config::<ConfigDropshot>("bind_address", &config_text).unwrap();
-    let server = make_server(&config, &log);
-    let task = server.start();
+    let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port + 1)).await.unwrap();
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
-    task.shutdown().await.unwrap();
+    server.close().await.unwrap();
 
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
     assert!(error.is_connect());

@@ -85,7 +85,7 @@ impl HttpServerStarter {
         let log_close = self.app_state.log.new(o!());
         let graceful = self.server.with_graceful_shutdown(async move {
             rx.await.expect(
-                "dropshot server shutting down without invoking shutdown()",
+                "dropshot server shutting down without invoking close()",
             );
             info!(log_close, "received request to begin graceful shutdown");
         });
@@ -96,7 +96,7 @@ impl HttpServerStarter {
             app_state: self.app_state,
             local_addr: self.local_addr,
             join_handle: Some(join_handle),
-            close_channel: tx,
+            close_channel: Some(tx),
         }
     }
 
@@ -159,14 +159,9 @@ pub struct HttpServer {
     app_state: Arc<DropshotState>,
     local_addr: SocketAddr,
     join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
-    close_channel: tokio::sync::oneshot::Sender<()>,
+    close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-/*
- * TODO: This struct would be a great target for async drop, if that happens - it
- * would be great to have a drop implementation which can invoke shutdown if
- * the caller has not done so explicitly.
- */
 impl HttpServer {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
@@ -180,15 +175,28 @@ impl HttpServer {
      * Signals the currently running server to stop (if it hasn't
      * stopped already) and waits for it to exit.
      */
-    pub async fn shutdown(self) -> Result<(), String> {
-        self.close_channel.send(()).expect("failed to send close signal");
-        if let Some(handle) = self.join_handle {
+    pub async fn close(mut self) -> Result<(), String> {
+        self.close_channel
+            .take().expect("cannnot close twice")
+            .send(()).expect("failed to send close signal");
+        if let Some(handle) = self.join_handle.take() {
             let join_result = handle
                 .await
                 .map_err(|error| format!("waiting for server: {}", error))?;
             join_result.map_err(|error| format!("server stopped: {}", error))
         } else {
             Ok(())
+        }
+    }
+}
+
+impl Drop for HttpServer {
+    // This implementation of drop is "best-effort"; dropping the HttpServer
+    // will inform the tokio::spawn-ed server to terminate eventually if
+    // close has not already been invoked.
+    fn drop(&mut self) {
+        if let Some(channel) = self.close_channel.take() {
+            let _ = channel.send(());
         }
     }
 }
