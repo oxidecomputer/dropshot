@@ -17,7 +17,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...HEAD[Full list of co
 
 == 0.4.0 (released 2021-02-01)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.3.0...v0.4.0[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.3.0\...v0.4.0[Full list of commits]
 
 === Breaking changes
 
