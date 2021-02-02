@@ -23,7 +23,7 @@ $ cargo +nightly doc
 You can **build and run the whole test suite** with `cargo test`.  The test
 suite runs cleanly and should remain clean.
 
-=== Code formatting
+=== Code formatting and lint
 
 Dropshot works with stable Rust versions, but for consistency the code is
 _formatted_ with a specific version of `rustfmt`.  To contribute to Dropshot,
@@ -38,6 +38,8 @@ You can then **format the code** using `cargo +nightly-2020-07-26 fmt` or
 `rustfmt +nightly-2020-07-26`.  Make sure to run this before pushing changes.
 The CI uses this version of `rustfmt` to check that the code is correctly
 formatted.
+
+https://github.com/rust-lang/rust-clippy[Clippy] is used to check for common code issues.  (We disable the style checks.)  You can run it with `cargo clippy`.  CI will run clippy as well.
 
 
 == Configuration reference
