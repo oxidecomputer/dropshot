@@ -383,7 +383,7 @@ fn serialize_page_token<PageSelector: Serialize>(
     let token_bytes = {
         let serialized_token = SerializedToken {
             v: PaginationVersion::V1,
-            page_start: page_start,
+            page_start,
         };
 
         let json_bytes =
@@ -445,7 +445,7 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
      */
     let deserialized: SerializedToken<PageSelector> =
         serde_json::from_slice(&json_bytes).map_err(|_| {
-            format!("failed to parse pagination token: corrupted token")
+            String::from("failed to parse pagination token: corrupted token")
         })?;
 
     if deserialized.v != PaginationVersion::V1 {

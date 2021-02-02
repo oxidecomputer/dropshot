@@ -23,6 +23,14 @@ jobs:
     - name: Check style
       run: cargo +nightly-2020-07-26 fmt -- --check
 
+  clippy-lint:
+    runs-on: ubuntu-18.04
+    steps:
+    # actions/checkout@v2
+    - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - name: Run Clippy Lints
+      run: cargo clippy -- -D warnings
+
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:

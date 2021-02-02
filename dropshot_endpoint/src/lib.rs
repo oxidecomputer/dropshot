@@ -4,6 +4,12 @@
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
 //! Spec (OAS) v3 document that describes the API.
 
+/*
+ * Clippy's style advice is definitely valuable, but not worth the trouble for
+ * automated enforcement.
+ */
+#![allow(clippy::style)]
+
 extern crate proc_macro;
 
 use proc_macro2::TokenStream;
@@ -196,7 +202,7 @@ fn do_endpoint(
         .collect::<Vec<_>>();
 
     // Help the user if they don't give any parameters.
-    if ast.sig.inputs.len() == 0 {
+    if ast.sig.inputs.is_empty() {
         checks.push(
             Error::new_spanned(
                 (&ast.sig).into_token_stream(),
@@ -258,7 +264,7 @@ fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
     quote!(#(#compile_errors)*)
 }
 
-fn extract_doc_from_attrs(attrs: &Vec<syn::Attribute>) -> Option<String> {
+fn extract_doc_from_attrs(attrs: &[syn::Attribute]) -> Option<String> {
     let doc = syn::Ident::new("doc", proc_macro2::Span::call_site());
 
     attrs
@@ -290,7 +296,7 @@ fn normalize_comment_string(s: String) -> String {
         .replace("\n * ", " ")
         .trim_end_matches(&[' ', '\n'] as &[char])
         .to_string();
-    if ret.starts_with(" ") && !ret.starts_with("  ") {
+    if ret.starts_with(' ') && !ret.starts_with("  ") {
         // Trim off the first character if the comment
         // begins with a single space.
         ret.as_str()[1..].to_string()

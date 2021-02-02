@@ -275,6 +275,7 @@ impl ApiDescription {
      * This routine is deprecated in favour of the new openapi() builder
      * routine.
      */
+    #[allow(clippy::too_many_arguments)]
     #[deprecated(note = "switch to openapi()")]
     pub fn print_openapi(
         &self,
