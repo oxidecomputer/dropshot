@@ -204,7 +204,10 @@ impl Drop for HttpServer {
     // close has not already been invoked.
     fn drop(&mut self) {
         if let Some(channel) = self.close_channel.take() {
-            warn!(self.app_state.log, "dropped HttpServer without calling close or await");
+            warn!(
+                self.app_state.log,
+                "dropped HttpServer without calling close or await"
+            );
             let _ = channel.send(());
         }
     }
