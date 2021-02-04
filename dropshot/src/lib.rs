@@ -489,6 +489,12 @@
  * which is really serde#1183.
  */
 
+/*
+ * Clippy's style advice is definitely valuable, but not worth the trouble for
+ * automated enforcement.
+ */
+#![allow(clippy::style)]
+
 mod api_description;
 mod config;
 mod error;

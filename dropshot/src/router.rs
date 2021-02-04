@@ -146,7 +146,7 @@ impl PathSegment {
  */
 #[derive(Debug)]
 pub struct RouterLookupResult<'a> {
-    pub handler: &'a Box<dyn RouteHandler>,
+    pub handler: &'a dyn RouteHandler,
     pub variables: BTreeMap<String, String>,
 }
 
@@ -298,7 +298,7 @@ impl HttpRouter {
         path: &'b str,
     ) -> Result<RouterLookupResult<'a>, HttpError> {
         let all_segments = path_to_segments(path);
-        let mut node: &Box<HttpRouterNode> = &self.root;
+        let mut node = &self.root;
         let mut variables: BTreeMap<String, String> = BTreeMap::new();
 
         for segment in all_segments {
@@ -337,7 +337,7 @@ impl HttpRouter {
         node.methods
             .get(&methodname)
             .map(|handler| RouterLookupResult {
-                handler: &handler.handler,
+                handler: &*handler.handler,
                 variables,
             })
             .ok_or_else(|| {
