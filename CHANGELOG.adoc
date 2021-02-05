@@ -15,15 +15,19 @@ https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...HEAD[Full list of co
 // configured in release.toml.  DO NOT change the format of the headers or the
 // list of raw commits.
 
-`HttpServer` has been split into two objects, `HttpServerStarter`, and `HttpServer`.
+=== Breaking Changes
+
+==== HttpServer
+
+===== HttpServer Split in Two
 * In the old implementation, `HttpServer` represented both a pending and running server. Callers were expected to invoke `run()` to begin execution of the old server.
 * In the new implementation, `HttpServerStarter` may be used to construct a server, and `HttpServer` represents the running server. Invoking `HttpServerStarter::start()` creates and `HttpServer` object, which represents the new server.
 
-`HttpServer` now implements `Future`, and does not directly expose a `tokio::JoinHandle`.
+===== HttpServer implements Future
 * In the old implementation, `HttpServer` returned a `tokio::JoinHandle`, and callers were expected to invoke `wait_for_shutdown` to await the completion of a server.
 * In the new implementation, `HttpServer` implements `Future`, and may be `await`-ed directly.
 
-As an example:
+===== Example
 
 ```rust
 // Old Version:
