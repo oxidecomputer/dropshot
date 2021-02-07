@@ -11,6 +11,7 @@ use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 
 use futures::future::BoxFuture;
+use futures::future::FusedFuture;
 use futures::future::FutureExt;
 use futures::lock::Mutex;
 use hyper::server::{
@@ -154,6 +155,10 @@ impl HttpServerStarter {
 
 /**
  * A running Dropshot HTTP server.
+ *
+ * # Panics
+ *
+ * Panics if dropped without invoking `close`.
  */
 pub struct HttpServer {
     app_state: Arc<DropshotState>,
@@ -172,8 +177,7 @@ impl HttpServer {
     }
 
     /**
-     * Signals the currently running server to stop (if it hasn't
-     * stopped already) and waits for it to exit.
+     * Signals the currently running server to stop and waits for it to exit.
      */
     pub async fn close(mut self) -> Result<(), String> {
         self.close_channel
@@ -182,10 +186,10 @@ impl HttpServer {
             .send(())
             .expect("failed to send close signal");
         if let Some(handle) = self.join_handle.take() {
-            let join_result = handle
+            handle
                 .await
-                .map_err(|error| format!("waiting for server: {}", error))?;
-            join_result.map_err(|error| format!("server stopped: {}", error))
+                .map_err(|error| format!("waiting for server: {}", error))?
+                .map_err(|error| format!("server stopped: {}", error))
         } else {
             Ok(())
         }
@@ -193,22 +197,13 @@ impl HttpServer {
 }
 
 /**
- * Dropping the HttpServer will terminate the server, without actually waiting
- * for it to stop.
- *
- * For graceful termination, use the `close` function instead.
+ * Verifies that the server has stopped execution when it is dropped.
+ * For graceful termination, use the `close` function.
  */
 impl Drop for HttpServer {
-    // This implementation of drop is "best-effort"; dropping the HttpServer
-    // will inform the tokio::spawn-ed server to terminate eventually if
-    // close has not already been invoked.
     fn drop(&mut self) {
-        if let Some(channel) = self.close_channel.take() {
-            warn!(
-                self.app_state.log,
-                "dropped HttpServer without calling close or await"
-            );
-            let _ = channel.send(());
+        if self.close_channel.is_some() {
+            panic!("dropped HttpServer without calling close");
         }
     }
 }
@@ -223,15 +218,21 @@ impl Future for HttpServer {
             .take()
             .expect("polling a server future which has already completed");
         let poll = handle.poll_unpin(cx).map(|result| {
-            let result = result
-                .map_err(|error| format!("waiting for server: {}", error))?;
-            result.map_err(|error| format!("server stopped: {}", error))
+            result
+                .map_err(|error| format!("waiting for server: {}", error))?
+                .map_err(|error| format!("server stopped: {}", error))
         });
 
         if poll.is_pending() {
             server.join_handle.replace(handle);
         }
         return poll;
+    }
+}
+
+impl FusedFuture for HttpServer {
+    fn is_terminated(&self) -> bool {
+        self.join_handle.is_none()
     }
 }
 
@@ -455,5 +456,107 @@ impl Service<Request<Body>> for ServerRequestHandler {
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         Box::pin(http_request_handle_wrap(Arc::clone(&self.server), req))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // Referring to the current crate as "dropshot::" instead of "crate::"
+    // helps the endpoint macro with module lookup.
+    use crate as dropshot;
+    use dropshot::endpoint;
+    use dropshot::test_util::ClientTestContext;
+    use dropshot::test_util::LogContext;
+    use dropshot::ConfigLogging;
+    use dropshot::ConfigLoggingLevel;
+    use dropshot::HttpError;
+    use dropshot::HttpResponseOk;
+    use dropshot::RequestContext;
+    use http::StatusCode;
+    use hyper::Method;
+
+    use futures::future::FusedFuture;
+
+    #[endpoint {
+        method = GET,
+        path = "/handler",
+    }]
+    async fn handler(
+        _rqctx: Arc<RequestContext>,
+    ) -> Result<HttpResponseOk<u64>, HttpError> {
+        Ok(HttpResponseOk(3))
+    }
+
+    struct TestConfig {
+        log_context: LogContext,
+    }
+
+    impl TestConfig {
+        fn log(&self) -> &slog::Logger {
+            &self.log_context.log
+        }
+    }
+
+    fn create_test_server() -> (HttpServer, TestConfig) {
+        let config_dropshot = ConfigDropshot::default();
+
+        let mut api = ApiDescription::new();
+        api.register(handler).unwrap();
+
+        let config_logging = ConfigLogging::StderrTerminal {
+            level: ConfigLoggingLevel::Warn,
+        };
+        let log_context = LogContext::new("test server", &config_logging);
+        let log = &log_context.log;
+
+        let server =
+            HttpServerStarter::new(&config_dropshot, api, Arc::new(0), log)
+                .unwrap()
+                .start();
+
+        (server, TestConfig {
+            log_context,
+        })
+    }
+
+    async fn single_client_request(addr: SocketAddr, log: &slog::Logger) {
+        let client_log = log.new(o!("http_client" => "dropshot test suite"));
+        let client_testctx = ClientTestContext::new(addr, client_log);
+        tokio::task::spawn(async move {
+            let response = client_testctx
+                .make_request(
+                    Method::GET,
+                    "/handler",
+                    None as Option<()>,
+                    StatusCode::OK,
+                )
+                .await;
+
+            assert!(response.is_ok());
+        })
+        .await
+        .expect("client request failed");
+    }
+
+    #[tokio::test]
+    async fn test_server_run_then_close() {
+        let (mut server, config) = create_test_server();
+        let client = single_client_request(server.local_addr, config.log());
+
+        futures::select! {
+            _ = client.fuse() => {},
+            r = server => panic!("Server unexpectedly terminated: {:?}", r),
+        }
+
+        assert!(!server.is_terminated());
+        assert!(server.close().await.is_ok());
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "dropped HttpServer without calling close")]
+    async fn test_drop_server_without_close_panics() {
+        let (server, _) = create_test_server();
+        std::mem::drop(server);
     }
 }
