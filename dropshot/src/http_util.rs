@@ -6,6 +6,10 @@
 use bytes::BufMut;
 use bytes::Bytes;
 use hyper::body::HttpBody;
+use hyper::header::HeaderMap;
+use hyper::header::HeaderName;
+use hyper::header::CONTENT_TYPE;
+use mime::Mime;
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 
@@ -153,6 +157,41 @@ pub fn http_extract_path_params<T: DeserializeOwned>(
         HttpError::for_bad_request(
             None,
             format!("bad parameter in URL path: {}", message),
+        )
+    })
+}
+
+/**
+ * For the given header map and key, get the header value as &str, converting
+ * errors into appropriate instances of `HttpError`.
+ */
+pub fn http_headers_get_value<'a>(
+    headers: &'a HeaderMap,
+    key: &HeaderName,
+) -> Result<&'a str, HttpError> {
+    let value = headers.get(key).ok_or_else(|| {
+        HttpError::for_bad_request(None, format!("header not found: {}", key))
+    })?;
+
+    Ok(value.to_str().map_err(|e| {
+        HttpError::for_bad_request(None, format!("invalid header value: {}", e))
+    })?)
+}
+
+/**
+ * For the given header map, parse the content-type header into an instance of
+ * `mime::MIME`, converting any errors into appropirate instances of
+ * `HttpError`.
+ */
+pub fn http_headers_parse_content_type(
+    headers: &HeaderMap,
+) -> Result<Mime, HttpError> {
+    let key = CONTENT_TYPE;
+
+    http_headers_get_value(headers, &key)?.parse().map_err(|_| {
+        HttpError::for_bad_request(
+            None,
+            "invalid mime string in content-type header".into(),
         )
     })
 }

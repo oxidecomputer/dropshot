@@ -35,6 +35,7 @@
 
 use super::error::HttpError;
 use super::http_util::http_extract_path_params;
+use super::http_util::http_headers_parse_content_type;
 use super::http_util::http_read_body;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::server::DropshotState;
@@ -50,6 +51,9 @@ use http::StatusCode;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use mime::APPLICATION;
+use mime::JSON;
+use mime::WWW_FORM_URLENCODED;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -58,6 +62,7 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::future::Future;
@@ -830,25 +835,19 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
 }
 
 /**
- * Given an HTTP request, attempt to read the body, parse it as JSON, and
- * deserialize an instance of `BodyType` from it.
+ * Given a deserializer function and byte slice, deserialize an instance of
+ * `BodyType` from it.
  */
-async fn http_request_load_json_body<BodyType>(
-    rqctx: Arc<RequestContext>,
+fn http_request_deserialize_body<'a, F, E, BodyType>(
+    deserialize: F,
+    body: &'a [u8],
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
+    F: FnOnce(&'a [u8]) -> Result<BodyType, E>,
+    E: Display,
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
-    let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
-    let body_bytes = http_read_body(
-        request.body_mut(),
-        server.config.request_body_max_bytes,
-    )
-    .await?;
-    let value: Result<BodyType, serde_json::Error> =
-        serde_json::from_slice(&body_bytes);
-    match value {
+    match deserialize(body) {
         Ok(j) => Ok(TypedBody {
             inner: j,
         }),
@@ -856,6 +855,54 @@ where
             None,
             format!("unable to parse body: {}", e),
         )),
+    }
+}
+
+/**
+ * Given an HTTP request, attempt to read and parse the body, and
+ * deserialize an instance of `BodyType` from it.
+ */
+async fn http_request_load_body<BodyType>(
+    rqctx: Arc<RequestContext>,
+) -> Result<TypedBody<BodyType>, HttpError>
+where
+    BodyType: JsonSchema + DeserializeOwned + Send + Sync,
+{
+    let server = &rqctx.server;
+    let mut request = rqctx.request.lock().await;
+
+    let body_bytes = http_read_body(
+        request.body_mut(),
+        server.config.request_body_max_bytes,
+    )
+    .await?;
+
+    // The following code would be cleaner if the content-type header can be
+    // expected to be present. RFC2616 suggest one really SHOULD (in the
+    // RFD2119 definition) be provided, but this would be a breaking change.
+    if let Ok(content_type) = http_headers_parse_content_type(request.headers())
+    {
+        match (content_type.type_(), content_type.subtype()) {
+            (APPLICATION, WWW_FORM_URLENCODED) => {
+                http_request_deserialize_body(
+                    serde_urlencoded::from_bytes,
+                    &body_bytes,
+                )
+            }
+            (APPLICATION, JSON) => http_request_deserialize_body(
+                serde_json::from_slice,
+                &body_bytes,
+            ),
+            _ => Err(HttpError::for_bad_request(
+                None,
+                format!("unsupported mime type: {}", content_type),
+            )),
+        }
+    } else {
+        // The default for this function has been to always attempt
+        // deserializing as JSON. In order to not break this behavior, more or
+        // less ignore the parse result and attempt parsing what's in the body.
+        http_request_deserialize_body(serde_json::from_slice, &body_bytes)
     }
 }
 
@@ -875,7 +922,7 @@ where
     async fn from_request(
         rqctx: Arc<RequestContext>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
-        http_request_load_json_body(rqctx).await
+        http_request_load_body(rqctx).await
     }
 
     fn metadata() -> Vec<ApiEndpointParameter> {
