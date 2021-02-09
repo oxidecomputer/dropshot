@@ -4,7 +4,7 @@ use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseOk,
     HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
-    RequestContext, ResultsPage, TypedBody,
+    RequestContext, ResultsPage, TypedBody, UntypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -125,6 +125,17 @@ async fn handler6(
     unimplemented!();
 }
 
+#[endpoint {
+    method = PUT,
+    path = "/datagoeshere",
+}]
+async fn handler7(
+    _rqctx: Arc<RequestContext>,
+    _dump: UntypedBody,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
 #[test]
 fn test_openapi_old() -> Result<(), String> {
     let mut api = ApiDescription::new();
@@ -134,6 +145,7 @@ fn test_openapi_old() -> Result<(), String> {
     api.register(handler4)?;
     api.register(handler5)?;
     api.register(handler6)?;
+    api.register(handler7)?;
 
     let mut output = Cursor::new(Vec::new());
 

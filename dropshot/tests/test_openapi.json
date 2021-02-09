@@ -5,6 +5,27 @@
     "version": "threeve"
   },
   "paths": {
+    "/datagoeshere": {
+      "put": {
+        "operationId": "handler7",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
     "/impairment": {
       "get": {
         "operationId": "handler6",
