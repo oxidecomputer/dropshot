@@ -4,7 +4,7 @@ use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseOk,
     HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
-    RequestContext, ResultsPage, TypedBody,
+    RequestContext, ResultsPage, TypedBody, UntypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -125,8 +125,18 @@ async fn handler6(
     unimplemented!();
 }
 
-#[test]
-fn test_openapi_old() -> Result<(), String> {
+#[endpoint {
+    method = PUT,
+    path = "/datagoeshere",
+}]
+async fn handler7(
+    _rqctx: Arc<RequestContext>,
+    _dump: UntypedBody,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+fn make_api() -> Result<ApiDescription, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
     api.register(handler2)?;
@@ -134,7 +144,13 @@ fn test_openapi_old() -> Result<(), String> {
     api.register(handler4)?;
     api.register(handler5)?;
     api.register(handler6)?;
+    api.register(handler7)?;
+    Ok(api)
+}
 
+#[test]
+fn test_openapi_old() -> Result<(), String> {
+    let api = make_api()?;
     let mut output = Cursor::new(Vec::new());
 
     #[allow(deprecated)]
@@ -152,20 +168,13 @@ fn test_openapi_old() -> Result<(), String> {
     );
     let actual = from_utf8(&output.get_ref()).unwrap();
 
-    expectorate::assert_contents("tests/test_openapi.json", actual);
+    expectorate::assert_contents("tests/test_openapi_old.json", actual);
     Ok(())
 }
 
 #[test]
 fn test_openapi() -> Result<(), String> {
-    let mut api = ApiDescription::new();
-    api.register(handler1)?;
-    api.register(handler2)?;
-    api.register(handler3)?;
-    api.register(handler4)?;
-    api.register(handler5)?;
-    api.register(handler6)?;
-
+    let api = make_api()?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api.openapi("test", "threeve").write(&mut output);
@@ -177,14 +186,7 @@ fn test_openapi() -> Result<(), String> {
 
 #[test]
 fn test_openapi_fuller() -> Result<(), String> {
-    let mut api = ApiDescription::new();
-    api.register(handler1)?;
-    api.register(handler2)?;
-    api.register(handler3)?;
-    api.register(handler4)?;
-    api.register(handler5)?;
-    api.register(handler6)?;
-
+    let api = make_api()?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api
