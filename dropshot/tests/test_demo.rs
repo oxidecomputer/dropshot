@@ -20,10 +20,12 @@ use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
+use dropshot::HttpResponseOk;
 use dropshot::Path;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
+use dropshot::UntypedBody;
 use dropshot::CONTENT_TYPE_JSON;
 use http::StatusCode;
 use hyper::Body;
@@ -49,6 +51,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_string).unwrap();
     api.register(demo_handler_path_param_uuid).unwrap();
     api.register(demo_handler_path_param_u32).unwrap();
+    api.register(demo_handler_untyped_body).unwrap();
 
     /*
      * We don't need to exhaustively test these cases, as they're tested by unit
@@ -514,6 +517,94 @@ async fn test_demo_path_param_u32() {
 }
 
 /*
+ * Test `UntypedBody`.
+ */
+#[tokio::test]
+async fn test_untyped_body() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_untyped_body", api);
+    let client = &testctx.client_testctx;
+
+    /* Error case: body too large. */
+    let big_body = vec![0u8; 1025];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body",
+            big_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 1024 bytes"
+    );
+
+    /* Error case: invalid UTF-8, when parsing as a UTF-8 string. */
+    let bad_body = vec![0x80u8; 1];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?parse_str=true",
+            bad_body.clone().into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "failed to parse body as UTF-8 string: invalid utf-8 sequence of 1 \
+         bytes from index 0"
+    );
+
+    /* Success case: invalid UTF-8, when not parsing. */
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body",
+            bad_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 1);
+    assert_eq!(json.as_utf8, None);
+
+    /* Success case: empty body */
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?parse_str=true",
+            "".into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 0);
+    assert_eq!(json.as_utf8, Some(String::from("")));
+
+    /* Success case: non-empty content */
+    let body: Vec<u8> = Vec::from(&b"t\xce\xbcv"[..]);
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?parse_str=true",
+            body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 4);
+    assert_eq!(json.as_utf8, Some(String::from("tμv")));
+
+    testctx.teardown().await;
+}
+
+/*
  * Demo handler functions
  */
 
@@ -623,6 +714,37 @@ async fn demo_handler_path_param_u32(
     path_params: Path<DemoPathU32>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct DemoUntyped {
+    pub nbytes: usize,
+    pub as_utf8: Option<String>,
+}
+#[derive(Deserialize, JsonSchema)]
+pub struct DemoUntypedQuery {
+    pub parse_str: Option<bool>,
+}
+#[endpoint {
+    method = PUT,
+    path = "/testing/untyped_body"
+}]
+async fn demo_handler_untyped_body(
+    _rqctx: Arc<RequestContext<usize>>,
+    body: UntypedBody,
+    query: Query<DemoUntypedQuery>,
+) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
+    let nbytes = body.as_bytes().len();
+    let as_utf8 = if query.into_inner().parse_str.unwrap_or(false) {
+        Some(String::from(body.as_str()?))
+    } else {
+        None
+    };
+
+    Ok(HttpResponseOk(DemoUntyped {
+        nbytes,
+        as_utf8,
+    }))
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

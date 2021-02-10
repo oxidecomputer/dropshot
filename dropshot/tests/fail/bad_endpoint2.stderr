@@ -5,6 +5,7 @@ Try using the following endpoint format:
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
+        [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
   --> $DIR/bad_endpoint2.rs:13:23
    |

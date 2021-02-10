@@ -60,6 +60,7 @@ const ERR_MSG_USAGE: &str = "Try using the following endpoint format:
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
+        [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>";
 
 /// This attribute transforms a handler function into a Dropshot endpoint
@@ -217,7 +218,7 @@ fn do_endpoint(
                         "Expected a non-receiver argument\n{}",
                         ERR_MSG_USAGE
                     ),
-                ))
+                ));
             }
         }
     };

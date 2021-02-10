@@ -14,6 +14,8 @@ use crate::from_map::from_map;
 
 /** header name for conveying request ids ("x-request-id") */
 pub const HEADER_REQUEST_ID: &str = "x-request-id";
+/** MIME type for raw bytes */
+pub const CONTENT_TYPE_OCTET_STREAM: &str = "application/octet-stream";
 /** MIME type for plain JSON data */
 pub const CONTENT_TYPE_JSON: &str = "application/json";
 /** MIME type for newline-delimited JSON data */
@@ -41,6 +43,7 @@ where
      * std::marker::Unpin, &mut T)
      * TODO Error type shouldn't have to be hyper Error -- Into<ApiError> should
      * work too?
+     * TODO do we need to use saturating_add() here?
      */
     let mut parts = std::vec::Vec::new();
     let mut nbytesread: usize = 0;
@@ -90,6 +93,7 @@ where
      * read?  What if the underlying implementation chooses to wait for a much
      * larger number of bytes?
      * TODO better understand pin_mut!()
+     * TODO do we need to use saturating_add() here?
      */
     let mut nbytesread: usize = 0;
     while let Some(maybebuf) = body.data().await {

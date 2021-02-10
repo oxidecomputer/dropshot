@@ -213,6 +213,7 @@
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
+ *      [body_param: UntypedBody<J>,]
  * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
@@ -221,9 +222,9 @@
  * The `Context` type is caller-provided context which is provided when
  * the server is created.
  *
- * The types `Query`, `Path`, and `TypedBody` are called **Extractors** because
- * they cause information to be pulled out of the request and made available to
- * the handler function.
+ * The types `Query`, `Path`, `TypedBody`, and `UntypedBody` are called
+ * **Extractors** because they cause information to be pulled out of the request
+ * and made available to the handler function.
  *
  * * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
  *   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
@@ -234,10 +235,12 @@
  * * [`TypedBody`]`<J>` extracts content from the request body by parsing the
  *   body as JSON and deserializing it into an instance of type `J`. `J` must
  *   implement `serde::Deserialize` and `schemars::JsonSchema`.
+ * * [`UntypedBody`] extracts the raw bytes of the request body.
  *
- * If the handler takes a `Query<Q>`, `Path<P>`, or a `TypedBody<J>` and the
- * corresponding extraction cannot be completed, the request fails with status
- * code 400 and an error message reflecting a validation error.
+ * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
+ * `UntypedBody`, and the corresponding extraction cannot be completed, the
+ * request fails with status code 400 and an error message reflecting a
+ * validation error.
  *
  * As with any serde-deserializable type, you can make fields optional by having
  * the corresponding property of the type be an `Option`.  Here's an example of
@@ -538,8 +541,10 @@ pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;
 pub use handler::TypedBody;
+pub use handler::UntypedBody;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_NDJSON;
+pub use http_util::CONTENT_TYPE_OCTET_STREAM;
 pub use http_util::HEADER_REQUEST_ID;
 pub use logging::ConfigLogging;
 pub use logging::ConfigLoggingIfExists;

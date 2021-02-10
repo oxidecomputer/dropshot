@@ -15,7 +15,10 @@ https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...HEAD[Full list of co
 // configured in release.toml.  DO NOT change the format of the headers or the
 // list of raw commits.
 
+=== Notable changes
+
 * Dropshot now uses generics to store client context, rather than relying on an internal `Any` object within `RequestContext`. Endpoints are expected to have the first argument `rqctx: Arc<RequestContext<CallerContext>>`, for some `CallerContext` object, and they may call `rqtcx.context()` to access the inner type.
+* https://github.com/oxidecomputer/dropshot/issues/44[#44] The new extractor `UntypedBody` allows API endpoints to accept either raw bytes or a UTF-8 string.
 
 == 0.4.0 (released 2021-02-01)
 
