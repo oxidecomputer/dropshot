@@ -135,7 +135,7 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(tree);
+    let ctx = tree;
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,

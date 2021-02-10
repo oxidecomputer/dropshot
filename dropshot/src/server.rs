@@ -44,7 +44,7 @@ impl<T: 'static> ServerContext for T where T: Send + Sync {}
  */
 pub struct DropshotState<C: ServerContext> {
     /** caller-specific state */
-    pub private: Arc<C>,
+    pub private: C,
     /** static server configuration parameters */
     pub config: ServerConfig,
     /** request router */
@@ -130,7 +130,7 @@ impl<C: ServerContext> HttpServer<C> {
     pub fn new(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
-        private: Arc<C>,
+        private: C,
         log: &Logger,
     ) -> Result<HttpServer<C>, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
@@ -176,8 +176,8 @@ impl<C: ServerContext> HttpServer<C> {
         })
     }
 
-    pub fn app_private(&self) -> Arc<C> {
-        Arc::clone(&self.app_state.private)
+    pub fn app_private(&self) -> &C {
+        &self.app_state.private
     }
 }
 

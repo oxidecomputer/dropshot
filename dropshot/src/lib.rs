@@ -273,7 +273,7 @@
  *     -> Result<Response<Body>, HttpError>
  * {
  *     let query_args = query.into_inner();
- *     let context: Arc<MyContext> = rqctx.context();
+ *     let context: &MyContext = rqctx.context();
  *     let limit: u32 = query_args.limit;
  *     let marker: Option<String> = query_args.marker;
  *     Ok(Response::builder()

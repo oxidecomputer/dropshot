@@ -104,8 +104,8 @@ impl<Context: ServerContext> RequestContext<Context> {
     /**
      * Returns the server context state.
      */
-    pub fn context(&self) -> Arc<Context> {
-        self.server.private.clone()
+    pub fn context(&self) -> &Context {
+        &self.server.private
     }
 
     /**

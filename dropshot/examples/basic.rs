@@ -80,10 +80,10 @@ impl ExampleContext {
     /**
      * Return a new ExampleContext.
      */
-    pub fn new() -> Arc<ExampleContext> {
-        Arc::new(ExampleContext {
+    pub fn new() -> ExampleContext {
+        ExampleContext {
             counter: AtomicU64::new(0),
-        })
+        }
     }
 }
 

@@ -27,7 +27,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use crate::api_description::ApiDescription;
@@ -426,7 +425,7 @@ impl<Context: ServerContext> TestContext<Context> {
      */
     pub fn new(
         api: ApiDescription<Context>,
-        private: Arc<Context>,
+        private: Context,
         config_dropshot: &ConfigDropshot,
         log_context: Option<LogContext>,
         log: Logger,

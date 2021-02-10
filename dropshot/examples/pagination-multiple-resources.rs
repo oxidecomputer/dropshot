@@ -244,7 +244,7 @@ async fn example_list_instances(
 }
 
 fn do_list<'a, T>(
-    data: &'a Arc<DataCollection>,
+    data: &'a DataCollection,
     scan_params: &ExScanParams,
     p: &'a WhichPage<ExScanParams, ExPageSelector>,
     by_name: &'a BTreeMap<String, Arc<T>>,
@@ -292,7 +292,7 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(DataCollection::new());
+    let ctx = DataCollection::new();
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,

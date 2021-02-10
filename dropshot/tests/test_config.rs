@@ -8,7 +8,6 @@ use dropshot::ConfigDropshot;
 use dropshot::HttpServer;
 use slog::Logger;
 use std::fs;
-use std::sync::Arc;
 
 /*
  * Bad values for "bind_address"
@@ -54,8 +53,7 @@ fn test_config_bad_bind_address_garbage() {
 }
 
 fn make_server(config: &ConfigDropshot, log: &Logger) -> HttpServer<i32> {
-    HttpServer::new(&config, dropshot::ApiDescription::new(), Arc::new(0), log)
-        .unwrap()
+    HttpServer::new(&config, dropshot::ApiDescription::new(), 0, log).unwrap()
 }
 
 #[tokio::test]

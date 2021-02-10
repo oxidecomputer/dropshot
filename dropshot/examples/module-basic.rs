@@ -11,7 +11,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -72,10 +71,10 @@ impl ExampleContext {
     /**
      * Return a new ExampleContext.
      */
-    pub fn new() -> Arc<ExampleContext> {
-        Arc::new(ExampleContext {
+    pub fn new() -> ExampleContext {
+        ExampleContext {
             counter: AtomicU64::new(0),
-        })
+        }
     }
 }
 
