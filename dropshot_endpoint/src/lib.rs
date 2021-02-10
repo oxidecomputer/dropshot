@@ -213,7 +213,6 @@ fn do_endpoint(
             _ => {
                 return Err(Error::new(
                     first_arg.span(),
-                    //                    (&ast.sig).into_token_stream(),
                     format!(
                         "Expected a non-receiver argument\n{}",
                         ERR_MSG_USAGE

@@ -42,13 +42,13 @@ impl<T: 'static> ServerContext for T where T: Send + Sync {}
 /**
  * Stores shared state used by the Dropshot server.
  */
-pub struct DropshotState<Context: ServerContext> {
+pub struct DropshotState<C: ServerContext> {
     /** caller-specific state */
-    pub private: Arc<Context>,
+    pub private: Arc<C>,
     /** static server configuration parameters */
     pub config: ServerConfig,
     /** request router */
-    pub router: HttpRouter<Context>,
+    pub router: HttpRouter<C>,
     /** server-wide log handle */
     pub log: Logger,
 }
@@ -74,14 +74,14 @@ pub struct ServerConfig {
  * (i.e., it should consume self).  But you should be able to close() it.  Once
  * you've called close(), you shouldn't be able to call it again.
  */
-pub struct HttpServer<Context: ServerContext> {
-    app_state: Arc<DropshotState<Context>>,
+pub struct HttpServer<C: ServerContext> {
+    app_state: Arc<DropshotState<C>>,
     server_future: Option<BoxFuture<'static, Result<(), hyper::Error>>>,
     local_addr: SocketAddr,
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl<Context: ServerContext> HttpServer<Context> {
+impl<C: ServerContext> HttpServer<C> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -129,10 +129,10 @@ impl<Context: ServerContext> HttpServer<Context> {
      */
     pub fn new(
         config: &ConfigDropshot,
-        api: ApiDescription<Context>,
-        private: Arc<Context>,
+        api: ApiDescription<C>,
+        private: Arc<C>,
         log: &Logger,
-    ) -> Result<HttpServer<Context>, hyper::Error> {
+    ) -> Result<HttpServer<C>, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
         let log_close = log.new(o!());
         let app_state = Arc::new(DropshotState {
@@ -176,7 +176,7 @@ impl<Context: ServerContext> HttpServer<Context> {
         })
     }
 
-    pub fn app_private(&self) -> Arc<Context> {
+    pub fn app_private(&self) -> Arc<C> {
         Arc::clone(&self.app_state.private)
     }
 }
@@ -187,10 +187,10 @@ impl<Context: ServerContext> HttpServer<Context> {
  * must return a Hyper Service object that will handle requests for this
  * connection.
  */
-async fn http_connection_handle<Context: ServerContext>(
-    server: Arc<DropshotState<Context>>,
+async fn http_connection_handle<C: ServerContext>(
+    server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
-) -> Result<ServerRequestHandler<Context>, GenericError> {
+) -> Result<ServerRequestHandler<C>, GenericError> {
     info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
     Ok(ServerRequestHandler::new(server))
 }
@@ -201,8 +201,8 @@ async fn http_connection_handle<Context: ServerContext>(
  * Result that either represents a valid HTTP response or an error (which will
  * also get turned into an HTTP response).
  */
-async fn http_request_handle_wrap<Context: ServerContext>(
-    server: Arc<DropshotState<Context>>,
+async fn http_request_handle_wrap<C: ServerContext>(
+    server: Arc<DropshotState<C>>,
     request: Request<Body>,
 ) -> Result<Response<Body>, GenericError> {
     /*
@@ -255,8 +255,8 @@ async fn http_request_handle_wrap<Context: ServerContext>(
     Ok(response)
 }
 
-async fn http_request_handle<T: ServerContext>(
-    server: Arc<DropshotState<T>>,
+async fn http_request_handle<C: ServerContext>(
+    server: Arc<DropshotState<C>>,
     request: Request<Body>,
     request_id: &str,
     request_log: Logger,
@@ -308,17 +308,17 @@ fn generate_request_id() -> String {
  * using a closure to capture the state object, but the resulting code is a bit
  * simpler without it.
  */
-pub struct ServerConnectionHandler<T: ServerContext> {
+pub struct ServerConnectionHandler<C: ServerContext> {
     /** backend state that will be made available to the connection handler */
-    server: Arc<DropshotState<T>>,
+    server: Arc<DropshotState<C>>,
 }
 
-impl<T: ServerContext> ServerConnectionHandler<T> {
+impl<C: ServerContext> ServerConnectionHandler<C> {
     /**
      * Create an ServerConnectionHandler with the given state object that
      * will be made available to the handler.
      */
-    fn new(server: Arc<DropshotState<T>>) -> Self {
+    fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerConnectionHandler {
             server: Arc::clone(&server),
         }
@@ -369,24 +369,24 @@ impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
  * closure to capture the server state object, but the resulting code is a bit
  * simpler without all that.
  */
-pub struct ServerRequestHandler<T: ServerContext> {
+pub struct ServerRequestHandler<C: ServerContext> {
     /** backend state that will be made available to the request handler */
-    server: Arc<DropshotState<T>>,
+    server: Arc<DropshotState<C>>,
 }
 
-impl<T: ServerContext> ServerRequestHandler<T> {
+impl<C: ServerContext> ServerRequestHandler<C> {
     /**
      * Create a ServerRequestHandler object with the given state object that
      * will be provided to the handler function.
      */
-    fn new(server: Arc<DropshotState<T>>) -> Self {
+    fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerRequestHandler {
             server: Arc::clone(&server),
         }
     }
 }
 
-impl<T: ServerContext> Service<Request<Body>> for ServerRequestHandler<T> {
+impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     type Response = Response<Body>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;

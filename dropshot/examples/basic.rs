@@ -76,8 +76,6 @@ struct ExampleContext {
     counter: AtomicU64,
 }
 
-// impl dropshot::ServerContext for ExampleContext{}
-
 impl ExampleContext {
     /**
      * Return a new ExampleContext.
