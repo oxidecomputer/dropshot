@@ -38,6 +38,7 @@ use super::http_util::http_extract_path_params;
 use super::http_util::http_read_body;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::server::DropshotState;
+use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointResponse;
@@ -45,11 +46,14 @@ use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::PaginationParams;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures::lock::Mutex;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use schemars::schema::InstanceType;
+use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -155,11 +159,11 @@ impl RequestContext {
  * `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
  * constructor function, not instance functions.
  *
- * The extractors that we provide (`Query`, `Path`, `TypedBody`) implement
- * `Extractor` in order to construct themselves from the request. For example,
- * `Extractor` is implemented for `Query<Q>` with a function that reads the
- * query string from the request, parses it, and constructs a `Query<Q>` with
- * it.
+ * The extractors that we provide (`Query`, `Path`, `TypedBody`, and
+ * `UntypedBody`) implement `Extractor` in order to construct themselves from
+ * the request. For example, `Extractor` is implemented for `Query<Q>` with a
+ * function that reads the query string from the request, parses it, and
+ * constructs a `Query<Q>` with it.
  *
  * We also define implementations of `Extractor` for tuples of types that
  * themselves implement `Extractor`.  See the implementation of
@@ -805,7 +809,8 @@ fn schema2parameters(
 }
 
 /*
- * JSON: json body extractor
+ * TypedBody: body extractor for formats that can be deserialized to a specific
+ * type.  Only JSON is currently supported.
  */
 
 /**
@@ -880,12 +885,85 @@ where
 
     fn metadata() -> Vec<ApiEndpointParameter> {
         vec![ApiEndpointParameter::new_body(
+            ApiEndpointBodyContentType::Json,
             None,
             true,
             ApiSchemaGenerator::Gen {
                 name: BodyType::schema_name,
                 schema: BodyType::json_schema,
             },
+            vec![],
+        )]
+    }
+}
+
+/*
+ * UntypedBody: body extractor for a plain array of bytes of a body.
+ */
+
+/**
+ * `UntypedBody` is an extractor for reading in the contents of the HTTP request
+ * body and making the raw bytes directly available to the consumer.
+ */
+pub struct UntypedBody {
+    content: Bytes,
+}
+
+impl UntypedBody {
+    /**
+     * Returns a byte slice of the underlying body content.
+     */
+    /*
+     * TODO drop this in favor of Deref?  + Display and Debug for convenience?
+     */
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.content
+    }
+
+    /**
+     * Convenience wrapper to convert the body to a UTF-8 string slice,
+     * returning a 400-level error if the body is not valid UTF-8.
+     */
+    pub fn as_str(&self) -> Result<&str, HttpError> {
+        std::str::from_utf8(self.as_bytes()).map_err(|e| {
+            HttpError::for_bad_request(
+                None,
+                format!("failed to parse body as UTF-8 string: {}", e),
+            )
+        })
+    }
+}
+
+#[async_trait]
+impl Extractor for UntypedBody {
+    async fn from_request(
+        rqctx: Arc<RequestContext>,
+    ) -> Result<UntypedBody, HttpError> {
+        let server = &rqctx.server;
+        let mut request = rqctx.request.lock().await;
+        let body_bytes = http_read_body(
+            request.body_mut(),
+            server.config.request_body_max_bytes,
+        )
+        .await?;
+        Ok(UntypedBody {
+            content: body_bytes,
+        })
+    }
+
+    fn metadata() -> Vec<ApiEndpointParameter> {
+        let schema = SchemaObject {
+            instance_type: Some(InstanceType::String.into()),
+            format: Some(String::from("binary")),
+            ..Default::default()
+        }
+        .into();
+
+        vec![ApiEndpointParameter::new_body(
+            ApiEndpointBodyContentType::Bytes,
+            None,
+            true,
+            ApiSchemaGenerator::Static(schema),
             vec![],
         )]
     }
@@ -1107,7 +1185,7 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 mod test {
     use super::GetMetadata;
     use crate::{
-        api_description::ApiEndpointParameterName, ApiEndpointParameter,
+        api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
     };
     use schemars::JsonSchema;
@@ -1146,7 +1224,7 @@ mod test {
         actual.iter().zip(expected.iter()).for_each(
             |(param, (name, required))| {
                 if let ApiEndpointParameter {
-                    name: ApiEndpointParameterName::Path(aname),
+                    metadata: ApiEndpointParameterMetadata::Path(aname),
                     required: arequired,
                     ..
                 } = param

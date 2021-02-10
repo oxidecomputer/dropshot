@@ -45,6 +45,10 @@ let server = HttpServerStarter::new( /* Arguments are the same between versions 
 server.await;
 ```
 
+=== Notable changes
+
+* https://github.com/oxidecomputer/dropshot/issues/44[#44] The new extractor `UntypedBody` allows API endpoints to accept either raw bytes or a UTF-8 string.
+
 == 0.4.0 (released 2021-02-01)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.3.0\...v0.4.0[Full list of commits]

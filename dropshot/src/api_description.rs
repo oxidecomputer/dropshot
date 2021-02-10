@@ -12,6 +12,7 @@ use crate::router::HttpRouter;
 use crate::router::PathSegment;
 use crate::Extractor;
 use crate::CONTENT_TYPE_JSON;
+use crate::CONTENT_TYPE_OCTET_STREAM;
 
 use http::Method;
 use http::StatusCode;
@@ -77,7 +78,7 @@ impl<'a> ApiEndpoint {
  */
 #[derive(Debug)]
 pub struct ApiEndpointParameter {
-    pub name: ApiEndpointParameterName,
+    pub metadata: ApiEndpointParameterMetadata,
     pub description: Option<String>,
     pub required: bool,
     pub schema: ApiSchemaGenerator,
@@ -94,12 +95,12 @@ impl ApiEndpointParameter {
         examples: Vec<String>,
     ) -> Self {
         Self {
-            name: match loc {
+            metadata: match loc {
                 ApiEndpointParameterLocation::Path => {
-                    ApiEndpointParameterName::Path(name)
+                    ApiEndpointParameterMetadata::Path(name)
                 }
                 ApiEndpointParameterLocation::Query => {
-                    ApiEndpointParameterName::Query(name)
+                    ApiEndpointParameterMetadata::Query(name)
                 }
             },
             description,
@@ -110,13 +111,14 @@ impl ApiEndpointParameter {
     }
 
     pub fn new_body(
+        content_type: ApiEndpointBodyContentType,
         description: Option<String>,
         required: bool,
         schema: ApiSchemaGenerator,
         examples: Vec<String>,
     ) -> Self {
         Self {
-            name: ApiEndpointParameterName::Body,
+            metadata: ApiEndpointParameterMetadata::Body(content_type),
             description,
             required,
             schema,
@@ -132,10 +134,27 @@ pub enum ApiEndpointParameterLocation {
 }
 
 #[derive(Debug, Clone)]
-pub enum ApiEndpointParameterName {
+pub enum ApiEndpointParameterMetadata {
     Path(String),
     Query(String),
-    Body,
+    Body(ApiEndpointBodyContentType),
+}
+
+#[derive(Debug, Clone)]
+pub enum ApiEndpointBodyContentType {
+    /** application/octet-stream */
+    Bytes,
+    /** application/json */
+    Json,
+}
+
+impl ApiEndpointBodyContentType {
+    fn mime_type(&self) -> &str {
+        match self {
+            ApiEndpointBodyContentType::Bytes => CONTENT_TYPE_OCTET_STREAM,
+            ApiEndpointBodyContentType::Json => CONTENT_TYPE_JSON,
+        }
+    }
 }
 
 /**
@@ -211,8 +230,8 @@ impl ApiDescription {
         let vars = e
             .parameters
             .iter()
-            .filter_map(|p| match &p.name {
-                ApiEndpointParameterName::Path(name) => Some(name.clone()),
+            .filter_map(|p| match &p.metadata {
+                ApiEndpointParameterMetadata::Path(name) => Some(name.clone()),
                 _ => None,
             })
             .collect::<HashSet<_>>();
@@ -245,6 +264,23 @@ impl ApiDescription {
                     vv,
                 )),
             };
+        }
+
+        // Explicitly disallow any attempt to consume the body twice.
+        let nbodyextractors = e
+            .parameters
+            .iter()
+            .filter(|p| match p.metadata {
+                ApiEndpointParameterMetadata::Body(..) => true,
+                _ => false,
+            })
+            .count();
+        if nbodyextractors > 1 {
+            return Err(format!(
+                "only one body extractor can be used in a handler (this \
+                 function has {})",
+                nbodyextractors
+            ));
         }
 
         self.router.insert(e);
@@ -360,12 +396,12 @@ impl ApiDescription {
                 .parameters
                 .iter()
                 .filter_map(|param| {
-                    let (name, location) = match &param.name {
-                        ApiEndpointParameterName::Body => return None,
-                        ApiEndpointParameterName::Path(name) => {
+                    let (name, location) = match &param.metadata {
+                        ApiEndpointParameterMetadata::Body(_) => return None,
+                        ApiEndpointParameterMetadata::Path(name) => {
                             (name, ApiEndpointParameterLocation::Path)
                         }
-                        ApiEndpointParameterName::Query(name) => {
+                        ApiEndpointParameterMetadata::Query(name) => {
                             (name, ApiEndpointParameterLocation::Query)
                         }
                     };
@@ -417,10 +453,12 @@ impl ApiDescription {
                 .parameters
                 .iter()
                 .filter_map(|param| {
-                    match &param.name {
-                        ApiEndpointParameterName::Body => (),
+                    let mime_type = match &param.metadata {
+                        ApiEndpointParameterMetadata::Body(ct) => {
+                            ct.mime_type()
+                        }
                         _ => return None,
-                    }
+                    };
 
                     let (name, js) = match &param.schema {
                         ApiSchemaGenerator::Gen {
@@ -435,7 +473,7 @@ impl ApiDescription {
 
                     let mut content = indexmap::IndexMap::new();
                     content.insert(
-                        CONTENT_TYPE_JSON.to_string(),
+                        mime_type.to_string(),
                         openapiv3::MediaType {
                             schema: Some(schema),
                             example: None,
@@ -1073,6 +1111,10 @@ mod test {
     use super::j2oas_schema;
     use super::ApiDescription;
     use super::ApiEndpoint;
+    use crate as dropshot; /* for "endpoint" macro */
+    use crate::endpoint;
+    use crate::TypedBody;
+    use crate::UntypedBody;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
@@ -1193,5 +1235,31 @@ mod test {
         for (key, schema) in generator.definitions().iter() {
             let _ = j2oas_schema(Some(key), schema);
         }
+    }
+
+    #[test]
+    fn test_two_bodies() {
+        #[derive(Deserialize, JsonSchema)]
+        struct AStruct {};
+
+        #[endpoint {
+            method = PUT,
+            path = "/testing/two_bodies"
+        }]
+        async fn test_twobodies_handler(
+            _: Arc<RequestContext>,
+            _: UntypedBody,
+            _: TypedBody<AStruct>,
+        ) -> Result<Response<Body>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        let error = api.register(test_twobodies_handler).unwrap_err();
+        assert_eq!(
+            error,
+            "only one body extractor can be used in a handler (this function \
+             has 2)"
+        );
     }
 }
