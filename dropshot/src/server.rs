@@ -219,7 +219,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     ));
     trace!(request_log, "incoming request");
     let maybe_response = http_request_handle(
-        Arc::clone(&server),
+        server,
         request,
         &request_id,
         request_log.new(o!()),
@@ -320,7 +320,7 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
      */
     fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerConnectionHandler {
-            server: Arc::clone(&server),
+            server,
         }
     }
 }
@@ -381,7 +381,7 @@ impl<C: ServerContext> ServerRequestHandler<C> {
      */
     fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerRequestHandler {
-            server: Arc::clone(&server),
+            server,
         }
     }
 }
