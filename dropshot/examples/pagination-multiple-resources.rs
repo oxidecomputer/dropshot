@@ -12,7 +12,7 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServer;
+use dropshot::HttpServerStarter;
 use dropshot::PaginationOrder;
 use dropshot::PaginationOrder::Ascending;
 use dropshot::PaginationOrder::Descending;
@@ -307,10 +307,11 @@ async fn main() -> Result<(), String> {
     api.register(example_list_projects).unwrap();
     api.register(example_list_disks).unwrap();
     api.register(example_list_instances).unwrap();
-    let mut server = HttpServer::new(&config_dropshot, api, ctx, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?;
-    let server_task = server.run();
-    server.wait_for_shutdown(server_task).await
+    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
+        .map_err(|error| format!("failed to create server: {}", error))?
+        .start();
+
+    server.await
 }
 
 /**

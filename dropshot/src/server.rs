@@ -11,18 +11,23 @@ use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 
 use futures::future::BoxFuture;
+use futures::future::FusedFuture;
+use futures::future::FutureExt;
 use futures::lock::Mutex;
-use futures::FutureExt;
-use hyper::server::conn::AddrStream;
+use hyper::server::{
+    conn::{AddrIncoming, AddrStream},
+    Server,
+};
 use hyper::service::Service;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
+use std::task::{Context, Poll};
 use uuid::Uuid;
 
 use slog::Logger;
@@ -68,62 +73,47 @@ pub struct ServerConfig {
 
 /**
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
- * we find useful (e.g., close()).
- * TODO-cleanup: this mechanism should probably do better with types.  In
- * particular, once you call run(), you shouldn't be able to call it again
- * (i.e., it should consume self).  But you should be able to close() it.  Once
- * you've called close(), you shouldn't be able to call it again.
+ * we find useful.
  */
-pub struct HttpServer<C: ServerContext> {
+pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
-    server_future: Option<BoxFuture<'static, Result<(), hyper::Error>>>,
+    server: Server<AddrIncoming, ServerConnectionHandler<C>>,
     local_addr: SocketAddr,
-    close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl<C: ServerContext> HttpServer<C> {
+impl<C: ServerContext> HttpServerStarter<C> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
 
-    pub fn close(mut self) {
-        /*
-         * It should be impossible to close a channel that's already been closed
-         * because close() consumes self.  It should also be impossible to fail
-         * to send the close signal because nothing else can cause the server to
-         * exit.
-         */
-        let channel =
-            self.close_channel.take().expect("already closed somehow");
-        channel.send(()).expect("failed to send close signal");
-    }
-
-    /*
-     * TODO-cleanup is it more accurate to call this start() and say it returns
-     * a Future that resolves when the server is finished?
+    /**
+     * Begins execution of the underlying Http server.
      */
-    pub fn run(&mut self) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
-        let future =
-            self.server_future.take().expect("cannot run() more than once");
-        tokio::spawn(async { future.await })
-    }
+    pub fn start(self) -> HttpServer<C> {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let log_close = self.app_state.log.new(o!());
+        let graceful = self.server.with_graceful_shutdown(async move {
+            rx.await.expect(
+                "dropshot server shutting down without invoking close()",
+            );
+            info!(log_close, "received request to begin graceful shutdown");
+        });
 
-    pub async fn wait_for_shutdown(
-        &mut self,
-        join_handle: tokio::task::JoinHandle<Result<(), hyper::Error>>,
-    ) -> Result<(), String> {
-        let join_result = join_handle
-            .await
-            .map_err(|error| format!("waiting for server: {}", error))?;
-        join_result.map_err(|error| format!("server stopped: {}", error))
+        let join_handle = tokio::spawn(async { graceful.await });
+
+        HttpServer {
+            app_state: self.app_state,
+            local_addr: self.local_addr,
+            join_handle: Some(join_handle),
+            close_channel: Some(tx),
+        }
     }
 
     /**
      * Set up an HTTP server bound on the specified address that runs registered
-     * handlers.  You must invoke `run()` on the returned instance of
-     * `HttpServer` (and await the result) to actually start the server.  You
-     * can call `close()` to begin a graceful shutdown of the server, which will
-     * be complete when the `run()` Future is resolved.
+     * handlers.  You must invoke `start()` on the returned instance of
+     * `HttpServerStarter` (and await the result) to actually start the server.
+     *
      * TODO-cleanup We should be able to take a reference to the ApiDescription.
      * We currently can't because we need to hang onto the router.
      */
@@ -132,9 +122,8 @@ impl<C: ServerContext> HttpServer<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<HttpServer<C>, hyper::Error> {
+    ) -> Result<HttpServerStarter<C>, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
-        let log_close = log.new(o!());
         let app_state = Arc::new(DropshotState {
             private,
             config: ServerConfig {
@@ -160,24 +149,98 @@ impl<C: ServerContext> HttpServer<C> {
         let local_addr = server.local_addr();
         info!(app_state.log, "listening"; "local_addr" => %local_addr);
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let graceful = server.with_graceful_shutdown(async move {
-            rx.await.expect(
-                "dropshot server shutting down without invoking close()",
-            );
-            info!(log_close, "received request to begin graceful shutdown");
-        });
-
-        Ok(HttpServer {
+        Ok(HttpServerStarter {
             app_state,
-            server_future: Some(graceful.boxed()),
+            server,
             local_addr,
-            close_channel: Some(tx),
         })
     }
 
     pub fn app_private(&self) -> &C {
         &self.app_state.private
+    }
+}
+
+/**
+ * A running Dropshot HTTP server.
+ *
+ * # Panics
+ *
+ * Panics if dropped without invoking `close`.
+ */
+pub struct HttpServer<C: ServerContext> {
+    app_state: Arc<DropshotState<C>>,
+    local_addr: SocketAddr,
+    join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
+    close_channel: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl<C: ServerContext> HttpServer<C> {
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+
+    pub fn app_private(&self) -> &C {
+        &self.app_state.private
+    }
+
+    /**
+     * Signals the currently running server to stop and waits for it to exit.
+     */
+    pub async fn close(mut self) -> Result<(), String> {
+        self.close_channel
+            .take()
+            .expect("cannot close twice")
+            .send(())
+            .expect("failed to send close signal");
+        if let Some(handle) = self.join_handle.take() {
+            handle
+                .await
+                .map_err(|error| format!("waiting for server: {}", error))?
+                .map_err(|error| format!("server stopped: {}", error))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/**
+ * Verifies that the server has stopped execution when it is dropped.
+ * For graceful termination, use the `close` function.
+ */
+impl<C: ServerContext> Drop for HttpServer<C> {
+    fn drop(&mut self) {
+        if self.close_channel.is_some() {
+            panic!("dropped HttpServer without calling close");
+        }
+    }
+}
+
+impl<C: ServerContext> Future for HttpServer<C> {
+    type Output = Result<(), String>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let server = Pin::into_inner(self);
+        let mut handle = server
+            .join_handle
+            .take()
+            .expect("polling a server future which has already completed");
+        let poll = handle.poll_unpin(cx).map(|result| {
+            result
+                .map_err(|error| format!("waiting for server: {}", error))?
+                .map_err(|error| format!("server stopped: {}", error))
+        });
+
+        if poll.is_pending() {
+            server.join_handle.replace(handle);
+        }
+        return poll;
+    }
+}
+
+impl<C: ServerContext> FusedFuture for HttpServer<C> {
+    fn is_terminated(&self) -> bool {
+        self.join_handle.is_none()
     }
 }
 
@@ -401,5 +464,106 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         Box::pin(http_request_handle_wrap(Arc::clone(&self.server), req))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // Referring to the current crate as "dropshot::" instead of "crate::"
+    // helps the endpoint macro with module lookup.
+    use crate as dropshot;
+    use dropshot::endpoint;
+    use dropshot::test_util::ClientTestContext;
+    use dropshot::test_util::LogContext;
+    use dropshot::ConfigLogging;
+    use dropshot::ConfigLoggingLevel;
+    use dropshot::HttpError;
+    use dropshot::HttpResponseOk;
+    use dropshot::RequestContext;
+    use http::StatusCode;
+    use hyper::Method;
+
+    use futures::future::FusedFuture;
+
+    #[endpoint {
+        method = GET,
+        path = "/handler",
+    }]
+    async fn handler(
+        _rqctx: Arc<RequestContext<i32>>,
+    ) -> Result<HttpResponseOk<u64>, HttpError> {
+        Ok(HttpResponseOk(3))
+    }
+
+    struct TestConfig {
+        log_context: LogContext,
+    }
+
+    impl TestConfig {
+        fn log(&self) -> &slog::Logger {
+            &self.log_context.log
+        }
+    }
+
+    fn create_test_server() -> (HttpServer<i32>, TestConfig) {
+        let config_dropshot = ConfigDropshot::default();
+
+        let mut api = ApiDescription::new();
+        api.register(handler).unwrap();
+
+        let config_logging = ConfigLogging::StderrTerminal {
+            level: ConfigLoggingLevel::Warn,
+        };
+        let log_context = LogContext::new("test server", &config_logging);
+        let log = &log_context.log;
+
+        let server = HttpServerStarter::new(&config_dropshot, api, 0, log)
+            .unwrap()
+            .start();
+
+        (server, TestConfig {
+            log_context,
+        })
+    }
+
+    async fn single_client_request(addr: SocketAddr, log: &slog::Logger) {
+        let client_log = log.new(o!("http_client" => "dropshot test suite"));
+        let client_testctx = ClientTestContext::new(addr, client_log);
+        tokio::task::spawn(async move {
+            let response = client_testctx
+                .make_request(
+                    Method::GET,
+                    "/handler",
+                    None as Option<()>,
+                    StatusCode::OK,
+                )
+                .await;
+
+            assert!(response.is_ok());
+        })
+        .await
+        .expect("client request failed");
+    }
+
+    #[tokio::test]
+    async fn test_server_run_then_close() {
+        let (mut server, config) = create_test_server();
+        let client = single_client_request(server.local_addr, config.log());
+
+        futures::select! {
+            _ = client.fuse() => {},
+            r = server => panic!("Server unexpectedly terminated: {:?}", r),
+        }
+
+        assert!(!server.is_terminated());
+        assert!(server.close().await.is_ok());
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "dropped HttpServer without calling close")]
+    async fn test_drop_server_without_close_panics() {
+        let (server, _) = create_test_server();
+        std::mem::drop(server);
     }
 }

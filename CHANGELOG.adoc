@@ -15,9 +15,42 @@ https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...HEAD[Full list of co
 // configured in release.toml.  DO NOT change the format of the headers or the
 // list of raw commits.
 
+=== Breaking Changes
+
+==== Generic Context
+
+* Dropshot now uses generics to store client context, rather than relying on an internal `Any` object within `RequestContext`. Endpoints signatures are expected to begin with the argument `rqctx: Arc<RequestContext<CallerContext>>`, for some `CallerContext` object, and they may call `rqtcx.context()` to access the inner type.
+
+==== HttpServer
+
+===== HttpServer Split in Two
+* In the old implementation, `HttpServer` represented both a pending and running server. Callers were expected to invoke `run()` to begin execution of the old server.
+* In the new implementation, `HttpServerStarter` may be used to construct a server, and `HttpServer` represents the running server. Invoking `HttpServerStarter::start()` creates and `HttpServer` object, which represents the new server.
+
+===== HttpServer implements Future
+* In the old implementation, `HttpServer` returned a `tokio::JoinHandle`, and callers were expected to invoke `wait_for_shutdown` to await the completion of a server.
+* In the new implementation, `HttpServer` implements `Future`, and may be `await`-ed directly.
+
+===== Example
+
+```rust
+// Old Version:
+let mut server = HttpServer::new( /* Arguments are the same between versions */ )
+  .map_err(|error| format!("failed to start server: {}", error))?;
+
+let server_task = server.run();
+server.wait_for_shutdown(server_task).await;
+
+// New Version
+let server = HttpServerStarter::new( /* Arguments are the same between versions */ )
+  .map_err(|error| format!("failed to start server: {}", error))?
+  .start();
+
+server.await;
+```
+
 === Notable changes
 
-* Dropshot now uses generics to store client context, rather than relying on an internal `Any` object within `RequestContext`. Endpoints are expected to have the first argument `rqctx: Arc<RequestContext<CallerContext>>`, for some `CallerContext` object, and they may call `rqtcx.context()` to access the inner type.
 * https://github.com/oxidecomputer/dropshot/issues/44[#44] The new extractor `UntypedBody` allows API endpoints to accept either raw bytes or a UTF-8 string.
 
 == 0.4.0 (released 2021-02-01)
