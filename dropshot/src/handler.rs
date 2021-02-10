@@ -163,10 +163,10 @@ impl<Context: ServerContext> RequestContext<Context> {
 }
 
 /**
- * Helper trait for extracting the underlying Context
- * type from an input request.
+ * Helper trait for extracting the underlying Context type from an input
+ * request.
  */
-pub trait Requestable: Send + Sync + 'static {
+pub trait Requestable {
     type Context;
 }
 
