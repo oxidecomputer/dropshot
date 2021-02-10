@@ -12,7 +12,7 @@
 
 extern crate proc_macro;
 
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
 use quote::{quote_spanned, ToTokens};
@@ -95,55 +95,6 @@ pub fn endpoint(
     }
 }
 
-fn take_path_type(ty: &syn::Type) -> Result<&syn::Path, Error> {
-    match ty {
-        syn::Type::Path(ty_path) => Ok(&ty_path.path),
-        _ => Err(Error::new(
-            ty.span(),
-            format!("Unexpected non-path type\n{}", ERR_MSG_USAGE),
-        )),
-    }
-}
-
-fn take_path_final_segment<'a>(
-    path: &'a syn::Path,
-    ident: &str,
-) -> Result<&'a syn::PathSegment, Error> {
-    if let Some(segment) = path.segments.last() {
-        if segment.ident == Ident::new(ident, Span::call_site()) {
-            return Ok(segment);
-        }
-    }
-    Err(Error::new(
-        path.span(),
-        format!("Expected identifier: {}\n{}", ident, ERR_MSG_USAGE),
-    ))
-}
-
-fn take_one_generic_argument(
-    segment: &syn::PathSegment,
-) -> Result<&syn::Type, Error> {
-    if let syn::PathArguments::AngleBracketed(
-        syn::AngleBracketedGenericArguments {
-            colon2_token: _,
-            lt_token: _,
-            args,
-            gt_token: _,
-        },
-    ) = &segment.arguments
-    {
-        if args.len() == 1 {
-            if let syn::GenericArgument::Type(ty) = &args[0] {
-                return Ok(&ty);
-            }
-        }
-    }
-    return Err(Error::new(
-        segment.span(),
-        format!("Expected a single generic argument\n{}", ERR_MSG_USAGE),
-    ));
-}
-
 fn do_endpoint(
     attr: TokenStream,
     item: TokenStream,
@@ -222,14 +173,6 @@ fn do_endpoint(
         }
     };
 
-    let arg_name =
-        take_path_final_segment(take_path_type(&first_arg_type)?, "Arc")?;
-    let arc_parameter = take_path_final_segment(
-        take_path_type(take_one_generic_argument(&arg_name)?)?,
-        "RequestContext",
-    )?;
-    let context = &take_one_generic_argument(&arc_parameter)?;
-
     // When the user attaches this proc macro to a function with the wrong type
     // signature, the resulting errors can be deeply inscrutable. To attempt to
     // make failures easier to understand, we inject code that asserts the types
@@ -283,7 +226,7 @@ fn do_endpoint(
 
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`
-        impl From<#name> for #dropshot::ApiEndpoint<#context> {
+        impl From<#name> for #dropshot::ApiEndpoint<<#first_arg_type as #dropshot::Requestable>::Context> {
             fn from(_: #name) -> Self {
                 #item
 
@@ -384,7 +327,7 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<()> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::Requestable>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     pub async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
                     dropshot::ApiEndpoint::new(
@@ -422,7 +365,7 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<()> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<std::sync::Arc<dropshot::RequestContext<()> > as dropshot::Requestable>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) {}
                     dropshot::ApiEndpoint::new(
@@ -472,7 +415,7 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<std::i32> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<std::i32> > as dropshot::Requestable>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(_rqctx: Arc<RequestContext<std::i32>>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
@@ -522,7 +465,7 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub(crate) const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<()> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::Requestable>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext<()>>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
@@ -559,7 +502,7 @@ mod tests {
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
-            impl From<handler_xyz> for dropshot::ApiEndpoint<()> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::Requestable>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
                     dropshot::ApiEndpoint::new(
@@ -598,7 +541,7 @@ mod tests {
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             const handler_xyz: handler_xyz = handler_xyz {};
-            impl From<handler_xyz> for dropshot::ApiEndpoint<()> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::Requestable>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
                     async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
@@ -686,66 +629,6 @@ mod tests {
 
         let msg = format!("{}", ret.err().unwrap());
         assert_eq!("endpoint handler functions must be async", msg);
-    }
-
-    #[test]
-    fn test_endpoint_bad_context_no_generic() {
-        let ret = do_endpoint(
-            quote! {
-                method = GET,
-                path = "/a/b/c",
-            }
-            .into(),
-            quote! {
-                async fn handler_xyz(_rqctx: Arc<RequestContext>) {}
-            }
-            .into(),
-        );
-
-        let msg = format!("{}", ret.err().unwrap());
-        assert_eq!(
-            format!("Expected a single generic argument\n{}", ERR_MSG_USAGE),
-            msg
-        );
-    }
-
-    #[test]
-    fn test_endpoint_bad_context_wrong_request_context() {
-        let ret = do_endpoint(
-            quote! {
-                method = GET,
-                path = "/a/b/c",
-            }
-            .into(),
-            quote! {
-                async fn handler_xyz(_rqctx: Arc<i32>) {}
-            }
-            .into(),
-        );
-
-        let msg = format!("{}", ret.err().unwrap());
-        assert_eq!(
-            format!("Expected identifier: RequestContext\n{}", ERR_MSG_USAGE),
-            msg
-        );
-    }
-
-    #[test]
-    fn test_endpoint_bad_context_wrong_request_type() {
-        let ret = do_endpoint(
-            quote! {
-                method = GET,
-                path = "/a/b/c",
-            }
-            .into(),
-            quote! {
-                async fn handler_xyz(_rqctx: Arc<&RequestContext<()>>) {}
-            }
-            .into(),
-        );
-
-        let msg = format!("{}", ret.err().unwrap());
-        assert_eq!(format!("Unexpected non-path type\n{}", ERR_MSG_USAGE), msg);
     }
 
     #[test]

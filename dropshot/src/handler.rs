@@ -163,6 +163,18 @@ impl<Context: ServerContext> RequestContext<Context> {
 }
 
 /**
+ * Helper trait for extracting the underlying Context
+ * type from an input request.
+ */
+pub trait Requestable: Send + Sync + 'static {
+    type Context;
+}
+
+impl<T: 'static + ServerContext> Requestable for Arc<RequestContext<T>> {
+    type Context = T;
+}
+
+/**
  * `Extractor` defines an interface allowing a type to be constructed from a
  * `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
  * constructor function, not instance functions.

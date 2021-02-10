@@ -608,12 +608,14 @@ async fn test_untyped_body() {
  * Demo handler functions
  */
 
+type RequestCtx = Arc<RequestContext<usize>>;
+
 #[endpoint {
     method = GET,
     path = "/testing/demo1",
 }]
 async fn demo_handler_args_1(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&"demo_handler_args_1")
 }
@@ -628,7 +630,7 @@ pub struct DemoQueryArgs {
     path = "/testing/demo2query",
 }]
 async fn demo_handler_args_2query(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
     query: Query<DemoQueryArgs>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&query.into_inner())
@@ -644,7 +646,7 @@ pub struct DemoJsonBody {
     path = "/testing/demo2json",
 }]
 async fn demo_handler_args_2json(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
     json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&json.into_inner())
@@ -660,7 +662,7 @@ pub struct DemoJsonAndQuery {
     path = "/testing/demo3",
 }]
 async fn demo_handler_args_3(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
     query: Query<DemoQueryArgs>,
     json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
@@ -680,7 +682,7 @@ pub struct DemoPathString {
     path = "/testing/demo_path_string/{test1}",
 }]
 async fn demo_handler_path_param_string(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
     path_params: Path<DemoPathString>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
@@ -695,7 +697,7 @@ pub struct DemoPathUuid {
     path = "/testing/demo_path_uuid/{test1}",
 }]
 async fn demo_handler_path_param_uuid(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
     path_params: Path<DemoPathUuid>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
@@ -710,7 +712,7 @@ pub struct DemoPathU32 {
     path = "/testing/demo_path_u32/{test1}",
 }]
 async fn demo_handler_path_param_u32(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestCtx,
     path_params: Path<DemoPathU32>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())

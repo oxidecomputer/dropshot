@@ -540,6 +540,7 @@ pub use handler::HttpResponseUpdatedNoContent;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;
+pub use handler::Requestable;
 pub use handler::TypedBody;
 pub use handler::UntypedBody;
 pub use http_util::CONTENT_TYPE_JSON;
