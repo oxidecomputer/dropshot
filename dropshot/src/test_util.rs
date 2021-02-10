@@ -29,14 +29,13 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::task::JoinHandle;
 
 use crate::api_description::ApiDescription;
 use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
-use crate::server::HttpServer;
+use crate::server::{HttpServer, HttpServerStarter};
 
 /**
  * List of allowed HTTP headers in responses.  This is used to make sure we
@@ -411,7 +410,6 @@ pub struct TestContext {
     pub client_testctx: ClientTestContext,
     pub server: HttpServer,
     pub log: Logger,
-    server_task: JoinHandle<Result<(), hyper::Error>>,
     log_context: Option<LogContext>,
 }
 
@@ -441,9 +439,10 @@ impl TestContext {
         /*
          * Set up the server itself.
          */
-        let mut server =
-            HttpServer::new(&config_dropshot, api, private, &log).unwrap();
-        let server_task = server.run();
+        let server =
+            HttpServerStarter::new(&config_dropshot, api, private, &log)
+                .unwrap()
+                .start();
 
         let server_addr = server.local_addr();
         let client_log = log.new(o!("http_client" => "dropshot test suite"));
@@ -453,7 +452,6 @@ impl TestContext {
             client_testctx,
             server,
             log,
-            server_task,
             log_context,
         }
     }
@@ -464,9 +462,7 @@ impl TestContext {
      */
     /* TODO-cleanup: is there an async analog to Drop? */
     pub async fn teardown(self) {
-        self.server.close();
-        let join_result = self.server_task.await.unwrap();
-        join_result.expect("server stopped with an error");
+        self.server.close().await.expect("server stopped with an error");
         if let Some(log_context) = self.log_context {
             log_context.cleanup_successful();
         }

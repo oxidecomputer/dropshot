@@ -11,7 +11,7 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpResponseUpdatedNoContent;
-use dropshot::HttpServer;
+use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
 use schemars::JsonSchema;
@@ -58,15 +58,16 @@ async fn main() -> Result<(), String> {
     /*
      * Set up the server.
      */
-    let mut server = HttpServer::new(&config_dropshot, api, api_context, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?;
-    let server_task = server.run();
+    let server =
+        HttpServerStarter::new(&config_dropshot, api, api_context, &log)
+            .map_err(|error| format!("failed to create server: {}", error))?
+            .start();
 
     /*
      * Wait for the server to stop.  Note that there's not any code to shut down
      * this server, so we should never get past this point.
      */
-    server.wait_for_shutdown(server_task).await
+    server.await
 }
 
 /**

@@ -47,7 +47,7 @@
  * use dropshot::ConfigDropshot;
  * use dropshot::ConfigLogging;
  * use dropshot::ConfigLoggingLevel;
- * use dropshot::HttpServer;
+ * use dropshot::HttpServerStarter;
  * use std::sync::Arc;
  *
  * #[tokio::main]
@@ -61,12 +61,12 @@
  *         .map_err(|e| e.to_string())?;
  *
  *     // Describe the API.
- *     let mut api = ApiDescription::new();
+ *     let api = ApiDescription::new();
  *     // Register API functions -- see detailed example or ApiDescription docs.
  *
  *     // Start the server.
- *     let mut server =
- *         HttpServer::new(
+ *     let server =
+ *         HttpServerStarter::new(
  *             &ConfigDropshot {
  *                 bind_address: "127.0.0.1:0".parse().unwrap(),
  *                 request_body_max_bytes: 1024,
@@ -75,10 +75,10 @@
  *             Arc::new(()),
  *             &log,
  *         )
- *         .map_err(|error| format!("failed to start server: {}", error))?;
+ *         .map_err(|error| format!("failed to start server: {}", error))?
+ *         .start();
  *
- *     let server_task = server.run();
- *     server.wait_for_shutdown(server_task).await
+ *     server.await
  * }
  * ```
  *
@@ -547,7 +547,7 @@ pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
-pub use server::HttpServer;
+pub use server::{HttpServer, HttpServerStarter};
 
 /*
  * Users of the `endpoint` macro need `http::Method` available.
