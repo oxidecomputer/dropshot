@@ -1,5 +1,7 @@
 // Copyright 2020 Oxide Computer Company
 
+#![allow(unused_imports)]
+
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
@@ -16,7 +18,7 @@ struct Ret {}
     path = "/test",
 }]
 fn bad_endpoint(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<Ret>, HttpError> {
     Ok(HttpResponseOk(Ret {}))
 }

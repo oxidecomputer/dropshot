@@ -77,12 +77,12 @@ struct ProjectPage {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<BTreeMap<String, Project>>>,
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let tree = rqctx_to_tree(rqctx);
+    let tree = rqctx.context();
     let projects = match &pag_params.page {
         WhichPage::First(..) => {
             /* Return a list of the first "limit" projects. */
@@ -109,11 +109,6 @@ async fn example_list_projects(
             name: p.name.clone(),
         },
     )?))
-}
-
-fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {
-    let c = Arc::clone(&rqctx.server.private);
-    c.downcast::<BTreeMap<String, Project>>().unwrap()
 }
 
 #[tokio::main]

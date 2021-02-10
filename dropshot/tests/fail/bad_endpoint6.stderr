@@ -1,49 +1,51 @@
 error: expected identifier, found `"Oxide"`
-  --> $DIR/bad_endpoint6.rs:22:29
+  --> $DIR/bad_endpoint6.rs:24:29
    |
-22 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
+24 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
    |                       ---   ^^^^^^^ expected identifier
    |                       |
    |                       while parsing this struct
 
 error: expected identifier, found `0x1de`
-  --> $DIR/bad_endpoint6.rs:22:50
+  --> $DIR/bad_endpoint6.rs:24:50
    |
-22 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
+24 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
    |                       ---                        ^^^^^ expected identifier
    |                       |
    |                       while parsing this struct
 
 error[E0063]: missing fields `x`, `y` in initializer of `Ret`
-  --> $DIR/bad_endpoint6.rs:17:1
+  --> $DIR/bad_endpoint6.rs:19:2
    |
-17 | / #[endpoint {
-18 | |     method = GET,
-19 | |     path = "/test",
-20 | | }]
+19 |   #[endpoint {
+   |  __^
+20 | |     method = GET,
+21 | |     path = "/test",
+22 | | }]
    | |__^ missing `x`, `y`
 
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-  --> $DIR/bad_endpoint6.rs:17:1
+  --> $DIR/bad_endpoint6.rs:19:2
    |
-17 | / #[endpoint {
-18 | |     method = GET,
-19 | |     path = "/test",
-20 | | }]
+19 |   #[endpoint {
+   |  __^
+20 | |     method = GET,
+21 | |     path = "/test",
+22 | | }]
    | |__^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: required by `HttpResponseOk`
 
-error[E0277]: the trait bound `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
-  --> $DIR/bad_endpoint6.rs:17:1
+error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<()>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+  --> $DIR/bad_endpoint6.rs:19:1
    |
-17 | / #[endpoint {
-18 | |     method = GET,
-19 | |     path = "/test",
-20 | | }]
-   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}`
+19 | / #[endpoint {
+20 | |     method = GET,
+21 | |     path = "/test",
+22 | | }]
+   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<()>>::from::bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
-   |           HandlerType: HttpHandlerFunc<FuncParams, ResponseType>,
-   |                        ----------------------------------------- required by this bound in `ApiEndpoint::new`
+   |           FuncParams: Extractor + 'static,
+   |                                   ------- required by this bound in `ApiEndpoint::<Context>::new`

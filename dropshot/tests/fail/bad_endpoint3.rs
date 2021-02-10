@@ -1,5 +1,7 @@
 // Copyright 2020 Oxide Computer Company
 
+#![allow(unused_imports)]
+
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
@@ -11,7 +13,7 @@ use std::sync::Arc;
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     param: String,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))

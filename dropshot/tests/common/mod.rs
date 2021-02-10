@@ -12,7 +12,10 @@ use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
 use std::sync::Arc;
 
-pub fn test_setup(test_name: &str, api: ApiDescription) -> TestContext {
+pub fn test_setup(
+    test_name: &str,
+    api: ApiDescription<usize>,
+) -> TestContext<usize> {
     /*
      * The IP address to which we bind can be any local IP, but we use
      * 127.0.0.1 because we know it's present, it shouldn't expose this server

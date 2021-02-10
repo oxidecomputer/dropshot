@@ -1,5 +1,7 @@
 // Copyright 2020 Oxide Computer Company
 
+#![allow(unused_imports)]
+
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;

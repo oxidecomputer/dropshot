@@ -138,7 +138,7 @@
  *     path = "/projects/project1",
  * }]
  * async fn myapi_projects_get_project(
- *     rqctx: Arc<RequestContext>,
+ *     rqctx: Arc<RequestContext<()>>,
  * ) -> Result<HttpResponseOk<Project>, HttpError>
  * {
  *    let project = Project { name: String::from("project1") };
@@ -209,17 +209,21 @@
  *
  * ```ignore
  * async fn f(
- *      rqctx: Arc<RequestContext>,
+ *      rqctx: Arc<RequestContext<Context>>,
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
  * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
- * Other than the RequestContext, parameters may appear in any order.  The types
- * `Query`, `Path`, and `TypedBody` are called **Extractors** because they cause
- * information to be pulled out of the request and made available to the handler
- * function.
+ * Other than the RequestContext, parameters may appear in any order.
+ *
+ * The `Context` type is caller-provided context which is provided when
+ * the server is created.
+ *
+ * The types `Query`, `Path`, and `TypedBody` are called **Extractors** because
+ * they cause information to be pulled out of the request and made available to
+ * the handler function.
  *
  * * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
  *   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
@@ -258,12 +262,15 @@
  *     marker: Option<String>
  * }
  *
+ * struct MyContext {}
+ *
  * async fn myapi_projects_get(
- *     _: Arc<RequestContext>,
+ *     rqctx: Arc<RequestContext<MyContext>>,
  *     query: Query<MyQueryArgs>)
  *     -> Result<Response<Body>, HttpError>
  * {
  *     let query_args = query.into_inner();
+ *     let context: Arc<MyContext> = rqctx.context();
  *     let limit: u32 = query_args.limit;
  *     let marker: Option<String> = query_args.marker;
  *     Ok(Response::builder()
@@ -473,7 +480,7 @@
  *     path = "/list_stuff"
  * }]
  * async fn my_list_api(
- *     rqctx: Arc<RequestContext>,
+ *     rqctx: Arc<RequestContext<()>>,
  *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
  *     extra_params: Query<MyExtraQueryParams>,
  * ) -> Result<HttpResponseOk<ResultsPage<String>>, HttpError>
@@ -543,6 +550,7 @@ pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
 pub use server::HttpServer;
+pub use server::ServerContext;
 
 /*
  * Users of the `endpoint` macro need `http::Method` available.

@@ -170,12 +170,12 @@ fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<DataCollection>>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
@@ -196,12 +196,12 @@ async fn example_list_projects(
     path = "/disks"
 }]
 async fn example_list_disks(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<DataCollection>>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
@@ -222,12 +222,12 @@ async fn example_list_disks(
     path = "/instances"
 }]
 async fn example_list_instances(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<DataCollection>>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
@@ -311,11 +311,6 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create server: {}", error))?;
     let server_task = server.run();
     server.wait_for_shutdown(server_task).await
-}
-
-fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<DataCollection> {
-    let c = Arc::clone(&rqctx.server.private);
-    c.downcast::<DataCollection>().unwrap()
 }
 
 /**

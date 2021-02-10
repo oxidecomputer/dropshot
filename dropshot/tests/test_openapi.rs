@@ -18,7 +18,7 @@ use std::{io::Cursor, str::from_utf8, sync::Arc};
 /// line comment.
 /// It uses Rust-style.
 async fn handler1(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }
@@ -41,7 +41,7 @@ struct QueryArgs {
  * It uses C-style.
  */
 async fn handler2(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     _query: Query<QueryArgs>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     Ok(HttpResponseUpdatedNoContent())
@@ -58,7 +58,7 @@ struct PathArgs {
     path = "/test/man/{x}",
 }]
 async fn handler3(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     _path: Path<PathArgs>,
 ) -> Result<HttpResponseDeleted, HttpError> {
     Ok(HttpResponseDeleted())
@@ -77,7 +77,7 @@ struct Response {}
     path = "/test/camera",
 }]
 async fn handler4(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
@@ -89,7 +89,7 @@ async fn handler4(
     tags = [ "person", "woman", "man", "camera", "tv"]
 }]
 async fn handler5(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     _path: Path<PathArgs>,
     _query: Query<QueryArgs>,
     _body: TypedBody<BodyParam>,
@@ -119,7 +119,7 @@ struct ExamplePageSelector {
     path = "/impairment",
 }]
 async fn handler6(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     _query: Query<PaginationParams<ExampleScanParams, ExamplePageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<ResponseItem>>, HttpError> {
     unimplemented!();

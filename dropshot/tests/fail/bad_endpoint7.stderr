@@ -1,23 +1,23 @@
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-  --> $DIR/bad_endpoint7.rs:24:23
+  --> $DIR/bad_endpoint7.rs:26:23
    |
-24 |       Ok(HttpResponseOk(Ret {
+26 |       Ok(HttpResponseOk(Ret {
    |  _______________________^
-25 | |         x: "Oxide".to_string(),
-26 | |         y: 0x1de,
-27 | |     }))
+27 | |         x: "Oxide".to_string(),
+28 | |         y: 0x1de,
+29 | |     }))
    | |_____^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: required by `HttpResponseOk`
 
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> $DIR/bad_endpoint7.rs:24:8
+    --> $DIR/bad_endpoint7.rs:26:8
      |
-24   |       Ok(HttpResponseOk(Ret {
+26   |       Ok(HttpResponseOk(Ret {
      |  ________^
-25   | |         x: "Oxide".to_string(),
-26   | |         y: 0x1de,
-27   | |     }))
+27   | |         x: "Oxide".to_string(),
+28   | |         y: 0x1de,
+29   | |     }))
      | |______^ the trait `serde::ser::Serialize` is not implemented for `Ret`
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
@@ -26,12 +26,12 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |                                             --------- required by this bound in `HttpResponseOk`
 
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> $DIR/bad_endpoint7.rs:24:5
+    --> $DIR/bad_endpoint7.rs:26:5
      |
-24   | /     Ok(HttpResponseOk(Ret {
-25   | |         x: "Oxide".to_string(),
-26   | |         y: 0x1de,
-27   | |     }))
+26   | /     Ok(HttpResponseOk(Ret {
+27   | |         x: "Oxide".to_string(),
+28   | |         y: 0x1de,
+29   | |     }))
      | |_______^ the trait `serde::ser::Serialize` is not implemented for `Ret`
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
@@ -40,15 +40,15 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |                                             --------- required by this bound in `HttpResponseOk`
 
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> $DIR/bad_endpoint7.rs:23:45
+    --> $DIR/bad_endpoint7.rs:25:45
      |
-23   |   ) -> Result<HttpResponseOk<Ret>, HttpError> {
+25   |   ) -> Result<HttpResponseOk<Ret>, HttpError> {
      |  _____________________________________________^
-24   | |     Ok(HttpResponseOk(Ret {
-25   | |         x: "Oxide".to_string(),
-26   | |         y: 0x1de,
-27   | |     }))
-28   | | }
+26   | |     Ok(HttpResponseOk(Ret {
+27   | |         x: "Oxide".to_string(),
+28   | |         y: 0x1de,
+29   | |     }))
+30   | | }
      | |_^ the trait `serde::ser::Serialize` is not implemented for `Ret`
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
@@ -56,13 +56,13 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
      |                                             --------- required by this bound in `HttpResponseOk`
 
-error[E0277]: the trait bound `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _>` is not satisfied
-  --> $DIR/bad_endpoint7.rs:21:10
+error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<()>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+  --> $DIR/bad_endpoint7.rs:23:10
    |
-21 | async fn bad_endpoint(
-   |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _>` is not implemented for `fn(Arc<RequestContext>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint>::from::bad_endpoint}`
+23 | async fn bad_endpoint(
+   |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<()>>::from::bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
-   |         HandlerType: HttpHandlerFunc<FuncParams, ResponseType>,
-   |                      ----------------------------------------- required by this bound in `ApiEndpoint::new`
+   |         FuncParams: Extractor + 'static,
+   |                                 ------- required by this bound in `ApiEndpoint::<Context>::new`

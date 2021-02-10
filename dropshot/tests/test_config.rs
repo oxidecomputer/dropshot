@@ -53,7 +53,7 @@ fn test_config_bad_bind_address_garbage() {
     );
 }
 
-fn make_server(config: &ConfigDropshot, log: &Logger) -> HttpServer {
+fn make_server(config: &ConfigDropshot, log: &Logger) -> HttpServer<i32> {
     HttpServer::new(&config, dropshot::ApiDescription::new(), Arc::new(0), log)
         .unwrap()
 }

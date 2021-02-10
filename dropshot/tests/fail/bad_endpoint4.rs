@@ -1,5 +1,7 @@
 // Copyright 2020 Oxide Computer Company
 
+#![allow(unused_imports)]
+
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
@@ -18,7 +20,7 @@ struct QueryParams {
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext>,
+    _rqctx: Arc<RequestContext<()>>,
     _params: Query<QueryParams>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))

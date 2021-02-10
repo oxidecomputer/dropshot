@@ -233,12 +233,12 @@ fn page_selector_for(
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<ProjectCollection>>,
     query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = ProjectScanParams {
         sort: match &pag_params.page {
             WhichPage::First(ProjectScanParams {
@@ -294,11 +294,6 @@ async fn example_list_projects(
         &scan_params,
         page_selector_for,
     )?))
-}
-
-fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
-    let c = Arc::clone(&rqctx.server.private);
-    c.downcast::<ProjectCollection>().unwrap()
 }
 
 #[tokio::main]

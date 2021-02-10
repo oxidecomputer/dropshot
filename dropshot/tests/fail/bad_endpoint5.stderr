@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
-   --> $DIR/bad_endpoint5.rs:24:14
+   --> $DIR/bad_endpoint5.rs:26:14
     |
-24  |     _params: Query<QueryParams>,
+26  |     _params: Query<QueryParams>,
     |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
     |
    ::: $WORKSPACE/dropshot/src/handler.rs
