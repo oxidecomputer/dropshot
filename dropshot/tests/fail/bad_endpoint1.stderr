@@ -7,7 +7,7 @@ Try using the following endpoint format:
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
-  --> $DIR/bad_endpoint1.rs:13:1
+  --> $DIR/bad_endpoint1.rs:20:1
    |
-13 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
+20 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

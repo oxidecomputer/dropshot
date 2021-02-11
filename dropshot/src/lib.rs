@@ -540,7 +540,6 @@ pub use handler::HttpResponseUpdatedNoContent;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;
-pub use handler::Requestable;
 pub use handler::TypedBody;
 pub use handler::UntypedBody;
 pub use http_util::CONTENT_TYPE_JSON;
@@ -559,9 +558,10 @@ pub use server::ServerContext;
 pub use server::{HttpServer, HttpServerStarter};
 
 /*
- * Users of the `endpoint` macro need `http::Method` available.
+ * Users of the `endpoint` macro need the following macros:
  */
 pub use http::Method;
+pub use handler::RequestContextArgument;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::endpoint;

@@ -164,13 +164,13 @@ impl<Context: ServerContext> RequestContext<Context> {
 
 /**
  * Helper trait for extracting the underlying Context type from an input
- * request.
+ * request, explicitly to be used by the endpoint macro.
  */
-pub trait Requestable {
+pub trait RequestContextArgument {
     type Context;
 }
 
-impl<T: 'static + ServerContext> Requestable for Arc<RequestContext<T>> {
+impl<T: 'static + ServerContext> RequestContextArgument for Arc<RequestContext<T>> {
     type Context = T;
 }
 
@@ -433,9 +433,7 @@ where
      * here causes the compiler to behave as though this struct referred to a
      * `FuncParams`, which allows us to use the type parameter below.
      */
-    phantom: PhantomData<(FuncParams, ResponseType)>,
-
-    phantom2: PhantomData<Context>,
+    phantom: PhantomData<(FuncParams, ResponseType, Context)>,
 }
 
 impl<Context, HandlerType, FuncParams, ResponseType> Debug
@@ -527,7 +525,6 @@ where
             label: label.to_string(),
             handler,
             phantom: PhantomData,
-            phantom2: PhantomData,
         })
     }
 }

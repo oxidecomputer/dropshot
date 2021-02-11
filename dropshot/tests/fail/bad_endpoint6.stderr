@@ -36,14 +36,14 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
    |
    = note: required by `HttpResponseOk`
 
-error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as Requestable>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> $DIR/bad_endpoint6.rs:19:1
    |
 19 | / #[endpoint {
 20 | |     method = GET,
 21 | |     path = "/test",
 22 | | }]
-   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as Requestable>::Context>>::from::bad_endpoint}`
+   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |

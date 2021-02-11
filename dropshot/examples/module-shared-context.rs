@@ -1,6 +1,7 @@
 // Copyright 2021 Oxide Computer Company
 /*!
- * Example use of Dropshot.
+ * Example use of Dropshot where a client wants to act on
+ * a custom context object that outlives endpoint functions.
  */
 
 use dropshot::endpoint;
@@ -66,10 +67,7 @@ async fn main() -> Result<(), String> {
     /*
      * Wait for the server to stop.  Note that there's not any code to shut down
      * this server, so we should never get past this point.
-     */
-    futures::pin_mut!(server);
-
-    /*
+     *
      * Even with the endpoints acting on the `ExampleContext` object,
      * we can still hold a reference and act on the object beyond the lifetime
      * of those endpoints.
@@ -77,6 +75,7 @@ async fn main() -> Result<(), String> {
      * In this example, we increment the counter every five seconds,
      * regardless of received HTTP requests.
      */
+    futures::pin_mut!(server);
     loop {
         let sleep =
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).fuse();
