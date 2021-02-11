@@ -170,7 +170,9 @@ pub trait RequestContextArgument {
     type Context;
 }
 
-impl<T: 'static + ServerContext> RequestContextArgument for Arc<RequestContext<T>> {
+impl<T: 'static + ServerContext> RequestContextArgument
+    for Arc<RequestContext<T>>
+{
     type Context = T;
 }
 

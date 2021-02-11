@@ -560,8 +560,8 @@ pub use server::{HttpServer, HttpServerStarter};
 /*
  * Users of the `endpoint` macro need the following macros:
  */
-pub use http::Method;
 pub use handler::RequestContextArgument;
+pub use http::Method;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::endpoint;
