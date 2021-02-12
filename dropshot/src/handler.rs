@@ -163,8 +163,13 @@ impl<Context: ServerContext> RequestContext<Context> {
 }
 
 /**
- * Helper trait for extracting the underlying Context type from an input
- * request, explicitly to be used by the endpoint macro.
+ * Helper trait for extracting the underlying Context type from the
+ * first argument to an endpoint. This trait exists to help the
+ * endpoint macro parse this argument.
+ *
+ * The first argument to an endpoint handler must be of the form:
+ * `Arc<RequestContext<T>>` where `T` is a caller-supplied
+ * value that implements `ServerContext`.
  */
 pub trait RequestContextArgument {
     type Context;

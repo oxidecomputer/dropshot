@@ -1,6 +1,6 @@
 error: Endpoint requires arguments
-Try using the following endpoint format:
-    async fn my_endpoint(
+Endpoint handlers must have the following signature:
+    async fn bad_endpoint(
         rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]

@@ -54,14 +54,19 @@ struct Metadata {
 
 const DROPSHOT: &str = "dropshot";
 
-const ERR_MSG_USAGE: &str = "Try using the following endpoint format:
-    async fn my_endpoint(
+fn usage(err_msg: &str, fn_name: &str) -> String {
+    format!(
+        "{}\nEndpoint handlers must have the following signature:
+    async fn {}(
         rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
-    ) -> Result<HttpResponse*, HttpError>";
+    ) -> Result<HttpResponse*, HttpError>",
+        err_msg, fn_name
+    )
+}
 
 /// This attribute transforms a handler function into a Dropshot endpoint
 /// suitable to be used as a parameter to
@@ -150,7 +155,7 @@ fn do_endpoint(
     let first_arg = ast.sig.inputs.first().ok_or_else(|| {
         Error::new_spanned(
             (&ast.sig).into_token_stream(),
-            format!("Endpoint requires arguments\n{}", ERR_MSG_USAGE),
+            usage("Endpoint requires arguments", &name_str),
         )
     })?;
     let first_arg_type = {
@@ -164,10 +169,7 @@ fn do_endpoint(
             _ => {
                 return Err(Error::new(
                     first_arg.span(),
-                    format!(
-                        "Expected a non-receiver argument\n{}",
-                        ERR_MSG_USAGE
-                    ),
+                    usage("Expected a non-receiver argument", &name_str),
                 ));
             }
         }
@@ -647,7 +649,7 @@ mod tests {
 
         let msg = format!("{}", ret.err().unwrap());
         assert_eq!(
-            format!("Expected a non-receiver argument\n{}", ERR_MSG_USAGE),
+            usage("Expected a non-receiver argument", "handler_xyz"),
             msg
         );
     }
@@ -667,9 +669,6 @@ mod tests {
         );
 
         let msg = format!("{}", ret.err().unwrap());
-        assert_eq!(
-            format!("Endpoint requires arguments\n{}", ERR_MSG_USAGE),
-            msg
-        );
+        assert_eq!(usage("Endpoint requires arguments", "handler_xyz"), msg);
     }
 }
