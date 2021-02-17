@@ -10,6 +10,7 @@ use crate::handler::RouteHandler;
 use crate::router::path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
+use crate::server::ServerContext;
 use crate::Extractor;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
@@ -25,9 +26,9 @@ use std::collections::HashSet;
  * inferred from function parameter types and doc comments (respectively).
  */
 #[derive(Debug)]
-pub struct ApiEndpoint {
+pub struct ApiEndpoint<Context: ServerContext> {
     pub operation_id: String,
-    pub handler: Box<dyn RouteHandler>,
+    pub handler: Box<dyn RouteHandler<Context>>,
     pub method: Method,
     pub path: String,
     pub parameters: Vec<ApiEndpointParameter>,
@@ -36,7 +37,7 @@ pub struct ApiEndpoint {
     pub tags: Vec<String>,
 }
 
-impl<'a> ApiEndpoint {
+impl<'a, Context: ServerContext> ApiEndpoint<Context> {
     pub fn new<HandlerType, FuncParams, ResponseType>(
         operation_id: String,
         handler: HandlerType,
@@ -44,14 +45,14 @@ impl<'a> ApiEndpoint {
         path: &'a str,
     ) -> Self
     where
-        HandlerType: HttpHandlerFunc<FuncParams, ResponseType>,
+        HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
         FuncParams: Extractor + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         ApiEndpoint {
-            operation_id: operation_id,
+            operation_id,
             handler: HttpRouteHandler::new(handler),
-            method: method,
+            method,
             path: path.to_string(),
             parameters: FuncParams::metadata(),
             response: ResponseType::metadata(),
@@ -197,12 +198,12 @@ impl std::fmt::Debug for ApiSchemaGenerator {
  * Other metadata could also be provided here.  This object can be used to
  * generate an OpenAPI spec or to run an HTTP server implementing the API.
  */
-pub struct ApiDescription {
+pub struct ApiDescription<Context: ServerContext> {
     /** In practice, all the information we need is encoded in the router. */
-    router: HttpRouter,
+    router: HttpRouter<Context>,
 }
 
-impl ApiDescription {
+impl<Context: ServerContext> ApiDescription<Context> {
     pub fn new() -> Self {
         ApiDescription {
             router: HttpRouter::new(),
@@ -214,7 +215,7 @@ impl ApiDescription {
      */
     pub fn register<T>(&mut self, endpoint: T) -> Result<(), String>
     where
-        T: Into<ApiEndpoint>,
+        T: Into<ApiEndpoint<Context>>,
     {
         let e = endpoint.into();
 
@@ -297,7 +298,11 @@ impl ApiDescription {
      * `version` properties that the `Info` object in an OpenAPI definition must
      * contain.
      */
-    pub fn openapi<S1, S2>(&self, title: S1, version: S2) -> OpenApiDefinition
+    pub fn openapi<S1, S2>(
+        &self,
+        title: S1,
+        version: S2,
+    ) -> OpenApiDefinition<Context>
     where
         S1: AsRef<str>,
         S2: AsRef<str>,
@@ -564,7 +569,7 @@ impl ApiDescription {
      * crate?  Once we do that, we don't need to consume the ApiDescription to
      * do this.
      */
-    pub fn into_router(self) -> HttpRouter {
+    pub fn into_router(self) -> HttpRouter<Context> {
         self.router
     }
 }
@@ -956,17 +961,17 @@ fn j2oas_object(
  * document may be generated via [`write()`](`OpenApiDefinition::write`) or
  * [`json()`](`OpenApiDefinition::json`).
  */
-pub struct OpenApiDefinition<'a> {
-    api: &'a ApiDescription,
+pub struct OpenApiDefinition<'a, Context: ServerContext> {
+    api: &'a ApiDescription<Context>,
     info: openapiv3::Info,
 }
 
-impl<'a> OpenApiDefinition<'a> {
+impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     fn new(
-        api: &'a ApiDescription,
+        api: &'a ApiDescription<Context>,
         title: &str,
         version: &str,
-    ) -> OpenApiDefinition<'a> {
+    ) -> OpenApiDefinition<'a, Context> {
         let info = openapiv3::Info {
             title: title.to_string(),
             version: version.to_string(),
@@ -1130,7 +1135,7 @@ mod test {
     }
 
     async fn test_badpath_handler(
-        _: Arc<RequestContext>,
+        _: Arc<RequestContext<()>>,
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
@@ -1247,7 +1252,7 @@ mod test {
             path = "/testing/two_bodies"
         }]
         async fn test_twobodies_handler(
-            _: Arc<RequestContext>,
+            _: Arc<RequestContext<()>>,
             _: UntypedBody,
             _: TypedBody<AStruct>,
         ) -> Result<Response<Body>, HttpError> {

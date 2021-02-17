@@ -77,12 +77,12 @@ struct ProjectPage {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<BTreeMap<String, Project>>>,
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let tree = rqctx_to_tree(rqctx);
+    let tree = rqctx.context();
     let projects = match &pag_params.page {
         WhichPage::First(..) => {
             /* Return a list of the first "limit" projects. */
@@ -111,11 +111,6 @@ async fn example_list_projects(
     )?))
 }
 
-fn rqctx_to_tree(rqctx: Arc<RequestContext>) -> Arc<BTreeMap<String, Project>> {
-    let c = Arc::clone(&rqctx.server.private);
-    c.downcast::<BTreeMap<String, Project>>().unwrap()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let port = std::env::args()
@@ -140,7 +135,7 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(tree);
+    let ctx = tree;
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,

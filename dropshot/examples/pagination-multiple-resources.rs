@@ -170,12 +170,12 @@ fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<DataCollection>>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
@@ -196,12 +196,12 @@ async fn example_list_projects(
     path = "/disks"
 }]
 async fn example_list_disks(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<DataCollection>>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
@@ -222,12 +222,12 @@ async fn example_list_disks(
     path = "/instances"
 }]
 async fn example_list_instances(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<DataCollection>>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
     let iter = do_list(
@@ -244,7 +244,7 @@ async fn example_list_instances(
 }
 
 fn do_list<'a, T>(
-    data: &'a Arc<DataCollection>,
+    data: &'a DataCollection,
     scan_params: &ExScanParams,
     p: &'a WhichPage<ExScanParams, ExPageSelector>,
     by_name: &'a BTreeMap<String, Arc<T>>,
@@ -292,7 +292,7 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(DataCollection::new());
+    let ctx = DataCollection::new();
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,
@@ -312,11 +312,6 @@ async fn main() -> Result<(), String> {
         .start();
 
     server.await
-}
-
-fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<DataCollection> {
-    let c = Arc::clone(&rqctx.server.private);
-    c.downcast::<DataCollection>().unwrap()
 }
 
 /**

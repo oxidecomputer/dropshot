@@ -6,6 +6,7 @@
 use super::error::HttpError;
 use super::handler::RouteHandler;
 
+use crate::server::ServerContext;
 use crate::ApiEndpoint;
 use http::Method;
 use http::StatusCode;
@@ -61,9 +62,9 @@ use std::collections::BTreeSet;
  *   read-only.  This behavior isn't enforced by `HttpRouter`.
  */
 #[derive(Debug)]
-pub struct HttpRouter {
+pub struct HttpRouter<Context: ServerContext> {
     /** root of the trie */
-    root: Box<HttpRouterNode>,
+    root: Box<HttpRouterNode<Context>>,
 }
 
 /**
@@ -79,19 +80,19 @@ pub struct HttpRouter {
  * of outgoing edges a node will have when we create it.
  */
 #[derive(Debug)]
-struct HttpRouterNode {
+struct HttpRouterNode<Context: ServerContext> {
     /** Handlers, etc. for each of the HTTP methods defined for this node. */
-    methods: BTreeMap<String, ApiEndpoint>,
+    methods: BTreeMap<String, ApiEndpoint<Context>>,
     /** Edges linking to child nodes. */
-    edges: Option<HttpRouterEdges>,
+    edges: Option<HttpRouterEdges<Context>>,
 }
 
 #[derive(Debug)]
-enum HttpRouterEdges {
+enum HttpRouterEdges<Context: ServerContext> {
     /** Outgoing edges for literal paths. */
-    Literals(BTreeMap<String, Box<HttpRouterNode>>),
+    Literals(BTreeMap<String, Box<HttpRouterNode<Context>>>),
     /** Outgoing edges for variable-named paths. */
-    Variable(String, Box<HttpRouterNode>),
+    Variable(String, Box<HttpRouterNode<Context>>),
 }
 
 /**
@@ -145,12 +146,12 @@ impl PathSegment {
  * corresponding values in the actual path.
  */
 #[derive(Debug)]
-pub struct RouterLookupResult<'a> {
-    pub handler: &'a dyn RouteHandler,
+pub struct RouterLookupResult<'a, Context: ServerContext> {
+    pub handler: &'a dyn RouteHandler<Context>,
     pub variables: BTreeMap<String, String>,
 }
 
-impl HttpRouterNode {
+impl<Context: ServerContext> HttpRouterNode<Context> {
     pub fn new() -> Self {
         HttpRouterNode {
             methods: BTreeMap::new(),
@@ -159,7 +160,7 @@ impl HttpRouterNode {
     }
 }
 
-impl HttpRouter {
+impl<Context: ServerContext> HttpRouter<Context> {
     /**
      * Returns a new `HttpRouter` with no routes configured.
      */
@@ -174,14 +175,14 @@ impl HttpRouter {
      * URI `path`.  See the `HttpRouter` docs for information about how `path`
      * is processed.  Requests matching `path` will be resolved to `handler`.
      */
-    pub fn insert(&mut self, endpoint: ApiEndpoint) {
+    pub fn insert(&mut self, endpoint: ApiEndpoint<Context>) {
         let method = endpoint.method.clone();
         let path = endpoint.path.clone();
 
         let all_segments = path_to_segments(path.as_str());
         let mut varnames: BTreeSet<String> = BTreeSet::new();
 
-        let mut node: &mut Box<HttpRouterNode> = &mut self.root;
+        let mut node: &mut Box<HttpRouterNode<Context>> = &mut self.root;
         for raw_segment in all_segments {
             let segment = PathSegment::from(raw_segment);
 
@@ -296,7 +297,7 @@ impl HttpRouter {
         &'a self,
         method: &'b Method,
         path: &'b str,
-    ) -> Result<RouterLookupResult<'a>, HttpError> {
+    ) -> Result<RouterLookupResult<'a, Context>, HttpError> {
         let all_segments = path_to_segments(path);
         let mut node = &self.root;
         let mut variables: BTreeMap<String, String> = BTreeMap::new();
@@ -346,9 +347,9 @@ impl HttpRouter {
     }
 }
 
-impl<'a> IntoIterator for &'a HttpRouter {
-    type Item = (String, String, &'a ApiEndpoint);
-    type IntoIter = HttpRouterIter<'a>;
+impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
+    type Item = (String, String, &'a ApiEndpoint<Context>);
+    type IntoIter = HttpRouterIter<'a, Context>;
     fn into_iter(self) -> Self::IntoIter {
         HttpRouterIter::new(self)
     }
@@ -364,15 +365,16 @@ impl<'a> IntoIterator for &'a HttpRouter {
  * the root node's `methods` iterator and a stack consisting of a
  * blank string and an iterator over the root node's children.
  */
-pub struct HttpRouterIter<'a> {
-    method: Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint)> + 'a>,
-    path: Vec<(PathSegment, Box<PathIter<'a>>)>,
+pub struct HttpRouterIter<'a, Context: ServerContext> {
+    method:
+        Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint<Context>)> + 'a>,
+    path: Vec<(PathSegment, Box<PathIter<'a, Context>>)>,
 }
-type PathIter<'a> =
-    dyn Iterator<Item = (PathSegment, &'a Box<HttpRouterNode>)> + 'a;
+type PathIter<'a, Context> =
+    dyn Iterator<Item = (PathSegment, &'a Box<HttpRouterNode<Context>>)> + 'a;
 
-impl<'a> HttpRouterIter<'a> {
-    fn new(router: &'a HttpRouter) -> Self {
+impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
+    fn new(router: &'a HttpRouter<Context>) -> Self {
         HttpRouterIter {
             method: Box::new(router.root.methods.iter()),
             path: vec![(
@@ -388,7 +390,9 @@ impl<'a> HttpRouterIter<'a> {
      * path parameter variable, and a modified iterator in the case of
      * literal, explicit path segments.
      */
-    fn iter_node(node: &'a HttpRouterNode) -> Box<PathIter<'a>> {
+    fn iter_node(
+        node: &'a HttpRouterNode<Context>,
+    ) -> Box<PathIter<'a, Context>> {
         match &node.edges {
             Some(HttpRouterEdges::Literals(map)) => Box::new(
                 map.iter()
@@ -419,8 +423,8 @@ impl<'a> HttpRouterIter<'a> {
     }
 }
 
-impl<'a> Iterator for HttpRouterIter<'a> {
-    type Item = (String, String, &'a ApiEndpoint);
+impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
+    type Item = (String, String, &'a ApiEndpoint<Context>);
 
     fn next(&mut self) -> Option<Self::Item> {
         // If there are no path components left then we've reached the end of
@@ -516,28 +520,28 @@ mod test {
     use std::sync::Arc;
 
     async fn test_handler(
-        _: Arc<RequestContext>,
+        _: Arc<RequestContext<()>>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
     }
 
-    fn new_handler() -> Box<dyn RouteHandler> {
+    fn new_handler() -> Box<dyn RouteHandler<()>> {
         HttpRouteHandler::new(test_handler)
     }
 
-    fn new_handler_named(name: &str) -> Box<dyn RouteHandler> {
+    fn new_handler_named(name: &str) -> Box<dyn RouteHandler<()>> {
         HttpRouteHandler::new_with_name(test_handler, name)
     }
 
     fn new_endpoint(
-        handler: Box<dyn RouteHandler>,
+        handler: Box<dyn RouteHandler<()>>,
         method: Method,
         path: &str,
-    ) -> ApiEndpoint {
+    ) -> ApiEndpoint<()> {
         ApiEndpoint {
             operation_id: "test_handler".to_string(),
-            handler: handler,
-            method: method,
+            handler,
+            method,
             path: path.to_string(),
             parameters: vec![],
             response: ApiEndpointResponse {
@@ -922,7 +926,7 @@ mod test {
 
     #[test]
     fn test_iter_null() {
-        let router = HttpRouter::new();
+        let router = HttpRouter::<()>::new();
         let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
         assert_eq!(ret, vec![]);
     }

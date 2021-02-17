@@ -10,9 +10,11 @@ use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
-use std::sync::Arc;
 
-pub fn test_setup(test_name: &str, api: ApiDescription) -> TestContext {
+pub fn test_setup(
+    test_name: &str,
+    api: ApiDescription<usize>,
+) -> TestContext<usize> {
     /*
      * The IP address to which we bind can be any local IP, but we use
      * 127.0.0.1 because we know it's present, it shouldn't expose this server
@@ -32,11 +34,5 @@ pub fn test_setup(test_name: &str, api: ApiDescription) -> TestContext {
 
     let logctx = LogContext::new(test_name, &config_logging);
     let log = logctx.log.new(o!());
-    TestContext::new(
-        api,
-        Arc::new(0 as usize),
-        &config_dropshot,
-        Some(logctx),
-        log,
-    )
+    TestContext::new(api, 0 as usize, &config_dropshot, Some(logctx), log)
 }

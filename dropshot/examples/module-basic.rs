@@ -7,13 +7,10 @@ use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpServerStarter;
-use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::any::Any;
 use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -75,20 +72,10 @@ impl ExampleContext {
     /**
      * Return a new ExampleContext.
      */
-    pub fn new() -> Arc<ExampleContext> {
-        Arc::new(ExampleContext {
+    pub fn new() -> ExampleContext {
+        ExampleContext {
             counter: AtomicU64::new(0),
-        })
-    }
-
-    /**
-     * Given `rqctx` (which is provided by Dropshot to all HTTP handler
-     * functions), return our application-specific context.
-     */
-    pub fn from_rqctx(rqctx: &Arc<RequestContext>) -> Arc<ExampleContext> {
-        let ctx: Arc<dyn Any + Send + Sync + 'static> =
-            Arc::clone(&rqctx.server.private);
-        ctx.downcast::<ExampleContext>().expect("wrong type for private data")
+        }
     }
 }
 
@@ -131,9 +118,9 @@ pub mod routes {
           path = "/counter",
       }]
     pub async fn example_api_get_counter(
-        rqctx: Arc<RequestContext>,
+        rqctx: Arc<RequestContext<ExampleContext>>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
-        let api_context = ExampleContext::from_rqctx(&rqctx);
+        let api_context = rqctx.context();
 
         Ok(HttpResponseOk(CounterValue {
             counter: api_context.counter.load(Ordering::SeqCst),
@@ -149,10 +136,10 @@ pub mod routes {
           path = "/counter",
       }]
     pub async fn example_api_put_counter(
-        rqctx: Arc<RequestContext>,
+        rqctx: Arc<RequestContext<ExampleContext>>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-        let api_context = ExampleContext::from_rqctx(&rqctx);
+        let api_context = rqctx.context();
         let updated_value = update.into_inner();
 
         if updated_value.counter == 10 {

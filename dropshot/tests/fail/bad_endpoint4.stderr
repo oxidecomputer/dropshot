@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
-   --> $DIR/bad_endpoint4.rs:22:14
+   --> $DIR/bad_endpoint4.rs:24:14
     |
-22  |     _params: Query<QueryParams>,
+24  |     _params: Query<QueryParams>,
     |              ^^^^^^^^^^^^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
     |
    ::: $WORKSPACE/dropshot/src/handler.rs
@@ -10,9 +10,9 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
     |                                                ---------- required by this bound in `dropshot::Query`
 
 error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
-   --> $DIR/bad_endpoint4.rs:22:14
+   --> $DIR/bad_endpoint4.rs:24:14
     |
-22  |     _params: Query<QueryParams>,
+24  |     _params: Query<QueryParams>,
     |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
     |
    ::: $WORKSPACE/dropshot/src/handler.rs

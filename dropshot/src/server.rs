@@ -22,7 +22,6 @@ use hyper::service::Service;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
-use std::any::Any;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -37,15 +36,24 @@ use slog::Logger;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 /**
+ * Endpoint-accessible context associated with a server.
+ *
+ * Automatically implemented for all Send + Sync types.
+ */
+pub trait ServerContext: Send + Sync + 'static {}
+
+impl<T: 'static> ServerContext for T where T: Send + Sync {}
+
+/**
  * Stores shared state used by the Dropshot server.
  */
-pub struct DropshotState {
+pub struct DropshotState<C: ServerContext> {
     /** caller-specific state */
-    pub private: Arc<dyn Any + Send + Sync + 'static>,
+    pub private: C,
     /** static server configuration parameters */
     pub config: ServerConfig,
     /** request router */
-    pub router: HttpRouter,
+    pub router: HttpRouter<C>,
     /** server-wide log handle */
     pub log: Logger,
 }
@@ -67,13 +75,13 @@ pub struct ServerConfig {
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
  * we find useful.
  */
-pub struct HttpServerStarter {
-    app_state: Arc<DropshotState>,
-    server: Server<AddrIncoming, ServerConnectionHandler>,
+pub struct HttpServerStarter<C: ServerContext> {
+    app_state: Arc<DropshotState<C>>,
+    server: Server<AddrIncoming, ServerConnectionHandler<C>>,
     local_addr: SocketAddr,
 }
 
-impl HttpServerStarter {
+impl<C: ServerContext> HttpServerStarter<C> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -81,7 +89,7 @@ impl HttpServerStarter {
     /**
      * Begins execution of the underlying Http server.
      */
-    pub fn start(self) -> HttpServer {
+    pub fn start(self) -> HttpServer<C> {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let log_close = self.app_state.log.new(o!());
         let graceful = self.server.with_graceful_shutdown(async move {
@@ -111,10 +119,10 @@ impl HttpServerStarter {
      */
     pub fn new(
         config: &ConfigDropshot,
-        api: ApiDescription,
-        private: Arc<dyn Any + Send + Sync + 'static>,
+        api: ApiDescription<C>,
+        private: C,
         log: &Logger,
-    ) -> Result<HttpServerStarter, hyper::Error> {
+    ) -> Result<HttpServerStarter<C>, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
@@ -148,8 +156,8 @@ impl HttpServerStarter {
         })
     }
 
-    pub fn app_private(&self) -> Arc<dyn Any + Send + Sync + 'static> {
-        Arc::clone(&self.app_state.private)
+    pub fn app_private(&self) -> &C {
+        &self.app_state.private
     }
 }
 
@@ -160,20 +168,20 @@ impl HttpServerStarter {
  *
  * Panics if dropped without invoking `close`.
  */
-pub struct HttpServer {
-    app_state: Arc<DropshotState>,
+pub struct HttpServer<C: ServerContext> {
+    app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl HttpServer {
+impl<C: ServerContext> HttpServer<C> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
 
-    pub fn app_private(&self) -> Arc<dyn Any + Send + Sync + 'static> {
-        Arc::clone(&self.app_state.private)
+    pub fn app_private(&self) -> &C {
+        &self.app_state.private
     }
 
     /**
@@ -200,7 +208,7 @@ impl HttpServer {
  * Verifies that the server has stopped execution when it is dropped.
  * For graceful termination, use the `close` function.
  */
-impl Drop for HttpServer {
+impl<C: ServerContext> Drop for HttpServer<C> {
     fn drop(&mut self) {
         if self.close_channel.is_some() {
             panic!("dropped HttpServer without calling close");
@@ -208,7 +216,7 @@ impl Drop for HttpServer {
     }
 }
 
-impl Future for HttpServer {
+impl<C: ServerContext> Future for HttpServer<C> {
     type Output = Result<(), String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -230,7 +238,7 @@ impl Future for HttpServer {
     }
 }
 
-impl FusedFuture for HttpServer {
+impl<C: ServerContext> FusedFuture for HttpServer<C> {
     fn is_terminated(&self) -> bool {
         self.join_handle.is_none()
     }
@@ -242,10 +250,10 @@ impl FusedFuture for HttpServer {
  * must return a Hyper Service object that will handle requests for this
  * connection.
  */
-async fn http_connection_handle(
-    server: Arc<DropshotState>,
+async fn http_connection_handle<C: ServerContext>(
+    server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
-) -> Result<ServerRequestHandler, GenericError> {
+) -> Result<ServerRequestHandler<C>, GenericError> {
     info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
     Ok(ServerRequestHandler::new(server))
 }
@@ -256,8 +264,8 @@ async fn http_connection_handle(
  * Result that either represents a valid HTTP response or an error (which will
  * also get turned into an HTTP response).
  */
-async fn http_request_handle_wrap(
-    server: Arc<DropshotState>,
+async fn http_request_handle_wrap<C: ServerContext>(
+    server: Arc<DropshotState<C>>,
     request: Request<Body>,
 ) -> Result<Response<Body>, GenericError> {
     /*
@@ -274,7 +282,7 @@ async fn http_request_handle_wrap(
     ));
     trace!(request_log, "incoming request");
     let maybe_response = http_request_handle(
-        Arc::clone(&server),
+        server,
         request,
         &request_id,
         request_log.new(o!()),
@@ -310,8 +318,8 @@ async fn http_request_handle_wrap(
     Ok(response)
 }
 
-async fn http_request_handle(
-    server: Arc<DropshotState>,
+async fn http_request_handle<C: ServerContext>(
+    server: Arc<DropshotState<C>>,
     request: Request<Body>,
     request_id: &str,
     request_log: Logger,
@@ -363,24 +371,24 @@ fn generate_request_id() -> String {
  * using a closure to capture the state object, but the resulting code is a bit
  * simpler without it.
  */
-pub struct ServerConnectionHandler {
+pub struct ServerConnectionHandler<C: ServerContext> {
     /** backend state that will be made available to the connection handler */
-    server: Arc<DropshotState>,
+    server: Arc<DropshotState<C>>,
 }
 
-impl ServerConnectionHandler {
+impl<C: ServerContext> ServerConnectionHandler<C> {
     /**
      * Create an ServerConnectionHandler with the given state object that
      * will be made available to the handler.
      */
-    fn new(server: Arc<DropshotState>) -> Self {
+    fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerConnectionHandler {
-            server: Arc::clone(&server),
+            server,
         }
     }
 }
 
-impl Service<&AddrStream> for ServerConnectionHandler {
+impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
     /*
      * Recall that a Service in this context is just something that takes a
      * request (which could be anything) and produces a response (which could be
@@ -389,7 +397,7 @@ impl Service<&AddrStream> for ServerConnectionHandler {
      * another Service: one that accepts HTTP requests and produces HTTP
      * responses.
      */
-    type Response = ServerRequestHandler;
+    type Response = ServerRequestHandler<T>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -424,24 +432,24 @@ impl Service<&AddrStream> for ServerConnectionHandler {
  * closure to capture the server state object, but the resulting code is a bit
  * simpler without all that.
  */
-pub struct ServerRequestHandler {
+pub struct ServerRequestHandler<C: ServerContext> {
     /** backend state that will be made available to the request handler */
-    server: Arc<DropshotState>,
+    server: Arc<DropshotState<C>>,
 }
 
-impl ServerRequestHandler {
+impl<C: ServerContext> ServerRequestHandler<C> {
     /**
      * Create a ServerRequestHandler object with the given state object that
      * will be provided to the handler function.
      */
-    fn new(server: Arc<DropshotState>) -> Self {
+    fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerRequestHandler {
-            server: Arc::clone(&server),
+            server,
         }
     }
 }
 
-impl Service<Request<Body>> for ServerRequestHandler {
+impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     type Response = Response<Body>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -483,7 +491,7 @@ mod test {
         path = "/handler",
     }]
     async fn handler(
-        _rqctx: Arc<RequestContext>,
+        _rqctx: Arc<RequestContext<i32>>,
     ) -> Result<HttpResponseOk<u64>, HttpError> {
         Ok(HttpResponseOk(3))
     }
@@ -498,7 +506,7 @@ mod test {
         }
     }
 
-    fn create_test_server() -> (HttpServer, TestConfig) {
+    fn create_test_server() -> (HttpServer<i32>, TestConfig) {
         let config_dropshot = ConfigDropshot::default();
 
         let mut api = ApiDescription::new();
@@ -510,10 +518,9 @@ mod test {
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
-        let server =
-            HttpServerStarter::new(&config_dropshot, api, Arc::new(0), log)
-                .unwrap()
-                .start();
+        let server = HttpServerStarter::new(&config_dropshot, api, 0, log)
+            .unwrap()
+            .start();
 
         (server, TestConfig {
             log_context,

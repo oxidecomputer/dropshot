@@ -19,7 +19,6 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use slog::Logger;
-use std::any::Any;
 use std::fmt::Debug;
 use std::fs;
 use std::iter::Iterator;
@@ -28,14 +27,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use crate::api_description::ApiDescription;
 use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
-use crate::server::{HttpServer, HttpServerStarter};
+use crate::server::{HttpServer, HttpServerStarter, ServerContext};
 
 /**
  * List of allowed HTTP headers in responses.  This is used to make sure we
@@ -406,14 +404,14 @@ impl LogContext {
  * test-case pattern of setting up a logger, server, and client and tearing them
  * all down at the end.
  */
-pub struct TestContext {
+pub struct TestContext<Context: ServerContext> {
     pub client_testctx: ClientTestContext,
-    pub server: HttpServer,
+    pub server: HttpServer<Context>,
     pub log: Logger,
     log_context: Option<LogContext>,
 }
 
-impl TestContext {
+impl<Context: ServerContext> TestContext<Context> {
     /**
      * Instantiate a TestContext by creating a new Dropshot server with `api`,
      * `private`, `config_dropshot`, and `log`, and then creating a
@@ -424,12 +422,12 @@ impl TestContext {
      * in order for it to be used concurrently by many tests.
      */
     pub fn new(
-        api: ApiDescription,
-        private: Arc<dyn Any + Send + Sync + 'static>,
+        api: ApiDescription<Context>,
+        private: Context,
         config_dropshot: &ConfigDropshot,
         log_context: Option<LogContext>,
         log: Logger,
-    ) -> TestContext {
+    ) -> TestContext<Context> {
         assert_eq!(
             0,
             config_dropshot.bind_address.port(),

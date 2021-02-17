@@ -17,6 +17,34 @@ https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...HEAD[Full list of co
 
 === Breaking Changes
 
+==== Generic Context
+
+* https://github.com/oxidecomputer/dropshot/pull/86[#86] Dropshot now uses generics to store client context, rather than relying on an internal `Any` object within `RequestContext`. Endpoints signatures are expected to begin with the argument `rqctx: Arc<RequestContext<CallerContext>>`, for some `CallerContext` object, and they may call `rqtcx.context()` to access the inner type.
+* To provide this generic context, many Dropshot types are now generic, acting on a specialized context object (this includes `ApiDescription`, `ApiEndpoint`, `OpenApiDefinition`, `HttpServer`, `HttpServerStarter`, and `RequestContext`). For the most part, the specialization is made implicit by passing the context argument to an `HttpServerStarter` (formerly `HttpServer`).
+
+```rust
+struct ExampleContext { ... }
+
+// Old Version:
+#[endpoint { method = GET, path = "/endpoint" }]
+pub async fn example_endpoint(
+    rqctx: Arc<RequestContext>,
+) -> Result<HttpResponseOk<...>, HttpError> {
+    let ctx: Arc<dyn Any + Send + Sync + 'static> = Arc::clone(&rqctx.server.private);
+    let example_context = ctx.downcast::<ExampleContext>().expect("Wrong type");
+    ...
+}
+
+// New Version
+#[endpoint { method = GET, path = "/endpoint" }]
+pub async fn example_endpoint(
+    rqctx: Arc<RequestContext<ExampleContext>>,
+) -> Result<HttpResponseOk<...>, HttpError> {
+    let example_context = rqctx.context();
+    ...
+}
+```
+
 ==== HttpServer
 
 ===== HttpServer Split in Two

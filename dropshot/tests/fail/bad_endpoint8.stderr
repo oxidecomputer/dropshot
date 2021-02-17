@@ -1,31 +1,5 @@
 error: endpoint handler functions must be async
-  --> $DIR/bad_endpoint8.rs:18:1
+  --> $DIR/bad_endpoint8.rs:20:1
    |
-18 | fn bad_endpoint(
+20 | fn bad_endpoint(
    | ^^
-
-warning: unused import: `dropshot::HttpError`
- --> $DIR/bad_endpoint8.rs:4:5
-  |
-4 | use dropshot::HttpError;
-  |     ^^^^^^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` on by default
-
-warning: unused import: `dropshot::HttpResponseOk`
- --> $DIR/bad_endpoint8.rs:5:5
-  |
-5 | use dropshot::HttpResponseOk;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `dropshot::RequestContext`
- --> $DIR/bad_endpoint8.rs:6:5
-  |
-6 | use dropshot::RequestContext;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `std::sync::Arc`
- --> $DIR/bad_endpoint8.rs:9:5
-  |
-9 | use std::sync::Arc;
-  |     ^^^^^^^^^^^^^^

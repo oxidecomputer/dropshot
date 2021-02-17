@@ -5,16 +5,24 @@
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
+use dropshot::Query;
 use dropshot::RequestContext;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct QueryParams {
+    x: String,
+    y: u32,
+}
 
 #[endpoint {
     method = GET,
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
-    param: String,
+    _params: Query<QueryParams>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }

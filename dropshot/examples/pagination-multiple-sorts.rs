@@ -233,12 +233,12 @@ fn page_selector_for(
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext>,
+    rqctx: Arc<RequestContext<ProjectCollection>>,
     query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get();
-    let data = rqctx_to_data(rqctx);
+    let data = rqctx.context();
     let scan_params = ProjectScanParams {
         sort: match &pag_params.page {
             WhichPage::First(ProjectScanParams {
@@ -296,11 +296,6 @@ async fn example_list_projects(
     )?))
 }
 
-fn rqctx_to_data(rqctx: Arc<RequestContext>) -> Arc<ProjectCollection> {
-    let c = Arc::clone(&rqctx.server.private);
-    c.downcast::<ProjectCollection>().unwrap()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let port = std::env::args()
@@ -313,7 +308,7 @@ async fn main() -> Result<(), String> {
     /*
      * Run the Dropshot server.
      */
-    let ctx = Arc::new(ProjectCollection::new());
+    let ctx = ProjectCollection::new();
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         request_body_max_bytes: 1024,
