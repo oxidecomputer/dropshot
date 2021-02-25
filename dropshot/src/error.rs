@@ -47,6 +47,8 @@
 use hyper::Error as HyperError;
 use serde::Deserialize;
 use serde::Serialize;
+use std::error::Error;
+use std::fmt;
 
 /**
  * `HttpError` represents an error generated as part of handling an API
@@ -282,5 +284,17 @@ impl HttpError {
                 .into(),
             )
             .unwrap()
+    }
+}
+
+impl fmt::Display for HttpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HttpError({}): {}", self.status_code, self.external_message)
+    }
+}
+
+impl Error for HttpError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
     }
 }
