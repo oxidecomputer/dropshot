@@ -20,6 +20,10 @@ jobs:
         toolchain: nightly-2020-07-26
         default: false
         components: rustfmt
+    - name: Report cargo version
+      run: cargo +nightly-2020-07-26 --version
+    - name: Report rustfmt version
+      run: cargo +nightly-2020-07-26 fmt -- --version
     - name: Check style
       run: cargo +nightly-2020-07-26 fmt -- --check
 
@@ -28,6 +32,10 @@ jobs:
     steps:
     # actions/checkout@v2
     - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - name: Report cargo version
+      run: cargo --version
+    - name: Report Clippy version
+      run: cargo clippy -- --version
     - name: Run Clippy Lints
       run: cargo clippy -- -D warnings
 
@@ -44,6 +52,8 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+    - name: Report cargo version
+      run: cargo --version
     - name: Build
       run: cargo build --tests --verbose
     - name: Run tests
