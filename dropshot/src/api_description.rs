@@ -178,7 +178,7 @@ pub enum ApiSchemaGenerator {
             fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
     },
     Static {
-        schema: schemars::schema::Schema,
+        schema: Box<schemars::schema::Schema>,
         dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
     },
 }
@@ -484,7 +484,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             dependencies,
                         } => {
                             definitions.extend(dependencies.clone());
-                            (None, schema.clone())
+                            (None, schema.as_ref().clone())
                         }
                     };
                     let schema = j2oas_schema(name.as_ref(), &js);
@@ -519,7 +519,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         dependencies,
                     } => {
                         definitions.extend(dependencies.clone());
-                        (None, schema.clone())
+                        (None, schema.as_ref().clone())
                     }
                 };
                 let mut content = indexmap::IndexMap::new();

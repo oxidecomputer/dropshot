@@ -821,7 +821,7 @@ fn schema2parameters(
                             None,
                             required && object.required.contains(name),
                             ApiSchemaGenerator::Static {
-                                schema: s,
+                                schema: Box::new(s),
                                 dependencies: visitor.dependencies(),
                             },
                             vec![],
@@ -1033,12 +1033,14 @@ impl Extractor for UntypedBody {
             None,
             true,
             ApiSchemaGenerator::Static {
-                schema: SchemaObject {
-                    instance_type: Some(InstanceType::String.into()),
-                    format: Some(String::from("binary")),
-                    ..Default::default()
-                }
-                .into(),
+                schema: Box::new(
+                    SchemaObject {
+                        instance_type: Some(InstanceType::String.into()),
+                        format: Some(String::from("binary")),
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
                 dependencies: indexmap::IndexMap::default(),
             },
             vec![],
