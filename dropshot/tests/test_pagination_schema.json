@@ -1,0 +1,102 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "test",
+    "description": "gusty winds may exist",
+    "termsOfService": "no hat, no cane? no service!",
+    "contact": {
+      "name": "old mate"
+    },
+    "license": {
+      "name": "CDDL"
+    },
+    "version": "1985.7"
+  },
+  "paths": {
+    "/super_pages": {
+      "get": {
+        "operationId": "handler",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Maximum number of items returned by a single call",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 1
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "garbage_goes_in",
+            "schema": {
+              "$ref": "#/components/schemas/GarbageGoesIn"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "ResultsPage_for_ResponseItem",
+                  "description": "A single page of results",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "description": "list of items on this page of results",
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ResponseItem"
+                      }
+                    },
+                    "next_page": {
+                      "description": "token used to fetch the next page of results (if any)",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ResponseItem": {
+        "type": "object",
+        "properties": {
+          "word": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "word"
+        ]
+      },
+      "GarbageGoesIn": {
+        "type": "string",
+        "enum": [
+          "garbage-can"
+        ]
+      }
+    }
+  }
+}

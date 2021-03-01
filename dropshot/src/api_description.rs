@@ -177,7 +177,10 @@ pub enum ApiSchemaGenerator {
         schema:
             fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
     },
-    Static(schemars::schema::Schema),
+    Static {
+        schema: Box<schemars::schema::Schema>,
+        dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
+    },
 }
 
 impl std::fmt::Debug for ApiSchemaGenerator {
@@ -186,9 +189,9 @@ impl std::fmt::Debug for ApiSchemaGenerator {
             ApiSchemaGenerator::Gen {
                 ..
             } => f.write_str("[schema generator]"),
-            ApiSchemaGenerator::Static(schema) => {
-                f.write_str(format!("{:?}", schema).as_str())
-            }
+            ApiSchemaGenerator::Static {
+                schema, ..
+            } => f.write_str(format!("{:?}", schema).as_str()),
         }
     }
 }
@@ -370,6 +373,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         let settings = schemars::gen::SchemaSettings::openapi3();
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let mut definitions =
+            indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
         for (path, method, endpoint) in &self.router {
             let path = openapi.paths.entry(path).or_insert(
@@ -412,7 +417,11 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     };
 
                     let schema = match &param.schema {
-                        ApiSchemaGenerator::Static(schema) => {
+                        ApiSchemaGenerator::Static {
+                            schema,
+                            dependencies,
+                        } => {
+                            definitions.extend(dependencies.clone());
                             j2oas_schema(None, schema)
                         }
                         _ => {
@@ -470,8 +479,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             name,
                             schema,
                         } => (Some(name()), schema(&mut generator)),
-                        ApiSchemaGenerator::Static(schema) => {
-                            (None, schema.clone())
+                        ApiSchemaGenerator::Static {
+                            schema,
+                            dependencies,
+                        } => {
+                            definitions.extend(dependencies.clone());
+                            (None, schema.as_ref().clone())
                         }
                     };
                     let schema = j2oas_schema(name.as_ref(), &js);
@@ -501,8 +514,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         name,
                         schema,
                     } => (Some(name()), schema(&mut generator)),
-                    ApiSchemaGenerator::Static(schema) => {
-                        (None, schema.clone())
+                    ApiSchemaGenerator::Static {
+                        schema,
+                        dependencies,
+                    } => {
+                        definitions.extend(dependencies.clone());
+                        (None, schema.as_ref().clone())
                     }
                 };
                 let mut content = indexmap::IndexMap::new();
@@ -559,6 +576,11 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .schemas;
         generator.definitions().iter().for_each(|(key, schema)| {
             schemas.insert(key.clone(), j2oas_schema(None, schema));
+        });
+        definitions.into_iter().for_each(|(key, schema)| {
+            if !schemas.contains_key(&key) {
+                schemas.insert(key, j2oas_schema(None, &schema));
+            }
         });
 
         openapi

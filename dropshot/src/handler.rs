@@ -3,7 +3,7 @@
  * Interface for implementing HTTP endpoint handler functions.
  *
  * For information about supported endpoint function signatures, argument types,
- * extractors, and return types, see the top-level documentation for this crate.
+ * extractors, and return types, see the top-level documentation dependencies: () for this crate.
  * As documented there, we support several different sets of function arguments
  * and return types.
  *
@@ -682,21 +682,62 @@ where
          * the structure to encode as an individual parameter.
          */
         let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3().with(|settings| {
-                /*
-                 * Strip off any definitions prefix so that we can lookup
-                 * references simply. Ideally we would force no references to
-                 * be generated, but that doesn't seem to be an option.
-                 */
-                settings.definitions_path = String::new();
-            }),
+            schemars::gen::SchemaSettings::openapi3()
+                .with(|settings| settings.inline_subschemas = false),
         );
         let schema = ParamType::json_schema(&mut generator);
-        schema2parameters(loc, &schema, generator.definitions(), true)
+        schema2parameters(loc, &schema, &generator, true)
     }
 }
 
-/**
+/// Used to visit all schemas and collect all dependencies.
+struct ReferenceVisitor<'a> {
+    generator: &'a schemars::gen::SchemaGenerator,
+    dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
+}
+
+impl<'a> ReferenceVisitor<'a> {
+    fn new(generator: &'a schemars::gen::SchemaGenerator) -> Self {
+        Self {
+            generator,
+            dependencies: indexmap::IndexMap::new(),
+        }
+    }
+
+    fn dependencies(
+        self,
+    ) -> indexmap::IndexMap<String, schemars::schema::Schema> {
+        self.dependencies
+    }
+}
+
+impl<'a> schemars::visit::Visitor for ReferenceVisitor<'a> {
+    fn visit_schema_object(&mut self, schema: &mut SchemaObject) {
+        if let Some(refstr) = &schema.reference {
+            let definitions_path = &self.generator.settings().definitions_path;
+            let name = &refstr[definitions_path.len()..];
+
+            if !self.dependencies.contains_key(name) {
+                let mut refschema = self
+                    .generator
+                    .definitions()
+                    .get(name)
+                    .expect("invalid reference")
+                    .clone();
+                self.dependencies.insert(
+                    name.to_string(),
+                    schemars::schema::Schema::Bool(false),
+                );
+                schemars::visit::visit_schema(self, &mut refschema);
+                self.dependencies.insert(name.to_string(), refschema);
+            }
+        }
+
+        schemars::visit::visit_schema_object(self, schema);
+    }
+}
+
+/*
  * This helper function produces a list of parameters. It is invoked
  * recursively with subschemas, which we will encounter in the case of enums
  * and structs that have been flattened into the containing structure. The
@@ -715,7 +756,7 @@ where
 fn schema2parameters(
     loc: &ApiEndpointParameterLocation,
     schema: &schemars::schema::Schema,
-    definitions: &schemars::Map<String, schemars::schema::Schema>,
+    generator: &schemars::gen::SchemaGenerator,
     required: bool,
 ) -> Vec<ApiEndpointParameter> {
     /*
@@ -736,22 +777,18 @@ fn schema2parameters(
             string: None,
             array: None,
             object: None,
-            reference: Some(refstr),
+            reference: Some(_),
             extensions: _,
-        }) => match definitions.get(refstr) {
-            // Recur on the referenced type.
-            Some(refschema) => {
-                schema2parameters(loc, refschema, definitions, required)
-            }
-            // This should not be possible.
-            None => panic!("invalid reference {}", refstr),
-        },
-
+        }) => schema2parameters(
+            loc,
+            generator.dereference(schema).expect("invalid reference"),
+            generator,
+            required,
+        ),
         // Match objects and subschemas.
         schemars::schema::Schema::Object(schemars::schema::SchemaObject {
             metadata: _,
-            // TODO: should be Some(schemars::schema::SingleOrVec::Single(_))
-            instance_type: _,
+            instance_type: Some(schemars::schema::SingleOrVec::Single(_)),
             format: None,
             enum_values: None,
             const_value: None,
@@ -770,12 +807,23 @@ fn schema2parameters(
             if let Some(object) = object {
                 parameters.extend(object.properties.iter().map(
                     |(name, schema)| {
+                        // We won't often see referenced schemas here, but we may
+                        // in the case of enumerated strings. To handle this, we
+                        // package up the dependencies to include in the top-
+                        // level definitions section.
+                        let mut s = schema.clone();
+                        let mut visitor = ReferenceVisitor::new(generator);
+                        schemars::visit::visit_schema(&mut visitor, &mut s);
+
                         ApiEndpointParameter::new_named(
                             loc,
                             name.clone(),
                             None,
                             required && object.required.contains(name),
-                            ApiSchemaGenerator::Static(schema.clone()),
+                            ApiSchemaGenerator::Static {
+                                schema: Box::new(s),
+                                dependencies: visitor.dependencies(),
+                            },
                             vec![],
                         )
                     },
@@ -798,12 +846,7 @@ fn schema2parameters(
                     } => parameters.extend(schemas.iter().flat_map(
                         |subschema| {
                             // Note that all these parameters will be optional.
-                            schema2parameters(
-                                loc,
-                                subschema,
-                                definitions,
-                                false,
-                            )
+                            schema2parameters(loc, subschema, generator, false)
                         },
                     )),
 
@@ -822,10 +865,7 @@ fn schema2parameters(
                     } if schemas.len() == 1 => parameters.extend(
                         schemas.iter().flat_map(|subschema| {
                             schema2parameters(
-                                loc,
-                                subschema,
-                                definitions,
-                                required,
+                                loc, subschema, generator, required,
                             )
                         }),
                     ),
@@ -988,18 +1028,21 @@ impl Extractor for UntypedBody {
     }
 
     fn metadata() -> Vec<ApiEndpointParameter> {
-        let schema = SchemaObject {
-            instance_type: Some(InstanceType::String.into()),
-            format: Some(String::from("binary")),
-            ..Default::default()
-        }
-        .into();
-
         vec![ApiEndpointParameter::new_body(
             ApiEndpointBodyContentType::Bytes,
             None,
             true,
-            ApiSchemaGenerator::Static(schema),
+            ApiSchemaGenerator::Static {
+                schema: Box::new(
+                    SchemaObject {
+                        instance_type: Some(InstanceType::String.into()),
+                        format: Some(String::from("binary")),
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                dependencies: indexmap::IndexMap::default(),
+            },
             vec![],
         )]
     }

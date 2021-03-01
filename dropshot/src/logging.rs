@@ -33,8 +33,8 @@ pub enum ConfigLogging {
 /**
  * Log messages have a level that's used for filtering in the usual way.
  */
-#[serde(rename_all = "lowercase")]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ConfigLoggingLevel {
     Trace,
     Debug,
@@ -60,8 +60,8 @@ impl From<&ConfigLoggingLevel> for Level {
 /**
  * Specifies the behavior when logging to a file that already exists.
  */
-#[serde(rename_all = "lowercase")]
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ConfigLoggingIfExists {
     /** Fail to create the log */
     Fail,
