@@ -219,6 +219,7 @@ where
 
 pub(crate) const PAGINATION_PARAM_SENTINEL: &str =
     "x-dropshot-pagination-param";
+pub(crate) const PAGINATION_EXTENSION: &str = "x-dropshot-pagination";
 
 impl<ScanParams, PageSelector> JsonSchema
     for PaginationParams<ScanParams, PageSelector>

@@ -1,0 +1,8 @@
+{
+    "rust-analyzer.rustfmt.overrideCommand": [
+        "rustup",
+        "run",
+        "nightly-2020-07-26",
+        "rustfmt"
+    ]
+}

@@ -512,6 +512,13 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 })
                 .next();
 
+            if endpoint.paginated {
+                operation.extensions.insert(
+                    crate::pagination::PAGINATION_EXTENSION.to_string(),
+                    serde_json::json! {true},
+                );
+            }
+
             if let Some(schema) = &endpoint.response.schema {
                 let (name, js) = match schema {
                     ApiSchemaGenerator::Gen {

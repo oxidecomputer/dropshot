@@ -706,12 +706,7 @@ where
                 .extensions
                 .get(&PAGINATION_PARAM_SENTINEL.to_string())
                 .is_some(),
-            parameters: schema2parameters(
-                loc,
-                &schema,
-                &generator,
-                true,
-            ),
+            parameters: schema2parameters(loc, &schema, &generator, true),
         },
         _ => panic!("unexpected catchall schema"),
     }
@@ -1060,24 +1055,25 @@ impl Extractor for UntypedBody {
 
     fn metadata() -> ExtractorMetadata {
         ExtractorMetadata {
-        parameters: vec![ApiEndpointParameter::new_body(
-            ApiEndpointBodyContentType::Bytes,
-            None,
-            true,
-            ApiSchemaGenerator::Static {
-                schema: Box::new(
-                    SchemaObject {
-                        instance_type: Some(InstanceType::String.into()),
-                        format: Some(String::from("binary")),
-                        ..Default::default()
-                    }
-                    .into(),
-                ),
-                dependencies: indexmap::IndexMap::default(),
-            },
-            vec![],
-        )],
-        paginated: false}
+            parameters: vec![ApiEndpointParameter::new_body(
+                ApiEndpointBodyContentType::Bytes,
+                None,
+                true,
+                ApiSchemaGenerator::Static {
+                    schema: Box::new(
+                        SchemaObject {
+                            instance_type: Some(InstanceType::String.into()),
+                            format: Some(String::from("binary")),
+                            ..Default::default()
+                        }
+                        .into(),
+                    ),
+                    dependencies: indexmap::IndexMap::default(),
+                },
+                vec![],
+            )],
+            paginated: false,
+        }
     }
 }
 
