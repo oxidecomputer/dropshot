@@ -691,13 +691,7 @@ where
      * the structure to encode as an individual parameter.
      */
     let mut generator = schemars::gen::SchemaGenerator::new(
-        schemars::gen::SchemaSettings::openapi3().with(|settings| {
-            /*
-             * Strip off any definitions prefix so that we can lookup
-             * references simply.
-             */
-            settings.definitions_path = String::new();
-        }),
+        schemars::gen::SchemaSettings::openapi3(),
     );
     let schema = ParamType::json_schema(&mut generator);
     match &schema {

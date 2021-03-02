@@ -21,7 +21,7 @@
             "in": "query",
             "name": "garbage_goes_in",
             "schema": {
-              "$ref": "GarbageGoesIn"
+              "$ref": "#/components/schemas/GarbageGoesIn"
             },
             "style": "form"
           },
@@ -52,7 +52,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "ResultsPage_for_ResponseItem",
+                  "title": "ResponseItemResultsPage",
                   "description": "A single page of results",
                   "type": "object",
                   "properties": {

@@ -117,9 +117,34 @@ use std::num::NonZeroU64;
  * This structure is intended for use both on the server side (to generate the
  * results page) and on the client side (to parse it).
  */
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
-#[schemars(description = "A single page of results")]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ResultsPage<ItemType> {
+    /** token used to fetch the next page of results (if any) */
+    pub next_page: Option<String>,
+    /** list of items on this page of results */
+    pub items: Vec<ItemType>,
+}
+
+impl<ItemType> JsonSchema for ResultsPage<ItemType>
+where
+    ItemType: JsonSchema,
+{
+    fn schema_name() -> String {
+        format!("{}ResultsPage", ItemType::schema_name())
+    }
+
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        ResultsPageSchema::<ItemType>::json_schema(gen)
+    }
+}
+
+/**
+ * A single page of results
+ */
+#[derive(JsonSchema)]
+pub struct ResultsPageSchema<ItemType> {
     /** token used to fetch the next page of results (if any) */
     pub next_page: Option<String>,
     /** list of items on this page of results */
