@@ -551,6 +551,7 @@ mod test {
             },
             description: None,
             tags: vec![],
+            paginated: false,
         }
     }
 

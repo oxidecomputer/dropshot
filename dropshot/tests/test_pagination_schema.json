@@ -19,6 +19,14 @@
         "parameters": [
           {
             "in": "query",
+            "name": "garbage_goes_in",
+            "schema": {
+              "$ref": "#/components/schemas/GarbageGoesIn"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
             "name": "limit",
             "schema": {
               "description": "Maximum number of items returned by a single call",
@@ -32,15 +40,8 @@
             "in": "query",
             "name": "page_token",
             "schema": {
+              "description": "Token returned by previous call to retreive the subsequent page",
               "type": "string"
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "garbage_goes_in",
-            "schema": {
-              "$ref": "#/components/schemas/GarbageGoesIn"
             },
             "style": "form"
           }
@@ -51,7 +52,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "ResultsPage_for_ResponseItem",
+                  "title": "ResponseItemResultsPage",
                   "description": "A single page of results",
                   "type": "object",
                   "properties": {
@@ -74,7 +75,8 @@
               }
             }
           }
-        }
+        },
+        "x-dropshot-pagination": true
       }
     }
   },

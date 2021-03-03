@@ -35,6 +35,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub response: ApiEndpointResponse,
     pub description: Option<String>,
     pub tags: Vec<String>,
+    pub paginated: bool,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -49,15 +50,17 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         FuncParams: Extractor + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
+        let func_parameters = FuncParams::metadata();
         ApiEndpoint {
             operation_id,
             handler: HttpRouteHandler::new(handler),
             method,
             path: path.to_string(),
-            parameters: FuncParams::metadata(),
+            parameters: func_parameters.parameters,
             response: ResponseType::metadata(),
             description: None,
             tags: vec![],
+            paginated: func_parameters.paginated,
         }
     }
 
@@ -439,6 +442,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         ),
                         example: None,
                         examples: indexmap::IndexMap::new(),
+                        extensions: indexmap::IndexMap::new(),
                     };
                     match location {
                         ApiEndpointParameterLocation::Query => {
@@ -501,12 +505,19 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     );
 
                     Some(openapiv3::ReferenceOr::Item(openapiv3::RequestBody {
-                        description: None,
                         content: content,
                         required: true,
+                        ..Default::default()
                     }))
                 })
                 .next();
+
+            if endpoint.paginated {
+                operation.extensions.insert(
+                    crate::pagination::PAGINATION_EXTENSION.to_string(),
+                    serde_json::json! {true},
+                );
+            }
 
             if let Some(schema) = &endpoint.response.schema {
                 let (name, js) = match schema {
@@ -546,9 +557,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         // by OpenAPI.
                         "".to_string()
                     },
-                    headers: indexmap::IndexMap::new(),
                     content: content,
-                    links: indexmap::IndexMap::new(),
+                    ..Default::default()
                 };
 
                 match &endpoint.response.success {
@@ -1075,7 +1085,7 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         if self.info.license.is_none() {
             self.info.license = Some(openapiv3::License {
                 name: name.to_string(),
-                url: None,
+                ..Default::default()
             })
         }
         self.info.license.as_mut().unwrap()
