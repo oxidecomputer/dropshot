@@ -47,6 +47,8 @@ pub async fn example_endpoint(
 
 ==== HttpServer
 
+See https://github.com/oxidecomputer/dropshot/pull/81[#81 for details]
+
 ===== HttpServer Split in Two
 * In the old implementation, `HttpServer` represented both a pending and running server. Callers were expected to invoke `run()` to begin execution of the old server.
 * In the new implementation, `HttpServerStarter` may be used to construct a server, and `HttpServer` represents the running server. Invoking `HttpServerStarter::start()` creates and `HttpServer` object, which represents the new server.
@@ -76,6 +78,7 @@ server.await;
 === Notable changes
 
 * https://github.com/oxidecomputer/dropshot/issues/44[#44] The new extractor `UntypedBody` allows API endpoints to accept either raw bytes or a UTF-8 string.
+* https://github.com/oxidecomputer/dropshot/pull/90[#90] `HttpError` now impls `std::error::Error`.
 
 == 0.4.0 (released 2021-02-01)
 
