@@ -5,6 +5,10 @@
 
 = Dropshot Changelog
 
+// WARNING: This file is modified programmatically by `cargo release` as
+// configured in release.toml.  DO NOT change the format of the headers or the
+// list of raw commits.
+
 // cargo-release: next header goes here (do not change this line)
 
 == Unreleased changes (release date TBD)
@@ -16,10 +20,6 @@ https://github.com/oxidecomputer/dropshot/compare/v0.5.0\...HEAD[Full list of co
 == 0.5.0 (released 2021-03-03)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...v0.5.0[Full list of commits]
-
-// WARNING: This file is modified programmatically by `cargo release` as
-// configured in release.toml.  DO NOT change the format of the headers or the
-// list of raw commits.
 
 WARNING: This release does not build due to downstream dependencies.  See 0.5.1.
 
