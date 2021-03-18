@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.5.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...HEAD[Full list of commits]
+
+== 0.5.1 (released 2021-03-18)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.5.0\...v0.5.1[Full list of commits]
 
 * Fixes the dependency on the `openapiv3` crate.  Because of this problem, builds against Dropshot 0.5.0 will not work.
 
