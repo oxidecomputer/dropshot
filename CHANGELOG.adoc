@@ -11,6 +11,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.5.0\...HEAD[Full list of commits]
 
+* Fixes the dependency on the `openapiv3` crate.  Because of this problem, builds against Dropshot 0.5.0 will not work.
+
 == 0.5.0 (released 2021-03-03)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...v0.5.0[Full list of commits]
@@ -18,6 +20,8 @@ https://github.com/oxidecomputer/dropshot/compare/v0.4.0\...v0.5.0[Full list of 
 // WARNING: This file is modified programmatically by `cargo release` as
 // configured in release.toml.  DO NOT change the format of the headers or the
 // list of raw commits.
+
+WARNING: This release does not build due to downstream dependencies.  See 0.5.1.
 
 === Breaking Changes
 
