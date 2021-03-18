@@ -9,7 +9,7 @@ repository = "https://github.com/oxidecomputer/dropshot/"
 
 [dependencies]
 async-trait = "0.1.24"
-base64 = "0.12.3"
+base64 = "0.13.0"
 bytes = "1"
 futures = "0.3.1"
 hostname = "0.3.0"
