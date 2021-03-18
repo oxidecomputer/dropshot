@@ -1,0 +1,14 @@
+#
+# Dependabot configuration file
+#
+
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "dropshot"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "dropshot_endpoint"
+    schedule:
+      interval: "weekly"
