@@ -680,7 +680,7 @@ async fn api_dictionary(
     >,
 ) -> Result<HttpResponseOk<ResultsPage<DictionaryWord>>, HttpError> {
     let pag_params = query.into_inner();
-    let limit = rqctx.page_limit(&pag_params)?.get();
+    let limit = rqctx.page_limit(&pag_params)?.get() as usize;
     let dictionary: &BTreeSet<String> = &*WORD_LIST;
 
     let (bound, scan_params) = match &pag_params.page {

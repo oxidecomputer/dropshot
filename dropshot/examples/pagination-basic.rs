@@ -81,7 +81,7 @@ async fn example_list_projects(
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
-    let limit = rqctx.page_limit(&pag_params)?.get();
+    let limit = rqctx.page_limit(&pag_params)?.get() as usize;
     let tree = rqctx.context();
     let projects = match &pag_params.page {
         WhichPage::First(..) => {

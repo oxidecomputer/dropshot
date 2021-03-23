@@ -109,7 +109,7 @@ use serde::Serialize;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::num::NonZeroU64;
+use std::num::NonZeroU32;
 
 /**
  * A page of results from a paginated API
@@ -239,7 +239,7 @@ where
      * [`RequestContext`][crate::handler::RequestContext::page_limit()]
      * to access this value.
      */
-    pub(crate) limit: Option<NonZeroU64>,
+    pub(crate) limit: Option<NonZeroU32>,
 }
 
 pub(crate) const PAGINATION_PARAM_SENTINEL: &str =
@@ -287,7 +287,7 @@ struct SchemaPaginationParams<ScanParams> {
     #[schemars(flatten)]
     params: Option<ScanParams>,
     /** Maximum number of items returned by a single call */
-    limit: Option<NonZeroU64>,
+    limit: Option<NonZeroU32>,
     /** Token returned by previous call to retreive the subsequent page */
     page_token: Option<String>,
 }
@@ -526,7 +526,7 @@ mod test {
     use serde::Deserialize;
     use serde::Serialize;
     use serde_json::json;
-    use std::{fmt::Debug, num::NonZeroU64};
+    use std::{fmt::Debug, num::NonZeroU32};
 
     #[test]
     fn test_page_token_serialization() {
@@ -662,7 +662,7 @@ mod test {
 
         fn parse_as_first_page<T: DeserializeOwned + Debug>(
             querystring: &str,
-        ) -> (T, Option<NonZeroU64>) {
+        ) -> (T, Option<NonZeroU32>) {
             let pagparams: PaginationParams<T, MyPageSelector> =
                 serde_urlencoded::from_str(querystring).unwrap();
             let limit = pagparams.limit;
@@ -751,7 +751,7 @@ mod test {
 
         fn parse_as_next_page(
             querystring: &str,
-        ) -> (MyPageSelector, Option<NonZeroU64>) {
+        ) -> (MyPageSelector, Option<NonZeroU32>) {
             let pagparams: PaginationParams<MyScanParams, MyPageSelector> =
                 serde_urlencoded::from_str(querystring).unwrap();
             let limit = pagparams.limit;
