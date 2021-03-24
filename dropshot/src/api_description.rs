@@ -973,10 +973,15 @@ fn j2oas_object(
                     .collect::<_>(),
                 required: obj.required.iter().cloned().collect::<_>(),
                 additional_properties: obj.additional_properties.as_ref().map(
-                    |schema| {
-                        openapiv3::AdditionalProperties::Schema(Box::new(
-                            j2oas_schema(None, schema),
-                        ))
+                    |schema| match schema.as_ref() {
+                        schemars::schema::Schema::Bool(b) => {
+                            openapiv3::AdditionalProperties::Any(*b)
+                        }
+                        schemars::schema::Schema::Object(obj) => {
+                            openapiv3::AdditionalProperties::Schema(Box::new(
+                                j2oas_schema_object(None, obj),
+                            ))
+                        }
                     },
                 ),
                 min_properties: obj.min_properties.map(|n| n as usize),
