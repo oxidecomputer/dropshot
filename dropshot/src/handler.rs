@@ -132,7 +132,7 @@ impl<Context: ServerContext> RequestContext<Context> {
              * Compare the client-provided limit to the configured max for the
              * server and take the smaller one.
              */
-            .map(|limit_nzu32| min(limit_nzu32, server_config.page_max_nitems))
+            .map(|limit| min(limit, server_config.page_max_nitems))
             /*
              * If no limit was provided by the client, use the configured
              * default.
