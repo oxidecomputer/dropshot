@@ -639,7 +639,7 @@ fn j2oas_schema(
     schema: &schemars::schema::Schema,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     match schema {
-        schemars::schema::Schema::Bool(_) => todo!(),
+        schemars::schema::Schema::Bool(_) => unreachable!(),
         schemars::schema::Schema::Object(obj) => j2oas_schema_object(name, obj),
     }
 }
@@ -973,10 +973,15 @@ fn j2oas_object(
                     .collect::<_>(),
                 required: obj.required.iter().cloned().collect::<_>(),
                 additional_properties: obj.additional_properties.as_ref().map(
-                    |schema| {
-                        openapiv3::AdditionalProperties::Schema(Box::new(
-                            j2oas_schema(None, schema),
-                        ))
+                    |schema| match schema.as_ref() {
+                        schemars::schema::Schema::Bool(b) => {
+                            openapiv3::AdditionalProperties::Any(*b)
+                        }
+                        schemars::schema::Schema::Object(obj) => {
+                            openapiv3::AdditionalProperties::Schema(Box::new(
+                                j2oas_schema_object(None, obj),
+                            ))
+                        }
                     },
                 ),
                 min_properties: obj.min_properties.map(|n| n as usize),
@@ -1298,5 +1303,21 @@ mod test {
             "only one body extractor can be used in a handler (this function \
              has 2)"
         );
+    }
+
+    #[test]
+    fn test_additional_properties() {
+        #[allow(dead_code)]
+        #[derive(JsonSchema)]
+        enum Union {
+            A { a: u32 },
+        }
+        let settings = schemars::gen::SchemaSettings::openapi3();
+        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let schema = Union::json_schema(&mut generator);
+        let _ = j2oas_schema(None, &schema);
+        for (key, schema) in generator.definitions().iter() {
+            let _ = j2oas_schema(Some(key), schema);
+        }
     }
 }
