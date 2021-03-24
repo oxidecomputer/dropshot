@@ -46,7 +46,7 @@
             "schema": {
               "description": "Maximum number of items returned by a single call",
               "type": "integer",
-              "format": "uint64",
+              "format": "uint32",
               "minimum": 1
             },
             "style": "form"

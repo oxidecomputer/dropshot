@@ -174,7 +174,7 @@ async fn example_list_projects(
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
-    let limit = rqctx.page_limit(&pag_params)?.get();
+    let limit = rqctx.page_limit(&pag_params)?.get() as usize;
     let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
@@ -200,7 +200,7 @@ async fn example_list_disks(
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
-    let limit = rqctx.page_limit(&pag_params)?.get();
+    let limit = rqctx.page_limit(&pag_params)?.get() as usize;
     let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 
@@ -226,7 +226,7 @@ async fn example_list_instances(
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();
-    let limit = rqctx.page_limit(&pag_params)?.get();
+    let limit = rqctx.page_limit(&pag_params)?.get() as usize;
     let data = rqctx.context();
     let scan_params = scan_params(&pag_params.page);
 

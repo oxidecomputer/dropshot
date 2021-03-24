@@ -62,13 +62,12 @@ use serde::Serialize;
 use slog::Logger;
 use std::cmp::min;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
-use std::num::NonZeroUsize;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 /**
@@ -120,7 +119,7 @@ impl<Context: ServerContext> RequestContext<Context> {
     pub fn page_limit<ScanParams, PageSelector>(
         &self,
         pag_params: &PaginationParams<ScanParams, PageSelector>,
-    ) -> Result<NonZeroUsize, HttpError>
+    ) -> Result<NonZeroU32, HttpError>
     where
         ScanParams: DeserializeOwned,
         PageSelector: DeserializeOwned + Serialize,
@@ -130,31 +129,10 @@ impl<Context: ServerContext> RequestContext<Context> {
         Ok(pag_params
             .limit
             /*
-             * Convert the client-provided limit from a NonZeroU64 to a
-             * usize.  That's because internally, we want the limit to be a
-             * "usize" so we can use functions like `iter.take()` with it (as an
-             * example).  We could put "usize" in the public interface, but that
-             * would cause the server's exported interface to change when it was
-             * built differently, although that's arguably correct.  Instead, we
-             * essentially validate here that the client gave us a value that we
-             * can support.
-             */
-            .map(|limit_nzu64| usize::try_from(limit_nzu64.get()))
-            .transpose()
-            .map_err(|_| {
-                HttpError::for_bad_request(
-                    None,
-                    String::from("unsupported pagination limit: too large"),
-                )
-            })?
-            /*
              * Compare the client-provided limit to the configured max for the
              * server and take the smaller one.
              */
-            .map(|limit_usize| {
-                let limit_nzusize = NonZeroUsize::new(limit_usize).unwrap();
-                min(limit_nzusize, server_config.page_max_nitems)
-            })
+            .map(|limit| min(limit, server_config.page_max_nitems))
             /*
              * If no limit was provided by the client, use the configured
              * default.
