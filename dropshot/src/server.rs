@@ -563,8 +563,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "dropped HttpServer without calling close")]
-    async fn test_drop_server_without_close_panics() {
+    async fn test_drop_server_without_close_okay() {
         let (server, _) = create_test_server();
         std::mem::drop(server);
     }
