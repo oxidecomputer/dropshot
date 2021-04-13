@@ -1282,7 +1282,7 @@ mod test {
     #[test]
     fn test_two_bodies() {
         #[derive(Deserialize, JsonSchema)]
-        struct AStruct {};
+        struct AStruct {}
 
         #[endpoint {
             method = PUT,
