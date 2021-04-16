@@ -34,6 +34,40 @@
         }
       }
     },
+    "/dup1": {
+      "put": {
+        "operationId": "handler8",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeverDuplicatedTopLevel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dup2": {
+      "put": {
+        "operationId": "handler9",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeverDuplicatedTopLevel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/impairment": {
       "get": {
         "operationId": "handler6",
@@ -75,25 +109,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "ResponseItemResultsPage",
-                  "description": "A single page of results",
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "description": "list of items on this page of results",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ResponseItem"
-                      }
-                    },
-                    "next_page": {
-                      "description": "token used to fetch the next page of results (if any)",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ]
+                  "$ref": "#/components/schemas/ResponseItemResultsPage"
                 }
               }
             }
@@ -130,8 +146,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Response"
                 }
               }
             }
@@ -296,6 +311,31 @@
   },
   "components": {
     "schemas": {
+      "NeverDuplicatedNextLevel": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "v"
+        ]
+      },
+      "NeverDuplicatedTopLevel": {
+        "type": "object",
+        "properties": {
+          "b": {
+            "$ref": "#/components/schemas/NeverDuplicatedNextLevel"
+          }
+        },
+        "required": [
+          "b"
+        ]
+      },
+      "Response": {
+        "type": "object"
+      },
       "ResponseItem": {
         "type": "object",
         "properties": {
@@ -305,6 +345,26 @@
         },
         "required": [
           "word"
+        ]
+      },
+      "ResponseItemResultsPage": {
+        "description": "A single page of results",
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "list of items on this page of results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseItem"
+            }
+          },
+          "next_page": {
+            "description": "token used to fetch the next page of results (if any)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
         ]
       }
     }
