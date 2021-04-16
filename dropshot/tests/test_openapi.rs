@@ -136,6 +136,36 @@ async fn handler7(
     unimplemented!();
 }
 
+#[derive(JsonSchema, Serialize)]
+struct NeverDuplicatedTopLevel {
+    b: NeverDuplicatedNextLevel,
+}
+
+#[derive(JsonSchema, Serialize)]
+struct NeverDuplicatedNextLevel {
+    v: bool,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup1",
+}]
+async fn handler8(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<NeverDuplicatedTopLevel>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup2",
+}]
+async fn handler9(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<NeverDuplicatedTopLevel>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -145,6 +175,8 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler5)?;
     api.register(handler6)?;
     api.register(handler7)?;
+    api.register(handler8)?;
+    api.register(handler9)?;
     Ok(api)
 }
 
