@@ -671,32 +671,15 @@ where
     let mut generator = schemars::gen::SchemaGenerator::new(
         schemars::gen::SchemaSettings::openapi3(),
     );
-    let schema = generator.subschema_for::<ParamType>();
+    let schema = ParamType::json_schema(&mut generator);
     match &schema {
-        schemars::schema::Schema::Object(object) => {
-            let real_object = match &object.reference {
-                None => object,
-                Some(_) => {
-                    let name = ParamType::schema_name();
-                    let referenced_object =
-                        generator.definitions().get(&name).expect(
-                            "referenced schema not found in generator \
-                             definitions",
-                        );
-                    match referenced_object {
-                        schemars::schema::Schema::Object(r) => r,
-                        _ => panic!("unexpected referenced catchall schema"),
-                    }
-                }
-            };
-            ExtractorMetadata {
-                paginated: real_object
-                    .extensions
-                    .get(&PAGINATION_PARAM_SENTINEL.to_string())
-                    .is_some(),
-                parameters: schema2parameters(loc, &schema, &generator, true),
-            }
-        }
+        schemars::schema::Schema::Object(object) => ExtractorMetadata {
+            paginated: object
+                .extensions
+                .get(&PAGINATION_PARAM_SENTINEL.to_string())
+                .is_some(),
+            parameters: schema2parameters(loc, &schema, &generator, true),
+        },
         _ => panic!("unexpected catchall schema"),
     }
 }
