@@ -147,7 +147,7 @@ struct NeverDuplicatedNextLevel {
 }
 
 #[endpoint {
-    method = PUT,
+    method = GET,
     path = "/dup1",
 }]
 async fn handler8(
@@ -157,12 +157,76 @@ async fn handler8(
 }
 
 #[endpoint {
-    method = PUT,
+    method = GET,
     path = "/dup2",
 }]
 async fn handler9(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTopLevel>, HttpError> {
+    unimplemented!();
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedParamTopLevel {
+    _b: NeverDuplicatedParamNextLevel
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedParamNextLevel {
+    _v: bool
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup3",
+}]
+async fn handler10(
+    _rqctx: Arc<RequestContext<()>>,
+    _q: Query<NeverDuplicatedParamTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup4",
+}]
+async fn handler11(
+    _rqctx: Arc<RequestContext<()>>,
+    _q: Query<NeverDuplicatedParamTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedBodyTopLevel {
+    _b: NeverDuplicatedBodyNextLevel,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedBodyNextLevel {
+    _v: bool
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup5",
+}]
+async fn handler12(
+    _rqctx: Arc<RequestContext<()>>,
+    _b: TypedBody<NeverDuplicatedBodyTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup6",
+}]
+async fn handler13(
+    _rqctx: Arc<RequestContext<()>>,
+    _b: TypedBody<NeverDuplicatedBodyTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
 }
 
@@ -177,6 +241,10 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler7)?;
     api.register(handler8)?;
     api.register(handler9)?;
+    api.register(handler10)?;
+    api.register(handler11)?;
+    api.register(handler12)?;
+    api.register(handler13)?;
     Ok(api)
 }
 

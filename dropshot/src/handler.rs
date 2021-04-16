@@ -671,7 +671,7 @@ where
     let mut generator = schemars::gen::SchemaGenerator::new(
         schemars::gen::SchemaSettings::openapi3(),
     );
-    let schema = ParamType::json_schema(&mut generator);
+    let schema = generator.subschema_for::<ParamType>();
     match &schema {
         schemars::schema::Schema::Object(object) => ExtractorMetadata {
             paginated: object
@@ -960,7 +960,8 @@ where
             true,
             ApiSchemaGenerator::Gen {
                 name: BodyType::schema_name,
-                schema: BodyType::json_schema,
+                // XXX add test for this
+                schema: make_subschema_for::<BodyType>,
             },
             vec![],
         );

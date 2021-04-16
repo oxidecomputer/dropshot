@@ -27,7 +27,7 @@
       }
     },
     "/dup1": {
-      "put": {
+      "get": {
         "operationId": "handler8",
         "responses": {
           "200": {
@@ -44,7 +44,7 @@
       }
     },
     "/dup2": {
-      "put": {
+      "get": {
         "operationId": "handler9",
         "responses": {
           "200": {
@@ -56,6 +56,88 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/dup3": {
+      "put": {
+        "operationId": "handler10",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_b",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NeverDuplicatedParamNextLevel"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup4": {
+      "put": {
+        "operationId": "handler11",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_b",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NeverDuplicatedParamNextLevel"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup5": {
+      "put": {
+        "operationId": "handler12",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeverDuplicatedBodyTopLevel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup6": {
+      "put": {
+        "operationId": "handler13",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeverDuplicatedBodyTopLevel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
           }
         }
       }
@@ -106,8 +188,7 @@
               }
             }
           }
-        },
-        "x-dropshot-pagination": true
+        }
       }
     },
     "/test/camera": {
@@ -117,16 +198,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "title": "BodyParam",
-                "type": "object",
-                "properties": {
-                  "_x": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "_x"
-                ]
+                "$ref": "#/components/schemas/BodyParam"
               }
             }
           },
@@ -234,16 +306,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "title": "BodyParam",
-                "type": "object",
-                "properties": {
-                  "_x": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "_x"
-                ]
+                "$ref": "#/components/schemas/BodyParam"
               }
             }
           },
@@ -303,6 +366,39 @@
   },
   "components": {
     "schemas": {
+      "BodyParam": {
+        "type": "object",
+        "properties": {
+          "_x": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_x"
+        ]
+      },
+      "NeverDuplicatedBodyNextLevel": {
+        "type": "object",
+        "properties": {
+          "_v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "_v"
+        ]
+      },
+      "NeverDuplicatedBodyTopLevel": {
+        "type": "object",
+        "properties": {
+          "_b": {
+            "$ref": "#/components/schemas/NeverDuplicatedBodyNextLevel"
+          }
+        },
+        "required": [
+          "_b"
+        ]
+      },
       "NeverDuplicatedNextLevel": {
         "type": "object",
         "properties": {
@@ -357,6 +453,17 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "NeverDuplicatedParamNextLevel": {
+        "type": "object",
+        "properties": {
+          "_v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "_v"
         ]
       }
     }
