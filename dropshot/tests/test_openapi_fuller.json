@@ -150,6 +150,43 @@
         }
       }
     },
+    "/dup7": {
+      "put": {
+        "operationId": "handler14",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeverDuplicatedTop"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup8": {
+      "get": {
+        "operationId": "handler15",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeverDuplicatedTop"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/impairment": {
       "get": {
         "operationId": "handler6",
@@ -407,6 +444,17 @@
           "_b"
         ]
       },
+      "NeverDuplicatedNext": {
+        "type": "object",
+        "properties": {
+          "_v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "_v"
+        ]
+      },
       "NeverDuplicatedNextLevel": {
         "type": "object",
         "properties": {
@@ -416,6 +464,17 @@
         },
         "required": [
           "v"
+        ]
+      },
+      "NeverDuplicatedTop": {
+        "type": "object",
+        "properties": {
+          "_b": {
+            "$ref": "#/components/schemas/NeverDuplicatedNext"
+          }
+        },
+        "required": [
+          "_b"
         ]
       },
       "NeverDuplicatedTopLevel": {

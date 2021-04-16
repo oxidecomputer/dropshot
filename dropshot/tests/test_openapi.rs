@@ -246,6 +246,42 @@ async fn handler13(
     unimplemented!();
 }
 
+/*
+ * Finally, test that we do not generate duplicate type definitions when the
+ * same type is used in two different places.
+ */
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct NeverDuplicatedTop {
+    _b: NeverDuplicatedNext,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct NeverDuplicatedNext {
+    _v: bool
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup7",
+}]
+async fn handler14(
+    _rqctx: Arc<RequestContext<()>>,
+    _b: TypedBody<NeverDuplicatedTop>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/dup8",
+}]
+async fn handler15(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -261,6 +297,8 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler11)?;
     api.register(handler12)?;
     api.register(handler13)?;
+    api.register(handler14)?;
+    api.register(handler15)?;
     Ok(api)
 }
 
