@@ -43,7 +43,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NeverDuplicatedTopLevel"
+                  "$ref": "#/components/schemas/NeverDuplicatedResponseTopLevel"
                 }
               }
             }
@@ -60,7 +60,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NeverDuplicatedTopLevel"
+                  "$ref": "#/components/schemas/NeverDuplicatedResponseTopLevel"
                 }
               }
             }
@@ -456,7 +456,7 @@
           "_v"
         ]
       },
-      "NeverDuplicatedNextLevel": {
+      "NeverDuplicatedResponseNextLevel": {
         "type": "object",
         "properties": {
           "v": {
@@ -465,6 +465,17 @@
         },
         "required": [
           "v"
+        ]
+      },
+      "NeverDuplicatedResponseTopLevel": {
+        "type": "object",
+        "properties": {
+          "b": {
+            "$ref": "#/components/schemas/NeverDuplicatedResponseNextLevel"
+          }
+        },
+        "required": [
+          "b"
         ]
       },
       "NeverDuplicatedTop": {
@@ -476,17 +487,6 @@
         },
         "required": [
           "_b"
-        ]
-      },
-      "NeverDuplicatedTopLevel": {
-        "type": "object",
-        "properties": {
-          "b": {
-            "$ref": "#/components/schemas/NeverDuplicatedNextLevel"
-          }
-        },
-        "required": [
-          "b"
         ]
       },
       "Response": {
