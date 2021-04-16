@@ -142,12 +142,12 @@ async fn handler7(
  */
 
 #[derive(JsonSchema, Serialize)]
-struct NeverDuplicatedTopLevel {
-    b: NeverDuplicatedNextLevel,
+struct NeverDuplicatedResponseTopLevel {
+    b: NeverDuplicatedResponseNextLevel,
 }
 
 #[derive(JsonSchema, Serialize)]
-struct NeverDuplicatedNextLevel {
+struct NeverDuplicatedResponseNextLevel {
     v: bool,
 }
 
@@ -157,7 +157,7 @@ struct NeverDuplicatedNextLevel {
 }]
 async fn handler8(
     _rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseOk<NeverDuplicatedTopLevel>, HttpError> {
+) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
 
@@ -167,7 +167,7 @@ async fn handler8(
 }]
 async fn handler9(
     _rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseOk<NeverDuplicatedTopLevel>, HttpError> {
+) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
 
