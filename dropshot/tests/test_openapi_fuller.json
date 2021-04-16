@@ -233,7 +233,8 @@
               }
             }
           }
-        }
+        },
+        "x-dropshot-pagination": true
       }
     },
     "/test/camera": {
