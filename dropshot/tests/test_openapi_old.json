@@ -26,6 +26,159 @@
         }
       }
     },
+    "/dup1": {
+      "get": {
+        "operationId": "handler8",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeverDuplicatedResponseTopLevel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dup2": {
+      "get": {
+        "operationId": "handler9",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeverDuplicatedResponseTopLevel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dup3": {
+      "put": {
+        "operationId": "handler10",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_b",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NeverDuplicatedParamNextLevel"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup4": {
+      "put": {
+        "operationId": "handler11",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_b",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NeverDuplicatedParamNextLevel"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup5": {
+      "put": {
+        "operationId": "handler12",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeverDuplicatedBodyTopLevel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup6": {
+      "put": {
+        "operationId": "handler13",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeverDuplicatedBodyTopLevel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup7": {
+      "put": {
+        "operationId": "handler14",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeverDuplicatedTop"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          }
+        }
+      }
+    },
+    "/dup8": {
+      "get": {
+        "operationId": "handler15",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeverDuplicatedTop"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/impairment": {
       "get": {
         "operationId": "handler6",
@@ -67,25 +220,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "ResponseItemResultsPage",
-                  "description": "A single page of results",
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "description": "list of items on this page of results",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ResponseItem"
-                      }
-                    },
-                    "next_page": {
-                      "description": "token used to fetch the next page of results (if any)",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ]
+                  "$ref": "#/components/schemas/ResponseItemResultsPage"
                 }
               }
             }
@@ -101,16 +236,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "title": "BodyParam",
-                "type": "object",
-                "properties": {
-                  "_x": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "_x"
-                ]
+                "$ref": "#/components/schemas/BodyParam"
               }
             }
           },
@@ -122,8 +248,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Response"
                 }
               }
             }
@@ -219,16 +344,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "title": "BodyParam",
-                "type": "object",
-                "properties": {
-                  "_x": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "_x"
-                ]
+                "$ref": "#/components/schemas/BodyParam"
               }
             }
           },
@@ -288,6 +404,86 @@
   },
   "components": {
     "schemas": {
+      "BodyParam": {
+        "type": "object",
+        "properties": {
+          "_x": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_x"
+        ]
+      },
+      "NeverDuplicatedBodyNextLevel": {
+        "type": "object",
+        "properties": {
+          "_v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "_v"
+        ]
+      },
+      "NeverDuplicatedBodyTopLevel": {
+        "type": "object",
+        "properties": {
+          "_b": {
+            "$ref": "#/components/schemas/NeverDuplicatedBodyNextLevel"
+          }
+        },
+        "required": [
+          "_b"
+        ]
+      },
+      "NeverDuplicatedNext": {
+        "type": "object",
+        "properties": {
+          "_v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "_v"
+        ]
+      },
+      "NeverDuplicatedResponseNextLevel": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "v"
+        ]
+      },
+      "NeverDuplicatedResponseTopLevel": {
+        "type": "object",
+        "properties": {
+          "b": {
+            "$ref": "#/components/schemas/NeverDuplicatedResponseNextLevel"
+          }
+        },
+        "required": [
+          "b"
+        ]
+      },
+      "NeverDuplicatedTop": {
+        "type": "object",
+        "properties": {
+          "_b": {
+            "$ref": "#/components/schemas/NeverDuplicatedNext"
+          }
+        },
+        "required": [
+          "_b"
+        ]
+      },
+      "Response": {
+        "type": "object"
+      },
       "ResponseItem": {
         "type": "object",
         "properties": {
@@ -297,6 +493,37 @@
         },
         "required": [
           "word"
+        ]
+      },
+      "ResponseItemResultsPage": {
+        "description": "A single page of results",
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "list of items on this page of results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseItem"
+            }
+          },
+          "next_page": {
+            "description": "token used to fetch the next page of results (if any)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "NeverDuplicatedParamNextLevel": {
+        "type": "object",
+        "properties": {
+          "_v": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "_v"
         ]
       }
     }
