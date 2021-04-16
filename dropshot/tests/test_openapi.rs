@@ -136,6 +136,11 @@ async fn handler7(
     unimplemented!();
 }
 
+/*
+ * Test that we do not generate duplicate type definitions when the same type is
+ * returned by two different handler functions.
+ */
+
 #[derive(JsonSchema, Serialize)]
 struct NeverDuplicatedTopLevel {
     b: NeverDuplicatedNextLevel,
@@ -165,6 +170,12 @@ async fn handler9(
 ) -> Result<HttpResponseOk<NeverDuplicatedTopLevel>, HttpError> {
     unimplemented!();
 }
+
+/*
+ * Similarly, test that we do not generate duplicate type definitions when the
+ * same type is accepted as a query parameter to two different handler
+ * functions.
+ */
 
 #[derive(Deserialize, JsonSchema)]
 struct NeverDuplicatedParamTopLevel {
@@ -197,6 +208,11 @@ async fn handler11(
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
 }
+
+/*
+ * Similarly, test that we do not generate duplicate type definitions when the
+ * same type is accepted as a typed body to two different handler functions.
+ */
 
 #[derive(Deserialize, JsonSchema)]
 struct NeverDuplicatedBodyTopLevel {
