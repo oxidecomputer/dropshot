@@ -179,12 +179,12 @@ async fn handler9(
 
 #[derive(Deserialize, JsonSchema)]
 struct NeverDuplicatedParamTopLevel {
-    _b: NeverDuplicatedParamNextLevel
+    _b: NeverDuplicatedParamNextLevel,
 }
 
 #[derive(Deserialize, JsonSchema)]
 struct NeverDuplicatedParamNextLevel {
-    _v: bool
+    _v: bool,
 }
 
 #[endpoint {
@@ -221,7 +221,7 @@ struct NeverDuplicatedBodyTopLevel {
 
 #[derive(Deserialize, JsonSchema)]
 struct NeverDuplicatedBodyNextLevel {
-    _v: bool
+    _v: bool,
 }
 
 #[endpoint {
@@ -258,7 +258,7 @@ struct NeverDuplicatedTop {
 
 #[derive(Deserialize, JsonSchema, Serialize)]
 struct NeverDuplicatedNext {
-    _v: bool
+    _v: bool,
 }
 
 #[endpoint {
