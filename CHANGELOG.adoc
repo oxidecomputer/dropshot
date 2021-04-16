@@ -15,6 +15,7 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/105[#105] When generating an OpenAPI spec, Dropshot now uses references rather than inline schemas to represent request and response bodies.
 * https://github.com/oxidecomputer/dropshot/pull/103[#103] When the Dropshot server is dropped before having been shut down, Dropshot now attempts to gracefully shut down rather than panic.
 
 === Breaking Changes
