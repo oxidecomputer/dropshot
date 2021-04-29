@@ -49,7 +49,6 @@ use crate::pagination::PAGINATION_PARAM_SENTINEL;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::lock::Mutex;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Request;
@@ -78,20 +77,11 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 /**
  * Handle for various interfaces useful during request processing.
  */
-/*
- * TODO-cleanup What's the right way to package up "request"?  The only time we
- * need it to be mutable is when we're reading the body (e.g., as part of the
- * JSON extractor).  In order to support that, we wrap it in something that
- * supports interior mutability.  It also needs to be thread-safe, since we're
- * using async/await.  That brings us to Arc<Mutex<...>>, but it seems like
- * overkill since it will only really be used by one thread at a time (at all,
- * let alone mutably) and there will never be contention on the Mutex.
- */
 pub struct RequestContext<Context: ServerContext> {
     /** shared server state */
     pub server: Arc<DropshotState<Context>>,
     /** HTTP request details */
-    pub request: Arc<Mutex<Request<Body>>>,
+    pub request: Request<Body>,
     /** HTTP request routing variables */
     pub path_variables: BTreeMap<String, String>,
     /** unique id assigned to this request */
@@ -181,7 +171,7 @@ pub trait Extractor: Send + Sync + Sized {
      * Construct an instance of this type from a `RequestContext`.
      */
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<Self, HttpError>;
 
     fn metadata() -> ExtractorMetadata;
@@ -205,10 +195,16 @@ macro_rules! impl_extractor_for_tuple {
     #[async_trait]
     impl< $($T: Extractor + 'static,)* > Extractor for ($($T,)*)
     {
-        async fn from_request<Context: ServerContext>(_rqctx: Arc<RequestContext<Context>>)
+
+        // This `allow` prevents a false positive from clippy. See -
+        // https://github.com/rust-lang/rust-clippy/issues/4637
+        #[allow(clippy::eval_order_dependence)]
+        async fn from_request<Context: ServerContext>(_rqctx: &mut RequestContext<Context>)
             -> Result<( $($T,)* ), HttpError>
         {
-            futures::try_join!($($T::from_request(Arc::clone(&_rqctx)),)*)
+            Ok(($(
+                $T::from_request(_rqctx).await?
+            ,)*))
         }
 
         fn metadata() -> ExtractorMetadata {
@@ -465,7 +461,7 @@ where
 
     async fn handle_request(
         &self,
-        rqctx_raw: RequestContext<Context>,
+        mut rqctx_raw: RequestContext<Context>,
     ) -> HttpHandlerResult {
         /*
          * This is where the magic happens: in the code below, `funcparams` has
@@ -485,8 +481,8 @@ where
          * actual handler function.  From this point down, all of this is
          * resolved statically.
          */
+        let funcparams = Extractor::from_request(&mut rqctx_raw).await?;
         let rqctx = Arc::new(rqctx_raw);
-        let funcparams = Extractor::from_request(Arc::clone(&rqctx)).await?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -596,10 +592,10 @@ where
     QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<Query<QueryType>, HttpError> {
-        let request = rqctx.request.lock().await;
-        http_request_load_query(&request)
+        let request = &rqctx.request;
+        http_request_load_query(request)
     }
 
     fn metadata() -> ExtractorMetadata {
@@ -641,7 +637,7 @@ where
     PathType: DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<Path<PathType>, HttpError> {
         let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
         Ok(Path {
@@ -909,13 +905,13 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
  * deserialize an instance of `BodyType` from it.
  */
 async fn http_request_load_json_body<Context: ServerContext, BodyType>(
-    rqctx: Arc<RequestContext<Context>>,
+    rqctx: &mut RequestContext<Context>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
+    let request = &mut rqctx.request;
     let body_bytes = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
@@ -948,7 +944,7 @@ where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
         http_request_load_json_body(rqctx).await
     }
@@ -1011,10 +1007,10 @@ impl UntypedBody {
 #[async_trait]
 impl Extractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
-        let mut request = rqctx.request.lock().await;
+        let request = &mut rqctx.request;
         let body_bytes = http_read_body(
             request.body_mut(),
             server.config.request_body_max_bytes,
