@@ -443,6 +443,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         example: None,
                         examples: indexmap::IndexMap::new(),
                         extensions: indexmap::IndexMap::new(),
+                        explode: None,
                     };
                     match location {
                         ApiEndpointParameterLocation::Query => {
