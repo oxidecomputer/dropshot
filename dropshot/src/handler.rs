@@ -196,8 +196,10 @@ macro_rules! impl_extractor_for_tuple {
     impl< $($T: Extractor + 'static,)* > Extractor for ($($T,)*)
     {
 
-        // This `allow` prevents a false positive from clippy. See -
-        // https://github.com/rust-lang/rust-clippy/issues/4637
+        // Clippy doesn't handle `.await`s within initialization blocks
+        // gracefully yet, so this `allow` prevents a false positive. Tuple
+        // initialization is well ordered, so there's no chance of inconsistency
+        // See: https://github.com/rust-lang/rust-clippy/issues/4637
         #[allow(clippy::eval_order_dependence)]
         async fn from_request<Context: ServerContext>(_rqctx: &mut RequestContext<Context>)
             -> Result<( $($T,)* ), HttpError>
