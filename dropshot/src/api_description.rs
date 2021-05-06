@@ -640,7 +640,21 @@ fn j2oas_schema(
     schema: &schemars::schema::Schema,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     match schema {
-        schemars::schema::Schema::Bool(_) => unreachable!(),
+        /*
+         * The permissive, "match anything" schema. We'll typically see this
+         * when consumers use a type such as serde_json::Value.
+         */
+        schemars::schema::Schema::Bool(true) => {
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData::default(),
+                schema_kind: openapiv3::SchemaKind::Any(
+                    openapiv3::AnySchema::default(),
+                ),
+            })
+        }
+        schemars::schema::Schema::Bool(false) => {
+            panic!("We don't expect to see a schema that matches the null set")
+        }
         schemars::schema::Schema::Object(obj) => j2oas_schema_object(name, obj),
     }
 }

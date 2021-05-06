@@ -67,6 +67,7 @@ async fn handler3(
 #[derive(JsonSchema, Deserialize)]
 struct BodyParam {
     _x: String,
+    _any: serde_json::Value,
 }
 
 #[derive(Serialize, JsonSchema)]
