@@ -57,6 +57,7 @@ use hyper::Response;
 use schemars::schema::InstanceType;
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
+use serde_qs::Config as QSConfig;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use slog::Logger;
@@ -561,20 +562,26 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
  * Given an HTTP request, pull out the query string and attempt to deserialize
  * it as an instance of `QueryType`.
  */
-fn http_request_load_query<QueryType>(
-    request: &Request<Body>,
+async fn http_request_load_query<QueryType, Context: ServerContext>(
+     rqctx: Arc<RequestContext<Context>>,
 ) -> Result<Query<QueryType>, HttpError>
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,
 {
-    let raw_query_string = request.uri().query().unwrap_or("");
-    /*
-     * TODO-correctness: are query strings defined to be urlencoded in this way?
-     */
-    match serde_urlencoded::from_str(raw_query_string) {
-        Ok(q) => Ok(Query {
-            inner: q,
-        }),
+     let mut request = rqctx.request.lock().await;
+     let server = &rqctx.server;
+
+     let b = http_read_body(request.body_mut(), server.config.request_body_max_bytes)
+         .await
+         .unwrap();
+
+     // For to work, it's necessary to parse the query string
+     // in non-strict mode, to allow parsing of url_encoded square brackets
+     // in the key. See the lib.rs documentation for why.
+     let qs_non_strict = QSConfig::new(10, false);
+
+     match qs_non_strict.deserialize_bytes(&b) {
+         Ok(q) => Ok(Query { inner: q }),
         Err(e) => Err(HttpError::for_bad_request(
             None,
             format!("unable to parse query string: {}", e),
@@ -595,11 +602,8 @@ impl<QueryType> Extractor for Query<QueryType>
 where
     QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
-    async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
-    ) -> Result<Query<QueryType>, HttpError> {
-        let request = rqctx.request.lock().await;
-        http_request_load_query(&request)
+    async fn from_request<Context: ServerContext>(rqctx: Arc<RequestContext<Context>>) -> Result<Query<QueryType>, HttpError> {
+         http_request_load_query(rqctx).await
     }
 
     fn metadata() -> ExtractorMetadata {
