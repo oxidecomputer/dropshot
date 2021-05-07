@@ -17,7 +17,9 @@ https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...HEAD[Full list of co
 
 === Breaking Changes
 
+* https://github.com/oxidecomputer/dropshot/pull/106[#106] The type of the field, https://docs.rs/dropshot/0.6.0/dropshot/struct.RequestContext.html#structfield.request[`RequestContext.request`], has changed from `Arc<Mutex<Request<Body>>>` to just `Request<Body>`. This simplification eliminates the need to lock and unlock the request before reading, but mutating the original hyper request will no longer be possible.
 * https://github.com/oxidecomputer/dropshot/pull/100[#100] The type used for the "limit" argument for paginated resources has changed.  This limit refers to the number of items that an HTTP client can ask for in a single request to a paginated endpoint.  The limit is now 4294967295, where it may have previously been larger.  This is not expected to affect consumers because this limit is far larger than practical.  For details, see #100.
+
 
 == 0.5.1 (released 2021-03-18)
 
