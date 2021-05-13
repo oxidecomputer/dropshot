@@ -316,7 +316,7 @@ mod tests {
             }
             .into(),
             quote! {
-                pub async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                pub async fn handler_xyz(_rqctx: &RequestContext<()>) {}
             }
             .into(),
         );
@@ -329,9 +329,9 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                    pub async fn handler_xyz(_rqctx: &RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -354,7 +354,7 @@ mod tests {
             }
             .into(),
             quote! {
-                pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) {}
+                pub async fn handler_xyz(_rqctx: &dropshot::RequestContext<()>) {}
             }
             .into(),
         );
@@ -367,9 +367,9 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) {}
+                    pub async fn handler_xyz(_rqctx: &dropshot::RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -392,7 +392,7 @@ mod tests {
             }
             .into(),
             quote! {
-                async fn handler_xyz(_rqctx: Arc<RequestContext<std::i32>>, q: Query<Q>) {}
+                async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
             }
             .into(),
         );
@@ -419,7 +419,7 @@ mod tests {
 
             impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: Arc<RequestContext<std::i32>>, q: Query<Q>) {}
+                    async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -442,7 +442,7 @@ mod tests {
             }
             .into(),
             quote! {
-                pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext<()>>, q: Query<Q>) {}
+                pub(crate) async fn handler_xyz(_rqctx: &RequestContext<()>, q: Query<Q>) {}
             }
             .into(),
         );
@@ -469,7 +469,7 @@ mod tests {
 
             impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext<()>>, q: Query<Q>) {}
+                    pub(crate) async fn handler_xyz(_rqctx: &RequestContext<()>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -493,7 +493,7 @@ mod tests {
             }
             .into(),
             quote! {
-                async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                async fn handler_xyz(_rqctx: &RequestContext<()>) {}
             }
             .into(),
         );
@@ -506,7 +506,7 @@ mod tests {
             const handler_xyz: handler_xyz = handler_xyz {};
             impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                    async fn handler_xyz(_rqctx: &RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -532,7 +532,7 @@ mod tests {
             .into(),
             quote! {
                 /** handle "xyz" requests */
-                async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                async fn handler_xyz(_rqctx: &RequestContext<()>) {}
             }
             .into(),
         );
@@ -546,7 +546,7 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
-                    async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                    async fn handler_xyz(_rqctx: &RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,

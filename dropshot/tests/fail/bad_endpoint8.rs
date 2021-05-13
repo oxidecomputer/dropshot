@@ -18,7 +18,7 @@ struct Ret {}
     path = "/test",
 }]
 fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<Ret>, HttpError> {
     Ok(HttpResponseOk(Ret {}))
 }

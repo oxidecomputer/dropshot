@@ -118,7 +118,7 @@ pub mod routes {
           path = "/counter",
       }]
     pub async fn example_api_get_counter(
-        rqctx: Arc<RequestContext<ExampleContext>>,
+        rqctx: &RequestContext<ExampleContext>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
         let api_context = rqctx.context();
 
@@ -136,7 +136,7 @@ pub mod routes {
           path = "/counter",
       }]
     pub async fn example_api_put_counter(
-        rqctx: Arc<RequestContext<ExampleContext>>,
+        rqctx: &RequestContext<ExampleContext>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         let api_context = rqctx.context();

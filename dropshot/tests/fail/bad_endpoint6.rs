@@ -20,7 +20,7 @@ struct Ret {
     method = GET,
     path = "/test",
 }]
-async fn bad_endpoint(_rqctx: Arc<RequestContext<()>>) -> Result<HttpResponseOk<Ret>, HttpError> {
+async fn bad_endpoint(_rqctx: &RequestContext<()>) -> Result<HttpResponseOk<Ret>, HttpError> {
     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
 }
 

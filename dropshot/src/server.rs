@@ -490,7 +490,7 @@ mod test {
         path = "/handler",
     }]
     async fn handler(
-        _rqctx: Arc<RequestContext<i32>>,
+        _rqctx: &RequestContext<i32>,
     ) -> Result<HttpResponseOk<u64>, HttpError> {
         Ok(HttpResponseOk(3))
     }

@@ -77,7 +77,7 @@ struct ProjectPage {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext<BTreeMap<String, Project>>>,
+    rqctx: &RequestContext<BTreeMap<String, Project>>,
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();

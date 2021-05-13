@@ -67,6 +67,7 @@ use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
+use std::pin::Pin;
 use std::sync::Arc;
 
 /**
@@ -137,7 +138,7 @@ impl<Context: ServerContext> RequestContext<Context> {
  * endpoint macro parse this argument.
  *
  * The first argument to an endpoint handler must be of the form:
- * `Arc<RequestContext<T>>` where `T` is a caller-supplied
+ * `&RequestContext<T>` where `T` is a caller-supplied
  * value that implements `ServerContext`.
  */
 pub trait RequestContextArgument {
@@ -145,7 +146,7 @@ pub trait RequestContextArgument {
 }
 
 impl<T: 'static + ServerContext> RequestContextArgument
-    for Arc<RequestContext<T>>
+    for &RequestContext<T>
 {
     type Context = T;
 }
@@ -246,19 +247,19 @@ impl_extractor_for_tuple!(T1, T2, T3);
  * in the `FuncParams` type parameter, we'll need additional abstraction to
  * treat different handlers interchangeably.  See `RouteHandler` below.
  */
-#[async_trait]
-pub trait HttpHandlerFunc<Context, FuncParams, ResponseType>:
+pub trait HttpHandlerFunc<'a, Context, ResponseType, FuncParams>:
     Send + Sync + 'static
 where
     Context: ServerContext,
     FuncParams: Extractor,
-    ResponseType: HttpResponse + Send + Sync + 'static,
 {
-    async fn handle_request(
+    type FutureType : Future<Output = Result<ResponseType,HttpError>> + Send + 'a;
+
+    fn handle_request(
         &self,
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &'a RequestContext<Context>,
         p: FuncParams,
-    ) -> HttpHandlerResult;
+    ) -> Pin<Box<Self::FutureType>>;
 }
 
 /**
@@ -346,27 +347,24 @@ where
 macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     ($(($i:tt, $T:tt)),*) => {
 
-    #[async_trait]
-    impl<Context, FuncType, FutureType, ResponseType, $($T,)*>
-        HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
+    impl<'a, Context, FuncType, FutureType, ResponseType, $($T,)*>
+        HttpHandlerFunc<'a, Context, ResponseType, ($($T,)*)> for FuncType
     where
         Context: ServerContext,
-        FuncType: Fn(Arc<RequestContext<Context>>, $($T,)*)
-            -> FutureType + Send + Sync + 'static,
-        FutureType: Future<Output = Result<ResponseType, HttpError>>
-            + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
-        $($T: Extractor + Send + Sync + 'static,)*
+        FuncType: 'static + Send + Sync + Fn(&'a RequestContext<Context>, $($T,)*) -> FutureType,
+        FutureType : Future<Output = Result<ResponseType, HttpError>> + Send + 'a,
+        $($T: Extractor + 'static,)*
     {
-        async fn handle_request(
+        type FutureType = FutureType;
+
+        fn handle_request(
             &self,
-            rqctx: Arc<RequestContext<Context>>,
+            rqctx: &'a RequestContext<Context>,
             _param_tuple: ($($T,)*)
-        ) -> HttpHandlerResult
+        ) -> Pin<Box<Self::FutureType>>
         {
-            let response: ResponseType =
-                (self)(rqctx, $(_param_tuple.$i,)*).await?;
-            response.to_result()
+            Box::pin((self)(rqctx, $(_param_tuple.$i,)*))
         }
     }
 }}
@@ -414,9 +412,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
 pub struct HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
-    HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
     FuncParams: Extractor,
-    ResponseType: HttpResponse + Send + Sync + 'static,
 {
     /** the actual HttpHandlerFunc used to implement this route */
     handler: HandlerType,
@@ -439,9 +435,7 @@ impl<Context, HandlerType, FuncParams, ResponseType> Debug
     for HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
-    HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
     FuncParams: Extractor,
-    ResponseType: HttpResponse + Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "handler: {}", self.label)
@@ -453,9 +447,9 @@ impl<Context, HandlerType, FuncParams, ResponseType> RouteHandler<Context>
     for HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
-    HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-    FuncParams: Extractor + 'static,
     ResponseType: HttpResponse + Send + Sync + 'static,
+    HandlerType: for <'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
+    FuncParams: Extractor + 'static,
 {
     fn label(&self) -> &str {
         &self.label
@@ -463,7 +457,7 @@ where
 
     async fn handle_request(
         &self,
-        mut rqctx_raw: RequestContext<Context>,
+        mut rqctx: RequestContext<Context>,
     ) -> HttpHandlerResult {
         /*
          * This is where the magic happens: in the code below, `funcparams` has
@@ -483,10 +477,9 @@ where
          * actual handler function.  From this point down, all of this is
          * resolved statically.
          */
-        let funcparams = Extractor::from_request(&mut rqctx_raw).await?;
-        let rqctx = Arc::new(rqctx_raw);
-        let future = self.handler.handle_request(rqctx, funcparams);
-        future.await
+        let funcparams = Extractor::from_request(&mut rqctx).await?;
+        let future = self.handler.handle_request(&rqctx, funcparams);
+        future.await?.to_result()
     }
 }
 
@@ -498,9 +491,9 @@ impl<Context, HandlerType, FuncParams, ResponseType>
     HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
-    HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-    FuncParams: Extractor + 'static,
     ResponseType: HttpResponse + Send + Sync + 'static,
+    HandlerType: for <'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
+    FuncParams: Extractor + 'static,
 {
     /**
      * Given a function matching one of the supported API handler function
@@ -519,7 +512,7 @@ where
     pub fn new_with_name(
         handler: HandlerType,
         label: &str,
-    ) -> Box<dyn RouteHandler<Context>> {
+    ) -> Box<(dyn RouteHandler<Context>)> {
         Box::new(HttpRouteHandler {
             label: label.to_string(),
             handler,
