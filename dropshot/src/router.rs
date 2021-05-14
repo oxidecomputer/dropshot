@@ -517,10 +517,9 @@ mod test {
     use http::StatusCode;
     use hyper::Body;
     use hyper::Response;
-    use std::sync::Arc;
 
     async fn test_handler(
-        _: &RequestContext<()>,
+        _: &mut RequestContext<()>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
     }

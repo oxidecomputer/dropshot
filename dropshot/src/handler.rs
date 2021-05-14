@@ -138,7 +138,7 @@ impl<Context: ServerContext> RequestContext<Context> {
  * endpoint macro parse this argument.
  *
  * The first argument to an endpoint handler must be of the form:
- * `&RequestContext<T>` where `T` is a caller-supplied
+ * `&mut RequestContext<T>` where `T` is a caller-supplied
  * value that implements `ServerContext`.
  */
 pub trait RequestContextArgument {
@@ -146,7 +146,7 @@ pub trait RequestContextArgument {
 }
 
 impl<T: 'static + ServerContext> RequestContextArgument
-    for &RequestContext<T>
+    for &mut RequestContext<T>
 {
     type Context = T;
 }
@@ -253,11 +253,13 @@ where
     Context: ServerContext,
     FuncParams: Extractor,
 {
-    type FutureType : Future<Output = Result<ResponseType,HttpError>> + Send + 'a;
+    type FutureType: Future<Output = Result<ResponseType, HttpError>>
+        + Send
+        + 'a;
 
     fn handle_request(
         &self,
-        rqctx: &'a RequestContext<Context>,
+        rqctx: &'a mut RequestContext<Context>,
         p: FuncParams,
     ) -> Pin<Box<Self::FutureType>>;
 }
@@ -352,7 +354,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     where
         Context: ServerContext,
         ResponseType: HttpResponse + Send + Sync + 'static,
-        FuncType: 'static + Send + Sync + Fn(&'a RequestContext<Context>, $($T,)*) -> FutureType,
+        FuncType: 'static + Send + Sync + Fn(&'a mut RequestContext<Context>, $($T,)*) -> FutureType,
         FutureType : Future<Output = Result<ResponseType, HttpError>> + Send + 'a,
         $($T: Extractor + 'static,)*
     {
@@ -360,7 +362,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
 
         fn handle_request(
             &self,
-            rqctx: &'a RequestContext<Context>,
+            rqctx: &'a mut RequestContext<Context>,
             _param_tuple: ($($T,)*)
         ) -> Pin<Box<Self::FutureType>>
         {
@@ -448,7 +450,7 @@ impl<Context, HandlerType, FuncParams, ResponseType> RouteHandler<Context>
 where
     Context: ServerContext,
     ResponseType: HttpResponse + Send + Sync + 'static,
-    HandlerType: for <'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
+    HandlerType: for<'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
     FuncParams: Extractor + 'static,
 {
     fn label(&self) -> &str {
@@ -478,7 +480,7 @@ where
          * resolved statically.
          */
         let funcparams = Extractor::from_request(&mut rqctx).await?;
-        let future = self.handler.handle_request(&rqctx, funcparams);
+        let future = self.handler.handle_request(&mut rqctx, funcparams);
         future.await?.to_result()
     }
 }
@@ -492,7 +494,7 @@ impl<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
     ResponseType: HttpResponse + Send + Sync + 'static,
-    HandlerType: for <'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
+    HandlerType: for<'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
     FuncParams: Extractor + 'static,
 {
     /**

@@ -6,7 +6,7 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{io::Cursor, str::from_utf8, sync::Arc};
+use std::{io::Cursor, str::from_utf8};
 
 #[derive(JsonSchema, Serialize)]
 struct ResponseItem {
@@ -35,7 +35,7 @@ struct PageSelector {
     path = "/super_pages",
 }]
 async fn handler(
-    _rqctx: &RequestContext<()>,
+    _rqctx: &mut RequestContext<()>,
     _query: Query<PaginationParams<ScanParams, PageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<ResponseItem>>, HttpError> {
     unimplemented!();

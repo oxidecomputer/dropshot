@@ -170,7 +170,7 @@ fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: &RequestContext<DataCollection>,
+    rqctx: &mut RequestContext<DataCollection>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();
@@ -196,7 +196,7 @@ async fn example_list_projects(
     path = "/disks"
 }]
 async fn example_list_disks(
-    rqctx: &RequestContext<DataCollection>,
+    rqctx: &mut RequestContext<DataCollection>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Disk>>, HttpError> {
     let pag_params = query.into_inner();
@@ -222,7 +222,7 @@ async fn example_list_disks(
     path = "/instances"
 }]
 async fn example_list_instances(
-    rqctx: &RequestContext<DataCollection>,
+    rqctx: &mut RequestContext<DataCollection>,
     query: Query<PaginationParams<ExScanParams, ExPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Instance>>, HttpError> {
     let pag_params = query.into_inner();

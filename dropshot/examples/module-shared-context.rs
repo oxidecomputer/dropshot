@@ -128,7 +128,7 @@ pub struct CounterValue {
       path = "/counter",
   }]
 pub async fn example_api_get_counter(
-    rqctx: &RequestContext<Arc<ExampleContext>>,
+    rqctx: &mut RequestContext<Arc<ExampleContext>>,
 ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
     let api_context = rqctx.context();
 

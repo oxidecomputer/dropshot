@@ -233,7 +233,7 @@ fn page_selector_for(
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: &RequestContext<ProjectCollection>,
+    rqctx: &mut RequestContext<ProjectCollection>,
     query: Query<PaginationParams<ProjectScanParams, ProjectScanPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();

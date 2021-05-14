@@ -123,7 +123,6 @@
  * use http::Method;
  * use schemars::JsonSchema;
  * use serde::Serialize;
- * use std::sync::Arc;
  *
  * /** Represents a project in our API */
  * #[derive(Serialize, JsonSchema)]
@@ -138,7 +137,7 @@
  *     path = "/projects/project1",
  * }]
  * async fn myapi_projects_get_project(
- *     rqctx: &RequestContext<()>,
+ *     rqctx: &mut RequestContext<()>,
  * ) -> Result<HttpResponseOk<Project>, HttpError>
  * {
  *    let project = Project { name: String::from("project1") };
@@ -209,7 +208,7 @@
  *
  * ```ignore
  * async fn f(
- *      rqctx: &RequestContext<Context>,
+ *      rqctx: &mut RequestContext<Context>,
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
@@ -257,7 +256,6 @@
  * use hyper::Response;
  * use schemars::JsonSchema;
  * use serde::Deserialize;
- * use std::sync::Arc;
  *
  * #[derive(Deserialize, JsonSchema)]
  * struct MyQueryArgs {
@@ -268,7 +266,7 @@
  * struct MyContext {}
  *
  * async fn myapi_projects_get(
- *     rqctx: &RequestContext<MyContext>,
+ *     rqctx: &mut RequestContext<MyContext>,
  *     query: Query<MyQueryArgs>)
  *     -> Result<Response<Body>, HttpError>
  * {
@@ -467,7 +465,6 @@
  * use dropshot::endpoint;
  * use schemars::JsonSchema;
  * use serde::Deserialize;
- * use std::sync::Arc;
  * # use serde::Serialize;
  * # #[derive(Debug, Deserialize, JsonSchema)]
  * # enum MyScanParams { A };
@@ -483,7 +480,7 @@
  *     path = "/list_stuff"
  * }]
  * async fn my_list_api(
- *     rqctx: &RequestContext<()>,
+ *     rqctx: &mut RequestContext<()>,
  *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
  *     extra_params: Query<MyExtraQueryParams>,
  * ) -> Result<HttpResponseOk<ResultsPage<String>>, HttpError>

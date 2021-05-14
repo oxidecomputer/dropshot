@@ -34,7 +34,6 @@ use hyper::Response;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[macro_use]
@@ -615,7 +614,7 @@ type RequestCtx = RequestContext<usize>;
     path = "/testing/demo1",
 }]
 async fn demo_handler_args_1(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&"demo_handler_args_1")
 }
@@ -630,7 +629,7 @@ pub struct DemoQueryArgs {
     path = "/testing/demo2query",
 }]
 async fn demo_handler_args_2query(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
     query: Query<DemoQueryArgs>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&query.into_inner())
@@ -646,7 +645,7 @@ pub struct DemoJsonBody {
     path = "/testing/demo2json",
 }]
 async fn demo_handler_args_2json(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
     json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&json.into_inner())
@@ -662,7 +661,7 @@ pub struct DemoJsonAndQuery {
     path = "/testing/demo3",
 }]
 async fn demo_handler_args_3(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
     query: Query<DemoQueryArgs>,
     json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
@@ -682,7 +681,7 @@ pub struct DemoPathString {
     path = "/testing/demo_path_string/{test1}",
 }]
 async fn demo_handler_path_param_string(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
     path_params: Path<DemoPathString>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
@@ -697,7 +696,7 @@ pub struct DemoPathUuid {
     path = "/testing/demo_path_uuid/{test1}",
 }]
 async fn demo_handler_path_param_uuid(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
     path_params: Path<DemoPathUuid>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
@@ -712,7 +711,7 @@ pub struct DemoPathU32 {
     path = "/testing/demo_path_u32/{test1}",
 }]
 async fn demo_handler_path_param_u32(
-    _rqctx: &RequestCtx,
+    _rqctx: &mut RequestCtx,
     path_params: Path<DemoPathU32>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())
@@ -732,7 +731,7 @@ pub struct DemoUntypedQuery {
     path = "/testing/untyped_body"
 }]
 async fn demo_handler_untyped_body(
-    _rqctx: &RequestContext<usize>,
+    _rqctx: &mut RequestContext<usize>,
     body: UntypedBody,
     query: Query<DemoUntypedQuery>,
 ) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
@@ -758,7 +757,7 @@ pub struct DemoPathImpossible {
     path = "/testing/demo_path_impossible/{different_param_name}",
 }]
 async fn demo_handler_path_param_impossible(
-    _rqctx: &RequestContext<usize>,
+    _rqctx: &mut RequestContext<usize>,
     path_params: Path<DemoPathImpossible>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())

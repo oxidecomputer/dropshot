@@ -8,7 +8,7 @@ use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::Serialize;
-use std::sync::Arc;
+
 
 #[derive(JsonSchema, Serialize)]
 struct Ret {}
@@ -18,7 +18,7 @@ struct Ret {}
     path = "/test",
 }]
 fn bad_endpoint(
-    _rqctx: &RequestContext<()>,
+    _rqctx: &mut RequestContext<()>,
 ) -> Result<HttpResponseOk<Ret>, HttpError> {
     Ok(HttpResponseOk(Ret {}))
 }
