@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2021 Oxide Computer Company
 
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseAccepted,
@@ -283,6 +283,24 @@ async fn handler15(
     unimplemented!();
 }
 
+#[allow(dead_code)]
+#[derive(JsonSchema, Deserialize)]
+struct AllPath {
+    path: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/ceci_nes_pas_une_endpoint/{path:.*}",
+    unpublished = true,
+}]
+async fn handler16(
+    _rqctx: Arc<RequestContext<()>>,
+    _path: Path<AllPath>,
+) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -300,6 +318,7 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler13)?;
     api.register(handler14)?;
     api.register(handler15)?;
+    api.register(handler16)?;
     Ok(api)
 }
 
