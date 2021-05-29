@@ -6,6 +6,9 @@ authors = ["David Pacheco <dap@oxidecomputer.com>"]
 edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/oxidecomputer/dropshot/"
+readme = "README-crates.io.md"
+keywords = ["rest", "openapi", "async"]
+categories = ["network-programming", "web-programming::http-server"]
 
 [dependencies]
 async-trait = "0.1.24"
