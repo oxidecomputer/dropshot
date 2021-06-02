@@ -2,7 +2,40 @@
 :toc: left
 :icons: font
 
-= Dropshot Maintainer's Notes
+= Dropshot Maintainers' Notes
+
+== Checking in Cargo.lock file
+
+Although Dropshot is a library, we check in a Cargo.lock file.  Since the CI tests always run against a particular commit, this allows us to know exactly which dependencies were used for a particular CI run.  It also communicates to consumers what we've tested.  (Note that this file is not used in consumers' builds, though.)
+
+== Dependabot
+
+Dependabot is configured to keep our dependencies up-to-date by checking weekly for dependencies with newer versions available than what we've specified.  When updates are available, Dependabot can create pull requests that update Cargo.toml, Cargo.lock, or both.  The problem we're trying to avoid: accumulation of technical debt as dependencies evolve (incompatibly or otherwise).  Of course, it doesn't immediately break Dropshot when one of its dependencies is updated.  But without a proactive plan to update Dropshot for dependency updates, we could find ourselves depending on very old versions of crates and suddenly need to update them (for security reasons, or an important bug fix, or a new feature).  This can become quite a mess to untangle.
+
+For background and detailed information about Dependabot, see https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically[the Dependabot documentation].
+
+=== When Dependabot opens a pull request
+
+Treat these like any other software change.  We're responsible for the change and any breakage introduced by it.  So if you're looking at a Dependabot PR, you probably want to:
+
+* Assess the change itself.  When projects provide a changelog, Dependabot includes the appropriate excerpt, which makes this really easy.  If not, you can look at the commits yourself.  The appropriate level of scrutiny probably depends on the scope of changes and our level of trust with the project.
+* Check whether our CI checks passed.  If so, it's probably okay to land the change.  If not, we need to do more work (e.g., if there was a major version upgrade).  You can push follow-on commits to the PR and iterate on it like any other change.
+
+=== Notes about the Dependabot config
+
+Dependabot uses different https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/configuration-options-for-dependency-updates#versioning-strategy[policies] for updating a package's dependencies, depending on whether it's looking at an application or a library.  The documentation is confusing and self-inconsistent on this subject.  But it appears that when Dependabot checks a package, and it finds that some dependency has a newer version available, then:footnote:[It's worth noting that this description is inconsistent with the Dependabot docs linked above.  First, the docs say that "widen" is the default behavior for libraries, but empirically for Rust https://github.com/dependabot/dependabot-core/blob/f2167589e8210d53ac64e784a77c6aa4a14e31d6/cargo/lib/dependabot/cargo/update_checker/requirements_updater.rb#L45-L50[that's not even supported, and "increase-if-necessary" is the default].  Second, the docs largely don't say anything about what happens to Cargo.toml vs. Cargo.lock.  It's not clear why we've seen with applications that Dependabot sometimes updates Cargo.lock and not Cargo.toml.  The docs are self-inconsistent in other ways, too: it's not clear why they use "npm" and "pip" as examples of apps, or why Cargo is an example of a library, when you can ship apps or libraries with either.  The Cargo subsystem clearly supports both (as you'd expect).  The supported policies also don't make sense: the docs claim that Cargo only supports "auto" and "lockfile-only", but "auto" includes "increase", so how could that not be supported?  Also, Dependabot supports 19 backends, but only 7 are present in the table of which modes are supported.]
+
+* For applications (policy "increase"), it updates Cargo.lock to specify the newer version.  It does not always update Cargo.toml.
+* For libraries (policy https://github.com/dependabot/dependabot-core/blob/f2167589e8210d53ac64e784a77c6aa4a14e31d6/cargo/lib/dependabot/cargo/update_checker/requirements_updater.rb#L45-L50[seems to be "increase-if-necessary" for Rust]), it updates Cargo.toml only when the semver constraint in Cargo.toml does not already allow the newer package version.
+
+For applications (such as Oxide's internal Omicron project), we point Dependabot at the root of the https://doc.rust-lang.org/cargo/reference/workspaces.html[Cargo workspace] (the root of the repository).  This causes Dependabot to find Cargo.lock, treat the package as an application, and update Cargo.lock and the Cargo.toml files for all packages in the workspace.
+
+We do not do this in Dropshot.  We _do_ <<_checking_in_cargo_lock_file,check in a Cargo.lock file>>, but we point Dependabot at the individual packages in the Dropshot workspace.  Dependabot does not find the Cargo.lock file and so treats Dropshot as a library, only updating Cargo.toml when _necessary_ to accommodate a new dependency.
+
+=== Debugging Dependabot
+
+If you find yourself trying to debug what Dependabot is doing, you can https://github.com/oxidecomputer/dropshot/network/updates[view its activity on GitHub by clicking the Insights tab, then "Dependency Graph" on the left, and then the "Dependabot" subtab].  You'll see sections for dropshot/Cargo.toml and dropshot_endpoint/Cargo.toml.  For each one, you can click the "Last checked" link to get a log of its last run.  This may only make sense if you've looked at the https://github.com/dependabot/dependabot-core/[source].
+
 
 == Publishing a new release
 
@@ -23,8 +56,8 @@ The release _process_ ensures a few things:
 Here's how to cut a release.
 
 . Check that the CHANGELOG.adoc file is up to date for this release.
-.. Any notable changes should be documented.  There's a link in the changelog to a list of unreleased commits -- you can skim these to see if anything looks notable.
-.. Any breaking changes should have text that concisely summarizes for a Dropshot user how they know if they're affected and what they need to do to safely upgrade their code.  A few minutes here can save many people many minutes later!
+.. Any breaking changes should have text that concisely summarizes for a Dropshot user how they know if they're affected and what they need to do to safely upgrade their code.  A few minutes here can save many people many minutes later!  This is best done by updating CHANGELOG.adoc with each PR, rather than all at once when we want to cut a release.
+.. Any other notable changes should be documented.  There's a link in the changelog to a list of unreleased commits -- you can skim these to see if anything looks notable.
 . Double-check your working directory.
 .. `git status` should show that you're on the `main` branch.
 .. Use `git pull` to sync up with any upstream changes.  `git status` should show that your local "main" is exactly sync'd up with the upstream "main" and that you have no uncommitted files or local changes to committed files.
@@ -33,7 +66,7 @@ Here's how to cut a release.
 ... Use `git log -1` to see what commit you're on.
 ... Look up that commit on GitHub.  It will have a URL like `https://github.com/oxidecomputer/dropshot/commit/COMMIT_SHA` (with an actual `COMMIT_SHA`).  CI succeeded if there's a green check at the left of the commit message.  You can click the green check to be sure you're looking at the right thing.  It should say "All checks have passed".
 . Figure out the tag used for the most recent release.  The easiest is probably to view https://github.com/oxidecomputer/dropshot/releases[the recent releases].   We'll call this `PREV_RELEASE_TAG` in the next step.
-. Figure out what kind of update this is relative to the last one released.  https://github.com/sunng87/cargo-release/blob/master/docs/reference.md#bump-level[See `cargo release` docs for the available levels.]  We're usually doing a "patch", "minor", or "major" release.  We'll call this "RELEASE_KIND".
+. Figure out what kind of update this is relative to the last one released.  https://github.com/sunng87/cargo-release/blob/master/docs/reference.md#bump-level[See `cargo release` docs for the available levels.]  We're usually doing a "patch", "minor", or "major" release.  We'll call this "RELEASE_KIND".  (According to the docs, you can also use a specific version number that you want to release here.)
 . Do the release.  If you're daring, just run:
 +
 [source,text]
@@ -81,9 +114,11 @@ $ git push
 $ git push --tags
 ----
 
-=== Why all that checking?
+=== Why all that checking?  Is that going overboard?
 
 dap's not familiar enough with Cargo to know what all the safeties are.  Other language package managers (well, npm) make it easy to publish packages that are missing files, contain extra files (like local-only notes or private keys), fail tests, etc.  The worst is not knowing the published package is broken or leaked private information until somebody reports it.
+
+We could automate more of this with a script that takes a commit, checks the GitHub CI status, then does a fresh clone and publishes the release.
 
 === What if something goes wrong
 
@@ -92,8 +127,3 @@ At the end of the day, the release is just a git tag and the crates.io publish.
 If something went wrong prior to the crates.io publish, then you can `git reset` to the commit you started with, delete your local tag, and try again.  (If you followed the above steps, you won't have pushed any git tags, so there's nothing on GitHub to undo.)
 
 If something went wrong after the crates.io publish, you could try to fix up the Git state to match what it should be.  Or you could yank the version you published, reset your local state, and try again.
-
-
-== Dependabot
-
-TODO XXX
