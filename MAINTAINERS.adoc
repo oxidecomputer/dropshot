@@ -67,7 +67,14 @@ Here's how to cut a release.
 ... Look up that commit on GitHub.  It will have a URL like `https://github.com/oxidecomputer/dropshot/commit/COMMIT_SHA` (with an actual `COMMIT_SHA`).  CI succeeded if there's a green check at the left of the commit message.  You can click the green check to be sure you're looking at the right thing.  It should say "All checks have passed".
 . Figure out the tag used for the most recent release.  The easiest is probably to view https://github.com/oxidecomputer/dropshot/releases[the recent releases].   We'll call this `PREV_RELEASE_TAG` in the next step.
 . Figure out what kind of update this is relative to the last one released.  https://github.com/sunng87/cargo-release/blob/master/docs/reference.md#bump-level[See `cargo release` docs for the available levels.]  We're usually doing a "patch", "minor", or "major" release.  We'll call this "RELEASE_KIND".  (According to the docs, you can also use a specific version number that you want to release here.)
-. Do the release.  If you're daring, just run:
+. Do the release.  The first time you do this, you'll need to install https://github.com/sunng87/cargo-release/[cargo release]:
++
+[source,text]
+----
+cargo install cargo-release
+----
++
+If you're daring, just run:
 +
 [source,text]
 ----
