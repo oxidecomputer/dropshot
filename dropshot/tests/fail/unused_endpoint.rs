@@ -1,15 +1,21 @@
 // Copyright 2021 Oxide Computer Company
 
-#![allow(unused_imports)]
-#![deny(warnings)]
+// For whatever reason, trybuild overrides the default disposition for the
+// dead_code lint from "warn" to "allow" so we explicitly deny it here.
+#![deny(dead_code)]
 
 use dropshot::endpoint;
-use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use std::sync::Arc;
 
+// At some point we'd expect to see code like:
+// ```
+//     let mut api = ApiDescription::new();
+//     api.register(unused_endpoint).unwrap();
+// ```
+// Defining but not using the endpoint should cause a warning.
 #[endpoint {
     method = GET,
     path = "/test",
