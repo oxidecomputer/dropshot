@@ -21,7 +21,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...HEAD[Full list of co
 === Breaking Changes
 
 * https://github.com/oxidecomputer/dropshot/pull/100[#100] The type used for the "limit" argument for paginated resources has changed.  This limit refers to the number of items that an HTTP client can ask for in a single request to a paginated endpoint.  The limit is now 4294967295, where it may have previously been larger.  This is not expected to affect consumers because this limit is far larger than practical.  For details, see #100.
-* https://github.com/oxidecomputer/dropshot/pull/116[#116] Unused, non-`pub` endpoints from the `#[endpoint { ... }]` macro now produce a lint warning. This is *technically* a breaking change for those who may have had unused endpoints and compiled with `#[deny(warning)]` or `#[deny(dead_code)]` thus implicitly relying on the *absence* of a warning about the endpoint being unused.
+* https://github.com/oxidecomputer/dropshot/pull/116[#116] Unused, non-`pub` endpoints from the `&#35;[endpoint { ... }]` macro now produce a lint warning. This is *technically* a breaking change for those who may have had unused endpoints and compiled with `&#35;[deny(warning)]` or `&#35;[deny(dead_code)]` thus implicitly relying on the *absence* of a warning about the endpoint being unused.
 
 == 0.5.1 (released 2021-03-18)
 
