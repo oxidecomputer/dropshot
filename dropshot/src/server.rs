@@ -13,7 +13,7 @@ use super::router::HttpRouter;
 use futures::future::BoxFuture;
 use futures::future::FusedFuture;
 use futures::future::FutureExt;
-use futures::lock::Mutex;
+use tokio::sync::RwLock;
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
     Server,
@@ -342,7 +342,7 @@ async fn http_request_handle<C: ServerContext>(
     let lookup_result = server.router.lookup_route(&method, uri.path())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request: Arc::new(Mutex::new(request)),
+        request: Arc::new(RwLock::new(request)),
         path_variables: lookup_result.variables,
         request_id: request_id.to_string(),
         log: request_log,

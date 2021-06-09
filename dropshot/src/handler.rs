@@ -49,7 +49,7 @@ use crate::pagination::PAGINATION_PARAM_SENTINEL;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::lock::Mutex;
+use tokio::sync::RwLock;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Request;
@@ -91,7 +91,7 @@ pub struct RequestContext<Context: ServerContext> {
     /** shared server state */
     pub server: Arc<DropshotState<Context>>,
     /** HTTP request details */
-    pub request: Arc<Mutex<Request<Body>>>,
+    pub request: Arc<RwLock<Request<Body>>>,
     /** HTTP request routing variables */
     pub path_variables: BTreeMap<String, String>,
     /** unique id assigned to this request */
@@ -598,7 +598,7 @@ where
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
     ) -> Result<Query<QueryType>, HttpError> {
-        let request = rqctx.request.lock().await;
+        let request = rqctx.request.read().await;
         http_request_load_query(&request)
     }
 
@@ -915,7 +915,7 @@ where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
+    let mut request = rqctx.request.write().await;
     let body_bytes = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
@@ -1014,7 +1014,7 @@ impl Extractor for UntypedBody {
         rqctx: Arc<RequestContext<Context>>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
-        let mut request = rqctx.request.lock().await;
+        let mut request = rqctx.request.write().await;
         let body_bytes = http_read_body(
             request.body_mut(),
             server.config.request_body_max_bytes,
