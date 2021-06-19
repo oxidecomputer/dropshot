@@ -56,13 +56,13 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
      |                                             --------- required by this bound in `HttpResponseOk`
 
-error[E0277]: the trait bound `for<'r> for<'_> fn(&mut RequestContext<()>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&mut RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not satisfied
+error[E0277]: the trait bound `for<'r> for<'_> fn(&RequestContext<()>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not satisfied
   --> $DIR/bad_endpoint7.rs:23:10
    |
 23 | async fn bad_endpoint(
-   |          ^^^^^^^^^^^^ the trait `for<'r> dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not implemented for `for<'_> fn(&mut RequestContext<()>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&mut RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}`
+   |          ^^^^^^^^^^^^ the trait `for<'r> dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not implemented for `for<'_> fn(&RequestContext<()>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
-   |         FuncParams: Extractor + 'static,
-   |                                 ------- required by this bound in `ApiEndpoint::<Context>::new`
+   |             for <'r> Extractor<'r> + 'static,
+   |                                      ------- required by this bound in `ApiEndpoint::<Context>::new`

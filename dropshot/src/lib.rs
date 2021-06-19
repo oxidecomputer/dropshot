@@ -137,7 +137,7 @@
  *     path = "/projects/project1",
  * }]
  * async fn myapi_projects_get_project(
- *     rqctx: &mut RequestContext<()>,
+ *     rqctx: &RequestContext<()>,
  * ) -> Result<HttpResponseOk<Project>, HttpError>
  * {
  *    let project = Project { name: String::from("project1") };
@@ -208,7 +208,7 @@
  *
  * ```ignore
  * async fn f(
- *      rqctx: &mut RequestContext<Context>,
+ *      rqctx: &RequestContext<Context>,
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
@@ -266,7 +266,7 @@
  * struct MyContext {}
  *
  * async fn myapi_projects_get(
- *     rqctx: &mut RequestContext<MyContext>,
+ *     rqctx: &RequestContext<MyContext>,
  *     query: Query<MyQueryArgs>)
  *     -> Result<Response<Body>, HttpError>
  * {
@@ -480,7 +480,7 @@
  *     path = "/list_stuff"
  * }]
  * async fn my_list_api(
- *     rqctx: &mut RequestContext<()>,
+ *     rqctx: &RequestContext<()>,
  *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
  *     extra_params: Query<MyExtraQueryParams>,
  * ) -> Result<HttpResponseOk<ResultsPage<String>>, HttpError>

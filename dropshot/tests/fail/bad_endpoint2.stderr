@@ -1,7 +1,7 @@
 error: Expected a non-receiver argument
 Endpoint handlers must have the following signature:
     async fn bad_endpoint(
-        rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
+        rqctx: &dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]

@@ -339,7 +339,7 @@ async fn http_request_handle<C: ServerContext>(
     let lookup_result = server.router.lookup_route(&method, uri.path())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request,
+        request: Some(request),
         path_variables: lookup_result.variables,
         request_id: request_id.to_string(),
         log: request_log,
@@ -490,7 +490,7 @@ mod test {
         path = "/handler",
     }]
     async fn handler(
-        _rqctx: &mut RequestContext<i32>,
+        _rqctx: &RequestContext<i32>,
     ) -> Result<HttpResponseOk<u64>, HttpError> {
         Ok(HttpResponseOk(3))
     }

@@ -21,7 +21,7 @@ struct Ret {
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: &mut RequestContext<()>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<Ret>, HttpError> {
     Ok(HttpResponseOk(Ret {
         x: "Oxide".to_string(),

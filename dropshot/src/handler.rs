@@ -82,7 +82,7 @@ pub struct RequestContext<Context: ServerContext> {
     /** shared server state */
     pub server: Arc<DropshotState<Context>>,
     /** HTTP request details */
-    pub request: Request<Body>,
+    pub request: Option<Request<Body>>,
     /** HTTP request routing variables */
     pub path_variables: BTreeMap<String, String>,
     /** unique id assigned to this request */
@@ -145,9 +145,7 @@ pub trait RequestContextArgument {
     type Context;
 }
 
-impl<T: 'static + ServerContext> RequestContextArgument
-    for &mut RequestContext<T>
-{
+impl<T: 'static + ServerContext> RequestContextArgument for &RequestContext<T> {
     type Context = T;
 }
 
@@ -259,7 +257,7 @@ where
 
     fn handle_request(
         &self,
-        rqctx: &'a mut RequestContext<Context>,
+        rqctx: &'a RequestContext<Context>,
         p: FuncParams,
     ) -> Pin<Box<Self::FutureType>>;
 }
@@ -354,7 +352,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     where
         Context: ServerContext,
         ResponseType: HttpResponse + Send + Sync + 'static,
-        FuncType: 'static + Send + Sync + Fn(&'a mut RequestContext<Context>, $($T,)*) -> FutureType,
+        FuncType: 'static + Send + Sync + Fn(&'a RequestContext<Context>, $($T,)*) -> FutureType,
         FutureType : Future<Output = Result<ResponseType, HttpError>> + Send + 'a,
         $($T: Extractor + 'static,)*
     {
@@ -362,7 +360,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
 
         fn handle_request(
             &self,
-            rqctx: &'a mut RequestContext<Context>,
+            rqctx: &'a RequestContext<Context>,
             _param_tuple: ($($T,)*)
         ) -> Pin<Box<Self::FutureType>>
         {
@@ -414,7 +412,6 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
 pub struct HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
-    FuncParams: Extractor,
 {
     /** the actual HttpHandlerFunc used to implement this route */
     handler: HandlerType,
@@ -437,7 +434,6 @@ impl<Context, HandlerType, FuncParams, ResponseType> Debug
     for HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
-    FuncParams: Extractor,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "handler: {}", self.label)
@@ -451,7 +447,7 @@ where
     Context: ServerContext,
     ResponseType: HttpResponse + Send + Sync + 'static,
     HandlerType: for<'a> HttpHandlerFunc<'a, Context, ResponseType, FuncParams>,
-    FuncParams: Extractor + 'static,
+    FuncParams: Extractor,
 {
     fn label(&self) -> &str {
         &self.label
@@ -480,7 +476,7 @@ where
          * resolved statically.
          */
         let funcparams = Extractor::from_request(&mut rqctx).await?;
-        let future = self.handler.handle_request(&mut rqctx, funcparams);
+        let future = self.handler.handle_request(&rqctx, funcparams);
         future.await?.to_result()
     }
 }
@@ -591,7 +587,7 @@ where
     async fn from_request<Context: ServerContext>(
         rqctx: &mut RequestContext<Context>,
     ) -> Result<Query<QueryType>, HttpError> {
-        let request = &rqctx.request;
+        let request = &rqctx.request.as_ref().unwrap();
         http_request_load_query(request)
     }
 
@@ -908,7 +904,7 @@ where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let request = &mut rqctx.request;
+    let request = rqctx.request.as_mut().unwrap();
     let body_bytes = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
@@ -1003,11 +999,12 @@ impl UntypedBody {
 
 #[async_trait]
 impl Extractor for UntypedBody {
+
     async fn from_request<Context: ServerContext>(
         rqctx: &mut RequestContext<Context>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
-        let request = &mut rqctx.request;
+        let request = rqctx.request.as_mut().unwrap();
         let body_bytes = http_read_body(
             request.body_mut(),
             server.config.request_body_max_bytes,
@@ -1040,6 +1037,7 @@ impl Extractor for UntypedBody {
             paginated: false,
         }
     }
+
 }
 
 /*

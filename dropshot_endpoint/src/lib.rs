@@ -58,7 +58,7 @@ fn usage(err_msg: &str, fn_name: &str) -> String {
     format!(
         "{}\nEndpoint handlers must have the following signature:
     async fn {}(
-        rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
+        rqctx: &dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
@@ -212,6 +212,47 @@ fn do_endpoint(
         })
         .collect::<Vec<_>>();
 
+    // Instead of fighting with rust to get extractors to produce mutable
+    // references with correct lifetimes, this produces the code for a wrapper
+    // function that accepts the same root types as the described handler
+    // function, but all arguments are given as owned instances. This means we
+    // can use the same extractor system but limit the handler functions to
+    // only accept references to certain extracted types.
+    let wrapped_item_args = ast
+        .sig
+        .inputs
+        .iter()
+        .map(|arg| {
+            if let syn::FnArg::Typed(pat) = arg {
+
+                let arg_name = if let syn::Pat::Ident(i) = pat.pat.as_ref() {
+                    i.into_token_stream()
+                }
+                else {
+                    unreachable!("I think an argument name has to be an ident");
+                };
+
+                let mut mut_tokens = None;
+                let mut ref_tokens = None;
+
+                let root_type = if let syn::Type::Reference(tr) = pat.ty.as_ref() {
+                    ref_tokens = Some(tr.and_token);
+                    mut_tokens = tr.mutability;
+                    tr.elem.as_ref().into_token_stream()
+                }
+                else {
+                    pat.ty.as_ref().into_token_stream()
+                };
+
+                WrappedItemArgument {
+                    input_tokens: quote! { #mut_tokens #arg_name : #root_type },
+                    output_tokens: quote! { #ref_tokens #mut_tokens #arg_name }
+                }
+            } else {
+                unreachable!("An earlier compile error prevents this");
+            }
+        });
+
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the method to which this macro was applied...
     let stream = quote! {
@@ -245,6 +286,11 @@ fn do_endpoint(
     };
 
     Ok(stream)
+}
+
+struct WrappedItemArgument {
+    input_tokens: TokenStream,
+    output_tokens: TokenStream,
 }
 
 fn get_crate(var: Option<String>) -> TokenStream {
@@ -316,7 +362,7 @@ mod tests {
             }
             .into(),
             quote! {
-                pub async fn handler_xyz(_rqctx: &mut RequestContext<()>) {}
+                pub async fn handler_xyz(_rqctx: &RequestContext<()>) {}
             }
             .into(),
         );
@@ -329,9 +375,9 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<&mut RequestContext<()> as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub async fn handler_xyz(_rqctx: &mut RequestContext<()>) {}
+                    pub async fn handler_xyz(_rqctx: &RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -392,7 +438,7 @@ mod tests {
             }
             .into(),
             quote! {
-                async fn handler_xyz(_rqctx: &mut RequestContext<std::i32>, q: Query<Q>) {}
+                async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
             }
             .into(),
         );
@@ -417,9 +463,9 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<&mut RequestContext<std::i32> as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<std::i32> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: &mut RequestContext<std::i32>, q: Query<Q>) {}
+                    async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -442,7 +488,7 @@ mod tests {
             }
             .into(),
             quote! {
-                pub(crate) async fn handler_xyz(_rqctx: &mut RequestContext<()>, q: Query<Q>) {}
+                pub(crate) async fn handler_xyz(_rqctx: &RequestContext<()>, q: Query<Q>) {}
             }
             .into(),
         );
@@ -467,9 +513,9 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub(crate) const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<&mut RequestContext<()> as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub(crate) async fn handler_xyz(_rqctx: &mut RequestContext<()>, q: Query<Q>) {}
+                    pub(crate) async fn handler_xyz(_rqctx: &RequestContext<()>, q: Query<Q>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -493,7 +539,7 @@ mod tests {
             }
             .into(),
             quote! {
-                async fn handler_xyz(_rqctx: &mut RequestContext<()>) {}
+                async fn handler_xyz(_rqctx: &RequestContext<()>) {}
             }
             .into(),
         );
@@ -504,9 +550,9 @@ mod tests {
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<&mut RequestContext<()> as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: &mut RequestContext<()>) {}
+                    async fn handler_xyz(_rqctx: &RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -532,7 +578,7 @@ mod tests {
             .into(),
             quote! {
                 /** handle "xyz" requests */
-                async fn handler_xyz(_rqctx: &mut RequestContext<()>) {}
+                async fn handler_xyz(_rqctx: &RequestContext<()>) {}
             }
             .into(),
         );
@@ -543,10 +589,10 @@ mod tests {
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             const handler_xyz: handler_xyz = handler_xyz {};
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<&mut RequestContext<()> as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
-                    async fn handler_xyz(_rqctx: &mut RequestContext<()>) {}
+                    async fn handler_xyz(_rqctx: &RequestContext<()>) {}
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,

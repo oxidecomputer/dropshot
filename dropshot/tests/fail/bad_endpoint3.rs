@@ -13,7 +13,7 @@ use dropshot::RequestContext;
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: &mut RequestContext<()>,
+    _rqctx: &RequestContext<()>,
     param: String,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))

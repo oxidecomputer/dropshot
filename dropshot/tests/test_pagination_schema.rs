@@ -35,7 +35,7 @@ struct PageSelector {
     path = "/super_pages",
 }]
 async fn handler(
-    _rqctx: &mut RequestContext<()>,
+    _rqctx: &RequestContext<()>,
     _query: Query<PaginationParams<ScanParams, PageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<ResponseItem>>, HttpError> {
     unimplemented!();

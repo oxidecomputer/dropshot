@@ -1172,7 +1172,7 @@ mod test {
     }
 
     async fn test_badpath_handler(
-        _: &mut RequestContext<()>,
+        _: &RequestContext<()>,
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
@@ -1289,7 +1289,7 @@ mod test {
             path = "/testing/two_bodies"
         }]
         async fn test_twobodies_handler(
-            _: &mut RequestContext<()>,
+            _: &RequestContext<()>,
             _: UntypedBody,
             _: TypedBody<AStruct>,
         ) -> Result<Response<Body>, HttpError> {

@@ -20,7 +20,7 @@ struct QueryParams {
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: &mut RequestContext<()>,
+    _rqctx: &RequestContext<()>,
     _params: Query<QueryParams>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
