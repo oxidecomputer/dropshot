@@ -46,7 +46,8 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         path: &'a str,
     ) -> Self
     where
-        HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
+        HandlerType:
+            for<'r> HttpHandlerFunc<'r, Context, ResponseType, FuncParams>,
         FuncParams: Extractor + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
@@ -1177,7 +1178,6 @@ mod test {
     use hyper::Response;
     use schemars::JsonSchema;
     use serde::Deserialize;
-    use std::sync::Arc;
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1187,7 +1187,7 @@ mod test {
     }
 
     async fn test_badpath_handler(
-        _: Arc<RequestContext<()>>,
+        _: &RequestContext<()>,
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
@@ -1304,7 +1304,7 @@ mod test {
             path = "/testing/two_bodies"
         }]
         async fn test_twobodies_handler(
-            _: Arc<RequestContext<()>>,
+            _: &RequestContext<()>,
             _: UntypedBody,
             _: TypedBody<AStruct>,
         ) -> Result<Response<Body>, HttpError> {

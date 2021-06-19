@@ -9,7 +9,7 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 struct QueryParams {
