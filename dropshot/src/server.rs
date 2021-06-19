@@ -339,7 +339,8 @@ async fn http_request_handle<C: ServerContext>(
      */
     let method = request.method();
     let uri = request.uri();
-    let lookup_result = server.router.lookup_route(&method, uri.path())?;
+    let lookup_result =
+        server.router.lookup_route(&method, uri.path().into())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: Arc::new(Mutex::new(request)),

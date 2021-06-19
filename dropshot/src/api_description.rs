@@ -7,7 +7,7 @@ use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
-use crate::router::path_to_segments;
+use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
 use crate::server::ServerContext;
@@ -227,7 +227,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         // Gather up the path parameters and the path variable components, and
         // make sure they're identical.
-        let path = path_to_segments(&e.path)
+        let path = route_path_to_segments(&e.path)
             .iter()
             .filter_map(|segment| match PathSegment::from(segment) {
                 PathSegment::Varname(v) => Some(v),
@@ -1238,6 +1238,29 @@ mod test {
             Err("path parameters are not consumed (c,d) and specified \
                  parameters do not appear in the path (a,b)"
                 .to_string())
+        );
+    }
+
+    #[should_panic(expected = "route paths must begin with a '/': 'I don't \
+                               start with a slash'")]
+    #[test]
+    fn test_badpath4() {
+        #[endpoint {
+            method = PUT,
+            path = "I don't start with a slash"
+        }]
+        async fn test_twobodies_handler(
+            _: Arc<RequestContext<()>>,
+        ) -> Result<Response<Body>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        let error = api.register(test_twobodies_handler).unwrap_err();
+        assert_eq!(
+            error,
+            "only one body extractor can be used in a handler (this function \
+             has 2)"
         );
     }
 
