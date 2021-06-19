@@ -212,8 +212,18 @@ fn do_endpoint(
         })
         .collect::<Vec<_>>();
 
+    // For reasons that are not well understood unused constants that use the
+    // (default) call_site() Span do not trigger the dead_code lint. Because
+    // defining but not using an endpoint is likely a programming error, we
+    // want to be sure to have the compiler flag this. We force this by using
+    // the span from the name of the function to which this macro was applied.
+    let span = ast.sig.ident.span();
+    let const_struct = quote_spanned! {span=>
+        #visibility const #name: #name = #name {};
+    };
+
     // The final TokenStream returned will have a few components that reference
-    // `#name`, the name of the method to which this macro was applied...
+    // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         #(#checks)*
 
@@ -224,7 +234,7 @@ fn do_endpoint(
         // ... a constant of type `#name` whose identifier is also #name
         #[allow(non_upper_case_globals, missing_docs)]
         #description_doc_comment
-        #visibility const #name: #name = #name {};
+        #const_struct
 
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`

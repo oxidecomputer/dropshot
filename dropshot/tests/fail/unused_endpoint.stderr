@@ -1,0 +1,11 @@
+error: constant is never used: `unused_endpoint`
+  --> $DIR/unused_endpoint.rs:23:10
+   |
+23 | async fn unused_endpoint(
+   |          ^^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> $DIR/unused_endpoint.rs:5:9
+   |
+5  | #![deny(dead_code)]
+   |         ^^^^^^^^^
