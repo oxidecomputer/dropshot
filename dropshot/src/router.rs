@@ -13,6 +13,7 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::str::Utf8Error;
 
 /**
  * `HttpRouter` is a simple data structure for routing incoming HTTP requests to
@@ -752,31 +753,6 @@ pub fn route_path_to_segments(path: &str) -> Vec<&str> {
         ret.pop();
     }
     ret
-}
-
-/**
- * Helper function for splitting a Uri path into the first segment and the
- * remainder of the path.
- */
-pub fn get_path_segment(mut path: &str) -> (&str, &str) {
-    assert!(!path.is_empty());
-
-    /* Skip leading slashes */
-    while path.starts_with('/') {
-        path = &path[1..];
-    }
-
-    match path.find('/') {
-        Some(index) => {
-            let segment = &path[..index];
-            let mut rest = &path[index + 1..];
-            while rest.starts_with('/') {
-                rest = &rest[1..];
-            }
-            (segment, rest)
-        }
-        None => (path, ""),
-    }
 }
 
 #[cfg(test)]
