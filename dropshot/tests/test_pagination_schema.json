@@ -52,25 +52,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "ResponseItemResultsPage",
-                  "description": "A single page of results",
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "description": "list of items on this page of results",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ResponseItem"
-                      }
-                    },
-                    "next_page": {
-                      "description": "token used to fetch the next page of results (if any)",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ]
+                  "$ref": "#/components/schemas/ResponseItemResultsPage"
                 }
               }
             }
@@ -91,6 +73,26 @@
         },
         "required": [
           "word"
+        ]
+      },
+      "ResponseItemResultsPage": {
+        "description": "A single page of results",
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "list of items on this page of results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseItem"
+            }
+          },
+          "next_page": {
+            "description": "token used to fetch the next page of results (if any)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "GarbageGoesIn": {

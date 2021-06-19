@@ -67,6 +67,7 @@ async fn handler3(
 #[derive(JsonSchema, Deserialize)]
 struct BodyParam {
     _x: String,
+    _any: serde_json::Value,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -136,6 +137,152 @@ async fn handler7(
     unimplemented!();
 }
 
+/*
+ * Test that we do not generate duplicate type definitions when the same type is
+ * returned by two different handler functions.
+ */
+
+#[derive(JsonSchema, Serialize)]
+struct NeverDuplicatedResponseTopLevel {
+    b: NeverDuplicatedResponseNextLevel,
+}
+
+#[derive(JsonSchema, Serialize)]
+struct NeverDuplicatedResponseNextLevel {
+    v: bool,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/dup1",
+}]
+async fn handler8(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/dup2",
+}]
+async fn handler9(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
+    unimplemented!();
+}
+
+/*
+ * Similarly, test that we do not generate duplicate type definitions when the
+ * same type is accepted as a query parameter to two different handler
+ * functions.
+ */
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedParamTopLevel {
+    _b: NeverDuplicatedParamNextLevel,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedParamNextLevel {
+    _v: bool,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup3",
+}]
+async fn handler10(
+    _rqctx: Arc<RequestContext<()>>,
+    _q: Query<NeverDuplicatedParamTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup4",
+}]
+async fn handler11(
+    _rqctx: Arc<RequestContext<()>>,
+    _q: Query<NeverDuplicatedParamTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+/*
+ * Similarly, test that we do not generate duplicate type definitions when the
+ * same type is accepted as a typed body to two different handler functions.
+ */
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedBodyTopLevel {
+    _b: NeverDuplicatedBodyNextLevel,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NeverDuplicatedBodyNextLevel {
+    _v: bool,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup5",
+}]
+async fn handler12(
+    _rqctx: Arc<RequestContext<()>>,
+    _b: TypedBody<NeverDuplicatedBodyTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup6",
+}]
+async fn handler13(
+    _rqctx: Arc<RequestContext<()>>,
+    _b: TypedBody<NeverDuplicatedBodyTopLevel>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+/*
+ * Finally, test that we do not generate duplicate type definitions when the
+ * same type is used in two different places.
+ */
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct NeverDuplicatedTop {
+    _b: NeverDuplicatedNext,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct NeverDuplicatedNext {
+    _v: bool,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/dup7",
+}]
+async fn handler14(
+    _rqctx: Arc<RequestContext<()>>,
+    _b: TypedBody<NeverDuplicatedTop>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/dup8",
+}]
+async fn handler15(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -145,6 +292,14 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler5)?;
     api.register(handler6)?;
     api.register(handler7)?;
+    api.register(handler8)?;
+    api.register(handler9)?;
+    api.register(handler10)?;
+    api.register(handler11)?;
+    api.register(handler12)?;
+    api.register(handler13)?;
+    api.register(handler14)?;
+    api.register(handler15)?;
     Ok(api)
 }
 

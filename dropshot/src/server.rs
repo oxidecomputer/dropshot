@@ -203,14 +203,16 @@ impl<C: ServerContext> HttpServer<C> {
     }
 }
 
-/**
- * Verifies that the server has stopped execution when it is dropped.
- * For graceful termination, use the `close` function.
+/*
+ * For graceful termination, the `close()` function is preferred, as it can
+ * report errors and wait for termination to complete.  However, we impl
+ * `Drop` to attempt to shut down the server to handle less clean shutdowns
+ * (e.g., from failing tests).
  */
 impl<C: ServerContext> Drop for HttpServer<C> {
     fn drop(&mut self) {
-        if self.close_channel.is_some() {
-            panic!("dropped HttpServer without calling close");
+        if let Some(c) = self.close_channel.take() {
+            c.send(()).expect("failed to send close signal")
         }
     }
 }
@@ -560,8 +562,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "dropped HttpServer without calling close")]
-    async fn test_drop_server_without_close_panics() {
+    async fn test_drop_server_without_close_okay() {
         let (server, _) = create_test_server();
         std::mem::drop(server);
     }
