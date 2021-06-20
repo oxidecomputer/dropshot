@@ -527,6 +527,7 @@ pub use api_description::OpenApiDefinition;
 pub use config::ConfigDropshot;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
+pub use handler::Extractable;
 pub use handler::Extractor;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;

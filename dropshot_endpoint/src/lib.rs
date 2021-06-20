@@ -122,6 +122,7 @@ fn do_endpoint(
     let name_str = name.to_string();
     let method_ident = format_ident!("{}", method);
     let visibility = &ast.vis;
+    let item_return_tokens = ast.sig.output.clone().into_token_stream();
 
     let description_text_provided = extract_doc_from_attrs(&ast.attrs);
     let description_text_annotated = format!(
@@ -186,7 +187,7 @@ fn do_endpoint(
         .iter()
         .skip(1)
         .map(|arg| {
-            let req = quote! { #dropshot::Extractor };
+            let req = quote! { #dropshot::Extractable };
 
             match arg {
                 syn::FnArg::Receiver(_) => {
@@ -218,40 +219,54 @@ fn do_endpoint(
     // function, but all arguments are given as owned instances. This means we
     // can use the same extractor system but limit the handler functions to
     // only accept references to certain extracted types.
-    let wrapped_item_args = ast
+    let wrapped_item_args: Vec<_> = ast
         .sig
         .inputs
         .iter()
-        .map(|arg| {
+        .enumerate()
+        .map(|(arg_index, arg)| {
             if let syn::FnArg::Typed(pat) = arg {
-
                 let arg_name = if let syn::Pat::Ident(i) = pat.pat.as_ref() {
                     i.into_token_stream()
-                }
-                else {
-                    unreachable!("I think an argument name has to be an ident");
+                } else {
+                    format_ident!("{}_arg_{}", name_str, arg_index)
+                        .into_token_stream()
                 };
 
                 let mut mut_tokens = None;
                 let mut ref_tokens = None;
 
-                let root_type = if let syn::Type::Reference(tr) = pat.ty.as_ref() {
-                    ref_tokens = Some(tr.and_token);
-                    mut_tokens = tr.mutability;
-                    tr.elem.as_ref().into_token_stream()
-                }
-                else {
-                    pat.ty.as_ref().into_token_stream()
-                };
+                let root_type =
+                    if let syn::Type::Reference(tr) = pat.ty.as_ref() {
+                        ref_tokens = Some(tr.and_token);
+                        mut_tokens = tr.mutability;
+                        tr.elem.as_ref().into_token_stream()
+                    } else {
+                        pat.ty.as_ref().into_token_stream()
+                    };
 
                 WrappedItemArgument {
                     input_tokens: quote! { #mut_tokens #arg_name : #root_type },
-                    output_tokens: quote! { #ref_tokens #mut_tokens #arg_name }
+                    output_tokens: quote! { #ref_tokens #mut_tokens #arg_name },
                 }
             } else {
                 unreachable!("An earlier compile error prevents this");
             }
-        });
+        })
+        .collect();
+
+    let wrapped_item_args_in =
+        wrapped_item_args.iter().map(|arg| arg.input_tokens.clone());
+    let wrapped_item_args_out =
+        wrapped_item_args.iter().map(|arg| arg.output_tokens.clone());
+
+    let wrapper_item_name = format_ident!("wrapped_{}", name_str);
+
+    let wrapped_item = quote! {
+        async fn #wrapper_item_name(#(#wrapped_item_args_in),*) #item_return_tokens {
+            #name(#(#wrapped_item_args_out),*).await
+        }
+    };
 
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the method to which this macro was applied...
@@ -272,10 +287,11 @@ fn do_endpoint(
         impl From<#name> for #dropshot::ApiEndpoint<<#first_arg_type as #dropshot::RequestContextArgument>::Context> {
             fn from(_: #name) -> Self {
                 #item
+                #wrapped_item
 
                 #dropshot::ApiEndpoint::new(
                     #name_str.to_string(),
-                    #name,
+                    #wrapper_item_name,
                     #dropshot::Method::#method_ident,
                     #path,
                 )

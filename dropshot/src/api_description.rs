@@ -46,8 +46,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         path: &'a str,
     ) -> Self
     where
-        HandlerType:
-            for<'r> HttpHandlerFunc<'r, Context, ResponseType, FuncParams>,
+        HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
         FuncParams: Extractor + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
@@ -1187,7 +1186,7 @@ mod test {
     }
 
     async fn test_badpath_handler(
-        _: &RequestContext<()>,
+        _: RequestContext<()>,
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");

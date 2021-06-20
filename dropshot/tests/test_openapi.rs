@@ -157,7 +157,7 @@ struct NeverDuplicatedResponseNextLevel {
     path = "/dup1",
 }]
 async fn handler8(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
@@ -167,7 +167,7 @@ async fn handler8(
     path = "/dup2",
 }]
 async fn handler9(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
@@ -193,7 +193,7 @@ struct NeverDuplicatedParamNextLevel {
     path = "/dup3",
 }]
 async fn handler10(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _q: Query<NeverDuplicatedParamTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -204,7 +204,7 @@ async fn handler10(
     path = "/dup4",
 }]
 async fn handler11(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _q: Query<NeverDuplicatedParamTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -230,7 +230,7 @@ struct NeverDuplicatedBodyNextLevel {
     path = "/dup5",
 }]
 async fn handler12(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -241,7 +241,7 @@ async fn handler12(
     path = "/dup6",
 }]
 async fn handler13(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -267,7 +267,7 @@ struct NeverDuplicatedNext {
     path = "/dup7",
 }]
 async fn handler14(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _b: TypedBody<NeverDuplicatedTop>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -278,7 +278,7 @@ async fn handler14(
     path = "/dup8",
 }]
 async fn handler15(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
     unimplemented!();
 }

@@ -519,7 +519,7 @@ mod test {
     use hyper::Response;
 
     async fn test_handler(
-        _: &RequestContext<()>,
+        _: RequestContext<()>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
     }
