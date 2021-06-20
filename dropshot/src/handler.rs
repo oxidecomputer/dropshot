@@ -189,7 +189,6 @@ pub trait Extractable {}
 #[derive(EnumIter, PartialEq, Eq)]
 pub enum ExtractOrder {
     First,
-    NextToLast,
     Last,
 }
 
@@ -220,7 +219,7 @@ macro_rules! impl_extractor_for_tuple {
 
             for _extract_round in ExtractOrder::iter() {
                 $(
-                    $t = if _extract_round == <$T>::extract_order() { Some($T::from_request(_rqctx).await?) } else { None };
+                    $t = if _extract_round == <$T>::extract_order() { Some($T::from_request(_rqctx).await?) } else { $t };
                 )?
             }
 

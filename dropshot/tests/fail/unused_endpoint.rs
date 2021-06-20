@@ -8,7 +8,6 @@ use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
-use std::sync::Arc;
 
 // At some point we'd expect to see code like:
 // ```
@@ -21,7 +20,7 @@ use std::sync::Arc;
     path = "/test",
 }]
 async fn unused_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }

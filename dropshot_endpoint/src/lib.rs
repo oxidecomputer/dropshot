@@ -213,6 +213,16 @@ fn do_endpoint(
         })
         .collect::<Vec<_>>();
 
+    // For reasons that are not well understood unused constants that use the
+    // (default) call_site() Span do not trigger the dead_code lint. Because
+    // defining but not using an endpoint is likely a programming error, we
+    // want to be sure to have the compiler flag this. We force this by using
+    // the span from the name of the function to which this macro was applied.
+    let span = ast.sig.ident.span();
+    let const_struct = quote_spanned! {span=>
+        #visibility const #name: #name = #name {};
+    };
+
     // Instead of fighting with rust to get extractors to produce mutable
     // references with correct lifetimes, this produces the code for a wrapper
     // function that accepts the same root types as the described handler
@@ -280,7 +290,7 @@ fn do_endpoint(
         // ... a constant of type `#name` whose identifier is also #name
         #[allow(non_upper_case_globals, missing_docs)]
         #description_doc_comment
-        #visibility const #name: #name = #name {};
+        #const_struct
 
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`
@@ -394,9 +404,10 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     pub async fn handler_xyz(_rqctx: &RequestContext<()>) {}
+                    async fn wrapped_handler_xyz (_rqctx: RequestContext<()>) { handler_xyz(&_rqctx).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
-                        handler_xyz,
+                        wrapped_handler_xyz,
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
@@ -432,9 +443,10 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint<<&dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     pub async fn handler_xyz(_rqctx: &dropshot::RequestContext<()>) {}
+                    async fn wrapped_handler_xyz (_rqctx: dropshot::RequestContext<()>) { handler_xyz(&_rqctx).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
-                        handler_xyz,
+                        wrapped_handler_xyz,
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
@@ -465,7 +477,7 @@ mod tests {
             const _: fn() = || {
                 fn need_extractor<T>()
                 where
-                    T: ?Sized + dropshot::Extractor,
+                    T: ?Sized + dropshot::Extractable,
                 {
                 }
                 need_extractor::<#query>();
@@ -482,9 +494,10 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<std::i32> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
+                    async fn wrapped_handler_xyz (_rqctx: RequestContext<std::i32>, q: Query<Q>) { handler_xyz(&_rqctx, q).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
-                        handler_xyz,
+                        wrapped_handler_xyz,
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
@@ -515,7 +528,7 @@ mod tests {
             const _: fn() = || {
                 fn need_extractor<T>()
                 where
-                    T: ?Sized + dropshot::Extractor,
+                    T: ?Sized + dropshot::Extractable,
                 {
                 }
                 need_extractor::<#query>();
@@ -532,9 +545,10 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     pub(crate) async fn handler_xyz(_rqctx: &RequestContext<()>, q: Query<Q>) {}
+                    async fn wrapped_handler_xyz (_rqctx: RequestContext<()>, q: Query<Q>) { handler_xyz(&_rqctx, q).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
-                        handler_xyz,
+                        wrapped_handler_xyz,
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
@@ -569,9 +583,10 @@ mod tests {
             impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(_rqctx: &RequestContext<()>) {}
+                    async fn wrapped_handler_xyz(_rqctx: RequestContext<()>) { handler_xyz(&_rqctx).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
-                        handler_xyz,
+                        wrapped_handler_xyz,
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
@@ -609,9 +624,10 @@ mod tests {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
                     async fn handler_xyz(_rqctx: &RequestContext<()>) {}
+                    async fn wrapped_handler_xyz(_rqctx: RequestContext<()>) { handler_xyz(&_rqctx).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
-                        handler_xyz,
+                        wrapped_handler_xyz,
                         dropshot::Method::GET,
                         "/a/b/c",
                     )

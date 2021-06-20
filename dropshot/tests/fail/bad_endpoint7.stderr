@@ -56,13 +56,32 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
      |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
      |                                             --------- required by this bound in `HttpResponseOk`
 
-error[E0277]: the trait bound `for<'r> for<'_> fn(&RequestContext<()>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not satisfied
-  --> $DIR/bad_endpoint7.rs:23:10
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+    --> $DIR/bad_endpoint7.rs:19:1
+     |
+19   | / #[endpoint {
+20   | |     method = GET,
+21   | |     path = "/test",
+22   | | }]
+     | |__^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+     |
+    ::: $WORKSPACE/dropshot/src/handler.rs
+     |
+     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
+     |                                             --------- required by this bound in `HttpResponseOk`
+
+error[E0277]: the trait bound `fn(RequestContext<()>) -> impl Future {wrapped_bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+  --> $DIR/bad_endpoint7.rs:19:1
    |
-23 | async fn bad_endpoint(
-   |          ^^^^^^^^^^^^ the trait `for<'r> dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not implemented for `for<'_> fn(&RequestContext<()>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}`
+19 | / #[endpoint {
+20 | |     method = GET,
+21 | |     path = "/test",
+22 | | }]
+   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(RequestContext<()>) -> impl Future {wrapped_bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
-   |             for <'r> Extractor<'r> + 'static,
-   |                                      ------- required by this bound in `ApiEndpoint::<Context>::new`
+   |           FuncParams: Extractor + 'static,
+   |                                   ------- required by this bound in `ApiEndpoint::<Context>::new`
+   |
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)

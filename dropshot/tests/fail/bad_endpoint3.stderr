@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `String: Extractor<'_>` is not satisfied
+error[E0277]: the trait bound `String: Extractable` is not satisfied
   --> $DIR/bad_endpoint3.rs:17:12
    |
 11 | / #[endpoint {
@@ -10,16 +10,21 @@ error[E0277]: the trait bound `String: Extractor<'_>` is not satisfied
 17 |       param: String,
    |              ^^^^^^
    |              |
-   |              the trait `Extractor<'_>` is not implemented for `String`
+   |              the trait `Extractable` is not implemented for `String`
    |              required by a bound in this
 
-error[E0277]: the trait bound `for<'r> for<'_> fn(&RequestContext<()>, String) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not satisfied
-  --> $DIR/bad_endpoint3.rs:15:10
+error[E0277]: the trait bound `fn(RequestContext<()>, String) -> impl Future {wrapped_bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+  --> $DIR/bad_endpoint3.rs:11:1
    |
-15 | async fn bad_endpoint(
-   |          ^^^^^^^^^^^^ the trait `for<'r> dropshot::handler::HttpHandlerFunc<'r, _, _, _>` is not implemented for `for<'_> fn(&RequestContext<()>, String) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<&RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}`
+11 | / #[endpoint {
+12 | |     method = GET,
+13 | |     path = "/test",
+14 | | }]
+   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(RequestContext<()>, String) -> impl Future {wrapped_bad_endpoint}`
    |
   ::: $WORKSPACE/dropshot/src/api_description.rs
    |
-   |             for <'r> Extractor<'r> + 'static,
-   |                                      ------- required by this bound in `ApiEndpoint::<Context>::new`
+   |           FuncParams: Extractor + 'static,
+   |                                   ------- required by this bound in `ApiEndpoint::<Context>::new`
+   |
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
