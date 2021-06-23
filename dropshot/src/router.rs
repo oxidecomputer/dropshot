@@ -503,7 +503,7 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
  * if a client were able to follow a symlink to the root of the filesystem. As
  * always, it is incumbent on the consumer and *critical* to validate input.
  */
-pub fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
+fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
     /*
      * We're given the "path" portion of a URI and we want to construct an
      * array of the segments of the path.   Relevant references:
