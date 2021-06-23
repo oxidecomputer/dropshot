@@ -10,6 +10,7 @@ use crate::server::ServerContext;
 use crate::ApiEndpoint;
 use http::Method;
 use http::StatusCode;
+use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -140,6 +141,19 @@ impl PathSegment {
 }
 
 /**
+ * Wrapper for a path that's the result of user input i.e. an HTTP query.
+ * We use this type to avoid confusion with paths used to define routes.
+ */
+#[derive(Debug)]
+pub struct InputPath<'a>(&'a str);
+
+impl<'a> From<&'a str> for InputPath<'a> {
+    fn from(s: &'a str) -> Self {
+        Self(s)
+    }
+}
+
+/**
  * `RouterLookupResult` represents the result of invoking
  * `HttpRouter::lookup_route()`.  A successful route lookup includes both the
  * handler and a mapping of variables in the configured path to the
@@ -179,7 +193,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         let method = endpoint.method.clone();
         let path = endpoint.path.clone();
 
-        let all_segments = path_to_segments(path.as_str());
+        let all_segments = route_path_to_segments(path.as_str());
         let mut varnames: BTreeSet<String> = BTreeSet::new();
 
         let mut node: &mut Box<HttpRouterNode<Context>> = &mut self.root;
@@ -289,16 +303,18 @@ impl<Context: ServerContext> HttpRouter<Context> {
      * of variables assigned based on the request path as part of the lookup.
      * On failure, this returns an `HttpError` appropriate for the failure
      * mode.
-     *
-     * TODO-cleanup
-     * consider defining a separate struct type for url-encoded vs. not?
      */
     pub fn lookup_route<'a, 'b>(
         &'a self,
         method: &'b Method,
-        path: &'b str,
+        path: InputPath<'b>,
     ) -> Result<RouterLookupResult<'a, Context>, HttpError> {
-        let all_segments = path_to_segments(path);
+        let all_segments = input_path_to_segments(&path).map_err(|_| {
+            HttpError::for_bad_request(
+                None,
+                String::from("invalid path encoding"),
+            )
+        })?;
         let mut node = &self.root;
         let mut variables: BTreeMap<String, String> = BTreeMap::new();
 
@@ -464,9 +480,30 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
 
 /**
  * Helper function for taking a Uri path and producing a `Vec<String>` of
- * URL-encoded strings, each representing one segment of the path.
+ * URL-decoded strings, each representing one segment of the path. The input is
+ * percent-encoded. Empty segments i.e. due to consecutive "/" characters or a
+ * leading "/" are omitted.
+ *
+ * Regarding "dot-segments" ("." and ".."), RFC 3986 section 3.3 says this:
+ *    The path segments "." and "..", also known as dot-segments, are
+ *    defined for relative reference within the path name hierarchy.  They
+ *    are intended for use at the beginning of a relative-path reference
+ *    (Section 4.2) to indicate relative position within the hierarchical
+ *    tree of names.  This is similar to their role within some operating
+ *    systems' file directory structures to indicate the current directory
+ *    and parent directory, respectively.  However, unlike in a file
+ *    system, these dot-segments are only interpreted within the URI path
+ *    hierarchy and are removed as part of the resolution process (Section
+ *    5.2).
+ *
+ * While nothing prohibits APIs from including dot-segments. We see no strong
+ * case for allowing them in paths, and plenty of pitfalls if we were to
+ * require consumers to consider them (e.g. "GET /../../../etc/passwd"). Note
+ * that consumers may be susceptible to other information leaks, for example
+ * if a client were able to follow a symlink to the root of the filesystem. As
+ * always, it is incumbent on the consumer and *critical* to validate input.
  */
-pub fn path_to_segments(path: &str) -> Vec<&str> {
+fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
     /*
      * We're given the "path" portion of a URI and we want to construct an
      * array of the segments of the path.   Relevant references:
@@ -476,20 +513,16 @@ pub fn path_to_segments(path: &str) -> Vec<&str> {
      *    RFC 3986 Uniform Resource Identifier (URI): Generic Syntax
      *             (particularly: 6.2.2 on comparison)
      *
-     * TODO-hardening We should revisit this.  We want to consider a few things:
-     * - whether our input is already (still?) percent-encoded or not
-     * - whether our returned representation is percent-encoded or not
+     * TODO-hardening We should revisit this.  We want to consider a couple of
+     * things:
      * - what it means (and what we should do) if the path does not begin with
      *   a leading "/"
-     * - whether we want to collapse consecutive "/" characters (presumably we
-     *   do, both at the start of the path and later)
      * - how to handle paths that end in "/" (in some cases, ought this send a
      *   300-level redirect?)
-     * - are there other normalization considerations? e.g., ".", ".."
      *
-     * It seems obvious to reach for the Rust "url" crate. That crate parses
-     * complete URLs, which include a scheme and authority section that does
-     * not apply here. We could certainly make one up (e.g.,
+     * It would seem obvious to reach for the Rust "url" crate. That crate
+     * parses complete URLs, which include a scheme and authority section that
+     * does not apply here. We could certainly make one up (e.g.,
      * "http://127.0.0.1") and construct a URL whose path matches the path we
      * were given. However, while it seems natural that our internal
      * representation would not be percent-encoded, the "url" crate
@@ -501,7 +534,45 @@ pub fn path_to_segments(path: &str) -> Vec<&str> {
      * much here, but it does create more work, so we'll just split it
      * ourselves.
      */
-    path.split('/').filter(|segment| !segment.is_empty()).collect::<Vec<_>>()
+    path.0
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| match segment {
+            "." | ".." => Err("dot-segments are not permitted".to_string()),
+            _ => Ok(percent_decode_str(segment)
+                .decode_utf8()
+                .map_err(|e| e.to_string())?
+                .to_string()),
+        })
+        .collect()
+}
+
+/**
+ * Whereas in `input_path_to_segments()` we must accommodate any user input, when
+ * processing paths specified by the client program we can be more stringent and
+ * fail via a panic! rather than an error. We do not percent-decode the path
+ * meaning that programs may specify path segments that would require
+ * percent-encoding by clients. Paths *must* begin with a "/"; only the final
+ * segment may be empty i.e. the path may end with a "/".
+ */
+pub fn route_path_to_segments(path: &str) -> Vec<&str> {
+    if !matches!(path.chars().next(), Some('/')) {
+        panic!("route paths must begin with a '/': '{}'", path);
+    }
+    let mut ret = path.split('/').skip(1).collect::<Vec<_>>();
+    for segment in &ret[..ret.len() - 1] {
+        if segment.is_empty() {
+            panic!("path segments may not be empty: '{}'", path);
+        }
+    }
+
+    // TODO pop off the last element if it's empty; today we treat a trailing
+    // "/" as identical to a path without a trailing "/", but we may want to
+    // support the distinction.
+    if ret[ret.len() - 1] == "" {
+        ret.pop();
+    }
+    ret
 }
 
 #[cfg(test)]
@@ -510,6 +581,7 @@ mod test {
     use super::super::handler::HttpRouteHandler;
     use super::super::handler::RequestContext;
     use super::super::handler::RouteHandler;
+    use super::input_path_to_segments;
     use super::HttpRouter;
     use crate::ApiEndpoint;
     use crate::ApiEndpointResponse;
@@ -600,17 +672,16 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "URI path \"/foo//bar\": attempted to create \
+    #[should_panic(expected = "URI path \"/foo/bar/\": attempted to create \
                                duplicate route for method \"GET\"")]
     fn test_duplicate_route2() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/bar"));
-        router.insert(new_endpoint(new_handler(), Method::GET, "/foo//bar"));
+        router.insert(new_endpoint(new_handler(), Method::GET, "/foo/bar/"));
     }
 
     #[test]
-    #[should_panic(expected = "URI path \"//\": attempted to create \
-                               duplicate route for method \"GET\"")]
+    #[should_panic(expected = "path segments may not be empty: '//'")]
     fn test_duplicate_route3() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(new_handler(), Method::GET, "/"));
@@ -693,14 +764,17 @@ mod test {
         /*
          * Check a few initial conditions.
          */
-        let error = router.lookup_route(&Method::GET, "/").unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error = router.lookup_route(&Method::GET, "////").unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error = router.lookup_route(&Method::GET, "/foo/bar").unwrap_err();
+        let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error =
-            router.lookup_route(&Method::GET, "//foo///bar").unwrap_err();
+            router.lookup_route(&Method::GET, "////".into()).unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error =
+            router.lookup_route(&Method::GET, "/foo/bar".into()).unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error = router
+            .lookup_route(&Method::GET, "//foo///bar".into())
+            .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
 
         /*
@@ -708,31 +782,40 @@ mod test {
          * parent nodes, sibling nodes, and child nodes.
          */
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/bar"));
-        assert!(router.lookup_route(&Method::GET, "/foo/bar").is_ok());
-        assert!(router.lookup_route(&Method::GET, "/foo/bar/").is_ok());
-        assert!(router.lookup_route(&Method::GET, "//foo/bar").is_ok());
-        assert!(router.lookup_route(&Method::GET, "//foo//bar").is_ok());
-        assert!(router.lookup_route(&Method::GET, "//foo//bar//").is_ok());
-        assert!(router.lookup_route(&Method::GET, "///foo///bar///").is_ok());
+        assert!(router.lookup_route(&Method::GET, "/foo/bar".into()).is_ok());
+        assert!(router.lookup_route(&Method::GET, "/foo/bar/".into()).is_ok());
+        assert!(router.lookup_route(&Method::GET, "//foo/bar".into()).is_ok());
+        assert!(router.lookup_route(&Method::GET, "//foo//bar".into()).is_ok());
+        assert!(router
+            .lookup_route(&Method::GET, "//foo//bar//".into())
+            .is_ok());
+        assert!(router
+            .lookup_route(&Method::GET, "///foo///bar///".into())
+            .is_ok());
 
         /*
          * TODO-cleanup: consider having a "build" step that constructs a
          * read-only router and does validation like making sure that there's a
          * GET route on all nodes?
          */
-        let error = router.lookup_route(&Method::GET, "/").unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error = router.lookup_route(&Method::GET, "/foo").unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error = router.lookup_route(&Method::GET, "//foo").unwrap_err();
+        let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error =
-            router.lookup_route(&Method::GET, "/foo/bar/baz").unwrap_err();
+            router.lookup_route(&Method::GET, "/foo".into()).unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error =
+            router.lookup_route(&Method::GET, "//foo".into()).unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error = router
+            .lookup_route(&Method::GET, "/foo/bar/baz".into())
+            .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
 
-        let error = router.lookup_route(&Method::PUT, "/foo/bar").unwrap_err();
+        let error =
+            router.lookup_route(&Method::PUT, "/foo/bar".into()).unwrap_err();
         assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
-        let error = router.lookup_route(&Method::PUT, "/foo/bar/").unwrap_err();
+        let error =
+            router.lookup_route(&Method::PUT, "/foo/bar/".into()).unwrap_err();
         assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
     }
 
@@ -746,15 +829,15 @@ mod test {
          * Before we start, sanity-check that there's nothing at the root
          * already.  Other test cases examine the errors in more detail.
          */
-        assert!(router.lookup_route(&Method::GET, "/").is_err());
+        assert!(router.lookup_route(&Method::GET, "/".into()).is_err());
         router.insert(new_endpoint(new_handler_named("h1"), Method::GET, "/"));
-        let result = router.lookup_route(&Method::GET, "/").unwrap();
+        let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "//").unwrap();
+        let result = router.lookup_route(&Method::GET, "//".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "///").unwrap();
+        let result = router.lookup_route(&Method::GET, "///".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
 
@@ -764,14 +847,14 @@ mod test {
          * corresponding method and that we get no handler for a different,
          * third method.
          */
-        assert!(router.lookup_route(&Method::PUT, "/").is_err());
+        assert!(router.lookup_route(&Method::PUT, "/".into()).is_err());
         router.insert(new_endpoint(new_handler_named("h2"), Method::PUT, "/"));
-        let result = router.lookup_route(&Method::PUT, "/").unwrap();
+        let result = router.lookup_route(&Method::PUT, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h2");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/").unwrap();
+        let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(router.lookup_route(&Method::DELETE, "/").is_err());
+        assert!(router.lookup_route(&Method::DELETE, "/".into()).is_err());
         assert!(result.variables.is_empty());
 
         /*
@@ -779,34 +862,36 @@ mod test {
          * handlers behave as we expect, and that we have one handler at the new
          * path, whichever name we use for it.
          */
-        assert!(router.lookup_route(&Method::GET, "/foo").is_err());
+        assert!(router.lookup_route(&Method::GET, "/foo".into()).is_err());
         router.insert(new_endpoint(
             new_handler_named("h3"),
             Method::GET,
             "/foo",
         ));
-        let result = router.lookup_route(&Method::PUT, "/").unwrap();
+        let result = router.lookup_route(&Method::PUT, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h2");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/").unwrap();
+        let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/foo").unwrap();
+        let result = router.lookup_route(&Method::GET, "/foo".into()).unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/foo/").unwrap();
+        let result = router.lookup_route(&Method::GET, "/foo/".into()).unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "//foo//").unwrap();
+        let result =
+            router.lookup_route(&Method::GET, "//foo//".into()).unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/foo//").unwrap();
+        let result =
+            router.lookup_route(&Method::GET, "/foo//".into()).unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        assert!(router.lookup_route(&Method::PUT, "/foo").is_err());
-        assert!(router.lookup_route(&Method::PUT, "/foo/").is_err());
-        assert!(router.lookup_route(&Method::PUT, "//foo//").is_err());
-        assert!(router.lookup_route(&Method::PUT, "/foo//").is_err());
+        assert!(router.lookup_route(&Method::PUT, "/foo".into()).is_err());
+        assert!(router.lookup_route(&Method::PUT, "/foo/".into()).is_err());
+        assert!(router.lookup_route(&Method::PUT, "//foo//".into()).is_err());
+        assert!(router.lookup_route(&Method::PUT, "/foo//".into()).is_err());
     }
 
     #[test]
@@ -816,18 +901,25 @@ mod test {
          * change the behavior, intentionally or otherwise.
          */
         let mut router = HttpRouter::new();
-        assert!(router.lookup_route(&Method::GET, "/not{a}variable").is_err());
+        assert!(router
+            .lookup_route(&Method::GET, "/not{a}variable".into())
+            .is_err());
         router.insert(new_endpoint(
             new_handler_named("h4"),
             Method::GET,
             "/not{a}variable",
         ));
-        let result =
-            router.lookup_route(&Method::GET, "/not{a}variable").unwrap();
+        let result = router
+            .lookup_route(&Method::GET, "/not{a}variable".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h4");
         assert!(result.variables.is_empty());
-        assert!(router.lookup_route(&Method::GET, "/not{b}variable").is_err());
-        assert!(router.lookup_route(&Method::GET, "/notnotavariable").is_err());
+        assert!(router
+            .lookup_route(&Method::GET, "/not{b}variable".into())
+            .is_err());
+        assert!(router
+            .lookup_route(&Method::GET, "/notnotavariable".into())
+            .is_err());
     }
 
     #[test]
@@ -841,29 +933,34 @@ mod test {
             Method::GET,
             "/projects/{project_id}",
         ));
-        assert!(router.lookup_route(&Method::GET, "/projects").is_err());
-        assert!(router.lookup_route(&Method::GET, "/projects/").is_err());
-        let result =
-            router.lookup_route(&Method::GET, "/projects/p12345").unwrap();
+        assert!(router.lookup_route(&Method::GET, "/projects".into()).is_err());
+        assert!(router
+            .lookup_route(&Method::GET, "/projects/".into())
+            .is_err());
+        let result = router
+            .lookup_route(&Method::GET, "/projects/p12345".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(result.variables.keys().collect::<Vec<&String>>(), vec![
             "project_id"
         ]);
         assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
         assert!(router
-            .lookup_route(&Method::GET, "/projects/p12345/child")
+            .lookup_route(&Method::GET, "/projects/p12345/child".into())
             .is_err());
-        let result =
-            router.lookup_route(&Method::GET, "/projects/p12345/").unwrap();
+        let result = router
+            .lookup_route(&Method::GET, "/projects/p12345/".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
-        let result =
-            router.lookup_route(&Method::GET, "/projects///p12345//").unwrap();
+        let result = router
+            .lookup_route(&Method::GET, "/projects///p12345//".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
         /* Trick question! */
         let result = router
-            .lookup_route(&Method::GET, "/projects/{project_id}")
+            .lookup_route(&Method::GET, "/projects/{project_id}".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(result.variables.get("project_id").unwrap(), "{project_id}");
@@ -884,7 +981,7 @@ mod test {
         let result = router
             .lookup_route(
                 &Method::GET,
-                "/projects/p1/instances/i2/fwrules/fw3/info",
+                "/projects/p1/instances/i2/fwrules/fw3/info".into(),
             )
             .unwrap();
         assert_eq!(result.handler.label(), "h6");
@@ -911,16 +1008,16 @@ mod test {
             "/projects/{project_id}/instances",
         ));
         assert!(router
-            .lookup_route(&Method::GET, "/projects/instances")
+            .lookup_route(&Method::GET, "/projects/instances".into())
             .is_err());
         assert!(router
-            .lookup_route(&Method::GET, "/projects//instances")
+            .lookup_route(&Method::GET, "/projects//instances".into())
             .is_err());
         assert!(router
-            .lookup_route(&Method::GET, "/projects///instances")
+            .lookup_route(&Method::GET, "/projects///instances".into())
             .is_err());
         let result = router
-            .lookup_route(&Method::GET, "/projects/foo/instances")
+            .lookup_route(&Method::GET, "/projects/foo/instances".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h7");
     }
@@ -970,5 +1067,12 @@ mod test {
             ("/".to_string(), "GET".to_string(),),
             ("/".to_string(), "POST".to_string(),),
         ]);
+    }
+
+    #[test]
+    fn test_segments() {
+        let segs =
+            input_path_to_segments(&"//foo/bar/baz%2fbuzz".into()).unwrap();
+        assert_eq!(segs, vec!["foo", "bar", "baz/buzz"]);
     }
 }
