@@ -13,7 +13,6 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::str::Utf8Error;
 
 /**
  * `HttpRouter` is a simple data structure for routing incoming HTTP requests to
@@ -203,6 +202,14 @@ fn valid_identifier(var: &str) -> bool {
     true
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum VariableValue {
+    String(String),
+    Components(Vec<String>),
+}
+
+pub type VariableSet = BTreeMap<String, VariableValue>;
+
 /**
  * `RouterLookupResult` represents the result of invoking
  * `HttpRouter::lookup_route()`.  A successful route lookup includes both the
@@ -212,7 +219,7 @@ fn valid_identifier(var: &str) -> bool {
 #[derive(Debug)]
 pub struct RouterLookupResult<'a, Context: ServerContext> {
     pub handler: &'a dyn RouteHandler<Context>,
-    pub variables: BTreeMap<String, String>,
+    pub variables: VariableSet,
 }
 
 impl<Context: ServerContext> HttpRouterNode<Context> {
@@ -243,7 +250,8 @@ impl<Context: ServerContext> HttpRouter<Context> {
         let method = endpoint.method.clone();
         let path = endpoint.path.clone();
 
-        let mut all_segments = path_to_segments(path.as_str()).into_iter();
+        let mut all_segments =
+            route_path_to_segments(path.as_str()).into_iter();
         let mut varnames: BTreeSet<String> = BTreeSet::new();
 
         let mut node: &mut Box<HttpRouterNode<Context>> = &mut self.root;
@@ -425,41 +433,43 @@ impl<Context: ServerContext> HttpRouter<Context> {
         method: &'b Method,
         path: InputPath<'b>,
     ) -> Result<RouterLookupResult<'a, Context>, HttpError> {
-        let all_segments = input_path_to_segments(&path).map_err(|_| {
-            HttpError::for_bad_request(
-                None,
-                String::from("invalid path encoding"),
-            )
-        })?;
+        let mut all_segments = input_path_to_segments(&path)
+            .map_err(|_| {
+                HttpError::for_bad_request(
+                    None,
+                    String::from("invalid path encoding"),
+                )
+            })?
+            .into_iter();
         let mut node = &self.root;
-        let mut variables: BTreeMap<String, String> = BTreeMap::new();
+        let mut variables = VariableSet::new();
 
-        assert_eq!(path.chars().nth(0), Some('/'));
+        while let Some(segment) = all_segments.next() {
+            let segment_string = segment.to_string();
 
-        /* Skip initial slashes */
-        while path.chars().nth(0) == Some('/') {
-            path = &path[1..];
-        }
-
-        while !path.is_empty() {
             node = match &node.edges {
                 None => None,
 
                 Some(HttpRouterEdges::Literals(edges)) => {
-                    let (segment, rest) = get_path_segment(path);
-                    path = rest;
-                    edges.get(&segment.to_string())
+                    edges.get(&segment_string)
                 }
                 Some(HttpRouterEdges::VariableSingle(varname, ref node)) => {
-                    let (segment, rest) = get_path_segment(path);
-                    path = rest;
-                    variables.insert(varname.clone(), segment.to_string());
+                    variables.insert(
+                        varname.clone(),
+                        VariableValue::String(segment_string),
+                    );
                     Some(node)
                 }
                 Some(HttpRouterEdges::VariableRest(varname, node)) => {
-                    variables.insert(varname.clone(), path.to_string());
-                    path = "";
-                    /* There should be no outgoing edges */
+                    let rest: Vec<String> = all_segments.collect();
+                    variables.insert(
+                        varname.clone(),
+                        VariableValue::Components(rest),
+                    );
+                    /*
+                     * There should be no outgoing edges since this is by
+                     * definition a terminal node
+                     */
                     assert!(node.edges.is_none());
                     Some(node)
                 }
@@ -473,13 +483,12 @@ impl<Context: ServerContext> HttpRouter<Context> {
         }
 
         /*
-         * The wildcard match consumes the empty path segment
-         * TODO: this continues our loosey-goosey treatment regarding the presence
-         * or absence of trailing slashes.
+         * The wildcard match consumes the implicit, empty path segment
          */
         match &node.edges {
             Some(HttpRouterEdges::VariableRest(varname, new_node)) => {
-                variables.insert(varname.clone(), path.to_string());
+                variables
+                    .insert(varname.clone(), VariableValue::Components(vec![]));
                 /* There should be no outgoing edges */
                 assert!(new_node.edges.is_none());
                 node = new_node;
@@ -764,6 +773,7 @@ mod test {
     use super::input_path_to_segments;
     use super::HttpRouter;
     use super::PathSegment;
+    use crate::router::VariableValue;
     use crate::ApiEndpoint;
     use crate::ApiEndpointResponse;
     use http::Method;
@@ -1168,7 +1178,10 @@ mod test {
         assert_eq!(result.variables.keys().collect::<Vec<&String>>(), vec![
             "project_id"
         ]);
-        assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p12345".to_string())
+        );
         assert!(router
             .lookup_route(&Method::GET, "/projects/p12345/child".into())
             .is_err());
@@ -1176,18 +1189,27 @@ mod test {
             .lookup_route(&Method::GET, "/projects/p12345/".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p12345".to_string())
+        );
         let result = router
             .lookup_route(&Method::GET, "/projects///p12345//".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p12345".to_string())
+        );
         /* Trick question! */
         let result = router
             .lookup_route(&Method::GET, "/projects/{project_id}".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.get("project_id").unwrap(), "{project_id}");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("{project_id}".to_string())
+        );
     }
 
     #[test]
@@ -1214,9 +1236,18 @@ mod test {
             "instance_id",
             "project_id"
         ]);
-        assert_eq!(result.variables.get("project_id").unwrap(), "p1");
-        assert_eq!(result.variables.get("instance_id").unwrap(), "i2");
-        assert_eq!(result.variables.get("fwrule_id").unwrap(), "fw3");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p1".to_string())
+        );
+        assert_eq!(
+            *result.variables.get("instance_id").unwrap(),
+            VariableValue::String("i2".to_string())
+        );
+        assert_eq!(
+            *result.variables.get("fwrule_id").unwrap(),
+            VariableValue::String("fw3".to_string())
+        );
     }
 
     #[test]
@@ -1256,12 +1287,12 @@ mod test {
         ));
 
         let result = router
-            .lookup_route(&Method::OPTIONS, "/console/missiles/launch")
+            .lookup_route(&Method::OPTIONS, "/console/missiles/launch".into())
             .unwrap();
 
         assert_eq!(
             result.variables.get("path"),
-            Some(&"missiles/launch".to_string()),
+            Some(&VariableValue::String("missiles/launch".to_string())),
         );
     }
 
