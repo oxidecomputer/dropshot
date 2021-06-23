@@ -13,7 +13,6 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::str::Utf8Error;
 
 /**
  * `HttpRouter` is a simple data structure for routing incoming HTTP requests to
@@ -497,18 +496,14 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
  *    hierarchy and are removed as part of the resolution process (Section
  *    5.2).
  *
- * As dropshot requests are necessarily made with absolute (rather than
- * relative) targets (any resolution presumed to have been done by the client)
- * we make no special interpretation of dot-segments. In short, the strings "."
- * and ".." may appear as segments (and thus as the values for path-derived
- * variables). Consumers should take special care concerning these values when
- * using Dropshot to serve files. Absent proper input validation, it could be
- * possible for requests to retrieve files not-intended to be exposed (e.g.
- * "GET /../../../etc/passwd").
+ * While nothing prohibits APIs from including dot-segments. We see no strong
+ * case for allowing them in paths, and plenty of pitfalls if we were to
+ * require consumers to consider them (e.g. "GET /../../../etc/passwd"). Note
+ * that consumers may be susceptible to other information leaks, for example
+ * if a client were able to follow a symlink to the root of the filesystem. As
+ * always, it is incumbent on the consumer and *critical* to validate input.
  */
-pub fn input_path_to_segments(
-    path: &InputPath,
-) -> Result<Vec<String>, Utf8Error> {
+pub fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
     /*
      * We're given the "path" portion of a URI and we want to construct an
      * array of the segments of the path.   Relevant references:
@@ -539,13 +534,17 @@ pub fn input_path_to_segments(
      * much here, but it does create more work, so we'll just split it
      * ourselves.
      */
-    let mut ret = Vec::new();
-    for segment in path.0.split('/') {
-        if !segment.is_empty() {
-            ret.push(percent_decode_str(segment).decode_utf8()?.to_string());
-        }
-    }
-    Ok(ret)
+    path.0
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| match segment {
+            "." | ".." => Err("dot-segments are not permitted".to_string()),
+            _ => Ok(percent_decode_str(segment)
+                .decode_utf8()
+                .map_err(|e| e.to_string())?
+                .to_string()),
+        })
+        .collect()
 }
 
 /**

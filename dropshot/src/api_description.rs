@@ -1249,19 +1249,14 @@ mod test {
             method = PUT,
             path = "I don't start with a slash"
         }]
-        async fn test_twobodies_handler(
+        async fn test_badpath_handler(
             _: Arc<RequestContext<()>>,
         ) -> Result<Response<Body>, HttpError> {
             unimplemented!();
         }
 
         let mut api = ApiDescription::new();
-        let error = api.register(test_twobodies_handler).unwrap_err();
-        assert_eq!(
-            error,
-            "only one body extractor can be used in a handler (this function \
-             has 2)"
-        );
+        api.register(test_badpath_handler).unwrap();
     }
 
     #[test]
