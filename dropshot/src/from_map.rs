@@ -10,21 +10,22 @@ use serde::Deserialize;
 use serde::Deserializer;
 use std::any::type_name;
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::fmt::Display;
 
 /**
  * Deserialize a BTreeMap<String, String> into a type, invoking String::parse()
  * for all values according to the required type.
  */
-pub(crate) fn from_map<'a, T>(
-    map: &'a BTreeMap<String, String>,
+pub(crate) fn from_map<'a, T, Z>(
+    map: &'a BTreeMap<String, Z>,
 ) -> Result<T, String>
 where
     T: Deserialize<'a>,
+    Z: AsRef<str> + Debug + Clone + 'static,
 {
     let mut deserializer = MapDeserializer::from_map(map);
-    let x = T::deserialize(&mut deserializer);
-    x.map_err(|e| e.0)
+    T::deserialize(&mut deserializer).map_err(|e| e.0)
 }
 
 /**
@@ -32,13 +33,13 @@ where
  * two modes: about to iterate over the map or about to process a single value.
  */
 #[derive(Debug)]
-enum MapDeserializer<'de> {
-    Map(&'de BTreeMap<String, String>),
-    Value(String),
+enum MapDeserializer<'de, Z> {
+    Map(&'de BTreeMap<String, Z>),
+    Value(Z),
 }
 
-impl<'de> MapDeserializer<'de> {
-    fn from_map(input: &'de BTreeMap<String, String>) -> Self {
+impl<'de, Z> MapDeserializer<'de, Z> {
+    fn from_map(input: &'de BTreeMap<String, Z>) -> Self {
         MapDeserializer::Map(input)
     }
 
@@ -48,7 +49,7 @@ impl<'de> MapDeserializer<'de> {
      */
     fn value<VV, F>(&self, deserialize: F) -> Result<VV, MapError>
     where
-        F: FnOnce(&String) -> Result<VV, MapError>,
+        F: FnOnce(&Z) -> Result<VV, MapError>,
     {
         match self {
             MapDeserializer::Value(ref raw_value) => deserialize(raw_value),
@@ -111,11 +112,11 @@ macro_rules! de_value {
             where
                 V: Visitor<'de>,
             {
-                self.value(|raw_value| match raw_value.parse::<$i>() {
+                self.value(|raw_value| match raw_value.as_ref().parse::<$i>() {
                     Ok(value) => visitor.[<visit_ $i>](value),
                     Err(_) => Err(MapError(format!(
                         "unable to parse '{}' as {}",
-                        raw_value,
+                        raw_value.as_ref(),
                         type_name::<$i>()
                     ))),
                 })
@@ -124,7 +125,10 @@ macro_rules! de_value {
     };
 }
 
-impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
+impl<'de, 'a, Z> Deserializer<'de> for &'a mut MapDeserializer<'de, Z>
+where
+    Z: AsRef<str> + Debug + Clone + 'static,
+{
     type Error = MapError;
 
     // Simple values
@@ -145,13 +149,13 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_str()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
     }
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_str()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -183,11 +187,13 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
     {
         match self {
             MapDeserializer::Map(map) => {
-                let x = Box::new(map.clone().into_iter());
-                visitor.visit_map(MapMapAccess {
+                let xx = map.clone();
+                let x = Box::new(xx.into_iter());
+                let m = MapMapAccess::<Z> {
                     iter: x,
                     value: None,
-                })
+                };
+                visitor.visit_map(m)
             }
             MapDeserializer::Value(_) => Err(MapError(
                 "destination struct must be fully flattened".to_string(),
@@ -201,7 +207,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_str()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
     }
 
     fn deserialize_enum<V>(
@@ -223,7 +229,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_str()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
     }
 
     /*
@@ -251,7 +257,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_str()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
     }
 
     de_unimp!(deserialize_bytes);
@@ -267,7 +273,10 @@ impl<'de, 'a> Deserializer<'de> for &'a mut MapDeserializer<'de> {
 /*
  * Deserializer component for processing enums.
  */
-impl<'de, 'a> EnumAccess<'de> for &mut MapDeserializer<'de> {
+impl<'de, 'a, Z> EnumAccess<'de> for &mut MapDeserializer<'de, Z>
+where
+    Z: AsRef<str> + Debug + Clone + 'static,
+{
     type Error = MapError;
     type Variant = Self;
 
@@ -285,7 +294,7 @@ impl<'de, 'a> EnumAccess<'de> for &mut MapDeserializer<'de> {
 /*
  * Deserializer component for processing enum variants.
  */
-impl<'de, 'a> VariantAccess<'de> for &mut MapDeserializer<'de> {
+impl<'de, 'a, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z> {
     type Error = MapError;
 
     fn unit_variant(self) -> Result<(), MapError> {
@@ -325,14 +334,17 @@ impl<'de, 'a> VariantAccess<'de> for &mut MapDeserializer<'de> {
 /*
  * Deserializer component for iterating over the Map.
  */
-struct MapMapAccess {
+struct MapMapAccess<Z> {
     /** Iterator through the Map */
-    iter: Box<dyn Iterator<Item = (String, String)>>,
+    iter: Box<dyn Iterator<Item = (String, Z)>>,
     /** Pending value in a key-value pair */
-    value: Option<String>,
+    value: Option<Z>,
 }
 
-impl<'de, 'a> MapAccess<'de> for MapMapAccess {
+impl<'de, 'a, Z> MapAccess<'de> for MapMapAccess<Z>
+where
+    Z: AsRef<str> + Debug + Clone + 'static,
+{
     type Error = MapError;
 
     fn next_key_seed<K>(
@@ -380,7 +392,7 @@ mod test {
     #[test]
     fn test_lone_literal() {
         let map = BTreeMap::new();
-        match from_map::<String>(&map) {
+        match from_map::<String, String>(&map) {
             Err(s) => assert_eq!(
                 s,
                 "must be applied to a flattened struct rather than a raw type"
@@ -401,7 +413,7 @@ mod test {
         }
         let mut map = BTreeMap::new();
         map.insert("b".to_string(), "B".to_string());
-        match from_map::<A>(&map) {
+        match from_map::<A, String>(&map) {
             Err(s) => {
                 assert_eq!(s, "destination struct must be fully flattened")
             }
@@ -422,7 +434,7 @@ mod test {
         }
         let mut map = BTreeMap::new();
         map.insert("aaa".to_string(), "A".to_string());
-        match from_map::<A>(&map) {
+        match from_map::<A, String>(&map) {
             Err(s) => assert_eq!(s, "missing field `sss`"),
             Ok(_) => panic!("unexpected success"),
         }
@@ -441,7 +453,7 @@ mod test {
         }
         let mut map = BTreeMap::new();
         map.insert("sss".to_string(), "stringy".to_string());
-        match from_map::<A>(&map) {
+        match from_map::<A, String>(&map) {
             Err(s) => assert_eq!(s, "missing field `aaa`"),
             Ok(_) => panic!("unexpected success"),
         }
@@ -473,7 +485,7 @@ mod test {
         map.insert("aoption".to_string(), "8".to_string());
         map.insert("bstring".to_string(), "B string".to_string());
         //map.insert("bbool".to_string(), "true".to_string());
-        match from_map::<A>(&map) {
+        match from_map::<A, String>(&map) {
             Ok(a) => {
                 assert_eq!(a.astring, "A string");
                 assert_eq!(a.au32, 1000);

@@ -202,13 +202,22 @@ fn valid_identifier(var: &str) -> bool {
     true
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VariableValue {
     String(String),
     Components(Vec<String>),
 }
 
 pub type VariableSet = BTreeMap<String, VariableValue>;
+
+impl AsRef<str> for VariableValue {
+    fn as_ref(&self) -> &str {
+        match self {
+            VariableValue::String(s) => s.as_ref(),
+            VariableValue::Components(_) => todo!(),
+        }
+    }
+}
 
 /**
  * `RouterLookupResult` represents the result of invoking
@@ -250,8 +259,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
         let method = endpoint.method.clone();
         let path = endpoint.path.clone();
 
-        let mut all_segments =
-            route_path_to_segments(path.as_str()).into_iter();
+        let all_segments = route_path_to_segments(path.as_str());
+
+        println!("{:?}", all_segments);
+        let mut all_segments = all_segments.into_iter();
         let mut varnames: BTreeSet<String> = BTreeSet::new();
 
         let mut node: &mut Box<HttpRouterNode<Context>> = &mut self.root;
@@ -433,19 +444,28 @@ impl<Context: ServerContext> HttpRouter<Context> {
         method: &'b Method,
         path: InputPath<'b>,
     ) -> Result<RouterLookupResult<'a, Context>, HttpError> {
-        let mut all_segments = input_path_to_segments(&path)
-            .map_err(|_| {
-                HttpError::for_bad_request(
-                    None,
-                    String::from("invalid path encoding"),
-                )
-            })?
-            .into_iter();
+        let all_segments = input_path_to_segments(&path).map_err(|_| {
+            HttpError::for_bad_request(
+                None,
+                String::from("invalid path encoding"),
+            )
+        })?;
+        println!("{:?}", all_segments);
+        let mut all_segments = all_segments.into_iter();
         let mut node = &self.root;
         let mut variables = VariableSet::new();
 
         while let Some(segment) = all_segments.next() {
             let segment_string = segment.to_string();
+
+            println!("{} {}", segment, match &node.edges {
+                Some(HttpRouterEdges::Literals(_)) => format!("literal"),
+                Some(HttpRouterEdges::VariableSingle(varname, _)) =>
+                    format!("single({})", varname),
+                Some(HttpRouterEdges::VariableRest(varname, _)) =>
+                    format!("rest({})", varname),
+                None => "none".to_string(),
+            });
 
             node = match &node.edges {
                 None => None,
@@ -461,7 +481,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
                     Some(node)
                 }
                 Some(HttpRouterEdges::VariableRest(varname, node)) => {
-                    let rest: Vec<String> = all_segments.collect();
+                    let mut rest = vec![segment];
+                    while let Some(segment) = all_segments.next() {
+                        rest.push(segment);
+                    }
                     variables.insert(
                         varname.clone(),
                         VariableValue::Components(rest),
@@ -1292,7 +1315,10 @@ mod test {
 
         assert_eq!(
             result.variables.get("path"),
-            Some(&VariableValue::String("missiles/launch".to_string())),
+            Some(&VariableValue::Components(vec![
+                "missiles".to_string(),
+                "launch".to_string()
+            ]))
         );
     }
 
