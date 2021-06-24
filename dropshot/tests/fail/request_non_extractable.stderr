@@ -1,0 +1,18 @@
+error[E0277]: the trait bound `Request<Body>: Extractable` is not satisfied
+  --> $DIR/request_non_extractable.rs:24:8
+   |
+18 | / #[endpoint {
+19 | |     method = GET,
+20 | |     path = "/test",
+21 | | }]
+   | |__- required by this bound in `need_extractor`
+...
+24 |       _: Request<Body>
+   |          -------^^^^^^
+   |          |
+   |          the trait `Extractable` is not implemented for `Request<Body>`
+   |          required by a bound in this
+   |
+   = help: the following implementations were found:
+             <&Request<Body> as Extractable>
+             <&mut Request<Body> as Extractable>

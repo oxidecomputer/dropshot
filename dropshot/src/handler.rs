@@ -179,9 +179,46 @@ pub trait Extractor: Send + Sync + Sized {
     fn extract_order() -> ExtractOrder;
 }
 
+/// This looks weird, but it's apparently a standard rust pattern for preventing
+/// pub traits from being implemented outside of this crate. See `Sealed Traits`
+/// `https://rust-lang.github.io/api-guidelines/future-proofing.html`
+mod private {
+    /// Private marker trait for Extractable that prevents it from being implemented
+    /// outside of this crate
+    pub trait Seal {}
+}
+
 /// Marker trait for types or variations of types that are considered valid for
 /// extraction into user-defined handler functions.
-pub trait Extractable {}
+pub trait Extractable: private::Seal {}
+
+/// Possibly over-egged Macro that lets you declare a list of types to be
+/// extractable all at once
+macro_rules! declare_extractables {
+
+    (impl $(<$($generic:ident),*$(,)?>)? Extractable for
+        $(where $($bound_generic:ty : $($constraint:tt)*),*)?) => {
+    };
+
+    (impl $(<$($generic:ident),*$(,)?>)? Extractable for $T:ty $(,$OtherTs:ty)*
+            $(where $($bound_generic:ty : $($constraint:tt)*),*)?) => {
+
+        impl $(<$($generic),*>)? Extractable for $T
+            $(where $($bound_generic : $($constraint)*)*)? {}
+        impl $(<$($generic),*>)? private::Seal for $T
+            $(where $($bound_generic : $($constraint)*)*)? {}
+
+        declare_extractables! {
+            impl $(<$($generic),*>)? Extractable for $($OtherTs),*
+                $(where $($bound_generic : $($constraint)*)*)?
+        }
+    };
+}
+
+declare_extractables! {
+    impl <Q> Extractable for Query<Q>, &Query<Q>, &mut Query<Q>
+        where Q: DeserializeOwned + JsonSchema + Send + Sync
+}
 
 /// Enumeration of the rounds of Extraction. Some of the extractable types
 /// have to be extracted before others (Example: `TypedBody` & `UntypedBody`
@@ -602,19 +639,6 @@ where
     }
 }
 
-impl<QueryType> Extractable for Query<QueryType> where
-    QueryType: DeserializeOwned + JsonSchema + Send + Sync
-{
-}
-impl<QueryType> Extractable for &mut Query<QueryType> where
-    QueryType: DeserializeOwned + JsonSchema + Send + Sync
-{
-}
-impl<QueryType> Extractable for &Query<QueryType> where
-    QueryType: DeserializeOwned + JsonSchema + Send + Sync
-{
-}
-
 /*
  * The `Extractor` implementation for Query<QueryType> describes how to construct
  * an instance of `Query<QueryType>` from an HTTP request: namely, by parsing
@@ -670,17 +694,9 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
     }
 }
 
-impl<PathType> Extractable for Path<PathType> where
-    PathType: JsonSchema + Send + Sync
-{
-}
-impl<PathType> Extractable for &mut Path<PathType> where
-    PathType: JsonSchema + Send + Sync
-{
-}
-impl<PathType> Extractable for &Path<PathType> where
-    PathType: JsonSchema + Send + Sync
-{
+declare_extractables! {
+    impl<P> Extractable for Path<P>, &Path<P>, &mut Path<P>
+    where P: JsonSchema + Send + Sync
 }
 
 /*
@@ -994,17 +1010,9 @@ where
     }
 }
 
-impl<T> Extractable for TypedBody<T> where
-    T: JsonSchema + DeserializeOwned + Send + Sync
-{
-}
-impl<T> Extractable for &mut TypedBody<T> where
-    T: JsonSchema + DeserializeOwned + Send + Sync
-{
-}
-impl<T> Extractable for &TypedBody<T> where
-    T: JsonSchema + DeserializeOwned + Send + Sync
-{
+declare_extractables! {
+    impl<T> Extractable for TypedBody<T>, &TypedBody<T>, &mut TypedBody<T>
+    where T: JsonSchema + DeserializeOwned + Send + Sync
 }
 
 /*
@@ -1085,9 +1093,9 @@ impl UntypedBody {
     }
 }
 
-impl Extractable for UntypedBody {}
-impl Extractable for &mut UntypedBody {}
-impl Extractable for &UntypedBody {}
+declare_extractables!{
+    impl Extractable for UntypedBody, &UntypedBody, &mut UntypedBody
+}
 
 #[async_trait]
 impl Extractor for UntypedBody {
@@ -1137,8 +1145,9 @@ impl Extractor for UntypedBody {
     }
 }
 
-impl Extractable for &mut Request<Body> {}
-impl Extractable for &Request<Body> {}
+declare_extractables! {
+    impl Extractable for &mut Request<Body>, &Request<Body>
+}
 
 #[async_trait]
 impl Extractor for Request<Body> {
