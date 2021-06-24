@@ -20,14 +20,12 @@ https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...HEAD[Full list of co
 
 === Breaking Changes
 
-*
 * https://github.com/oxidecomputer/dropshot/pull/106[#106] This PR contains 2 sizeable breaking changes to the structure of request-handling
 functions.
-    1. Handler functions will now accept a reference to the the `RequestContext` instead of an `Arc`
-    2. The field, https://docs.rs/dropshot/0.6.0/dropshot/struct.RequestContext.html#structfield.request[`RequestContext.request`], has been removed from the public api in favor of making the raw hyper request extractable directly as `&mut Request<Body>`
+    1. Handler functions will now accept a reference to the dropshot request context as `&RequestContext` instead of an `Arc<RequestContext>`
+    2. The field, https://docs.rs/dropshot/0.6.0/dropshot/struct.RequestContext.html#structfield.request[`RequestContext.request`], has been removed from the public api. To access the raw hyper request, users can specify it in their handler function's argument list as `&mut Request<Body>`
 * https://github.com/oxidecomputer/dropshot/pull/100[#100] The type used for the "limit" argument for paginated resources has changed.  This limit refers to the number of items that an HTTP client can ask for in a single request to a paginated endpoint.  The limit is now 4294967295, where it may have previously been larger.  This is not expected to affect consumers because this limit is far larger than practical.  For details, see #100.
 * https://github.com/oxidecomputer/dropshot/pull/116[#116] Unused, non-`pub` endpoints from the `&#35;[endpoint { ... }]` macro now produce a lint warning. This is *technically* a breaking change for those who may have had unused endpoints and compiled with `&#35;[deny(warning)]` or `&#35;[deny(dead_code)]` thus implicitly relying on the *absence* of a warning about the endpoint being unused.
-
 
 
 == 0.5.1 (released 2021-03-18)
