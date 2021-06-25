@@ -26,9 +26,8 @@ async fn handler1(
 #[derive(Deserialize, JsonSchema)]
 #[allow(dead_code)]
 struct QueryArgs {
-    _tomax: String,
-    _xamot: Option<String>,
-    _destro: Vec<u16>,
+    tomax: String,
+    xamot: Option<String>,
 }
 
 #[endpoint {
@@ -65,9 +64,10 @@ async fn handler3(
 }
 
 #[derive(JsonSchema, Deserialize)]
+#[allow(dead_code)]
 struct BodyParam {
-    _x: String,
-    _any: serde_json::Value,
+    x: String,
+    any: serde_json::Value,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -174,44 +174,6 @@ async fn handler9(
 
 /*
  * Similarly, test that we do not generate duplicate type definitions when the
- * same type is accepted as a query parameter to two different handler
- * functions.
- */
-
-#[derive(Deserialize, JsonSchema)]
-struct NeverDuplicatedParamTopLevel {
-    _b: NeverDuplicatedParamNextLevel,
-}
-
-#[derive(Deserialize, JsonSchema)]
-struct NeverDuplicatedParamNextLevel {
-    _v: bool,
-}
-
-#[endpoint {
-    method = PUT,
-    path = "/dup3",
-}]
-async fn handler10(
-    _rqctx: Arc<RequestContext<()>>,
-    _q: Query<NeverDuplicatedParamTopLevel>,
-) -> Result<HttpResponseOk<()>, HttpError> {
-    unimplemented!();
-}
-
-#[endpoint {
-    method = PUT,
-    path = "/dup4",
-}]
-async fn handler11(
-    _rqctx: Arc<RequestContext<()>>,
-    _q: Query<NeverDuplicatedParamTopLevel>,
-) -> Result<HttpResponseOk<()>, HttpError> {
-    unimplemented!();
-}
-
-/*
- * Similarly, test that we do not generate duplicate type definitions when the
  * same type is accepted as a typed body to two different handler functions.
  */
 
@@ -221,15 +183,16 @@ struct NeverDuplicatedBodyTopLevel {
 }
 
 #[derive(Deserialize, JsonSchema)]
+#[allow(dead_code)]
 struct NeverDuplicatedBodyNextLevel {
-    _v: bool,
+    v: bool,
 }
 
 #[endpoint {
     method = PUT,
     path = "/dup5",
 }]
-async fn handler12(
+async fn handler10(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -240,7 +203,7 @@ async fn handler12(
     method = PUT,
     path = "/dup6",
 }]
-async fn handler13(
+async fn handler11(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -253,20 +216,22 @@ async fn handler13(
  */
 
 #[derive(Deserialize, JsonSchema, Serialize)]
+#[allow(dead_code)]
 struct NeverDuplicatedTop {
-    _b: NeverDuplicatedNext,
+    b: NeverDuplicatedNext,
 }
 
 #[derive(Deserialize, JsonSchema, Serialize)]
+#[allow(dead_code)]
 struct NeverDuplicatedNext {
-    _v: bool,
+    v: bool,
 }
 
 #[endpoint {
     method = PUT,
     path = "/dup7",
 }]
-async fn handler14(
+async fn handler12(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedTop>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -277,7 +242,7 @@ async fn handler14(
     method = GET,
     path = "/dup8",
 }]
-async fn handler15(
+async fn handler13(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
     unimplemented!();
@@ -294,7 +259,7 @@ struct AllPath {
     path = "/ceci_nes_pas_une_endpoint/{path:.*}",
     unpublished = true,
 }]
-async fn handler16(
+async fn handler14(
     _rqctx: Arc<RequestContext<()>>,
     _path: Path<AllPath>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
@@ -317,8 +282,6 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler12)?;
     api.register(handler13)?;
     api.register(handler14)?;
-    api.register(handler15)?;
-    api.register(handler16)?;
     Ok(api)
 }
 

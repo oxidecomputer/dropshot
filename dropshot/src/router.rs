@@ -6,6 +6,8 @@
 use super::error::HttpError;
 use super::handler::RouteHandler;
 
+use crate::from_map::MapError;
+use crate::from_map::MapValue;
 use crate::server::ServerContext;
 use crate::ApiEndpoint;
 use http::Method;
@@ -210,11 +212,22 @@ pub enum VariableValue {
 
 pub type VariableSet = BTreeMap<String, VariableValue>;
 
-impl AsRef<str> for VariableValue {
-    fn as_ref(&self) -> &str {
+impl MapValue for VariableValue {
+    fn as_value(&self) -> Result<&str, MapError> {
         match self {
-            VariableValue::String(s) => s.as_ref(),
-            VariableValue::Components(_) => todo!(),
+            VariableValue::String(s) => Ok(s.as_str()),
+            VariableValue::Components(_) => Err(MapError(
+                "cannot deserialize sequence as a single value".to_string(),
+            )),
+        }
+    }
+
+    fn as_seq(&self) -> Result<Box<dyn Iterator<Item = String>>, MapError> {
+        match self {
+            VariableValue::String(_) => Err(MapError(
+                "cannot deserialize a single value as a sequence".to_string(),
+            )),
+            VariableValue::Components(v) => Ok(Box::new(v.clone().into_iter())),
         }
     }
 }
@@ -261,7 +274,6 @@ impl<Context: ServerContext> HttpRouter<Context> {
 
         let all_segments = route_path_to_segments(path.as_str());
 
-        println!("{:?}", all_segments);
         let mut all_segments = all_segments.into_iter();
         let mut varnames: BTreeSet<String> = BTreeSet::new();
 
@@ -450,22 +462,12 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 String::from("invalid path encoding"),
             )
         })?;
-        println!("{:?}", all_segments);
         let mut all_segments = all_segments.into_iter();
         let mut node = &self.root;
         let mut variables = VariableSet::new();
 
         while let Some(segment) = all_segments.next() {
             let segment_string = segment.to_string();
-
-            println!("{} {}", segment, match &node.edges {
-                Some(HttpRouterEdges::Literals(_)) => format!("literal"),
-                Some(HttpRouterEdges::VariableSingle(varname, _)) =>
-                    format!("single({})", varname),
-                Some(HttpRouterEdges::VariableRest(varname, _)) =>
-                    format!("rest({})", varname),
-                None => "none".to_string(),
-            });
 
             node = match &node.edges {
                 None => None,
@@ -796,6 +798,7 @@ mod test {
     use super::input_path_to_segments;
     use super::HttpRouter;
     use super::PathSegment;
+    use crate::from_map::from_map;
     use crate::router::VariableValue;
     use crate::ApiEndpoint;
     use crate::ApiEndpointResponse;
@@ -803,6 +806,8 @@ mod test {
     use http::StatusCode;
     use hyper::Body;
     use hyper::Response;
+    use serde::Deserialize;
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
     async fn test_handler(
@@ -1437,5 +1442,82 @@ mod test {
     #[should_panic]
     fn test_bad_path_segment8() {
         let _ = PathSegment::from("{varname:abc+}");
+    }
+
+    #[test]
+    fn test_map() {
+        #[derive(Deserialize)]
+        struct A {
+            bbb: String,
+            ccc: Vec<String>,
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "bbb".to_string(),
+            VariableValue::String("doggos".to_string()),
+        );
+        map.insert(
+            "ccc".to_string(),
+            VariableValue::Components(vec![
+                "lizzie".to_string(),
+                "brickley".to_string(),
+            ]),
+        );
+
+        match from_map::<A, VariableValue>(&map) {
+            Ok(a) => {
+                assert_eq!(a.bbb, "doggos");
+                assert_eq!(a.ccc, vec!["lizzie", "brickley"]);
+            }
+            Err(s) => panic!("unexpected error: {}", s),
+        }
+    }
+
+    #[test]
+    fn test_map_bad_value() {
+        #[allow(dead_code)]
+        #[derive(Deserialize)]
+        struct A {
+            bbb: String,
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "bbb".to_string(),
+            VariableValue::Components(vec![
+                "lizzie".to_string(),
+                "brickley".to_string(),
+            ]),
+        );
+
+        match from_map::<A, VariableValue>(&map) {
+            Ok(_) => panic!("unexpected success"),
+            Err(s) => {
+                assert_eq!(s, "cannot deserialize sequence as a single value")
+            }
+        }
+    }
+
+    #[test]
+    fn test_map_bad_seq() {
+        #[allow(dead_code)]
+        #[derive(Deserialize)]
+        struct A {
+            bbb: Vec<String>,
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "bbb".to_string(),
+            VariableValue::String("doggos".to_string()),
+        );
+
+        match from_map::<A, VariableValue>(&map) {
+            Ok(_) => panic!("unexpected success"),
+            Err(s) => {
+                assert_eq!(s, "cannot deserialize a single value as a sequence")
+            }
+        }
     }
 }

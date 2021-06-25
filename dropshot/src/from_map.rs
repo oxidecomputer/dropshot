@@ -4,6 +4,7 @@ use paste::paste;
 use serde::de::DeserializeSeed;
 use serde::de::EnumAccess;
 use serde::de::MapAccess;
+use serde::de::SeqAccess;
 use serde::de::VariantAccess;
 use serde::de::Visitor;
 use serde::Deserialize;
@@ -14,18 +15,37 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 /**
- * Deserialize a BTreeMap<String, String> into a type, invoking String::parse()
- * for all values according to the required type.
+ * Deserialize a BTreeMap<String, MapValue> into a type, invoking
+ * String::parse() for all values according to the required type. MapValue may
+ * be either a single String or a sequence of Strings.
  */
 pub(crate) fn from_map<'a, T, Z>(
     map: &'a BTreeMap<String, Z>,
 ) -> Result<T, String>
 where
     T: Deserialize<'a>,
-    Z: AsRef<str> + Debug + Clone + 'static,
+    Z: MapValue + Debug + Clone + 'static,
 {
     let mut deserializer = MapDeserializer::from_map(map);
     T::deserialize(&mut deserializer).map_err(|e| e.0)
+}
+
+pub(crate) trait MapValue {
+    fn as_value(&self) -> Result<&str, MapError>;
+    fn as_seq(&self) -> Result<Box<dyn Iterator<Item = String>>, MapError>;
+}
+
+impl MapValue for String {
+    fn as_value(&self) -> Result<&str, MapError> {
+        Ok(self.as_str())
+    }
+
+    fn as_seq(&self) -> Result<Box<dyn Iterator<Item = String>>, MapError> {
+        Err(MapError(
+            "a string may not be used in place of a sequence of values"
+                .to_string(),
+        ))
+    }
 }
 
 /**
@@ -62,7 +82,7 @@ impl<'de, Z> MapDeserializer<'de, Z> {
 }
 
 #[derive(Clone, Debug)]
-struct MapError(String);
+pub(crate) struct MapError(pub String);
 
 impl Display for MapError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -90,7 +110,6 @@ macro_rules! de_unimp {
         where
             V: Visitor<'de>,
         {
-            println!("{:?}", self);
             unimplemented!(stringify!($i));
         }
     };
@@ -112,11 +131,11 @@ macro_rules! de_value {
             where
                 V: Visitor<'de>,
             {
-                self.value(|raw_value| match raw_value.as_ref().parse::<$i>() {
+                self.value(|raw_value| match raw_value.as_value()?.parse::<$i>() {
                     Ok(value) => visitor.[<visit_ $i>](value),
                     Err(_) => Err(MapError(format!(
                         "unable to parse '{}' as {}",
-                        raw_value.as_ref(),
+                        raw_value.as_value()?,
                         type_name::<$i>()
                     ))),
                 })
@@ -127,7 +146,7 @@ macro_rules! de_value {
 
 impl<'de, 'a, Z> Deserializer<'de> for &'a mut MapDeserializer<'de, Z>
 where
-    Z: AsRef<str> + Debug + Clone + 'static,
+    Z: MapValue + Debug + Clone + 'static,
 {
     type Error = MapError;
 
@@ -149,13 +168,13 @@ where
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -207,7 +226,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
 
     fn deserialize_enum<V>(
@@ -229,7 +248,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
 
     /*
@@ -257,7 +276,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.value(|raw_value| visitor.visit_str(raw_value.as_ref()))
+        self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
 
     de_unimp!(deserialize_bytes);
@@ -265,9 +284,21 @@ where
     de_unimp!(deserialize_unit);
     de_unimp!(deserialize_unit_struct, _name: &'static str);
     de_unimp!(deserialize_newtype_struct, _name: &'static str);
-    de_unimp!(deserialize_seq);
     de_unimp!(deserialize_tuple, _len: usize);
     de_unimp!(deserialize_tuple_struct, _name: &'static str, _len: usize);
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.value(|raw_value| {
+            let x = raw_value.as_seq()?;
+            let xx = MapSeqAccess {
+                iter: x,
+            };
+            visitor.visit_seq(xx)
+        })
+    }
 }
 
 /*
@@ -275,7 +306,7 @@ where
  */
 impl<'de, 'a, Z> EnumAccess<'de> for &mut MapDeserializer<'de, Z>
 where
-    Z: AsRef<str> + Debug + Clone + 'static,
+    Z: MapValue + Debug + Clone + 'static,
 {
     type Error = MapError;
     type Variant = Self;
@@ -343,7 +374,7 @@ struct MapMapAccess<Z> {
 
 impl<'de, 'a, Z> MapAccess<'de> for MapMapAccess<Z>
 where
-    Z: AsRef<str> + Debug + Clone + 'static,
+    Z: MapValue + Debug + Clone + 'static,
 {
     type Error = MapError;
 
@@ -378,7 +409,34 @@ where
              * This means we were called without a corresponding call to
              * next_key_seed() which should not be possible.
              */
-            None => panic!("unreachable"),
+            None => unreachable!(),
+        }
+    }
+}
+
+struct MapSeqAccess<Z> {
+    iter: Box<dyn Iterator<Item = Z>>,
+}
+
+impl<'de, 'a, Z> SeqAccess<'de> for MapSeqAccess<Z>
+where
+    Z: MapValue + Debug + Clone + 'static,
+{
+    type Error = MapError;
+
+    fn next_element_seed<T>(
+        &mut self,
+        seed: T,
+    ) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        match self.iter.next() {
+            Some(value) => {
+                let mut deserializer = MapDeserializer::Value(value);
+                seed.deserialize(&mut deserializer).map(Some)
+            }
+            None => Ok(None),
         }
     }
 }
@@ -496,6 +554,22 @@ mod test {
                 assert_eq!(a.bbb.boption, None);
             }
             Err(s) => panic!("error: {}", s),
+        }
+    }
+    #[test]
+    fn string_seq() {
+        #[derive(Deserialize, Debug)]
+        struct A {
+            b: Vec<String>,
+        }
+        let mut map = BTreeMap::new();
+        map.insert("b".to_string(), "stringy".to_string());
+        match from_map::<A, String>(&map) {
+            Err(s) => assert_eq!(
+                s,
+                "a string may not be used in place of a sequence of values"
+            ),
+            Ok(_) => panic!("unexpected success"),
         }
     }
 }

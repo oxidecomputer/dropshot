@@ -60,7 +60,7 @@ async fn main() -> Result<(), String> {
 
 #[derive(Deserialize, JsonSchema)]
 struct AllPath {
-    path: String,
+    path: Vec<String>,
 }
 
 /**
@@ -89,7 +89,7 @@ async fn index(
         .header(http::header::CONTENT_TYPE, "text/html")
         .body(
             format!(
-                "<HTML><HEAD>nothing at {}</HEAD></HTML>",
+                "<HTML><HEAD>nothing at {:?}</HEAD></HTML>",
                 path.into_inner().path
             )
             .into(),
