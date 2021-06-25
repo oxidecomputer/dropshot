@@ -193,9 +193,11 @@ mod private {
 pub trait Extractable: private::Seal {}
 
 /// Possibly over-egged Macro that lets you declare a list of types to be
-/// extractable all at once
+/// extractable all at once. Because this macro has two sets of repeating
+/// patterns, it has to be recursive.
 macro_rules! declare_extractables {
 
+    // This is the terminal case, so that recursion can end
     (impl $(<$($generic:ident),*$(,)?>)? Extractable for
         $(where $($bound_generic:ty : $($constraint:tt)*),*)?) => {
     };
@@ -1093,7 +1095,7 @@ impl UntypedBody {
     }
 }
 
-declare_extractables!{
+declare_extractables! {
     impl Extractable for UntypedBody, &UntypedBody, &mut UntypedBody
 }
 

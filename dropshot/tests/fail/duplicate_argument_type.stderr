@@ -1,0 +1,7 @@
+error[E0119]: conflicting implementations of trait `handler_argument_for_endpoint_with_duplicate_raw_requests` for type `hyper::Request<hyper::Body>`:
+  --> $DIR/duplicate_argument_type.rs:29:5
+   |
+28 |     _: &mut Request<Body>,
+   |     - first implementation here
+29 |     _: &mut SneakyBody
+   |     ^ conflicting implementation for `hyper::Request<hyper::Body>`

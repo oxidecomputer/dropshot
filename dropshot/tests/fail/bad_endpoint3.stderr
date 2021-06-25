@@ -5,7 +5,7 @@ error[E0277]: the trait bound `String: Extractable` is not satisfied
 12 | |     method = GET,
 13 | |     path = "/test",
 14 | | }]
-   | |__- required by this bound in `need_extractor`
+   | |__- required by this bound in `need_extractable`
 ...
 17 |       param: String,
    |              ^^^^^^

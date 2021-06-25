@@ -7,7 +7,6 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
-use std::sync::Arc;
 
 #[derive(JsonSchema)]
 #[allow(dead_code)]

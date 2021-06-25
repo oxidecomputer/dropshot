@@ -5,7 +5,7 @@ error[E0277]: the trait bound `Request<Body>: Extractable` is not satisfied
 19 | |     method = GET,
 20 | |     path = "/test",
 21 | | }]
-   | |__- required by this bound in `need_extractor`
+   | |__- required by this bound in `need_extractable`
 ...
 24 |       _: Request<Body>
    |          -------^^^^^^

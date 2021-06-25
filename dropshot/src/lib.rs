@@ -213,6 +213,7 @@
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
  *      [body_param: UntypedBody<J>,]
+ *      [raw_request: &mut Request<Body>,]
  * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
@@ -235,6 +236,8 @@
  *   body as JSON and deserializing it into an instance of type `J`. `J` must
  *   implement `serde::Deserialize` and `schemars::JsonSchema`.
  * * [`UntypedBody`] extracts the raw bytes of the request body.
+ * * [`Request<Body>`] exposes the raw `hyper::Request` from the context. Note:
+ *   this can only used as a mutable reference and not an owned instance.
  *
  * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
  * `UntypedBody`, and the corresponding extraction cannot be completed, the

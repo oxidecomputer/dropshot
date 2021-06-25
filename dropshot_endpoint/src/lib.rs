@@ -12,6 +12,7 @@
 
 extern crate proc_macro;
 
+use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
@@ -181,7 +182,7 @@ fn do_endpoint(
     // make failures easier to understand, we inject code that asserts the types
     // of the various parameters. We do this by calling a dummy function that
     // requires a type that satisfies the trait Extractor.
-    let checks = ast
+    let extractable_checks = ast
         .sig
         .inputs
         .iter()
@@ -200,12 +201,12 @@ fn do_endpoint(
 
                     quote_spanned! { span=>
                         const _: fn() = ||{
-                            fn need_extractor<T>()
+                            fn need_extractable<T>()
                             where
                                 T: ?Sized + #req,
                             {
                             }
-                            need_extractor::<#ty>();
+                            need_extractable::<#ty>();
                         };
                     }
                 }
@@ -229,7 +230,7 @@ fn do_endpoint(
     // function, but all arguments are given as owned instances. This means we
     // can use the same extractor system but limit the handler functions to
     // only accept references to certain extracted types.
-    let wrapped_item_args: Vec<_> = ast
+    let wrapped_item_args = ast
         .sig
         .inputs
         .iter()
@@ -256,6 +257,8 @@ fn do_endpoint(
                     };
 
                 WrappedItemArgument {
+                    span: pat.span(),
+                    root_type: root_type.clone(),
                     input_tokens: quote! { #mut_tokens #arg_name : #root_type },
                     output_tokens: quote! { #ref_tokens #mut_tokens #arg_name },
                 }
@@ -263,7 +266,37 @@ fn do_endpoint(
                 unreachable!("An earlier compile error prevents this");
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    let duplicate_check_trait = format_ident!("handler_argument_for_{}", name);
+
+    // If a user includes multiple arguments with the same root type in their
+    // handle function, this check will raise an error at compile time with
+    // a helpful error message. This prevents them from including multiple
+    // mutable references to the raw hyper request which would cause a runtime
+    // panic.
+    let duplicate_extractor_check_impls = wrapped_item_args
+        .iter()
+        .skip(1)
+        .map(|arg| {
+            let span = arg.span;
+            let root_type = &arg.root_type;
+            quote_spanned! {
+                span => impl #duplicate_check_trait for #root_type {}
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let duplicate_extractor_check = if duplicate_extractor_check_impls.len() > 1
+    {
+        quote! {
+            #[allow(non_camel_case_types, missing_docs)]
+            trait #duplicate_check_trait {}
+            #(#duplicate_extractor_check_impls)*
+        }
+    } else {
+        quote! {}
+    };
 
     let wrapped_item_args_in =
         wrapped_item_args.iter().map(|arg| arg.input_tokens.clone());
@@ -281,7 +314,9 @@ fn do_endpoint(
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the method to which this macro was applied...
     let stream = quote! {
-        #(#checks)*
+        #(#extractable_checks)*
+
+        #duplicate_extractor_check
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -315,6 +350,8 @@ fn do_endpoint(
 }
 
 struct WrappedItemArgument {
+    span: Span,
+    root_type: TokenStream,
     input_tokens: TokenStream,
     output_tokens: TokenStream,
 }
@@ -475,12 +512,12 @@ mod tests {
         };
         let expected = quote! {
             const _: fn() = || {
-                fn need_extractor<T>()
+                fn need_extractable<T>()
                 where
                     T: ?Sized + dropshot::Extractable,
                 {
                 }
-                need_extractor::<#query>();
+                need_extractable::<#query>();
             };
 
             #[allow(non_camel_case_types, missing_docs)]
@@ -495,6 +532,73 @@ mod tests {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
                     async fn wrapped_handler_xyz (_rqctx: RequestContext<std::i32>, q: Query<Q>) { handler_xyz(&_rqctx, q).await }
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        wrapped_handler_xyz,
+                        dropshot::Method::GET,
+                        "/a/b/c",
+                    )
+                }
+            }
+        };
+
+        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+    }
+
+    #[test]
+    fn test_endpoint_with_query_and_raw_request() {
+        let ret = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            }
+            .into(),
+            quote! {
+                async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>, _: &mut Request<Body>) {}
+            }
+            .into(),
+        );
+        let query = quote! {
+            Query<Q>
+        };
+        let request = quote! {
+            &mut Request<Body>
+        };
+        let expected = quote! {
+            const _: fn() = || {
+                fn need_extractable<T>()
+                where
+                    T: ?Sized + dropshot::Extractable,
+                {
+                }
+                need_extractable::<#query>();
+            };
+            const _: fn () = || {
+                fn need_extractable <T>()
+                where
+                    T: ?Sized + dropshot::Extractable,
+                {
+                }
+                need_extractable::<#request>();
+            };
+
+            # [allow (non_camel_case_types, missing_docs)]
+            trait handler_argument_for_handler_xyz {}
+            impl handler_argument_for_handler_xyz for Query <Q> {}
+            impl handler_argument_for_handler_xyz for Request <Body> {}
+
+            #[allow(non_camel_case_types, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            struct handler_xyz {}
+
+            #[allow(non_upper_case_globals, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            const handler_xyz: handler_xyz = handler_xyz {};
+
+            impl From<handler_xyz> for dropshot::ApiEndpoint<<&RequestContext<std::i32> as dropshot::RequestContextArgument>::Context> {
+                fn from(_: handler_xyz) -> Self {
+                    async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>, _: &mut Request<Body>) {}
+                    async fn wrapped_handler_xyz (_rqctx: RequestContext<std::i32>, q: Query<Q>, mut handler_xyz_arg_2: Request<Body>) { handler_xyz(&_rqctx, q, &mut handler_xyz_arg_2).await }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         wrapped_handler_xyz,
@@ -526,12 +630,12 @@ mod tests {
         };
         let expected = quote! {
             const _: fn() = || {
-                fn need_extractor<T>()
+                fn need_extractable<T>()
                 where
                     T: ?Sized + dropshot::Extractable,
                 {
                 }
-                need_extractor::<#query>();
+                need_extractable::<#query>();
             };
 
             #[allow(non_camel_case_types, missing_docs)]
@@ -702,7 +806,7 @@ mod tests {
             }
             .into(),
             quote! {
-                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                fn handler_xyz(_rqctx: &RequestContext) {}
             }
             .into(),
         );
