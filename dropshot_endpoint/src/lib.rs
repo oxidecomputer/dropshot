@@ -312,7 +312,7 @@ fn do_endpoint(
     };
 
     // The final TokenStream returned will have a few components that reference
-    // `#name`, the name of the method to which this macro was applied...
+    // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         #(#extractable_checks)*
 
