@@ -1004,6 +1004,21 @@ mod test {
         ));
     }
 
+    /*
+     * TODO: We allow a trailing slash after the wildcard specifier, but we may
+     * reconsider this if we decided to distinguish between the presence or
+     * absence of the trailing slash.
+     */
+    #[test]
+    fn test_slash_after_wildcard_is_fine_dot_dot_dot_for_now() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler(),
+            Method::GET,
+            "/some/{more:.*}/",
+        ));
+    }
+
     #[test]
     fn test_error_cases() {
         let mut router = HttpRouter::new();
