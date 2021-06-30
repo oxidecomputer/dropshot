@@ -191,37 +191,90 @@ fn do_endpoint(
     // make failures easier to understand, we inject code that asserts the types
     // of the various parameters. We do this by calling a dummy function that
     // requires a type that satisfies the trait Extractor.
-    let checks = ast
+    let param_checks = ast
         .sig
         .inputs
         .iter()
-        .skip(1)
-        .map(|arg| {
-            let req = quote! { #dropshot::Extractor };
-
+        .enumerate()
+        .map(|(index, arg)| {
             match arg {
                 syn::FnArg::Receiver(_) => {
                     // The compiler failure here is already comprehensible.
                     quote! {}
                 }
                 syn::FnArg::Typed(pat) => {
-                    let span = Error::new_spanned(pat.ty.as_ref(), "").span();
+                    let span = pat.ty.span();
                     let ty = pat.ty.as_ref().into_token_stream();
-
-                    quote_spanned! { span=>
-                        const _: fn() = ||{
-                            fn need_extractor<T>()
-                            where
-                                T: ?Sized + #req,
-                            {
-                            }
-                            need_extractor::<#ty>();
-                        };
+                    if index == 0 {
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                struct NeedRequestContext(<#ty as #dropshot::RequestContextArgument>::Context);
+                            };
+                        }
+                    } else {
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                fn need_extractor<T>()
+                                where
+                                    T: ?Sized + #dropshot::Extractor
+                                {
+                                }
+                                need_extractor::<#ty>();
+                            };
+                        }
                     }
                 }
             }
         })
         .collect::<Vec<_>>();
+
+    let ret_check = match ast.sig.output {
+        syn::ReturnType::Default => {
+            return Err(Error::new_spanned(
+                (&ast.sig).into_token_stream(),
+                usage("Endpoint must return a Result", &name_str),
+            ));
+        }
+        syn::ReturnType::Type(_, ret_ty) => {
+            let span = ret_ty.span();
+            quote_spanned! { span=>
+                const _: fn() = || {
+                    // Pick apart the Result type.
+                    trait ResultTrait {
+                        type T;
+                        type E;
+                    }
+
+                    impl<AA, BB> ResultTrait for Result<AA, BB>
+                    where
+                        AA: dropshot::HttpResponse,
+                    {
+                        type T = AA;
+                        type E = BB;
+                    }
+
+                    // TODO is this needed
+                    struct NeedHttpResponse(<#ret_ty as ResultTrait>::T);
+
+                    trait TypeEq {
+                        type This: ?Sized;
+                    }
+
+                    impl<T: ?Sized> TypeEq for T {
+                        type This = Self;
+                    }
+
+                    fn validate_return_type<T>()
+                    where
+                        T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                    {
+                    }
+
+                    validate_return_type::<<#ret_ty as ResultTrait>::E>();
+                };
+            }
+        }
+    };
 
     // For reasons that are not well understood unused constants that use the
     // (default) call_site() Span do not trigger the dead_code lint. Because
@@ -236,7 +289,10 @@ fn do_endpoint(
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
-        #(#checks)*
+        // ... type validation for parameter and return types
+        #(#param_checks)*
+        #ret_check
+
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -249,7 +305,11 @@ fn do_endpoint(
 
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`
-        impl From<#name> for #dropshot::ApiEndpoint<<#first_arg_type as #dropshot::RequestContextArgument>::Context> {
+        impl From<#name>
+            for #dropshot::ApiEndpoint<
+                <#first_arg_type as #dropshot::RequestContextArgument>::Context
+            >
+            {
             fn from(_: #name) -> Self {
                 #item
 
