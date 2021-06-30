@@ -113,8 +113,8 @@ pub enum PathSegment {
     Literal(String),
     /** a path segment for a variable */
     VarnameSegment(String),
-    /** a path segment for a variable with a regex */
-    VarnameRegEx(String, String),
+    /** a path segment that matches all remaining components for a variable */
+    VarnameWildcard(String),
 }
 
 impl PathSegment {
@@ -157,7 +157,7 @@ impl PathSegment {
                     pat == ".*",
                     "Only the pattern '.*' is currently supported"
                 );
-                PathSegment::VarnameRegEx(var.to_string(), pat.to_string())
+                PathSegment::VarnameWildcard(var.to_string())
             } else {
                 PathSegment::VarnameSegment(var.to_string())
             }
@@ -181,29 +181,16 @@ impl<'a> From<&'a str> for InputPath<'a> {
 }
 
 /*
- * Validate the pattern for Rust identifiers:
- * [a-zA-Z][a-zA-Z0-9_]* | _[a-zA-Z0-9_]+
+ * Validate that the string is a valid Rust identifier.
  */
 fn valid_identifier(var: &str) -> bool {
-    match var.chars().nth(0) {
-        Some('_') => {
-            if var.len() == 1 {
-                // A lone '_' is not a valid identifier.
-                return false;
-            }
-        }
-        Some('a'..='z') | Some('A'..='Z') => {}
-        _ => return false,
-    }
-
-    for ch in var.chars().skip(1) {
-        if !ch.is_ascii_alphanumeric() && ch != '_' {
-            return false;
-        }
-    }
-    true
+    syn::parse_str::<syn::Ident>(var).is_ok()
 }
 
+/**
+ * A value for a variable which may either be a single value or a list of
+ * values in the case of wildcard path matching.
+ */
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VariableValue {
     String(String),
@@ -363,9 +350,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                         }
                     }
                 }
-                PathSegment::VarnameRegEx(new_varname, pat) => {
-                    assert_eq!(pat, ".*");
-
+                PathSegment::VarnameWildcard(new_varname) => {
                     /*
                      * We don't accept further path segments after the .*.
                      */
@@ -644,7 +629,7 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
             .map(|(c, _)| match c {
                 PathSegment::Literal(s) => s.clone(),
                 PathSegment::VarnameSegment(s) => format!("{{{}}}", s),
-                PathSegment::VarnameRegEx(s, p) => format!("{{{}:{}}}", s, p),
+                PathSegment::VarnameWildcard(s) => format!("{{{}:.*}}", s),
             })
             .collect();
 
@@ -1010,7 +995,7 @@ mod test {
     #[should_panic(expected = "URI path \"/some/{more:.*}/{stuff}\": \
                                attempted to match segments after the \
                                wildcard variable \"more\"")]
-    fn test_after_regex() {
+    fn test_more_after_regex() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(
             new_handler(),
@@ -1390,10 +1375,7 @@ mod test {
         assert_eq!(seg, PathSegment::VarnameSegment("words".to_string()));
 
         let seg = PathSegment::from("{rest:.*}");
-        assert_eq!(
-            seg,
-            PathSegment::VarnameRegEx("rest".to_string(), ".*".to_string())
-        );
+        assert_eq!(seg, PathSegment::VarnameWildcard("rest".to_string()),);
     }
 
     #[test]

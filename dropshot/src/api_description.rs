@@ -238,7 +238,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .iter()
             .filter_map(|segment| match PathSegment::from(segment) {
                 PathSegment::VarnameSegment(v) => Some(v),
-                PathSegment::VarnameRegEx(v, _) => Some(v),
+                PathSegment::VarnameWildcard(v) => Some(v),
                 PathSegment::Literal(_) => None,
             })
             .collect::<HashSet<_>>();

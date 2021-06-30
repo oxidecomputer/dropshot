@@ -49,16 +49,19 @@ impl MapValue for String {
 }
 
 /**
- * Deserializer for BTreeMap<String, String> that interprets the values. It has
+ * Deserializer for BTreeMap<String, MapValue> that interprets the values. It has
  * two modes: about to iterate over the map or about to process a single value.
  */
 #[derive(Debug)]
-enum MapDeserializer<'de, Z> {
+enum MapDeserializer<'de, Z: MapValue + Debug + Clone + 'static> {
     Map(&'de BTreeMap<String, Z>),
     Value(Z),
 }
 
-impl<'de, Z> MapDeserializer<'de, Z> {
+impl<'de, Z> MapDeserializer<'de, Z>
+where
+    Z: MapValue + Debug + Clone + 'static,
+{
     fn from_map(input: &'de BTreeMap<String, Z>) -> Self {
         MapDeserializer::Map(input)
     }
@@ -325,7 +328,10 @@ where
 /*
  * Deserializer component for processing enum variants.
  */
-impl<'de, 'a, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z> {
+impl<'de, 'a, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z>
+where
+    Z: MapValue + Clone + Debug + 'static,
+{
     type Error = MapError;
 
     fn unit_variant(self) -> Result<(), MapError> {
@@ -557,7 +563,7 @@ mod test {
         }
     }
     #[test]
-    fn string_seq() {
+    fn wherefore_art_thou_a_valid_sequence_when_in_fact_you_are_a_lone_value() {
         #[derive(Deserialize, Debug)]
         struct A {
             b: Vec<String>,
