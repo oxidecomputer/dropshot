@@ -1,68 +1,10 @@
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-  --> $DIR/bad_endpoint7.rs:26:23
-   |
-26 |       Ok(HttpResponseOk(Ret {
-   |  _______________________^
-27 | |         x: "Oxide".to_string(),
-28 | |         y: 0x1de,
-29 | |     }))
-   | |_____^ the trait `serde::ser::Serialize` is not implemented for `Ret`
-   |
-   = note: required by `HttpResponseOk`
-
-error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> $DIR/bad_endpoint7.rs:26:8
+    --> $DIR/bad_endpoint7.rs:25:6
      |
-26   |       Ok(HttpResponseOk(Ret {
-     |  ________^
-27   | |         x: "Oxide".to_string(),
-28   | |         y: 0x1de,
-29   | |     }))
-     | |______^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+25   | ) -> Result<HttpResponseOk<Ret>, HttpError> {
+     |      ^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
      |
     ::: $WORKSPACE/dropshot/src/handler.rs
      |
-     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                             --------- required by this bound in `HttpResponseOk`
-
-error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> $DIR/bad_endpoint7.rs:26:5
-     |
-26   | /     Ok(HttpResponseOk(Ret {
-27   | |         x: "Oxide".to_string(),
-28   | |         y: 0x1de,
-29   | |     }))
-     | |_______^ the trait `serde::ser::Serialize` is not implemented for `Ret`
-     |
-    ::: $WORKSPACE/dropshot/src/handler.rs
-     |
-     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                             --------- required by this bound in `HttpResponseOk`
-
-error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> $DIR/bad_endpoint7.rs:25:45
-     |
-25   |   ) -> Result<HttpResponseOk<Ret>, HttpError> {
-     |  _____________________________________________^
-26   | |     Ok(HttpResponseOk(Ret {
-27   | |         x: "Oxide".to_string(),
-28   | |         y: 0x1de,
-29   | |     }))
-30   | | }
-     | |_^ the trait `serde::ser::Serialize` is not implemented for `Ret`
-     |
-    ::: $WORKSPACE/dropshot/src/handler.rs
-     |
-     |   pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                             --------- required by this bound in `HttpResponseOk`
-
-error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
-  --> $DIR/bad_endpoint7.rs:23:10
-   |
-23 | async fn bad_endpoint(
-   |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}`
-   |
-  ::: $WORKSPACE/dropshot/src/api_description.rs
-   |
-   |         FuncParams: Extractor + 'static,
-   |                                 ------- required by this bound in `ApiEndpoint::<Context>::new`
+     | pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
+     |                                           --------- required by this bound in `HttpResponseOk`
