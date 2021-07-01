@@ -259,7 +259,6 @@ fn do_endpoint(
                         type E = EE;
                     }
 
-
                     // This is not strictly necessary as we'll try to use
                     // #ret_ty as ResultTrait below. This does, however,
                     // produce a cleaner error message as type definition
