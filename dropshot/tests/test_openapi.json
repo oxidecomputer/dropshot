@@ -60,51 +60,9 @@
         }
       }
     },
-    "/dup3": {
-      "put": {
-        "operationId": "handler10",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "_b",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/NeverDuplicatedParamNextLevel"
-            },
-            "style": "form"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation"
-          }
-        }
-      }
-    },
-    "/dup4": {
-      "put": {
-        "operationId": "handler11",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "_b",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/NeverDuplicatedParamNextLevel"
-            },
-            "style": "form"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation"
-          }
-        }
-      }
-    },
     "/dup5": {
       "put": {
-        "operationId": "handler12",
+        "operationId": "handler10",
         "requestBody": {
           "content": {
             "application/json": {
@@ -124,7 +82,7 @@
     },
     "/dup6": {
       "put": {
-        "operationId": "handler13",
+        "operationId": "handler11",
         "requestBody": {
           "content": {
             "application/json": {
@@ -144,7 +102,7 @@
     },
     "/dup7": {
       "put": {
-        "operationId": "handler14",
+        "operationId": "handler12",
         "requestBody": {
           "content": {
             "application/json": {
@@ -164,7 +122,7 @@
     },
     "/dup8": {
       "get": {
-        "operationId": "handler15",
+        "operationId": "handler13",
         "responses": {
           "200": {
             "description": "successful operation",
@@ -310,21 +268,7 @@
           },
           {
             "in": "query",
-            "name": "_destro",
-            "required": true,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint16",
-                "minimum": 0
-              }
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "_tomax",
+            "name": "tomax",
             "required": true,
             "schema": {
               "type": "string"
@@ -333,7 +277,7 @@
           },
           {
             "in": "query",
-            "name": "_xamot",
+            "name": "xamot",
             "schema": {
               "type": "string"
             },
@@ -364,21 +308,7 @@
         "parameters": [
           {
             "in": "query",
-            "name": "_destro",
-            "required": true,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint16",
-                "minimum": 0
-              }
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "_tomax",
+            "name": "tomax",
             "required": true,
             "schema": {
               "type": "string"
@@ -387,7 +317,7 @@
           },
           {
             "in": "query",
-            "name": "_xamot",
+            "name": "xamot",
             "schema": {
               "type": "string"
             },
@@ -407,25 +337,25 @@
       "BodyParam": {
         "type": "object",
         "properties": {
-          "_any": {},
-          "_x": {
+          "any": {},
+          "x": {
             "type": "string"
           }
         },
         "required": [
-          "_any",
-          "_x"
+          "any",
+          "x"
         ]
       },
       "NeverDuplicatedBodyNextLevel": {
         "type": "object",
         "properties": {
-          "_v": {
+          "v": {
             "type": "boolean"
           }
         },
         "required": [
-          "_v"
+          "v"
         ]
       },
       "NeverDuplicatedBodyTopLevel": {
@@ -442,12 +372,12 @@
       "NeverDuplicatedNext": {
         "type": "object",
         "properties": {
-          "_v": {
+          "v": {
             "type": "boolean"
           }
         },
         "required": [
-          "_v"
+          "v"
         ]
       },
       "NeverDuplicatedResponseNextLevel": {
@@ -475,12 +405,12 @@
       "NeverDuplicatedTop": {
         "type": "object",
         "properties": {
-          "_b": {
+          "b": {
             "$ref": "#/components/schemas/NeverDuplicatedNext"
           }
         },
         "required": [
-          "_b"
+          "b"
         ]
       },
       "Response": {
@@ -515,17 +445,6 @@
         },
         "required": [
           "items"
-        ]
-      },
-      "NeverDuplicatedParamNextLevel": {
-        "type": "object",
-        "properties": {
-          "_v": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "_v"
         ]
       }
     }

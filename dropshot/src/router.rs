@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2021 Oxide Computer Company
 /*!
  * Routes incoming HTTP requests to handler functions
  */
@@ -6,6 +6,8 @@
 use super::error::HttpError;
 use super::handler::RouteHandler;
 
+use crate::from_map::MapError;
+use crate::from_map::MapValue;
 use crate::server::ServerContext;
 use crate::ApiEndpoint;
 use http::Method;
@@ -92,21 +94,27 @@ struct HttpRouterNode<Context: ServerContext> {
 enum HttpRouterEdges<Context: ServerContext> {
     /** Outgoing edges for literal paths. */
     Literals(BTreeMap<String, Box<HttpRouterNode<Context>>>),
-    /** Outgoing edges for variable-named paths. */
-    Variable(String, Box<HttpRouterNode<Context>>),
+    /** Outgoing edge for variable-named paths. */
+    VariableSingle(String, Box<HttpRouterNode<Context>>),
+    /** Outgoing edge that consumes all remaining components. */
+    VariableRest(String, Box<HttpRouterNode<Context>>),
 }
 
 /**
  * `PathSegment` represents a segment in a URI path when the router is being
  * configured.  Each segment may be either a literal string or a variable (the
- * latter indicated by being wrapped in braces.
+ * latter indicated by being wrapped in braces). Variables may consume a single
+ * /-delimited segment or several as defined by a regex (currently only `.*` is
+ * supported).
  */
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PathSegment {
     /** a path segment for a literal string */
     Literal(String),
     /** a path segment for a variable */
-    Varname(String),
+    VarnameSegment(String),
+    /** a path segment that matches all remaining components for a variable */
+    VarnameWildcard(String),
 }
 
 impl PathSegment {
@@ -128,12 +136,31 @@ impl PathSegment {
                 "{}",
                 "HTTP URI path segment variable missing trailing \"}\""
             );
+
+            let var = &segment[1..segment.len() - 1];
+
+            let (var, pat) = if let Some(index) = var.find(':') {
+                (&var[..index], Some(&var[index + 1..]))
+            } else {
+                (var, None)
+            };
+
             assert!(
-                segment.len() > 2,
-                "HTTP URI path segment variable name cannot be empty"
+                valid_identifier(var),
+                "HTTP URI path segment variable name must be a valid \
+                 identifier: '{}'",
+                var
             );
 
-            PathSegment::Varname((&segment[1..segment.len() - 1]).to_string())
+            if let Some(pat) = pat {
+                assert!(
+                    pat == ".*",
+                    "Only the pattern '.*' is currently supported"
+                );
+                PathSegment::VarnameWildcard(var.to_string())
+            } else {
+                PathSegment::VarnameSegment(var.to_string())
+            }
         } else {
             PathSegment::Literal(segment.to_string())
         }
@@ -153,6 +180,45 @@ impl<'a> From<&'a str> for InputPath<'a> {
     }
 }
 
+/*
+ * Validate that the string is a valid Rust identifier.
+ */
+fn valid_identifier(var: &str) -> bool {
+    syn::parse_str::<syn::Ident>(var).is_ok()
+}
+
+/**
+ * A value for a variable which may either be a single value or a list of
+ * values in the case of wildcard path matching.
+ */
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VariableValue {
+    String(String),
+    Components(Vec<String>),
+}
+
+pub type VariableSet = BTreeMap<String, VariableValue>;
+
+impl MapValue for VariableValue {
+    fn as_value(&self) -> Result<&str, MapError> {
+        match self {
+            VariableValue::String(s) => Ok(s.as_str()),
+            VariableValue::Components(_) => Err(MapError(
+                "cannot deserialize sequence as a single value".to_string(),
+            )),
+        }
+    }
+
+    fn as_seq(&self) -> Result<Box<dyn Iterator<Item = String>>, MapError> {
+        match self {
+            VariableValue::String(_) => Err(MapError(
+                "cannot deserialize a single value as a sequence".to_string(),
+            )),
+            VariableValue::Components(v) => Ok(Box::new(v.clone().into_iter())),
+        }
+    }
+}
+
 /**
  * `RouterLookupResult` represents the result of invoking
  * `HttpRouter::lookup_route()`.  A successful route lookup includes both the
@@ -162,7 +228,7 @@ impl<'a> From<&'a str> for InputPath<'a> {
 #[derive(Debug)]
 pub struct RouterLookupResult<'a, Context: ServerContext> {
     pub handler: &'a dyn RouteHandler<Context>,
-    pub variables: BTreeMap<String, String>,
+    pub variables: VariableSet,
 }
 
 impl<Context: ServerContext> HttpRouterNode<Context> {
@@ -194,10 +260,12 @@ impl<Context: ServerContext> HttpRouter<Context> {
         let path = endpoint.path.clone();
 
         let all_segments = route_path_to_segments(path.as_str());
+
+        let mut all_segments = all_segments.into_iter();
         let mut varnames: BTreeSet<String> = BTreeSet::new();
 
         let mut node: &mut Box<HttpRouterNode<Context>> = &mut self.root;
-        for raw_segment in all_segments {
+        while let Some(raw_segment) = all_segments.next() {
             let segment = PathSegment::from(raw_segment);
 
             node = match segment {
@@ -212,7 +280,8 @@ impl<Context: ServerContext> HttpRouter<Context> {
                          * caveats about how matching would work), but it seems
                          * more likely to be a mistake.
                          */
-                        HttpRouterEdges::Variable(varname, _) => {
+                        HttpRouterEdges::VariableSingle(varname, _)
+                        | HttpRouterEdges::VariableRest(varname, _) => {
                             panic!(
                                 "URI path \"{}\": attempted to register route \
                                  for literal path segment \"{}\" when a route \
@@ -227,26 +296,15 @@ impl<Context: ServerContext> HttpRouter<Context> {
                     }
                 }
 
-                PathSegment::Varname(new_varname) => {
-                    /*
-                     * Do not allow the same variable name to be used more than
-                     * once in the path.  Again, this could be supported (with
-                     * some caveats), but it seems more likely to be a mistake.
-                     */
-                    if varnames.contains(&new_varname) {
-                        panic!(
-                            "URI path \"{}\": variable name \"{}\" is used \
-                             more than once",
-                            path, new_varname
-                        );
-                    }
-                    varnames.insert(new_varname.clone());
+                PathSegment::VarnameSegment(new_varname) => {
+                    insert_var(&path, &mut varnames, &new_varname);
 
-                    let edges =
-                        node.edges.get_or_insert(HttpRouterEdges::Variable(
+                    let edges = node.edges.get_or_insert(
+                        HttpRouterEdges::VariableSingle(
                             new_varname.clone(),
                             Box::new(HttpRouterNode::new()),
-                        ));
+                        ),
+                    );
                     match edges {
                         /*
                          * See the analogous check above about combining literal
@@ -260,7 +318,81 @@ impl<Context: ServerContext> HttpRouter<Context> {
                             path, new_varname
                         ),
 
-                        HttpRouterEdges::Variable(varname, ref mut node) => {
+                        HttpRouterEdges::VariableRest(varname, _) => panic!(
+                            "URI path \"{}\": attempted to register route for \
+                             variable path segment (variable name: \"{}\") \
+                             when a route already exists for the remainder of \
+                             the path as {}",
+                            path, new_varname, varname,
+                        ),
+
+                        HttpRouterEdges::VariableSingle(
+                            varname,
+                            ref mut node,
+                        ) => {
+                            if *new_varname != *varname {
+                                /*
+                                 * Don't allow people to use different names for
+                                 * the same part of the path.  Again, this could
+                                 * be supported, but it seems likely to be
+                                 * confusing and probably a mistake.
+                                 */
+                                panic!(
+                                    "URI path \"{}\": attempted to use \
+                                     variable name \"{}\", but a different \
+                                     name (\"{}\") has already been used for \
+                                     this",
+                                    path, new_varname, varname
+                                );
+                            }
+
+                            node
+                        }
+                    }
+                }
+                PathSegment::VarnameWildcard(new_varname) => {
+                    /*
+                     * We don't accept further path segments after the .*.
+                     */
+                    if all_segments.next().is_some() {
+                        panic!(
+                            "URI path \"{}\": attempted to match segments \
+                             after the wildcard variable \"{}\"",
+                            path, new_varname,
+                        );
+                    }
+
+                    insert_var(&path, &mut varnames, &new_varname);
+
+                    let edges = node.edges.get_or_insert(
+                        HttpRouterEdges::VariableRest(
+                            new_varname.clone(),
+                            Box::new(HttpRouterNode::new()),
+                        ),
+                    );
+                    match edges {
+                        /*
+                         * See the analogous check above about combining literal
+                         * and variable path segments from the same resource.
+                         */
+                        HttpRouterEdges::Literals(_) => panic!(
+                            "URI path \"{}\": attempted to register route for \
+                             variable path regex (variable name: \"{}\") when \
+                             a route already exists for a literal path segment",
+                            path, new_varname
+                        ),
+
+                        HttpRouterEdges::VariableSingle(varname, _) => panic!(
+                            "URI path \"{}\": attempted to register route for \
+                             variable path regex (variable name: \"{}\") when \
+                             a route already exists for a segment {}",
+                            path, new_varname, varname,
+                        ),
+
+                        HttpRouterEdges::VariableRest(
+                            varname,
+                            ref mut node,
+                        ) => {
                             if *new_varname != *varname {
                                 /*
                                  * Don't allow people to use different names for
@@ -315,19 +447,40 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 String::from("invalid path encoding"),
             )
         })?;
+        let mut all_segments = all_segments.into_iter();
         let mut node = &self.root;
-        let mut variables: BTreeMap<String, String> = BTreeMap::new();
+        let mut variables = VariableSet::new();
 
-        for segment in all_segments {
+        while let Some(segment) = all_segments.next() {
             let segment_string = segment.to_string();
 
             node = match &node.edges {
                 None => None,
+
                 Some(HttpRouterEdges::Literals(edges)) => {
                     edges.get(&segment_string)
                 }
-                Some(HttpRouterEdges::Variable(varname, ref node)) => {
-                    variables.insert(varname.clone(), segment_string);
+                Some(HttpRouterEdges::VariableSingle(varname, ref node)) => {
+                    variables.insert(
+                        varname.clone(),
+                        VariableValue::String(segment_string),
+                    );
+                    Some(node)
+                }
+                Some(HttpRouterEdges::VariableRest(varname, node)) => {
+                    let mut rest = vec![segment];
+                    while let Some(segment) = all_segments.next() {
+                        rest.push(segment);
+                    }
+                    variables.insert(
+                        varname.clone(),
+                        VariableValue::Components(rest),
+                    );
+                    /*
+                     * There should be no outgoing edges since this is by
+                     * definition a terminal node
+                     */
+                    assert!(node.edges.is_none());
                     Some(node)
                 }
             }
@@ -337,6 +490,20 @@ impl<Context: ServerContext> HttpRouter<Context> {
                     String::from("no route found (no path in router)"),
                 )
             })?
+        }
+
+        /*
+         * The wildcard match consumes the implicit, empty path segment
+         */
+        match &node.edges {
+            Some(HttpRouterEdges::VariableRest(varname, new_node)) => {
+                variables
+                    .insert(varname.clone(), VariableValue::Components(vec![]));
+                /* There should be no outgoing edges */
+                assert!(new_node.edges.is_none());
+                node = new_node;
+            }
+            _ => {}
         }
 
         /*
@@ -361,6 +528,28 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
             })
     }
+}
+
+/**
+ * Insert a variable into the set after checking for duplicates.
+ */
+fn insert_var(
+    path: &str,
+    varnames: &mut BTreeSet<String>,
+    new_varname: &String,
+) -> () {
+    /*
+     * Do not allow the same variable name to be used more than
+     * once in the path.  Again, this could be supported (with
+     * some caveats), but it seems more likely to be a mistake.
+     */
+    if varnames.contains(new_varname) {
+        panic!(
+            "URI path \"{}\": variable name \"{}\" is used more than once",
+            path, new_varname
+        );
+    }
+    varnames.insert(new_varname.clone());
 }
 
 impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
@@ -414,9 +603,18 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
                 map.iter()
                     .map(|(s, node)| (PathSegment::Literal(s.clone()), node)),
             ),
-            Some(HttpRouterEdges::Variable(ref varname, ref node)) => Box::new(
-                std::iter::once((PathSegment::Varname(varname.clone()), node)),
-            ),
+            Some(HttpRouterEdges::VariableSingle(varname, node)) => {
+                Box::new(std::iter::once((
+                    PathSegment::VarnameSegment(varname.clone()),
+                    node,
+                )))
+            }
+            Some(HttpRouterEdges::VariableRest(varname, node)) => {
+                Box::new(std::iter::once((
+                    PathSegment::VarnameSegment(varname.clone()),
+                    node,
+                )))
+            }
             None => Box::new(std::iter::empty()),
         }
     }
@@ -430,7 +628,8 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
             .iter()
             .map(|(c, _)| match c {
                 PathSegment::Literal(s) => s.clone(),
-                PathSegment::Varname(s) => format!("{{{}}}", s),
+                PathSegment::VarnameSegment(s) => format!("{{{}}}", s),
+                PathSegment::VarnameWildcard(s) => format!("{{{}:.*}}", s),
             })
             .collect();
 
@@ -583,12 +782,17 @@ mod test {
     use super::super::handler::RouteHandler;
     use super::input_path_to_segments;
     use super::HttpRouter;
+    use super::PathSegment;
+    use crate::from_map::from_map;
+    use crate::router::VariableValue;
     use crate::ApiEndpoint;
     use crate::ApiEndpointResponse;
     use http::Method;
     use http::StatusCode;
     use hyper::Body;
     use hyper::Response;
+    use serde::Deserialize;
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
     async fn test_handler(
@@ -624,13 +828,13 @@ mod test {
             description: None,
             tags: vec![],
             paginated: false,
+            visible: true,
         }
     }
 
     #[test]
-    #[should_panic(
-        expected = "HTTP URI path segment variable name cannot be empty"
-    )]
+    #[should_panic(expected = "HTTP URI path segment variable name must be a \
+                               valid identifier: ''")]
     fn test_variable_name_empty() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/{}"));
@@ -754,6 +958,64 @@ mod test {
             new_handler(),
             Method::GET,
             "/projects/default",
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "URI path \"/projects/default\": attempted to \
+                               register route for literal path segment \
+                               \"default\" when a route exists for variable \
+                               path segment (variable name: \"rest\")")]
+    fn test_literal_after_regex() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler(),
+            Method::GET,
+            "/projects/{rest:.*}",
+        ));
+        router.insert(new_endpoint(
+            new_handler(),
+            Method::GET,
+            "/projects/default",
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the pattern '.*' is currently supported")]
+    fn test_bogus_regex() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler(),
+            Method::GET,
+            "/word/{rest:[a-z]*}",
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "URI path \"/some/{more:.*}/{stuff}\": \
+                               attempted to match segments after the \
+                               wildcard variable \"more\"")]
+    fn test_more_after_regex() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler(),
+            Method::GET,
+            "/some/{more:.*}/{stuff}",
+        ));
+    }
+
+    /*
+     * TODO: We allow a trailing slash after the wildcard specifier, but we may
+     * reconsider this if we decided to distinguish between the presence or
+     * absence of the trailing slash.
+     */
+    #[test]
+    fn test_slash_after_wildcard_is_fine_dot_dot_dot_for_now() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler(),
+            Method::GET,
+            "/some/{more:.*}/",
         ));
     }
 
@@ -944,7 +1206,10 @@ mod test {
         assert_eq!(result.variables.keys().collect::<Vec<&String>>(), vec![
             "project_id"
         ]);
-        assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p12345".to_string())
+        );
         assert!(router
             .lookup_route(&Method::GET, "/projects/p12345/child".into())
             .is_err());
@@ -952,18 +1217,27 @@ mod test {
             .lookup_route(&Method::GET, "/projects/p12345/".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p12345".to_string())
+        );
         let result = router
             .lookup_route(&Method::GET, "/projects///p12345//".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.get("project_id").unwrap(), "p12345");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p12345".to_string())
+        );
         /* Trick question! */
         let result = router
             .lookup_route(&Method::GET, "/projects/{project_id}".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
-        assert_eq!(result.variables.get("project_id").unwrap(), "{project_id}");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("{project_id}".to_string())
+        );
     }
 
     #[test]
@@ -990,9 +1264,18 @@ mod test {
             "instance_id",
             "project_id"
         ]);
-        assert_eq!(result.variables.get("project_id").unwrap(), "p1");
-        assert_eq!(result.variables.get("instance_id").unwrap(), "i2");
-        assert_eq!(result.variables.get("fwrule_id").unwrap(), "fw3");
+        assert_eq!(
+            *result.variables.get("project_id").unwrap(),
+            VariableValue::String("p1".to_string())
+        );
+        assert_eq!(
+            *result.variables.get("instance_id").unwrap(),
+            VariableValue::String("i2".to_string())
+        );
+        assert_eq!(
+            *result.variables.get("fwrule_id").unwrap(),
+            VariableValue::String("fw3".to_string())
+        );
     }
 
     #[test]
@@ -1020,6 +1303,28 @@ mod test {
             .lookup_route(&Method::GET, "/projects/foo/instances".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h7");
+    }
+
+    #[test]
+    fn test_variables_glob() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler_named("h8"),
+            Method::OPTIONS,
+            "/console/{path:.*}",
+        ));
+
+        let result = router
+            .lookup_route(&Method::OPTIONS, "/console/missiles/launch".into())
+            .unwrap();
+
+        assert_eq!(
+            result.variables.get("path"),
+            Some(&VariableValue::Components(vec![
+                "missiles".to_string(),
+                "launch".to_string()
+            ]))
+        );
     }
 
     #[test]
@@ -1074,5 +1379,142 @@ mod test {
         let segs =
             input_path_to_segments(&"//foo/bar/baz%2fbuzz".into()).unwrap();
         assert_eq!(segs, vec!["foo", "bar", "baz/buzz"]);
+    }
+
+    #[test]
+    fn test_path_segment() {
+        let seg = PathSegment::from("abc");
+        assert_eq!(seg, PathSegment::Literal("abc".to_string()));
+
+        let seg = PathSegment::from("{words}");
+        assert_eq!(seg, PathSegment::VarnameSegment("words".to_string()));
+
+        let seg = PathSegment::from("{rest:.*}");
+        assert_eq!(seg, PathSegment::VarnameWildcard("rest".to_string()),);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment1() {
+        let _ = PathSegment::from("{foo");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment2() {
+        let _ = PathSegment::from("bar}");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment3() {
+        let _ = PathSegment::from("{867_5309}");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment4() {
+        let _ = PathSegment::from("{_}");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment5() {
+        let _ = PathSegment::from("{...}");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment6() {
+        let _ = PathSegment::from("{}");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment7() {
+        let _ = PathSegment::from("{}");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_path_segment8() {
+        let _ = PathSegment::from("{varname:abc+}");
+    }
+
+    #[test]
+    fn test_map() {
+        #[derive(Deserialize)]
+        struct A {
+            bbb: String,
+            ccc: Vec<String>,
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "bbb".to_string(),
+            VariableValue::String("doggos".to_string()),
+        );
+        map.insert(
+            "ccc".to_string(),
+            VariableValue::Components(vec![
+                "lizzie".to_string(),
+                "brickley".to_string(),
+            ]),
+        );
+
+        match from_map::<A, VariableValue>(&map) {
+            Ok(a) => {
+                assert_eq!(a.bbb, "doggos");
+                assert_eq!(a.ccc, vec!["lizzie", "brickley"]);
+            }
+            Err(s) => panic!("unexpected error: {}", s),
+        }
+    }
+
+    #[test]
+    fn test_map_bad_value() {
+        #[allow(dead_code)]
+        #[derive(Deserialize)]
+        struct A {
+            bbb: String,
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "bbb".to_string(),
+            VariableValue::Components(vec![
+                "lizzie".to_string(),
+                "brickley".to_string(),
+            ]),
+        );
+
+        match from_map::<A, VariableValue>(&map) {
+            Ok(_) => panic!("unexpected success"),
+            Err(s) => {
+                assert_eq!(s, "cannot deserialize sequence as a single value")
+            }
+        }
+    }
+
+    #[test]
+    fn test_map_bad_seq() {
+        #[allow(dead_code)]
+        #[derive(Deserialize)]
+        struct A {
+            bbb: Vec<String>,
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "bbb".to_string(),
+            VariableValue::String("doggos".to_string()),
+        );
+
+        match from_map::<A, VariableValue>(&map) {
+            Ok(_) => panic!("unexpected success"),
+            Err(s) => {
+                assert_eq!(s, "cannot deserialize a single value as a sequence")
+            }
+        }
     }
 }

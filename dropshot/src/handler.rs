@@ -46,6 +46,7 @@ use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
+use crate::router::VariableSet;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -61,7 +62,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use slog::Logger;
 use std::cmp::min;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
@@ -93,7 +93,7 @@ pub struct RequestContext<Context: ServerContext> {
     /** HTTP request details */
     pub request: Arc<Mutex<Request<Body>>>,
     /** HTTP request routing variables */
-    pub path_variables: BTreeMap<String, String>,
+    pub path_variables: VariableSet,
     /** unique id assigned to this request */
     pub request_id: String,
     /** logger for this specific request */
@@ -801,6 +801,8 @@ fn schema2parameters(
             if let Some(object) = object {
                 parameters.extend(object.properties.iter().map(
                     |(name, schema)| {
+                        validate_parameter_schema(loc, name, schema, generator);
+
                         // We won't often see referenced schemas here, but we may
                         // in the case of enumerated strings. To handle this, we
                         // package up the dependencies to include in the top-
@@ -875,6 +877,148 @@ fn schema2parameters(
          * The generated schema should be an object.
          */
         invalid => panic!("invalid type {:#?}", invalid),
+    }
+}
+
+/**
+ * Confirm that the parameter schema type is either an atomic value (i.e.
+ * string, number, boolean) or an array of strings (to accommodate wild card
+ * paths).
+ */
+fn validate_parameter_schema(
+    loc: &ApiEndpointParameterLocation,
+    name: &String,
+    schema: &schemars::schema::Schema,
+    generator: &schemars::gen::SchemaGenerator,
+) {
+    match schema {
+        /*
+         * We expect references to be on their own.
+         */
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: None,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: Some(_),
+            extensions: _,
+        }) => validate_parameter_schema(
+            loc,
+            name,
+            generator.dereference(schema).expect("invalid reference"),
+            generator,
+        ),
+
+        /*
+         * Match atomic value types.
+         */
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            instance_type:
+                Some(schemars::schema::SingleOrVec::Single(instance_type)),
+            subschemas: None,
+            array: None,
+            object: None,
+            reference: None,
+            ..
+        }) if match instance_type.as_ref() {
+            InstanceType::Boolean
+            | InstanceType::Number
+            | InstanceType::String
+            | InstanceType::Integer => true,
+            _ => false,
+        } =>
+        { /* All good. */ }
+
+        /*
+         * For path parameters only, match array types and validate that their
+         * items are strings.
+         */
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type:
+                Some(schemars::schema::SingleOrVec::Single(instance_type)),
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: Some(array_validation),
+            object: None,
+            reference: None,
+            extensions: _,
+        }) if matches!(loc, ApiEndpointParameterLocation::Path)
+            && matches!(instance_type.as_ref(), InstanceType::Array) =>
+        {
+            match array_validation.as_ref() {
+                schemars::schema::ArrayValidation {
+                    items:
+                        Some(schemars::schema::SingleOrVec::Single(item_schema)),
+                    additional_items: None,
+                    ..
+                } => validate_string_schema(name, item_schema, generator),
+                _ => panic!("parameter {} has an invalid array type", name),
+            }
+        }
+
+        _ => panic!("parameter {} has an invalid type", name),
+    }
+}
+
+/**
+ * Validate that the given schema is for a simple string type.
+ */
+fn validate_string_schema(
+    name: &String,
+    schema: &schemars::schema::Schema,
+    generator: &schemars::gen::SchemaGenerator,
+) {
+    match schema {
+        /*
+         * We expect references to be on their own.
+         */
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: None,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: Some(_),
+            extensions: _,
+        }) => validate_string_schema(
+            name,
+            generator.dereference(schema).expect("invalid reference"),
+            generator,
+        ),
+
+        /*
+         * Match string value types.
+         */
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            instance_type:
+                Some(schemars::schema::SingleOrVec::Single(instance_type)),
+            subschemas: None,
+            array: None,
+            object: None,
+            reference: None,
+            ..
+        }) if matches!(instance_type.as_ref(), InstanceType::String) => { /* All good. */
+        }
+
+        _ => {
+            panic!("parameter {} is an array of a type other than string", name)
+        }
     }
 }
 
