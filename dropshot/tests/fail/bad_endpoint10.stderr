@@ -5,7 +5,7 @@ error[E0271]: type mismatch resolving `<String as TypeEq>::This == HttpError`
    |      ^^^^^^
    |      |
    |      expected struct `HttpError`, found struct `String`
-   |      required by this bound in `validate_return_type`
+   |      required by this bound in `validate_result_error_type`
 
 error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_error_type> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_error_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> $DIR/bad_endpoint10.rs:14:10
