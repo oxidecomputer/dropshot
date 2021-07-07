@@ -7,10 +7,10 @@ use bytes::BufMut;
 use bytes::Bytes;
 use hyper::body::HttpBody;
 use serde::de::DeserializeOwned;
-use std::collections::BTreeMap;
 
 use super::error::HttpError;
 use crate::from_map::from_map;
+use crate::router::VariableSet;
 
 /** header name for conveying request ids ("x-request-id") */
 pub const HEADER_REQUEST_ID: &str = "x-request-id";
@@ -136,7 +136,7 @@ where
  * TODO-testing: Add automated tests.
  */
 pub fn http_extract_path_params<T: DeserializeOwned>(
-    path_params: &BTreeMap<String, String>,
+    path_params: &VariableSet,
 ) -> Result<T, HttpError> {
     from_map(path_params).map_err(|message| {
         /*
