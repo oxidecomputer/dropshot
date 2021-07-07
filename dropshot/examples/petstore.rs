@@ -144,7 +144,7 @@ async fn find_pets_by_tags(
                 tags: None,
                 status: None,
             };
-            (vec![pet], scan_params.clone())
+            (vec![pet], scan_params)
         }
         dropshot::WhichPage::Next(page_selector) => {
             let pet = Pet {

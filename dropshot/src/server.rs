@@ -331,14 +331,12 @@ async fn http_request_handle<C: ServerContext>(
      * response?
      * TODO-hardening: add a request read timeout as well so that we don't allow
      * this to take forever.
-     * TODO-correctness: check that URL processing (particularly with slashes as
-     * the only separator) is correct.  (Do we need to URL-escape or un-escape
-     * here?  Redirect container URls that don't end it "/"?)
      * TODO-correctness: Do we need to dump the body on errors?
      */
     let method = request.method();
     let uri = request.uri();
-    let lookup_result = server.router.lookup_route(&method, uri.path())?;
+    let lookup_result =
+        server.router.lookup_route(&method, uri.path().into())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: Some(request),

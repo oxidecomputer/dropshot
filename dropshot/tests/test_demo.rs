@@ -387,24 +387,22 @@ async fn test_demo_path_param_string() {
 
     /*
      * Success cases (use the path parameter).
-     * TODO-coverage verify whether the values below are encoded correctly in
-     * all the right places.  It's a little surprising that they come back
-     * encoded.
      */
     let okay_paths = vec![
         ("/testing/demo_path_string/okay", "okay"),
         ("/testing/demo_path_string/okay/", "okay"),
         ("/testing/demo_path_string//okay", "okay"),
         ("/testing/demo_path_string//okay//", "okay"),
-        ("/testing/demo_path_string//%7Bevil%7D", "%7Bevil%7D"),
+        ("/testing/demo_path_string//%7Bevil%7D", "{evil}"),
         (
             "/testing/demo_path_string//%7Bsurprisingly_okay",
-            "%7Bsurprisingly_okay",
+            "{surprisingly_okay",
         ),
         (
             "/testing/demo_path_string//surprisingly_okay%7D",
-            "surprisingly_okay%7D",
+            "surprisingly_okay}",
         ),
+        ("/testing/demo_path_string/parent%2Fchild", "parent/child"),
     ];
 
     for (okay_path, matched_part) in okay_paths {

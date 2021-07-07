@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2021 Oxide Computer Company
 
 //! This package defines macro attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
@@ -50,6 +50,7 @@ struct Metadata {
     method: MethodType,
     path: String,
     tags: Option<Vec<String>>,
+    unpublished: Option<bool>,
     _dropshot_crate: Option<String>,
 }
 
@@ -81,8 +82,10 @@ fn usage(err_msg: &str, fn_name: &str) -> String {
 ///     method = { DELETE | GET | PATCH | POST | PUT },
 ///     path = "/path/name/with/{named}/{variables}",
 ///
-///     // Optional fields
+///     // Optional tags for the API description
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
+///     // A value of `true` causes the API to be omitted from the API description
+///     unpublished = { true | false },
 /// }]
 /// ```
 ///
@@ -151,6 +154,14 @@ fn do_endpoint(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+
+    let visible = if let Some(true) = metadata.unpublished {
+        quote! {
+            .visible(false)
+        }
+    } else {
+        quote! {}
+    };
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
@@ -342,6 +353,7 @@ fn do_endpoint(
                 )
                 #description
                 #(#tags)*
+                #visible
             }
         }
     };
@@ -422,12 +434,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 pub async fn handler_xyz(_rqctx: &RequestContext<()>) {}
-            }
-            .into(),
+            },
         );
         let expected = quote! {
             #[allow(non_camel_case_types, missing_docs)]
@@ -461,12 +471,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 pub async fn handler_xyz(_rqctx: &dropshot::RequestContext<()>) {}
-            }
-            .into(),
+            },
         );
         let expected = quote! {
             #[allow(non_camel_case_types, missing_docs)]
@@ -500,12 +508,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>) {}
-            }
-            .into(),
+            },
         );
         let query = quote! {
             Query<Q>
@@ -555,8 +561,7 @@ mod tests {
             .into(),
             quote! {
                 async fn handler_xyz(_rqctx: &RequestContext<std::i32>, q: Query<Q>, _: &mut Request<Body>) {}
-            }
-            .into(),
+            },
         );
         let query = quote! {
             Query<Q>
@@ -618,12 +623,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 pub(crate) async fn handler_xyz(_rqctx: &RequestContext<()>, q: Query<Q>) {}
-            }
-            .into(),
+            },
         );
         let query = quote! {
             Query<Q>
@@ -670,12 +673,10 @@ mod tests {
                 method = GET,
                 path = "/a/b/c",
                 tags = ["stuff", "things"],
-            }
-            .into(),
+            },
             quote! {
                 async fn handler_xyz(_rqctx: &RequestContext<()>) {}
-            }
-            .into(),
+            },
         );
         let expected = quote! {
             #[allow(non_camel_case_types, missing_docs)]
@@ -709,13 +710,11 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 /** handle "xyz" requests */
                 async fn handler_xyz(_rqctx: &RequestContext<()>) {}
-            }
-            .into(),
+            },
         );
         let expected = quote! {
             #[allow(non_camel_case_types, missing_docs)]
@@ -749,12 +748,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 const POTATO = "potato";
-            }
-            .into(),
+            },
         );
 
         let msg = format!("{}", ret.err().unwrap());
@@ -767,12 +764,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = /a/b/c
-            }
-            .into(),
+            },
             quote! {
                 const POTATO = "potato";
-            }
-            .into(),
+            },
         );
 
         let msg = format!("{}", ret.err().unwrap());
@@ -785,12 +780,10 @@ mod tests {
             quote! {
                 methud = GET,
                 path = "/a/b/c"
-            }
-            .into(),
+            },
             quote! {
                 const POTATO = "potato";
-            }
-            .into(),
+            },
         );
 
         let msg = format!("{}", ret.err().unwrap());
@@ -803,12 +796,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c",
-            }
-            .into(),
+            },
             quote! {
                 fn handler_xyz(_rqctx: &RequestContext) {}
-            }
-            .into(),
+            },
         );
 
         let msg = format!("{}", ret.err().unwrap());
@@ -821,12 +812,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c",
-            }
-            .into(),
+            },
             quote! {
                 async fn handler_xyz(&self) {}
-            }
-            .into(),
+            },
         );
 
         let msg = format!("{}", ret.err().unwrap());
@@ -842,12 +831,10 @@ mod tests {
             quote! {
                 method = GET,
                 path = "/a/b/c",
-            }
-            .into(),
+            },
             quote! {
                 async fn handler_xyz() {}
-            }
-            .into(),
+            },
         );
 
         let msg = format!("{}", ret.err().unwrap());

@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2021 Oxide Computer Company
 /*!
  * Describes the endpoints and handler functions in your API
  */
@@ -7,7 +7,7 @@ use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
-use crate::router::path_to_segments;
+use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
 use crate::server::ServerContext;
@@ -36,6 +36,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub description: Option<String>,
     pub tags: Vec<String>,
     pub paginated: bool,
+    pub visible: bool,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -61,6 +62,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             description: None,
             tags: vec![],
             paginated: func_parameters.paginated,
+            visible: true,
         }
     }
 
@@ -71,6 +73,11 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
 
     pub fn tag<T: ToString>(mut self, tag: T) -> Self {
         self.tags.push(tag.to_string());
+        self
+    }
+
+    pub fn visible(mut self, visible: bool) -> Self {
+        self.visible = visible;
         self
     }
 }
@@ -227,11 +234,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         // Gather up the path parameters and the path variable components, and
         // make sure they're identical.
-        let path = path_to_segments(&e.path)
+        let path = route_path_to_segments(&e.path)
             .iter()
             .filter_map(|segment| match PathSegment::from(segment) {
-                PathSegment::Varname(v) => Some(v),
-                _ => None,
+                PathSegment::VarnameSegment(v) => Some(v),
+                PathSegment::VarnameWildcard(v) => Some(v),
+                PathSegment::Literal(_) => None,
             })
             .collect::<HashSet<_>>();
         let vars = e
@@ -380,6 +388,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
             indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
         for (path, method, endpoint) in &self.router {
+            if !endpoint.visible {
+                continue;
+            }
             let path = openapi.paths.entry(path).or_insert(
                 openapiv3::ReferenceOr::Item(openapiv3::PathItem::default()),
             );
@@ -1238,6 +1249,24 @@ mod test {
                  parameters do not appear in the path (a,b)"
                 .to_string())
         );
+    }
+
+    #[should_panic(expected = "route paths must begin with a '/': 'I don't \
+                               start with a slash'")]
+    #[test]
+    fn test_badpath4() {
+        #[endpoint {
+            method = PUT,
+            path = "I don't start with a slash"
+        }]
+        async fn test_badpath_handler(
+            _: &RequestContext<()>,
+        ) -> Result<Response<Body>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        api.register(test_badpath_handler).unwrap();
     }
 
     #[test]
