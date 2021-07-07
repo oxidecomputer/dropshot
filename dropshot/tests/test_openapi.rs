@@ -8,7 +8,7 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{io::Cursor, str::from_utf8, sync::Arc};
+use std::{io::Cursor, str::from_utf8};
 
 #[endpoint {
     method = GET,
@@ -18,7 +18,7 @@ use std::{io::Cursor, str::from_utf8, sync::Arc};
 /// line comment.
 /// It uses Rust-style.
 async fn handler1(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }
@@ -40,7 +40,7 @@ struct QueryArgs {
  * It uses C-style.
  */
 async fn handler2(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _query: Query<QueryArgs>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     Ok(HttpResponseUpdatedNoContent())
@@ -57,7 +57,7 @@ struct PathArgs {
     path = "/test/man/{x}",
 }]
 async fn handler3(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _path: Path<PathArgs>,
 ) -> Result<HttpResponseDeleted, HttpError> {
     Ok(HttpResponseDeleted())
@@ -78,7 +78,7 @@ struct Response {}
     path = "/test/camera",
 }]
 async fn handler4(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
@@ -90,7 +90,7 @@ async fn handler4(
     tags = [ "person", "woman", "man", "camera", "tv"]
 }]
 async fn handler5(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _path: Path<PathArgs>,
     _query: Query<QueryArgs>,
     _body: TypedBody<BodyParam>,
@@ -120,7 +120,7 @@ struct ExamplePageSelector {
     path = "/impairment",
 }]
 async fn handler6(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _query: Query<PaginationParams<ExampleScanParams, ExamplePageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<ResponseItem>>, HttpError> {
     unimplemented!();
@@ -131,7 +131,7 @@ async fn handler6(
     path = "/datagoeshere",
 }]
 async fn handler7(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _dump: UntypedBody,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -157,7 +157,7 @@ struct NeverDuplicatedResponseNextLevel {
     path = "/dup1",
 }]
 async fn handler8(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
@@ -167,7 +167,7 @@ async fn handler8(
     path = "/dup2",
 }]
 async fn handler9(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
@@ -193,7 +193,7 @@ struct NeverDuplicatedBodyNextLevel {
     path = "/dup5",
 }]
 async fn handler10(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -204,7 +204,7 @@ async fn handler10(
     path = "/dup6",
 }]
 async fn handler11(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -232,7 +232,7 @@ struct NeverDuplicatedNext {
     path = "/dup7",
 }]
 async fn handler12(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _b: TypedBody<NeverDuplicatedTop>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
@@ -243,7 +243,7 @@ async fn handler12(
     path = "/dup8",
 }]
 async fn handler13(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
     unimplemented!();
 }
@@ -260,7 +260,7 @@ struct AllPath {
     unpublished = true,
 }]
 async fn handler14(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
     _path: Path<AllPath>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
     unimplemented!();

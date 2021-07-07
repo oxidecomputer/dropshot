@@ -106,7 +106,6 @@ pub mod routes {
     use dropshot::RequestContext;
     use dropshot::TypedBody;
     use std::sync::atomic::Ordering;
-    use std::sync::Arc;
 
     /**
      * Fetch the current value of the counter.
@@ -118,7 +117,7 @@ pub mod routes {
           path = "/counter",
       }]
     pub async fn example_api_get_counter(
-        rqctx: Arc<RequestContext<ExampleContext>>,
+        rqctx: &RequestContext<ExampleContext>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
         let api_context = rqctx.context();
 
@@ -136,7 +135,7 @@ pub mod routes {
           path = "/counter",
       }]
     pub async fn example_api_put_counter(
-        rqctx: Arc<RequestContext<ExampleContext>>,
+        rqctx: &RequestContext<ExampleContext>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         let api_context = rqctx.context();

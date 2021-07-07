@@ -1,0 +1,10 @@
+error[E0277]: the trait bound `SomethingCool: dropshot::handler::private::Seal` is not satisfied
+   --> $DIR/impl_extractable.rs:19:6
+    |
+19  | impl Extractable for SomethingCool {}
+    |      ^^^^^^^^^^^ the trait `dropshot::handler::private::Seal` is not implemented for `SomethingCool`
+    |
+   ::: $WORKSPACE/dropshot/src/handler.rs
+    |
+    | pub trait Extractable: private::Seal {}
+    |                        ------------- required by this bound in `Extractable`

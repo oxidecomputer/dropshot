@@ -50,7 +50,6 @@ use crate::router::VariableSet;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::lock::Mutex;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Request;
@@ -69,6 +68,8 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 /**
  * Type alias for the result returned by HTTP handler functions.
@@ -78,20 +79,11 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 /**
  * Handle for various interfaces useful during request processing.
  */
-/*
- * TODO-cleanup What's the right way to package up "request"?  The only time we
- * need it to be mutable is when we're reading the body (e.g., as part of the
- * JSON extractor).  In order to support that, we wrap it in something that
- * supports interior mutability.  It also needs to be thread-safe, since we're
- * using async/await.  That brings us to Arc<Mutex<...>>, but it seems like
- * overkill since it will only really be used by one thread at a time (at all,
- * let alone mutably) and there will never be contention on the Mutex.
- */
 pub struct RequestContext<Context: ServerContext> {
     /** shared server state */
     pub server: Arc<DropshotState<Context>>,
     /** HTTP request details */
-    pub request: Arc<Mutex<Request<Body>>>,
+    pub(crate) request: Option<Request<Body>>,
     /** HTTP request routing variables */
     pub path_variables: VariableSet,
     /** unique id assigned to this request */
@@ -154,9 +146,7 @@ pub trait RequestContextArgument {
     type Context;
 }
 
-impl<T: 'static + ServerContext> RequestContextArgument
-    for Arc<RequestContext<T>>
-{
+impl<T: 'static + ServerContext> RequestContextArgument for &RequestContext<T> {
     type Context = T;
 }
 
@@ -181,10 +171,64 @@ pub trait Extractor: Send + Sync + Sized {
      * Construct an instance of this type from a `RequestContext`.
      */
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<Self, HttpError>;
 
     fn metadata() -> ExtractorMetadata;
+
+    fn extract_order() -> ExtractOrder;
+}
+
+/// This looks weird, but it's apparently a standard rust pattern for preventing
+/// pub traits from being implemented outside of this crate. See `Sealed Traits`
+/// `https://rust-lang.github.io/api-guidelines/future-proofing.html`
+mod private {
+    /// Private marker trait for Extractable that prevents it from being implemented
+    /// outside of this crate
+    pub trait Seal {}
+}
+
+/// Marker trait for types or variations of types that are considered valid for
+/// extraction into user-defined handler functions.
+pub trait Extractable: private::Seal {}
+
+/// Possibly over-egged Macro that lets you declare a list of types to be
+/// extractable all at once. Because this macro has two sets of repeating
+/// patterns, it has to be recursive.
+macro_rules! declare_extractables {
+
+    // This is the terminal case, so that recursion can end
+    (impl $(<$($generic:ident),*$(,)?>)? Extractable for
+        $(where $($bound_generic:ty : $($constraint:tt)*),*)?) => {
+    };
+
+    (impl $(<$($generic:ident),*$(,)?>)? Extractable for $T:ty $(,$OtherTs:ty)*
+            $(where $($bound_generic:ty : $($constraint:tt)*),*)?) => {
+
+        impl $(<$($generic),*>)? Extractable for $T
+            $(where $($bound_generic : $($constraint)*)*)? {}
+        impl $(<$($generic),*>)? private::Seal for $T
+            $(where $($bound_generic : $($constraint)*)*)? {}
+
+        declare_extractables! {
+            impl $(<$($generic),*>)? Extractable for $($OtherTs),*
+                $(where $($bound_generic : $($constraint)*)*)?
+        }
+    };
+}
+
+declare_extractables! {
+    impl <Q> Extractable for Query<Q>, &Query<Q>, &mut Query<Q>
+        where Q: DeserializeOwned + JsonSchema + Send + Sync
+}
+
+/// Enumeration of the rounds of Extraction. Some of the extractable types
+/// have to be extracted before others (Example: `TypedBody` & `UntypedBody`
+/// need to be extracted before the raw request is extracted)
+#[derive(EnumIter, PartialEq, Eq)]
+pub enum ExtractOrder {
+    First,
+    Last,
 }
 
 /**
@@ -201,14 +245,26 @@ pub struct ExtractorMetadata {
  * whose elements themselves implement `Extractor`.
  */
 macro_rules! impl_extractor_for_tuple {
-    ($( $T:ident),*) => {
+    ($( ($t:ident, $T:ident) ),*) => {
     #[async_trait]
     impl< $($T: Extractor + 'static,)* > Extractor for ($($T,)*)
     {
-        async fn from_request<Context: ServerContext>(_rqctx: Arc<RequestContext<Context>>)
+        async fn from_request<Context: ServerContext>(_rqctx: &mut RequestContext<Context>)
             -> Result<( $($T,)* ), HttpError>
         {
-            futures::try_join!($($T::from_request(Arc::clone(&_rqctx)),)*)
+            $(
+                let mut $t = None;
+            )*
+
+            for _extract_round in ExtractOrder::iter() {
+                $(
+                    $t = if _extract_round == <$T>::extract_order() { Some($T::from_request(_rqctx).await?) } else { $t };
+                )?
+            }
+
+            Ok(($(
+                $t.expect("All extractors should have run")
+            ,)*))
         }
 
         fn metadata() -> ExtractorMetadata {
@@ -223,13 +279,16 @@ macro_rules! impl_extractor_for_tuple {
             )*
             ExtractorMetadata { paginated, parameters }
         }
+
+        fn extract_order() -> ExtractOrder { ExtractOrder::First }
     }
 }}
 
 impl_extractor_for_tuple!();
-impl_extractor_for_tuple!(T1);
-impl_extractor_for_tuple!(T1, T2);
-impl_extractor_for_tuple!(T1, T2, T3);
+impl_extractor_for_tuple!((t1, T1));
+impl_extractor_for_tuple!((t1, T1), (t2, T2));
+impl_extractor_for_tuple!((t1, T1), (t2, T2), (t3, T3));
+impl_extractor_for_tuple!((t1, T1), (t2, T2), (t3, T3), (t4, T4));
 
 /**
  * `HttpHandlerFunc` is a trait providing a single function, `handle_request()`,
@@ -258,7 +317,7 @@ where
 {
     async fn handle_request(
         &self,
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: RequestContext<Context>,
         p: FuncParams,
     ) -> HttpHandlerResult;
 }
@@ -353,7 +412,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
         HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
     where
         Context: ServerContext,
-        FuncType: Fn(Arc<RequestContext<Context>>, $($T,)*)
+        FuncType: Fn(RequestContext<Context>, $($T,)*)
             -> FutureType + Send + Sync + 'static,
         FutureType: Future<Output = Result<ResponseType, HttpError>>
             + Send + 'static,
@@ -362,7 +421,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     {
         async fn handle_request(
             &self,
-            rqctx: Arc<RequestContext<Context>>,
+            rqctx: RequestContext<Context>,
             _param_tuple: ($($T,)*)
         ) -> HttpHandlerResult
         {
@@ -375,8 +434,9 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
 
 impl_HttpHandlerFunc_for_func_with_params!();
 impl_HttpHandlerFunc_for_func_with_params!((0, T0));
-impl_HttpHandlerFunc_for_func_with_params!((0, T1), (1, T2));
-impl_HttpHandlerFunc_for_func_with_params!((0, T1), (1, T2), (2, T3));
+impl_HttpHandlerFunc_for_func_with_params!((0, T0), (1, T1));
+impl_HttpHandlerFunc_for_func_with_params!((0, T0), (1, T1), (2, T2));
+impl_HttpHandlerFunc_for_func_with_params!((0, T0), (1, T1), (2, T2), (3, T3));
 
 /**
  * `RouteHandler` abstracts an `HttpHandlerFunc<FuncParams, ResponseType>` in a
@@ -465,7 +525,7 @@ where
 
     async fn handle_request(
         &self,
-        rqctx_raw: RequestContext<Context>,
+        mut rqctx: RequestContext<Context>,
     ) -> HttpHandlerResult {
         /*
          * This is where the magic happens: in the code below, `funcparams` has
@@ -485,8 +545,7 @@ where
          * actual handler function.  From this point down, all of this is
          * resolved statically.
          */
-        let rqctx = Arc::new(rqctx_raw);
-        let funcparams = Extractor::from_request(Arc::clone(&rqctx)).await?;
+        let funcparams = Extractor::from_request(&mut rqctx).await?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -596,14 +655,21 @@ where
     QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<Query<QueryType>, HttpError> {
-        let request = rqctx.request.lock().await;
-        http_request_load_query(&request)
+        let request = rqctx
+            .request
+            .as_ref()
+            .expect("Hyper request will only extracted after Query");
+        http_request_load_query(request)
     }
 
     fn metadata() -> ExtractorMetadata {
         get_metadata::<QueryType>(&ApiEndpointParameterLocation::Query)
+    }
+
+    fn extract_order() -> ExtractOrder {
+        ExtractOrder::First
     }
 }
 
@@ -630,6 +696,11 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
     }
 }
 
+declare_extractables! {
+    impl<P> Extractable for Path<P>, &Path<P>, &mut Path<P>
+    where P: JsonSchema + Send + Sync
+}
+
 /*
  * The `Extractor` implementation for Path<PathType> describes how to construct
  * an instance of `Path<QueryType>` from an HTTP request: namely, by extracting
@@ -641,7 +712,7 @@ where
     PathType: DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<Path<PathType>, HttpError> {
         let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
         Ok(Path {
@@ -651,6 +722,10 @@ where
 
     fn metadata() -> ExtractorMetadata {
         get_metadata::<PathType>(&ApiEndpointParameterLocation::Path)
+    }
+
+    fn extract_order() -> ExtractOrder {
+        ExtractOrder::First
     }
 }
 
@@ -1053,13 +1128,16 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
  * deserialize an instance of `BodyType` from it.
  */
 async fn http_request_load_json_body<Context: ServerContext, BodyType>(
-    rqctx: Arc<RequestContext<Context>>,
+    rqctx: &mut RequestContext<Context>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
+    let request = rqctx
+        .request
+        .as_mut()
+        .expect("Hyper request will only extracted after Typed Body");
     let body_bytes = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
@@ -1078,6 +1156,11 @@ where
     }
 }
 
+declare_extractables! {
+    impl<T> Extractable for TypedBody<T>, &TypedBody<T>, &mut TypedBody<T>
+    where T: JsonSchema + DeserializeOwned + Send + Sync
+}
+
 /*
  * The `Extractor` implementation for TypedBody<BodyType> describes how to
  * construct an instance of `TypedBody<BodyType>` from an HTTP request: namely,
@@ -1092,7 +1175,7 @@ where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
         http_request_load_json_body(rqctx).await
     }
@@ -1112,6 +1195,10 @@ where
             paginated: false,
             parameters: vec![body],
         }
+    }
+
+    fn extract_order() -> ExtractOrder {
+        ExtractOrder::First
     }
 }
 
@@ -1152,13 +1239,20 @@ impl UntypedBody {
     }
 }
 
+declare_extractables! {
+    impl Extractable for UntypedBody, &UntypedBody, &mut UntypedBody
+}
+
 #[async_trait]
 impl Extractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &mut RequestContext<Context>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
-        let mut request = rqctx.request.lock().await;
+        let request = rqctx
+            .request
+            .as_mut()
+            .expect("Hyper request will only extracted after Untyped Body");
         let body_bytes = http_read_body(
             request.body_mut(),
             server.config.request_body_max_bytes,
@@ -1190,6 +1284,37 @@ impl Extractor for UntypedBody {
             )],
             paginated: false,
         }
+    }
+
+    fn extract_order() -> ExtractOrder {
+        ExtractOrder::First
+    }
+}
+
+declare_extractables! {
+    impl Extractable for &mut Request<Body>, &Request<Body>
+}
+
+#[async_trait]
+impl Extractor for Request<Body> {
+    async fn from_request<Context: ServerContext>(
+        rqctx: &mut RequestContext<Context>,
+    ) -> Result<Self, HttpError> {
+        Ok(rqctx
+            .request
+            .take()
+            .expect("Compiler prevents extracting request more than once"))
+    }
+
+    fn metadata() -> ExtractorMetadata {
+        ExtractorMetadata {
+            paginated: false,
+            parameters: vec![],
+        }
+    }
+
+    fn extract_order() -> ExtractOrder {
+        ExtractOrder::Last
     }
 }
 

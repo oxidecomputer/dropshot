@@ -1,7 +1,7 @@
 error: constant is never used: `unused_endpoint`
-  --> $DIR/unused_endpoint.rs:23:10
+  --> $DIR/unused_endpoint.rs:22:10
    |
-23 | async fn unused_endpoint(
+22 | async fn unused_endpoint(
    |          ^^^^^^^^^^^^^^^
    |
 note: the lint level is defined here

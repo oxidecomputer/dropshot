@@ -1188,7 +1188,6 @@ mod test {
     use hyper::Response;
     use schemars::JsonSchema;
     use serde::Deserialize;
-    use std::sync::Arc;
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1198,7 +1197,7 @@ mod test {
     }
 
     async fn test_badpath_handler(
-        _: Arc<RequestContext<()>>,
+        _: RequestContext<()>,
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
@@ -1261,7 +1260,7 @@ mod test {
             path = "I don't start with a slash"
         }]
         async fn test_badpath_handler(
-            _: Arc<RequestContext<()>>,
+            _: &RequestContext<()>,
         ) -> Result<Response<Body>, HttpError> {
             unimplemented!();
         }
@@ -1333,7 +1332,7 @@ mod test {
             path = "/testing/two_bodies"
         }]
         async fn test_twobodies_handler(
-            _: Arc<RequestContext<()>>,
+            _: &RequestContext<()>,
             _: UntypedBody,
             _: TypedBody<AStruct>,
         ) -> Result<Response<Body>, HttpError> {

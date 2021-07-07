@@ -7,7 +7,7 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
-use std::sync::Arc;
+
 
 #[derive(JsonSchema)]
 #[allow(dead_code)]
@@ -21,7 +21,7 @@ struct Ret {
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: &RequestContext<()>,
 ) -> Result<HttpResponseOk<Ret>, HttpError> {
     Ok(HttpResponseOk(Ret {
         x: "Oxide".to_string(),

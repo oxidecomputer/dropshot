@@ -123,7 +123,6 @@
  * use http::Method;
  * use schemars::JsonSchema;
  * use serde::Serialize;
- * use std::sync::Arc;
  *
  * /** Represents a project in our API */
  * #[derive(Serialize, JsonSchema)]
@@ -138,7 +137,7 @@
  *     path = "/projects/project1",
  * }]
  * async fn myapi_projects_get_project(
- *     rqctx: Arc<RequestContext<()>>,
+ *     rqctx: &RequestContext<()>,
  * ) -> Result<HttpResponseOk<Project>, HttpError>
  * {
  *    let project = Project { name: String::from("project1") };
@@ -209,11 +208,12 @@
  *
  * ```ignore
  * async fn f(
- *      rqctx: Arc<RequestContext<Context>>,
+ *      rqctx: &RequestContext<Context>,
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
  *      [body_param: UntypedBody<J>,]
+ *      [raw_request: &mut Request<Body>,]
  * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
@@ -236,6 +236,8 @@
  *   body as JSON and deserializing it into an instance of type `J`. `J` must
  *   implement `serde::Deserialize` and `schemars::JsonSchema`.
  * * [`UntypedBody`] extracts the raw bytes of the request body.
+ * * [`Request<Body>`] exposes the raw `hyper::Request` from the context. Note:
+ *   this can only used as a mutable reference and not an owned instance.
  *
  * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
  * `UntypedBody`, and the corresponding extraction cannot be completed, the
@@ -257,7 +259,6 @@
  * use hyper::Response;
  * use schemars::JsonSchema;
  * use serde::Deserialize;
- * use std::sync::Arc;
  *
  * #[derive(Deserialize, JsonSchema)]
  * struct MyQueryArgs {
@@ -268,7 +269,7 @@
  * struct MyContext {}
  *
  * async fn myapi_projects_get(
- *     rqctx: Arc<RequestContext<MyContext>>,
+ *     rqctx: &RequestContext<MyContext>,
  *     query: Query<MyQueryArgs>)
  *     -> Result<Response<Body>, HttpError>
  * {
@@ -467,7 +468,6 @@
  * use dropshot::endpoint;
  * use schemars::JsonSchema;
  * use serde::Deserialize;
- * use std::sync::Arc;
  * # use serde::Serialize;
  * # #[derive(Debug, Deserialize, JsonSchema)]
  * # enum MyScanParams { A };
@@ -483,7 +483,7 @@
  *     path = "/list_stuff"
  * }]
  * async fn my_list_api(
- *     rqctx: Arc<RequestContext<()>>,
+ *     rqctx: &RequestContext<()>,
  *     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
  *     extra_params: Query<MyExtraQueryParams>,
  * ) -> Result<HttpResponseOk<ResultsPage<String>>, HttpError>
@@ -530,6 +530,7 @@ pub use api_description::OpenApiDefinition;
 pub use config::ConfigDropshot;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
+pub use handler::Extractable;
 pub use handler::Extractor;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
