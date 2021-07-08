@@ -191,37 +191,104 @@ fn do_endpoint(
     // make failures easier to understand, we inject code that asserts the types
     // of the various parameters. We do this by calling a dummy function that
     // requires a type that satisfies the trait Extractor.
-    let checks = ast
+    let param_checks = ast
         .sig
         .inputs
         .iter()
-        .skip(1)
-        .map(|arg| {
-            let req = quote! { #dropshot::Extractor };
-
+        .enumerate()
+        .map(|(index, arg)| {
             match arg {
                 syn::FnArg::Receiver(_) => {
                     // The compiler failure here is already comprehensible.
                     quote! {}
                 }
                 syn::FnArg::Typed(pat) => {
-                    let span = Error::new_spanned(pat.ty.as_ref(), "").span();
+                    let span = pat.ty.span();
                     let ty = pat.ty.as_ref().into_token_stream();
-
-                    quote_spanned! { span=>
-                        const _: fn() = ||{
-                            fn need_extractor<T>()
-                            where
-                                T: ?Sized + #req,
-                            {
-                            }
-                            need_extractor::<#ty>();
-                        };
+                    if index == 0 {
+                        // The first parameter must be an Arc<RequestContext<T>>
+                        // and fortunately we already have a trait that we can
+                        // use to validate this type.
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                struct NeedRequestContext(<#ty as #dropshot::RequestContextArgument>::Context);
+                            };
+                        }
+                    } else {
+                        // Subsequent parameters must implement Extractor.
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                fn need_extractor<T>()
+                                where
+                                    T: ?Sized + #dropshot::Extractor,
+                                {
+                                }
+                                need_extractor::<#ty>();
+                            };
+                        }
                     }
                 }
             }
         })
         .collect::<Vec<_>>();
+
+    let ret_check = match ast.sig.output {
+        syn::ReturnType::Default => {
+            return Err(Error::new_spanned(
+                (&ast.sig).into_token_stream(),
+                usage("Endpoint must return a Result", &name_str),
+            ));
+        }
+        syn::ReturnType::Type(_, ret_ty) => {
+            let span = ret_ty.span();
+            quote_spanned! { span=>
+                const _: fn() = || {
+                    // Pick apart the Result type.
+                    trait ResultTrait {
+                        type T;
+                        type E;
+                    }
+
+                    // Verify that the affirmative result implements the
+                    // HttpResponse trait.
+                    impl<TT, EE> ResultTrait for Result<TT, EE>
+                    where
+                        TT: #dropshot::HttpResponse,
+                    {
+                        type T = TT;
+                        type E = EE;
+                    }
+
+                    // This is not strictly necessary as we'll try to use
+                    // #ret_ty as ResultTrait below. This does, however,
+                    // produce a cleaner error message as type definition
+                    // errors are detected prior to function type validation.
+                    struct NeedHttpResponse(
+                        <#ret_ty as ResultTrait>::T,
+                    );
+
+                    // Verify that the error result is of type HttpError.
+                    trait TypeEq {
+                        type This: ?Sized;
+                    }
+
+                    impl<T: ?Sized> TypeEq for T {
+                        type This = Self;
+                    }
+
+                    fn validate_result_error_type<T>()
+                    where
+                        T: ?Sized + TypeEq<This = #dropshot::HttpError>,
+                    {
+                    }
+
+                    validate_result_error_type::<
+                        <#ret_ty as ResultTrait>::E,
+                    >();
+                };
+            }
+        }
+    };
 
     // For reasons that are not well understood unused constants that use the
     // (default) call_site() Span do not trigger the dead_code lint. Because
@@ -236,7 +303,10 @@ fn do_endpoint(
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
-        #(#checks)*
+        // ... type validation for parameter and return types
+        #(#param_checks)*
+        #ret_check
+
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -249,7 +319,11 @@ fn do_endpoint(
 
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`
-        impl From<#name> for #dropshot::ApiEndpoint<<#first_arg_type as #dropshot::RequestContextArgument>::Context> {
+        impl From<#name>
+            for #dropshot::ApiEndpoint<
+                <#first_arg_type as #dropshot::RequestContextArgument>::Context
+            >
+        {
             fn from(_: #name) -> Self {
                 #item
 
@@ -337,10 +411,48 @@ mod tests {
                 path = "/a/b/c"
             },
             quote! {
-                pub async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                pub async fn handler_xyz(
+                    _rqctx: Arc<RequestContext<()>>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
             },
         );
         let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+                >();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
@@ -349,9 +461,17 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz>
+                for dropshot::ApiEndpoint<
+                    <Arc<RequestContext<()>
+                > as dropshot::RequestContextArgument>::Context>
+            {
                 fn from(_: handler_xyz) -> Self {
-                    pub async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                    pub async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -373,10 +493,48 @@ mod tests {
                 path = "/a/b/c"
             },
             quote! {
-                pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) {}
+                pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) ->
+                std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
+                {
+                    Ok(())
+                }
             },
         );
         let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError> as ResultTrait>::E,
+                >();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
@@ -385,9 +543,13 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint< <std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) {}
+                    pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) ->
+                        std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
+                    {
+                        Ok(())
+                    }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -409,20 +571,56 @@ mod tests {
                 path = "/a/b/c"
             },
             quote! {
-                async fn handler_xyz(_rqctx: Arc<RequestContext<std::i32>>, q: Query<Q>) {}
+                async fn handler_xyz(
+                    _rqctx: Arc<RequestContext<std::i32>>,
+                    q: Query<Q>,
+                ) -> Result<HttpResponseOk<()>, HttpError>
+                {
+                    Ok(())
+                }
             },
         );
-        let query = quote! {
-            Query<Q>
-        };
         let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context) ;
+            };
             const _: fn() = || {
                 fn need_extractor<T>()
                 where
                     T: ?Sized + dropshot::Extractor,
                 {
                 }
-                need_extractor::<#query>();
+                need_extractor::<Query<Q> >();
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+                >();
             };
 
             #[allow(non_camel_case_types, missing_docs)]
@@ -433,9 +631,20 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz>
+                for dropshot::ApiEndpoint<
+                    <Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context
+                >
+            {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: Arc<RequestContext<std::i32>>, q: Query<Q>) {}
+                    async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<std::i32>>,
+                        q: Query<Q>,
+                    ) ->
+                        Result<HttpResponseOk<()>, HttpError>
+                    {
+                        Ok(())
+                    }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -457,20 +666,56 @@ mod tests {
                 path = "/a/b/c"
             },
             quote! {
-                pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext<()>>, q: Query<Q>) {}
+                pub(crate) async fn handler_xyz(
+                    _rqctx: Arc<RequestContext<()>>,
+                    q: Query<Q>,
+                ) -> Result<HttpResponseOk<()>, HttpError>
+                {
+                    Ok(())
+                }
             },
         );
-        let query = quote! {
-            Query<Q>
-        };
         let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
             const _: fn() = || {
                 fn need_extractor<T>()
                 where
                     T: ?Sized + dropshot::Extractor,
                 {
                 }
-                need_extractor::<#query>();
+                need_extractor::<Query<Q> >();
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+                >();
             };
 
             #[allow(non_camel_case_types, missing_docs)]
@@ -481,9 +726,20 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub(crate) const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz>
+                for dropshot::ApiEndpoint<
+                    <Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context
+                >
+            {
                 fn from(_: handler_xyz) -> Self {
-                    pub(crate) async fn handler_xyz(_rqctx: Arc<RequestContext<()>>, q: Query<Q>) {}
+                    pub(crate) async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                        q: Query<Q>,
+                    ) ->
+                        Result<HttpResponseOk<()>, HttpError>
+                    {
+                        Ok(())
+                    }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -506,19 +762,67 @@ mod tests {
                 tags = ["stuff", "things"],
             },
             quote! {
-                async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                async fn handler_xyz(
+                    _rqctx: Arc<RequestContext<()>>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
             },
         );
         let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+                >();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             struct handler_xyz {}
+
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             const handler_xyz: handler_xyz = handler_xyz {};
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+
+            impl From<handler_xyz>
+                for dropshot::ApiEndpoint<
+                    <Arc<RequestContext<()>
+                > as dropshot::RequestContextArgument>::Context>
+            {
                 fn from(_: handler_xyz) -> Self {
-                    async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                    async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -543,20 +847,68 @@ mod tests {
             },
             quote! {
                 /** handle "xyz" requests */
-                async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                async fn handler_xyz(
+                    _rqctx: Arc<RequestContext<()>>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
             },
         );
         let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+                >();
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             struct handler_xyz {}
+
             #[allow(non_upper_case_globals, missing_docs)]
             #[doc = "API Endpoint: handle \"xyz\" requests"]
             const handler_xyz: handler_xyz = handler_xyz {};
-            impl From<handler_xyz> for dropshot::ApiEndpoint<<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+
+            impl From<handler_xyz>
+                for dropshot::ApiEndpoint<
+                    <Arc<RequestContext<()>
+                > as dropshot::RequestContextArgument>::Context>
+            {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
-                    async fn handler_xyz(_rqctx: Arc<RequestContext<()>>) {}
+                    async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
