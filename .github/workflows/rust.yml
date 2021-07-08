@@ -17,15 +17,15 @@ jobs:
     - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
     - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
       with:
-        toolchain: nightly-2020-10-15
+        toolchain: nightly-2021-03-25
         default: false
         components: rustfmt
     - name: Report cargo version
-      run: cargo +nightly-2020-10-15 --version
+      run: cargo +nightly-2021-03-25 --version
     - name: Report rustfmt version
-      run: cargo +nightly-2020-10-15 fmt -- --version
+      run: cargo +nightly-2021-03-25 fmt -- --version
     - name: Check style
-      run: cargo +nightly-2020-10-15 fmt -- --check
+      run: cargo +nightly-2021-03-25 fmt -- --check
 
   clippy-lint:
     runs-on: ubuntu-18.04
