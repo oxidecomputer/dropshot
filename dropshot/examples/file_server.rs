@@ -155,6 +155,10 @@ async fn static_content(
     }
 }
 
+/**
+ * Generate a simple HTML listing of files within the directory.
+ * See the note below regarding the handling of trailing slashes.
+ */
 async fn dir_body(dir_path: PathBuf) -> Result<String, std::io::Error> {
     let dir_link = dir_path.to_string_lossy();
     let mut dir = tokio::fs::read_dir(&dir_path).await?;
@@ -176,6 +180,18 @@ async fn dir_body(dir_path: PathBuf) -> Result<String, std::io::Error> {
     while let Some(entry) = dir.next_entry().await? {
         let name = entry.file_name();
         let name = name.to_string_lossy();
+        /*
+         * Note that Dropshot handles paths with and without trailing slashes
+         * as identical. This is important with respect to relative paths as
+         * the destination of a relative path is different depending on whether
+         * or not a trailing slash is present in the browser's location bar.
+         * For example, a relative url of "bar" would go from the location
+         * "localhost:123/foo" to "localhost:123/bar" and from the location
+         * "localhost:123/foo/" to "localhost:123/foo/bar". More robust
+         * handling would require distinct handling of the trailing slash
+         * and a redirect in the case of its absence when navigating to a
+         * directory.
+         */
         body.push_str(
             format!(
                 r#"<li><a href="{}{}">{}</a></li>"#,
