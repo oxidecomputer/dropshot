@@ -15,6 +15,7 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Once;
 
 /**
  * `HttpRouter` is a simple data structure for routing incoming HTTP requests to
@@ -180,10 +181,38 @@ impl<'a> From<&'a str> for InputPath<'a> {
     }
 }
 
+static INFORM_PROC_MACRO2_WE_ARE_NOT_A_PROC_MACRO: Once = Once::new();
+
 /*
  * Validate that the string is a valid Rust identifier.
  */
 fn valid_identifier(var: &str) -> bool {
+    // TODO: Remove this "Once" callback when the following issue
+    // is resolved.
+    // - https://github.com/alexcrichton/proc-macro2/issues/218
+    //
+    // proc_macro2 tries checking if the calling code exists within a proc_macro
+    // (as opposed to, e.g., a library/binary) by installing a custom panic
+    // handler (!), invoking it, and checking the result to see if the
+    // compiler's implementation of some proc macro functionality is available.
+    // - If it is available: proc_macro2 uses the compiler's codebase.
+    // - If it isn't: proc_macro uses a fallback implementation.
+    //
+    // For a program compiled with "panic = unwind", this admittedly works
+    // (... although it's arguably questionable to overwrite the panic hook),
+    // but it causes a program compiled with "panic = abort" to die.
+    //
+    // To workaround this, we force proc_macro2 to use the fallback
+    // implementation and avoid doing this panic-hook-based checking.
+    //
+    // As documented in the aforementioned issue, dtolnay plans on removing
+    // the panic-hook-based check once a compiler feature stabilizes
+    // to provide a better way of doing the check: proc_macro::is_available.
+    //
+    // Once that's done, we can remove this hack on our side.
+    INFORM_PROC_MACRO2_WE_ARE_NOT_A_PROC_MACRO.call_once(|| {
+        proc_macro2::fallback::force();
+    });
     syn::parse_str::<syn::Ident>(var).is_ok()
 }
 
