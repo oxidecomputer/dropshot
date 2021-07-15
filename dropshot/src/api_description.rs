@@ -11,12 +11,15 @@ use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
 use crate::server::ServerContext;
+use crate::type_util::type_is_scalar;
+use crate::type_util::type_is_string_enum;
 use crate::Extractor;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
 
 use http::Method;
 use http::StatusCode;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 /**
@@ -232,6 +235,23 @@ impl<Context: ServerContext> ApiDescription<Context> {
     {
         let e = endpoint.into();
 
+        self.validate_path_parameters(&e)?;
+        self.validate_body_parameters(&e)?;
+        self.validate_named_parameters(&e)?;
+
+        self.router.insert(e);
+
+        Ok(())
+    }
+
+    /**
+     * Validate that the parameters specified in the path match the parameters
+     * specified by the path parameter arguments to the handler function.
+     */
+    fn validate_path_parameters(
+        &self,
+        e: &ApiEndpoint<Context>,
+    ) -> Result<(), String> {
         // Gather up the path parameters and the path variable components, and
         // make sure they're identical.
         let path = route_path_to_segments(&e.path)
@@ -262,7 +282,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             let vv =
                 v.iter().map(|s| s.as_str()).collect::<Vec<&str>>().join(",");
 
-            return match (p.is_empty(), v.is_empty()) {
+            match (p.is_empty(), v.is_empty()) {
                 (false, true) => Err(format!(
                     "{} ({})",
                     "path parameters are not consumed", pp,
@@ -278,9 +298,19 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     "specified parameters do not appear in the path",
                     vv,
                 )),
-            };
+            }?;
         }
 
+        Ok(())
+    }
+
+    /**
+     * Validate that we have a single body parameter.
+     */
+    fn validate_body_parameters(
+        &self,
+        e: &ApiEndpoint<Context>,
+    ) -> Result<(), String> {
         // Explicitly disallow any attempt to consume the body twice.
         let nbodyextractors = e
             .parameters
@@ -298,7 +328,81 @@ impl<Context: ServerContext> ApiDescription<Context> {
             ));
         }
 
-        self.router.insert(e);
+        Ok(())
+    }
+
+    /**
+     * Validate that named parameters have appropriate types and their aren't
+     * duplicates. Parameters must have scalar types except in the case of the
+     * received for a wildcard path which must be an array of String.
+     */
+    fn validate_named_parameters(
+        &self,
+        e: &ApiEndpoint<Context>,
+    ) -> Result<(), String> {
+        enum SegmentOrWildcard {
+            Segment,
+            Wildcard,
+        }
+        let path_segments = route_path_to_segments(&e.path)
+            .iter()
+            .filter_map(|segment| {
+                let seg = PathSegment::from(segment);
+                match seg {
+                    PathSegment::VarnameSegment(v) => {
+                        Some((v, SegmentOrWildcard::Segment))
+                    }
+                    PathSegment::VarnameWildcard(v) => {
+                        Some((v, SegmentOrWildcard::Wildcard))
+                    }
+                    PathSegment::Literal(_) => None,
+                }
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        for param in &e.parameters {
+            /* Skip anything that's not a path or query parameter (i.e. body) */
+            match &param.metadata {
+                ApiEndpointParameterMetadata::Path(_)
+                | ApiEndpointParameterMetadata::Query(_) => (),
+                _ => continue,
+            }
+            /* Only body parameters should have unresolved schemas */
+            let (schema, dependencies) = match &param.schema {
+                ApiSchemaGenerator::Static {
+                    schema,
+                    dependencies,
+                } => (schema, dependencies),
+                _ => unreachable!(),
+            };
+
+            match &param.metadata {
+                ApiEndpointParameterMetadata::Path(ref name) => {
+                    match path_segments.get(name) {
+                        Some(SegmentOrWildcard::Segment) => {
+                            type_is_scalar(name, schema, dependencies)?;
+                        }
+                        Some(SegmentOrWildcard::Wildcard) => {
+                            type_is_string_enum(name, schema, dependencies)?;
+                        }
+                        None => {
+                            panic!("all path variables should be accounted for")
+                        }
+                    }
+                }
+                ApiEndpointParameterMetadata::Query(ref name) => {
+                    if path_segments.get(name).is_some() {
+                        return Err(format!(
+                            "the parameter '{}' is specified for both query \
+                             and path parameters",
+                            name
+                        ));
+                    }
+                    type_is_scalar(name, schema, dependencies)?;
+                }
+                _ => (),
+            }
+        }
 
         Ok(())
     }
@@ -374,8 +478,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
      * Internal routine for constructing the OpenAPI definition describing this
      * API in its JSON form.
      */
-    // TODO: There's a bunch of error handling we need here such as checking
-    // for duplicate parameter names.
     fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
@@ -1181,6 +1283,7 @@ mod test {
     use super::ApiEndpoint;
     use crate as dropshot; /* for "endpoint" macro */
     use crate::endpoint;
+    use crate::Query;
     use crate::TypedBody;
     use crate::UntypedBody;
     use http::Method;
@@ -1346,6 +1449,38 @@ mod test {
             error,
             "only one body extractor can be used in a handler (this function \
              has 2)"
+        );
+    }
+
+    #[test]
+    fn test_dup_names() {
+        #[derive(Deserialize, JsonSchema)]
+        struct AStruct {}
+
+        #[allow(dead_code)]
+        #[derive(Deserialize, JsonSchema)]
+        struct TheThing {
+            thing: String,
+        }
+
+        #[endpoint {
+            method = PUT,
+            path = "/testing/{thing}"
+        }]
+        async fn test_dup_names_handler(
+            _: Arc<RequestContext<()>>,
+            _: Query<TheThing>,
+            _: Path<TheThing>,
+        ) -> Result<Response<Body>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        let error = api.register(test_dup_names_handler).unwrap_err();
+        assert_eq!(
+            error,
+            "the parameter 'thing' is specified for both query and path \
+             parameters",
         );
     }
 
