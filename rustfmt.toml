@@ -4,6 +4,7 @@
 max_width = 80
 use_small_heuristics = "max"
 unstable_features = true
+edition = "2018"
 
 #
 # ---------------------------------------------------------------------------
@@ -76,7 +77,6 @@ trailing_comma = "Vertical"
 match_block_trailing_comma = false
 blank_lines_upper_bound = 1
 blank_lines_lower_bound = 0
-edition = "2015"
 version = "One"
 inline_attribute_width = 0
 merge_derives = true
