@@ -515,6 +515,7 @@ mod logging;
 mod pagination;
 mod router;
 mod server;
+mod type_util;
 
 pub mod test_util;
 
