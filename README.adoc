@@ -18,6 +18,8 @@ $ cargo +nightly doc
 
 == Contributing
 
+For maintainers (e.g., publishing new releases and managing dependabot), see link:./MAINTAINERS.adoc[MAINTAINERS.adoc].
+
 === Building and testing
 
 You can **build and run the whole test suite** with `cargo test`.  The test
