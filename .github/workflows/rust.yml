@@ -58,3 +58,41 @@ jobs:
       run: cargo build --tests --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  build-and-test-illumos:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: jclulow/action-agogo@main
+      with:
+        secret: ${{ secrets.BUILDOMAT_SECRET }}
+        baseurl: https://sys.illumos.org/buildomat
+        script: |
+          uname -a
+
+          echo "::group::git show"
+          git show
+          echo "::endgroup::"
+
+          echo "::group::install tools"
+          pkg install git build-essential
+          echo "::endgroup::"
+
+          echo "::group::install rust stable toolchain"
+          export RUSTUP_HOME=/rustup
+          export CARGO_HOME=/rustup
+          export PATH="$CARGO_HOME/bin:$PATH"
+          curl -sSf https://sh.rustup.rs | bash -s -- \
+              -y \
+              --default-toolchain stable \
+              --no-modify-path
+          echo "::endgroup::"
+
+          echo "::group::environment variable dump"
+          env
+          echo "::endgroup::"
+
+          banner build
+          cargo build --tests --verbose
+
+          banner test
+          cargo test --verbose
