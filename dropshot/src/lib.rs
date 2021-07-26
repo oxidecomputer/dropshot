@@ -69,6 +69,7 @@
  *         HttpServerStarter::new(
  *             &ConfigDropshot {
  *                 bind_address: "127.0.0.1:0".parse().unwrap(),
+ *                 https: false,
  *                 request_body_max_bytes: 1024,
  *             },
  *             api,

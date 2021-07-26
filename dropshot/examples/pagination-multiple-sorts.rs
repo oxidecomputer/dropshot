@@ -311,7 +311,7 @@ async fn main() -> Result<(), String> {
     let ctx = ProjectCollection::new();
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
-        request_body_max_bytes: 1024,
+        ..Default::default()
     };
     let config_logging = ConfigLogging::StderrTerminal {
         level: ConfigLoggingLevel::Debug,

@@ -10,10 +10,12 @@ use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 
+use async_stream::stream;
 use futures::future::BoxFuture;
 use futures::future::FusedFuture;
 use futures::future::FutureExt;
 use futures::lock::Mutex;
+use futures_core::stream::Stream;
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
     Server,
@@ -22,12 +24,16 @@ use hyper::service::Service;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use rustls;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use tokio::io::ReadBuf;
+use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
 use slog::Logger;
@@ -75,21 +81,67 @@ pub struct ServerConfig {
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
  * we find useful.
  */
-pub struct HttpServerStarter<C: ServerContext> {
+
+pub struct HttpServerStarter<C: ServerContext>(WrappedHttpServerStarter<C>);
+
+impl<C: ServerContext> HttpServerStarter<C> {
+    pub fn new(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+    ) -> Result<HttpServerStarter<C>, GenericError> {
+        let wrapped = WrappedHttpServerStarter::new(config, api, private, log)?;
+        Ok(HttpServerStarter(wrapped))
+    }
+
+    pub fn start(self) -> HttpServer<C> {
+        self.0.start()
+    }
+}
+
+enum WrappedHttpServerStarter<C: ServerContext> {
+    Http(InnerHttpServerStarter<C>),
+    Https(InnerHttpsServerStarter<C>),
+}
+
+impl<C: ServerContext> WrappedHttpServerStarter<C> {
+    pub fn new(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+    ) -> Result<WrappedHttpServerStarter<C>, GenericError> {
+        if config.https {
+            let starter =
+                InnerHttpsServerStarter::new(config, api, private, log)?;
+            Ok(WrappedHttpServerStarter::Https(starter))
+        } else {
+            let starter =
+                InnerHttpServerStarter::new(config, api, private, log)?;
+            Ok(WrappedHttpServerStarter::Http(starter))
+        }
+    }
+
+    pub fn start(self) -> HttpServer<C> {
+        match self {
+            WrappedHttpServerStarter::Http(http) => http.start(),
+            WrappedHttpServerStarter::Https(https) => https.start(),
+        }
+    }
+}
+
+struct InnerHttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     server: Server<AddrIncoming, ServerConnectionHandler<C>>,
     local_addr: SocketAddr,
 }
 
-impl<C: ServerContext> HttpServerStarter<C> {
-    pub fn local_addr(&self) -> SocketAddr {
-        self.local_addr
-    }
-
+impl<C: ServerContext> InnerHttpServerStarter<C> {
     /**
      * Begins execution of the underlying Http server.
      */
-    pub fn start(self) -> HttpServer<C> {
+    fn start(self) -> HttpServer<C> {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let log_close = self.app_state.log.new(o!());
         let graceful = self.server.with_graceful_shutdown(async move {
@@ -117,12 +169,12 @@ impl<C: ServerContext> HttpServerStarter<C> {
      * TODO-cleanup We should be able to take a reference to the ApiDescription.
      * We currently can't because we need to hang onto the router.
      */
-    pub fn new(
+    fn new(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<HttpServerStarter<C>, hyper::Error> {
+    ) -> Result<InnerHttpServerStarter<C>, hyper::Error> {
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
@@ -149,15 +201,208 @@ impl<C: ServerContext> HttpServerStarter<C> {
         let local_addr = server.local_addr();
         info!(app_state.log, "listening"; "local_addr" => %local_addr);
 
-        Ok(HttpServerStarter {
+        Ok(InnerHttpServerStarter {
             app_state,
             server,
             local_addr,
         })
     }
+}
 
-    pub fn app_private(&self) -> &C {
-        &self.app_state.private
+struct TlsConn {
+    stream: TlsStream<TcpStream>,
+    remote_addr: SocketAddr,
+}
+
+impl TlsConn {
+    fn new(stream: TlsStream<TcpStream>, remote_addr: SocketAddr) -> TlsConn {
+        TlsConn {
+            stream,
+            remote_addr,
+        }
+    }
+
+    fn remote_addr(&self) -> SocketAddr {
+        self.remote_addr
+    }
+}
+
+impl tokio::io::AsyncRead for TlsConn {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+        buf: &mut ReadBuf,
+    ) -> Poll<std::io::Result<()>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_read(ctx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for TlsConn {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+        data: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_write(ctx, data)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+    ) -> Poll<std::io::Result<()>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_flush(ctx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+    ) -> Poll<std::io::Result<()>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_shutdown(ctx)
+    }
+}
+
+struct HttpsAcceptor {
+    acceptor: Box<dyn Stream<Item = std::io::Result<TlsConn>> + Send + Unpin>,
+}
+
+impl hyper::server::accept::Accept for HttpsAcceptor {
+    type Conn = TlsConn;
+    type Error = std::io::Error;
+
+    fn poll_accept(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+    ) -> core::task::Poll<Option<Result<Self::Conn, Self::Error>>> {
+        let pinned = Pin::new(&mut self.acceptor);
+        pinned.poll_next(ctx)
+    }
+}
+
+struct InnerHttpsServerStarter<C: ServerContext> {
+    app_state: Arc<DropshotState<C>>,
+    server: Server<HttpsAcceptor, ServerConnectionHandler<C>>,
+    local_addr: SocketAddr,
+}
+
+impl<C: ServerContext> InnerHttpsServerStarter<C> {
+    fn start(self) -> HttpServer<C> {
+        let app_state = self.app_state;
+        let server = self.server;
+        let local_addr = self.local_addr;
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let log_close = app_state.log.new(o!());
+        let graceful = server.with_graceful_shutdown(async move {
+            rx.await.expect(
+                "dropshot server shutting down without invoking close()",
+            );
+            info!(log_close, "received request to begin graceful shutdown");
+        });
+
+        let join_handle = tokio::spawn(async { graceful.await });
+
+        HttpServer {
+            app_state,
+            local_addr,
+            join_handle: Some(join_handle),
+            close_channel: Some(tx),
+        }
+    }
+
+    pub fn new(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+    ) -> Result<InnerHttpsServerStarter<C>, GenericError> {
+        let app_state = Arc::new(DropshotState {
+            private,
+            config: ServerConfig {
+                request_body_max_bytes: config.request_body_max_bytes,
+                page_max_nitems: NonZeroU32::new(10000).unwrap(),
+                page_default_nitems: NonZeroU32::new(100).unwrap(),
+            },
+            router: api.into_router(),
+            log: log.new(o!()),
+        });
+
+        for (path, method, _) in &app_state.router {
+            debug!(app_state.log, "registered endpoint";
+                "method" => &method,
+                "path" => &path
+            );
+        }
+
+        let (conn, local_addr) = {
+            let dont_use_this_cert = load_certs(
+                "/Users/gk/oxide/src/dropshot/dropshot/data/\
+                 dont_use_this_cert.pem",
+            )?;
+            let dont_use_this_key = load_private_key(
+                "/Users/gk/oxide/src/dropshot/dropshot/data/dont_use_this_key.\
+                 rsa",
+            )?;
+            let mut cfg =
+                rustls::ServerConfig::new(rustls::NoClientAuth::new());
+            cfg.set_single_cert(dont_use_this_cert, dont_use_this_key)?;
+            cfg.set_protocols(&[b"h2".to_vec(), b"http/1.1".to_vec()]);
+            let cfg = Arc::new(cfg);
+            let acceptor = TlsAcceptor::from(cfg);
+
+            let tcp = TcpListener::from_std(std::net::TcpListener::bind(
+                &config.bind_address,
+            )?)?;
+
+            let local_addr = tcp.local_addr()?;
+
+            (
+                stream! {
+                    loop {
+                        let (socket, addr) = tcp.accept().await?;
+                        let stream = acceptor.accept(socket).await?;
+                        let conn = TlsConn::new(stream, addr);
+                        yield Ok(conn)
+                    }
+                },
+                local_addr,
+            )
+        };
+
+        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
+        let server = Server::builder(HttpsAcceptor {
+            acceptor: Box::new(Box::pin(conn)),
+        })
+        .serve(make_service);
+        info!(app_state.log, "listening"; "local_addr" => %local_addr);
+
+        Ok(InnerHttpsServerStarter {
+            app_state,
+            server,
+            local_addr,
+        })
+    }
+}
+
+impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
+    type Response = ServerRequestHandler<C>;
+    type Error = GenericError;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        _ctx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, conn: &TlsConn) -> Self::Future {
+        let server = Arc::clone(&self.server);
+        let remote_addr = conn.remote_addr();
+        Box::pin(http_connection_handle(server, remote_addr))
     }
 }
 
@@ -467,6 +712,38 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     }
 }
 
+fn error(err: String) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, err)
+}
+
+// Load public certificate from file.
+fn load_certs(filename: &str) -> std::io::Result<Vec<rustls::Certificate>> {
+    // Open certificate file.
+    let certfile = std::fs::File::open(filename)
+        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
+    let mut reader = std::io::BufReader::new(certfile);
+
+    // Load and return certificate.
+    rustls::internal::pemfile::certs(&mut reader)
+        .map_err(|_| error("failed to load certificate".into()))
+}
+
+// Load private key from file.
+fn load_private_key(filename: &str) -> std::io::Result<rustls::PrivateKey> {
+    // Open keyfile.
+    let keyfile = std::fs::File::open(filename)
+        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
+    let mut reader = std::io::BufReader::new(keyfile);
+
+    // Load and return a single private key.
+    let keys = rustls::internal::pemfile::rsa_private_keys(&mut reader)
+        .map_err(|_| error("failed to load private key".into()))?;
+    if keys.len() != 1 {
+        return Err(error("expected a single private key".into()));
+    }
+    Ok(keys[0].clone())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -549,7 +826,7 @@ mod test {
     #[tokio::test]
     async fn test_server_run_then_close() {
         let (mut server, config) = create_test_server();
-        let client = single_client_request(server.local_addr, config.log());
+        let client = single_client_request(server.local_addr(), config.log());
 
         futures::select! {
             _ = client.fuse() => {},

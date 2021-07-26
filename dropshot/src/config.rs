@@ -47,6 +47,9 @@ use std::net::SocketAddr;
 pub struct ConfigDropshot {
     /** IP address and TCP port to which to bind for accepting connections */
     pub bind_address: SocketAddr,
+    /** Whether to use HTTPS. For now, this defaults to false, but we
+     * should think about making it default to true in the future. */
+    pub https: bool,
     /** maximum allowed size of a request body, defaults to 1024 */
     pub request_body_max_bytes: usize,
 }
@@ -55,6 +58,7 @@ impl Default for ConfigDropshot {
     fn default() -> Self {
         ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
+            https: false,
             request_body_max_bytes: 1024,
         }
     }
