@@ -251,7 +251,7 @@ async fn handler13(
 #[allow(dead_code)]
 #[derive(JsonSchema, Deserialize)]
 struct AllPath {
-    path: String,
+    path: Vec<String>,
 }
 
 #[endpoint {
