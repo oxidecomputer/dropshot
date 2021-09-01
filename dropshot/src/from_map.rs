@@ -282,11 +282,21 @@ where
         self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
 
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
     de_unimp!(deserialize_bytes);
     de_unimp!(deserialize_byte_buf);
     de_unimp!(deserialize_unit);
     de_unimp!(deserialize_unit_struct, _name: &'static str);
-    de_unimp!(deserialize_newtype_struct, _name: &'static str);
     de_unimp!(deserialize_tuple, _len: usize);
     de_unimp!(deserialize_tuple_struct, _name: &'static str, _len: usize);
 
@@ -295,11 +305,9 @@ where
         V: Visitor<'de>,
     {
         self.value(|raw_value| {
-            let x = raw_value.as_seq()?;
-            let xx = MapSeqAccess {
-                iter: x,
-            };
-            visitor.visit_seq(xx)
+            visitor.visit_seq(MapSeqAccess {
+                iter: raw_value.as_seq()?,
+            })
         })
     }
 }
@@ -525,12 +533,16 @@ mod test {
     #[test]
     fn test_types() {
         #[derive(Deserialize, Debug)]
+        struct Newbie(String);
+
+        #[derive(Deserialize, Debug)]
         struct A {
             astring: String,
             au32: u32,
             ai16: i16,
             abool: bool,
             aoption: Option<i8>,
+            anew: Newbie,
 
             #[serde(flatten)]
             bbb: B,
@@ -539,7 +551,6 @@ mod test {
         struct B {
             bstring: String,
             boption: Option<String>,
-            // bbool: bool,
         }
         let mut map = BTreeMap::new();
         map.insert("astring".to_string(), "A string".to_string());
@@ -547,8 +558,8 @@ mod test {
         map.insert("ai16".to_string(), "-1000".to_string());
         map.insert("abool".to_string(), "false".to_string());
         map.insert("aoption".to_string(), "8".to_string());
+        map.insert("anew".to_string(), "New string".to_string());
         map.insert("bstring".to_string(), "B string".to_string());
-        //map.insert("bbool".to_string(), "true".to_string());
         match from_map::<A, String>(&map) {
             Ok(a) => {
                 assert_eq!(a.astring, "A string");
@@ -556,6 +567,7 @@ mod test {
                 assert_eq!(a.ai16, -1000);
                 assert_eq!(a.abool, false);
                 assert_eq!(a.aoption, Some(8));
+                assert_eq!(a.anew.0, "New string");
                 assert_eq!(a.bbb.bstring, "B string");
                 assert_eq!(a.bbb.boption, None);
             }
