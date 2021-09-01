@@ -418,7 +418,7 @@ async fn test_demo_path_param_string() {
             .await
             .unwrap();
         let json: DemoPathString = read_json(&mut response).await;
-        assert_eq!(json.test1, matched_part);
+        assert_eq!(json.test1.0, matched_part);
     }
 
     testctx.teardown().await;
@@ -672,8 +672,11 @@ async fn demo_handler_args_3(
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
+pub struct Test1(String);
+
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoPathString {
-    pub test1: String,
+    pub test1: Test1,
 }
 #[endpoint {
     method = GET,
