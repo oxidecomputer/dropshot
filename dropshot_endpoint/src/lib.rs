@@ -114,11 +114,43 @@ fn do_endpoint(
 
     let ast: ItemFn = syn::parse2(item.clone())?;
 
+    if ast.sig.constness.is_some() {
+        return Err(Error::new_spanned(
+            ast.sig.constness,
+            "endpoint handlers may not be const functions",
+        ));
+    }
+
     if ast.sig.asyncness.is_none() {
         return Err(Error::new_spanned(
             ast.sig.fn_token,
             "endpoint handler functions must be async",
         ));
+    }
+
+    if ast.sig.unsafety.is_some() {
+        return Err(Error::new_spanned(
+            ast.sig.unsafety,
+            "endpoint handlers may not be unsafe",
+        ));
+    }
+
+    if ast.sig.abi.is_some() {
+        return Err(Error::new_spanned(
+            ast.sig.abi,
+            "endpoint handler may not use an alternate ABI",
+        ));
+    }
+
+    if !ast.sig.generics.params.is_empty() {
+        return Err(Error::new_spanned(
+            ast.sig.generics,
+            "generics are not permitted for endpoint handlers",
+        ));
+    }
+
+    if ast.sig.variadic.is_some() {
+        return Err(Error::new_spanned(ast.sig.variadic, "no language C here"));
     }
 
     let name = &ast.sig.ident;
