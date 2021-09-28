@@ -1,0 +1,5 @@
+error: generics are not permitted for endpoint handlers
+  --> $DIR/bad_endpoint13.rs:19:27
+   |
+19 | async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
