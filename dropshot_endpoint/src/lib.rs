@@ -20,7 +20,10 @@ use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
 use syn::spanned::Spanned;
-use syn::ItemFn;
+
+use syn_parsing::ItemFnForSignature;
+
+mod syn_parsing;
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
@@ -54,20 +57,14 @@ struct Metadata {
 }
 
 const DROPSHOT: &str = "dropshot";
-
-fn usage(err_msg: &str, fn_name: &str) -> String {
-    format!(
-        "{}\nEndpoint handlers must have the following signature:
-    async fn {}(
+const USAGE: &str = "Endpoint handlers must have the following signature:
+    async fn(
         rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
-    ) -> Result<HttpResponse*, HttpError>",
-        err_msg, fn_name
-    )
-}
+    ) -> Result<HttpResponse*, HttpError>";
 
 /// This attribute transforms a handler function into a Dropshot endpoint
 /// suitable to be used as a parameter to
@@ -98,59 +95,72 @@ pub fn endpoint(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     match do_endpoint(attr.into(), item.into()) {
-        Ok(result) => result.into(),
         Err(err) => err.to_compile_error().into(),
+        Ok((endpoint, errors)) => {
+            let compiler_errors =
+                errors.iter().map(|err| err.to_compile_error());
+
+            let output = quote! {
+                #endpoint
+                #( #compiler_errors )*
+            };
+
+            output.into()
+        }
     }
 }
 
 fn do_endpoint(
     attr: TokenStream,
     item: TokenStream,
-) -> Result<TokenStream, Error> {
+) -> Result<(TokenStream, Vec<Error>), Error> {
     let metadata = from_tokenstream::<Metadata>(&attr)?;
 
     let method = metadata.method.as_str();
     let path = metadata.path;
 
-    let ast: ItemFn = syn::parse2(item.clone())?;
+    let ast: ItemFnForSignature = syn::parse2(item.clone())?;
+
+    let mut errors = Vec::new();
 
     if ast.sig.constness.is_some() {
-        return Err(Error::new_spanned(
-            ast.sig.constness,
+        errors.push(Error::new_spanned(
+            &ast.sig.constness,
             "endpoint handlers may not be const functions",
         ));
     }
 
     if ast.sig.asyncness.is_none() {
-        return Err(Error::new_spanned(
-            ast.sig.fn_token,
+        errors.push(Error::new_spanned(
+            &ast.sig.fn_token,
             "endpoint handler functions must be async",
         ));
     }
 
     if ast.sig.unsafety.is_some() {
-        return Err(Error::new_spanned(
-            ast.sig.unsafety,
+        errors.push(Error::new_spanned(
+            &ast.sig.unsafety,
             "endpoint handlers may not be unsafe",
         ));
     }
 
     if ast.sig.abi.is_some() {
-        return Err(Error::new_spanned(
-            ast.sig.abi,
+        errors.push(Error::new_spanned(
+            &ast.sig.abi,
             "endpoint handler may not use an alternate ABI",
         ));
     }
 
     if !ast.sig.generics.params.is_empty() {
-        return Err(Error::new_spanned(
-            ast.sig.generics,
+        errors.push(Error::new_spanned(
+            &ast.sig.generics,
             "generics are not permitted for endpoint handlers",
         ));
     }
 
     if ast.sig.variadic.is_some() {
-        return Err(Error::new_spanned(ast.sig.variadic, "no language C here"));
+        errors
+            .push(Error::new_spanned(&ast.sig.variadic, "no language C here"));
     }
 
     let name = &ast.sig.ident;
@@ -195,26 +205,28 @@ fn do_endpoint(
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
-    let first_arg = ast.sig.inputs.first().ok_or_else(|| {
-        Error::new_spanned(
-            (&ast.sig).into_token_stream(),
-            usage("Endpoint requires arguments", &name_str),
-        )
-    })?;
-    let first_arg_type = {
-        match first_arg {
-            syn::FnArg::Typed(syn::PatType {
-                attrs: _,
-                pat: _,
-                colon_token: _,
-                ty,
-            }) => ty,
-            _ => {
-                return Err(Error::new(
-                    first_arg.span(),
-                    usage("Expected a non-receiver argument", &name_str),
-                ));
-            }
+    let first_arg = match ast.sig.inputs.first() {
+        Some(syn::FnArg::Typed(syn::PatType {
+            attrs: _,
+            pat: _,
+            colon_token: _,
+            ty,
+        })) => quote! {
+                <#ty as #dropshot::RequestContextArgument>::Context
+        },
+        Some(first_arg @ syn::FnArg::Receiver(_)) => {
+            errors.push(Error::new(
+                first_arg.span(),
+                "Expected a non-receiver argument",
+            ));
+            quote! { () }
+        }
+        None => {
+            errors.push(Error::new(
+                ast.sig.paren_token.span,
+                "Endpoint requires arguments",
+            ));
+            quote! { () }
         }
     };
 
@@ -264,12 +276,13 @@ fn do_endpoint(
         })
         .collect::<Vec<_>>();
 
-    let ret_check = match ast.sig.output {
+    let ret_check = match &ast.sig.output {
         syn::ReturnType::Default => {
-            return Err(Error::new_spanned(
-                (&ast.sig).into_token_stream(),
-                usage("Endpoint must return a Result", &name_str),
+            errors.push(Error::new_spanned(
+                &ast.sig,
+                "Endpoint must return a Result",
             ));
+            quote! {}
         }
         syn::ReturnType::Type(_, ret_ty) => {
             let span = ret_ty.span();
@@ -332,13 +345,30 @@ fn do_endpoint(
         #visibility const #name: #name = #name {};
     };
 
+    let construct = if errors.is_empty() {
+        quote! {
+            #dropshot::ApiEndpoint::new(
+                #name_str.to_string(),
+                #name,
+                #dropshot::Method::#method_ident,
+                #path,
+            )
+            #description
+            #(#tags)*
+            #visible
+        }
+    } else {
+        quote! {
+            unreachable!()
+        }
+    };
+
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         // ... type validation for parameter and return types
         #(#param_checks)*
         #ret_check
-
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -352,27 +382,22 @@ fn do_endpoint(
         // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
         // `#name` to be passed into `ApiDescription::register()`
         impl From<#name>
-            for #dropshot::ApiEndpoint<
-                <#first_arg_type as #dropshot::RequestContextArgument>::Context
-            >
+            for #dropshot::ApiEndpoint< #first_arg >
         {
             fn from(_: #name) -> Self {
                 #item
 
-                #dropshot::ApiEndpoint::new(
-                    #name_str.to_string(),
-                    #name,
-                    #dropshot::Method::#method_ident,
-                    #path,
-                )
-                #description
-                #(#tags)*
-                #visible
+                #construct
             }
         }
     };
 
-    Ok(stream)
+    // Prepend the usage message if any errors were detected.
+    if !errors.is_empty() {
+        errors.insert(0, Error::new_spanned(&ast.sig, USAGE));
+    }
+
+    Ok((stream, errors))
 }
 
 fn get_crate(var: Option<String>) -> TokenStream {
@@ -437,7 +462,7 @@ mod tests {
 
     #[test]
     fn test_endpoint_basic() {
-        let ret = do_endpoint(
+        let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c"
@@ -449,7 +474,8 @@ mod tests {
                     Ok(())
                 }
             },
-        );
+        )
+        .unwrap();
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
@@ -514,12 +540,13 @@ mod tests {
             }
         };
 
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]
     fn test_endpoint_context_fully_qualified_names() {
-        let ret = do_endpoint(
+        let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c"
@@ -531,7 +558,7 @@ mod tests {
                     Ok(())
                 }
             },
-        );
+        ).unwrap();
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
@@ -592,12 +619,13 @@ mod tests {
             }
         };
 
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]
     fn test_endpoint_with_query() {
-        let ret = do_endpoint(
+        let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c"
@@ -611,7 +639,8 @@ mod tests {
                     Ok(())
                 }
             },
-        );
+        )
+        .unwrap();
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context) ;
@@ -687,12 +716,13 @@ mod tests {
             }
         };
 
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]
     fn test_endpoint_pub_crate() {
-        let ret = do_endpoint(
+        let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c"
@@ -706,7 +736,8 @@ mod tests {
                     Ok(())
                 }
             },
-        );
+        )
+        .unwrap();
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
@@ -782,12 +813,13 @@ mod tests {
             }
         };
 
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]
     fn test_endpoint_with_tags() {
-        let ret = do_endpoint(
+        let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c",
@@ -800,7 +832,8 @@ mod tests {
                     Ok(())
                 }
             },
-        );
+        )
+        .unwrap();
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
@@ -867,12 +900,13 @@ mod tests {
             }
         };
 
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]
     fn test_endpoint_with_doc() {
-        let ret = do_endpoint(
+        let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c"
@@ -885,7 +919,8 @@ mod tests {
                     Ok(())
                 }
             },
-        );
+        )
+        .unwrap();
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
@@ -952,7 +987,8 @@ mod tests {
             }
         };
 
-        assert_eq!(expected.to_string(), ret.unwrap().to_string());
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]
@@ -1005,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_endpoint_not_async() {
-        let ret = do_endpoint(
+        let (_, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c",
@@ -1013,15 +1049,19 @@ mod tests {
             quote! {
                 fn handler_xyz(_rqctx: Arc<RequestContext>) {}
             },
-        );
+        )
+        .unwrap();
 
-        let msg = format!("{}", ret.err().unwrap());
-        assert_eq!("endpoint handler functions must be async", msg);
+        assert!(!errors.is_empty());
+        assert_eq!(
+            errors.get(1).map(ToString::to_string),
+            Some("endpoint handler functions must be async".to_string())
+        );
     }
 
     #[test]
     fn test_endpoint_bad_context_receiver() {
-        let ret = do_endpoint(
+        let (_, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c",
@@ -1029,18 +1069,19 @@ mod tests {
             quote! {
                 async fn handler_xyz(&self) {}
             },
-        );
+        )
+        .unwrap();
 
-        let msg = format!("{}", ret.err().unwrap());
+        assert!(!errors.is_empty());
         assert_eq!(
-            usage("Expected a non-receiver argument", "handler_xyz"),
-            msg
+            errors.get(1).map(ToString::to_string),
+            Some("Expected a non-receiver argument".to_string())
         );
     }
 
     #[test]
     fn test_endpoint_no_arguments() {
-        let ret = do_endpoint(
+        let (_, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c",
@@ -1048,9 +1089,13 @@ mod tests {
             quote! {
                 async fn handler_xyz() {}
             },
-        );
+        )
+        .unwrap();
 
-        let msg = format!("{}", ret.err().unwrap());
-        assert_eq!(usage("Endpoint requires arguments", "handler_xyz"), msg);
+        assert!(!errors.is_empty());
+        assert_eq!(
+            errors.get(1).map(ToString::to_string),
+            Some("Endpoint requires arguments".to_string())
+        );
     }
 }

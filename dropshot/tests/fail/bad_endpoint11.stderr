@@ -1,12 +1,17 @@
-error: Endpoint must return a Result
-Endpoint handlers must have the following signature:
-    async fn bad_no_result(
+error: Endpoint handlers must have the following signature:
+    async fn(
         rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
+  --> $DIR/bad_endpoint11.rs:13:1
+   |
+13 | async fn bad_no_result(_: Arc<RequestContext<()>>) {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Endpoint must return a Result
   --> $DIR/bad_endpoint11.rs:13:1
    |
 13 | async fn bad_no_result(_: Arc<RequestContext<()>>) {}

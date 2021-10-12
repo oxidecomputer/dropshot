@@ -1,13 +1,38 @@
-error: Expected a non-receiver argument
-Endpoint handlers must have the following signature:
-    async fn bad_endpoint(
+error: Endpoint handlers must have the following signature:
+    async fn(
         rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
+  --> $DIR/bad_endpoint2.rs:13:1
+   |
+13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Expected a non-receiver argument
   --> $DIR/bad_endpoint2.rs:13:23
    |
 13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
    |                       ^^^^
+
+error: `self` parameter is only allowed in associated functions
+  --> $DIR/bad_endpoint2.rs:13:23
+   |
+13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
+   |                       ^^^^ not semantically valid as function parameter
+   |
+   = note: associated functions are those in `impl` or `trait` definitions
+
+error[E0401]: can't use generic parameters from outer function
+  --> $DIR/bad_endpoint2.rs:13:23
+   |
+9  | #[endpoint {
+   | ---------- `Self` type implicitly declared here, by this `impl`
+...
+13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
+   |                       ^^^^
+   |                       |
+   |                       use of generic parameter from outer function
+   |                       use a type here instead
