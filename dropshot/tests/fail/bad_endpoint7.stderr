@@ -1,10 +1,10 @@
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-    --> tests/fail/bad_endpoint7.rs:25:13
+    --> $DIR/bad_endpoint7.rs:25:13
      |
 25   | ) -> Result<HttpResponseOk<Ret>, HttpError> {
      |             ^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
      |
-    ::: src/handler.rs:1216:43
+    ::: $WORKSPACE/dropshot/src/handler.rs
      |
-1216 | pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
+     | pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
      |                                           --------- required by this bound in `HttpResponseOk`
