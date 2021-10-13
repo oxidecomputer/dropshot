@@ -50,7 +50,7 @@ jobs:
     - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: 1.55.0
         override: true
     - name: Report cargo version
       run: cargo --version
