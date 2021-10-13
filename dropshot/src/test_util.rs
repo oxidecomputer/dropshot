@@ -619,17 +619,15 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
 pub async fn object_delete<T: DeserializeOwned>(
     client: &ClientTestContext,
     object_url: &str,
-) -> T {
-    let mut response = client
-        .make_request_with_body(
+) {
+    client
+        .make_request_no_body(
             Method::DELETE,
             &object_url,
-            "".into(),
-            StatusCode::OK,
+            StatusCode::NO_CONTENT,
         )
         .await
         .unwrap();
-    read_json::<T>(&mut response).await
 }
 
 /**
