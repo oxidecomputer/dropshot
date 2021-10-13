@@ -614,6 +614,25 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
 }
 
 /**
+ * Issues an HTTP DELETE to the specified object URL to delete an object.
+ */
+pub async fn object_delete<T: DeserializeOwned>(
+    client: &ClientTestContext,
+    object_url: &str,
+) -> T {
+    let mut response = client
+        .make_request_with_body(
+            Method::DELETE,
+            &object_url,
+            "".into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    read_json::<T>(&mut response).await
+}
+
+/**
  * Iterate a paginated collection.
  */
 pub async fn iter_collection<T: Clone + DeserializeOwned>(
