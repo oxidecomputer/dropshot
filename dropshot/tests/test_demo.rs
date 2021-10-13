@@ -614,7 +614,7 @@ async fn test_delete_request() {
     let testctx = common::test_setup("test_delete_request", api);
     let client = &testctx.client_testctx;
 
-    object_delete::<()>(&client, "/testing/delete").await;
+    object_delete(&client, "/testing/delete").await;
 
     testctx.teardown().await;
 }
