@@ -51,7 +51,6 @@ jobs:
       with:
         profile: minimal
         toolchain: 1.55.0
-        default: true
         override: true
     - name: Report cargo version
       run: cargo --version

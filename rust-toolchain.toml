@@ -1,0 +1,9 @@
+# We use a specific toolchain revision to ensure our tests - which
+# occasionally depend on specific compiler output - remain stable
+# for all developers until the toolchain is explicitly advanced.
+
+[toolchain]
+# NOTE: This toolchain is also specified within .github/workflows/rust.yml
+# If you update it here, update that file too.
+channel = "1.55.0"
+profile = "default"
