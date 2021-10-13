@@ -55,6 +55,8 @@ jobs:
         override: true
     - name: Report cargo version
       run: cargo --version
+    - name: Report rustc version
+      run: rustc --version
     - name: Build
       run: cargo build --tests --verbose
     - name: Run tests
