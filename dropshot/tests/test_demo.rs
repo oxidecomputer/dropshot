@@ -16,9 +16,9 @@
  */
 
 use dropshot::endpoint;
+use dropshot::test_util::object_delete;
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
-use dropshot::test_util::object_delete;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
