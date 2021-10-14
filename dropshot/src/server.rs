@@ -56,6 +56,8 @@ pub struct DropshotState<C: ServerContext> {
     pub router: HttpRouter<C>,
     /** server-wide log handle */
     pub log: Logger,
+    /** bound local address for the server. */
+    pub local_addr: SocketAddr,
 }
 
 /**
@@ -123,6 +125,9 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, hyper::Error> {
+        let incoming = AddrIncoming::bind(&config.bind_address)?;
+        let local_addr = incoming.local_addr();
+
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
@@ -133,7 +138,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 page_default_nitems: NonZeroU32::new(100).unwrap(),
             },
             router: api.into_router(),
-            log: log.new(o!()),
+            log: log.new(o!("local_addr" => local_addr)),
+            local_addr,
         });
 
         for (path, method, _) in &app_state.router {
@@ -144,10 +150,9 @@ impl<C: ServerContext> HttpServerStarter<C> {
         }
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-        let builder = hyper::Server::try_bind(&config.bind_address)?;
+        let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
-        let local_addr = server.local_addr();
-        info!(app_state.log, "listening"; "local_addr" => %local_addr);
+        info!(app_state.log, "listening");
 
         Ok(HttpServerStarter {
             app_state,
@@ -257,7 +262,7 @@ async fn http_connection_handle<C: ServerContext>(
     remote_addr: SocketAddr,
 ) -> Result<ServerRequestHandler<C>, GenericError> {
     info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
-    Ok(ServerRequestHandler::new(server))
+    Ok(ServerRequestHandler::new(server, remote_addr))
 }
 
 /**
@@ -268,6 +273,7 @@ async fn http_connection_handle<C: ServerContext>(
  */
 async fn http_request_handle_wrap<C: ServerContext>(
     server: Arc<DropshotState<C>>,
+    remote_addr: SocketAddr,
     request: Request<Body>,
 ) -> Result<Response<Body>, GenericError> {
     /*
@@ -278,6 +284,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
      */
     let request_id = generate_request_id();
     let request_log = server.log.new(o!(
+        "remote_addr" => remote_addr,
         "req_id" => request_id.clone(),
         "method" => request.method().as_str().to_string(),
         "uri" => format!("{}", request.uri()),
@@ -435,6 +442,7 @@ impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
 pub struct ServerRequestHandler<C: ServerContext> {
     /** backend state that will be made available to the request handler */
     server: Arc<DropshotState<C>>,
+    remote_addr: SocketAddr,
 }
 
 impl<C: ServerContext> ServerRequestHandler<C> {
@@ -442,9 +450,10 @@ impl<C: ServerContext> ServerRequestHandler<C> {
      * Create a ServerRequestHandler object with the given state object that
      * will be provided to the handler function.
      */
-    fn new(server: Arc<DropshotState<C>>) -> Self {
+    fn new(server: Arc<DropshotState<C>>, remote_addr: SocketAddr) -> Self {
         ServerRequestHandler {
             server,
+            remote_addr,
         }
     }
 }
@@ -463,7 +472,7 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        Box::pin(http_request_handle_wrap(Arc::clone(&self.server), req))
+        Box::pin(http_request_handle_wrap(Arc::clone(&self.server), self.remote_addr, req))
     }
 }
 
