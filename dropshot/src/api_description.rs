@@ -1485,6 +1485,39 @@ mod test {
     }
 
     #[test]
+    fn test_nested_types_with_same_name() {
+        mod inner {
+            use super::*;
+
+            #[derive(Deserialize, JsonSchema)]
+            pub struct TheThing(String);
+        }
+
+        #[derive(Deserialize, JsonSchema)]
+        struct TheThing(pub inner::TheThing);
+
+        #[derive(Deserialize, JsonSchema)]
+        struct Params {
+            #[allow(dead_code)]
+            thing: TheThing,
+        }
+
+        #[endpoint {
+            method = PUT,
+            path = "/testing/{thing}"
+        }]
+        async fn test_handler(
+            _: Arc<RequestContext<()>>,
+            _: Path<Params>,
+        ) -> Result<Response<Body>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        let _ = api.register(test_handler).unwrap();
+    }
+
+    #[test]
     fn test_additional_properties() {
         #[allow(dead_code)]
         #[derive(JsonSchema)]
