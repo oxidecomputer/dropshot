@@ -4,6 +4,7 @@
 max_width = 80
 use_small_heuristics = "max"
 unstable_features = true
+edition = "2018"
 
 #
 # ---------------------------------------------------------------------------
@@ -51,7 +52,8 @@ fn_single_line = false
 where_single_line = false
 imports_indent = "Block"
 imports_layout = "Mixed"
-merge_imports = false
+imports_granularity = "Preserve"
+group_imports = "Preserve"
 reorder_imports = true
 reorder_modules = true
 reorder_impl_items = false
@@ -65,6 +67,7 @@ combine_control_expr = true
 struct_field_align_threshold = 0
 enum_discrim_align_threshold = 0
 match_arm_blocks = true
+match_arm_leading_pipes = "Never"
 force_multiline_blocks = false
 fn_args_layout = "Tall"
 brace_style = "SameLineWhere"
@@ -74,7 +77,6 @@ trailing_comma = "Vertical"
 match_block_trailing_comma = false
 blank_lines_upper_bound = 1
 blank_lines_lower_bound = 0
-edition = "2018"
 version = "One"
 inline_attribute_width = 0
 merge_derives = true
@@ -83,7 +85,7 @@ use_field_init_shorthand = false
 force_explicit_abi = true
 condense_wildcard_suffixes = false
 color = "Auto"
-required_version = "1.4.19"
+required_version = "1.4.36"
 disable_all_formatting = false
 skip_children = false
 hide_parse_errors = false

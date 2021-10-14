@@ -17,10 +17,13 @@ https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...HEAD[Full list of co
 
 * https://github.com/oxidecomputer/dropshot/pull/105[#105] When generating an OpenAPI spec, Dropshot now uses references rather than inline schemas to represent request and response bodies.
 * https://github.com/oxidecomputer/dropshot/pull/103[#103] When the Dropshot server is dropped before having been shut down, Dropshot now attempts to gracefully shut down rather than panic.
+* https://github.com/oxidecomputer/dropshot/pull/110[#110] Wildcard paths are now supported. Consumers may take over routing (e.g. for file serving) by annotating a path component: `/static/{path:.*}`. The `path` member should then be of type `Vec<String>` and it will be filled in with all path components following `/static/`.
 
 === Breaking Changes
 
 * https://github.com/oxidecomputer/dropshot/pull/100[#100] The type used for the "limit" argument for paginated resources has changed.  This limit refers to the number of items that an HTTP client can ask for in a single request to a paginated endpoint.  The limit is now 4294967295, where it may have previously been larger.  This is not expected to affect consumers because this limit is far larger than practical.  For details, see #100.
+* https://github.com/oxidecomputer/dropshot/pull/116[#116] Unused, non-`pub` endpoints from the `&#35;[endpoint { ... }]` macro now produce a lint warning. This is *technically* a breaking change for those who may have had unused endpoints and compiled with `&#35;[deny(warning)]` or `&#35;[deny(dead_code)]` thus implicitly relying on the *absence* of a warning about the endpoint being unused.
+* https://github.com/oxidecomputer/dropshot/pull/118[#118] Path handling has changed. Escape sequences are decoded so that path parameters will no longer include those escape sequences. In addition, paths for endpoints added via `ApiDescription::register()` may not contain consecutive "/" characters.
 
 == 0.5.1 (released 2021-03-18)
 

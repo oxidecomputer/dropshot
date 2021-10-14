@@ -46,6 +46,7 @@ use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
+use crate::router::VariableSet;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -61,7 +62,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use slog::Logger;
 use std::cmp::min;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
@@ -93,7 +93,7 @@ pub struct RequestContext<Context: ServerContext> {
     /** HTTP request details */
     pub request: Arc<Mutex<Request<Body>>>,
     /** HTTP request routing variables */
-    pub path_variables: BTreeMap<String, String>,
+    pub path_variables: VariableSet,
     /** unique id assigned to this request */
     pub request_id: String,
     /** logger for this specific request */
@@ -755,8 +755,8 @@ fn schema2parameters(
 ) -> Vec<ApiEndpointParameter> {
     /*
      * We ignore schema.metadata, which includes things like doc comments, and
-     * schema.extensions. We call these out explicitly rather than .. since we
-     * match all other fields in the structure.
+     * schema.extensions. We call these out explicitly rather than eliding them
+     * as .. since we match all other fields in the structure.
      */
     match schema {
         /* We expect references to be on their own. */
@@ -779,7 +779,8 @@ fn schema2parameters(
             generator,
             required,
         ),
-        // Match objects and subschemas.
+
+        /* Match objects and subschemas. */
         schemars::schema::Schema::Object(schemars::schema::SchemaObject {
             metadata: _,
             instance_type: Some(schemars::schema::SingleOrVec::Single(_)),

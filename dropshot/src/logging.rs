@@ -435,7 +435,8 @@ mod test {
         if cfg!(windows) {
             assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
         } else {
-            assert_eq!(error.kind(), std::io::ErrorKind::Other);
+            // We expect ErrorKind::IsADirectory which is nightly-only atm
+            // assert_eq!(error.kind(), std::io::ErrorKind::IsADirectory);
             assert_eq!(error.raw_os_error(), Some(libc::EISDIR));
         }
     }

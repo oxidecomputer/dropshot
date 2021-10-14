@@ -29,15 +29,15 @@ suite runs cleanly and should remain clean.
 
 Dropshot works with stable Rust versions, but for consistency the code is
 _formatted_ with a specific version of `rustfmt`.  To contribute to Dropshot,
-you will need to have installed the `nightly-2020-07-26` version of the Rust
+you will need to have installed the `nightly-2021-03-25` version of the Rust
 toolchain:
 
 ----
-$ rustup install nightly-2020-07-26
+$ rustup install nightly-2021-03-25
 ----
 
-You can then **format the code** using `cargo +nightly-2020-07-26 fmt` or
-`rustfmt +nightly-2020-07-26`.  Make sure to run this before pushing changes.
+You can then **format the code** using `cargo +nightly-2021-03-25 fmt` or
+`rustfmt +nightly-2021-03-25`.  Make sure to run this before pushing changes.
 The CI uses this version of `rustfmt` to check that the code is correctly
 formatted.
 

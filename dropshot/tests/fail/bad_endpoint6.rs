@@ -20,8 +20,12 @@ struct Ret {
     method = GET,
     path = "/test",
 }]
-async fn bad_endpoint(_rqctx: Arc<RequestContext<()>>) -> Result<HttpResponseOk<Ret>, HttpError> {
-    Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
+async fn bad_endpoint(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<Ret>, HttpError> {
+    // Validate that compiler errors show up with useful context and aren't
+    // obscured by the macro.
+    Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
 }
 
 fn main() {}
