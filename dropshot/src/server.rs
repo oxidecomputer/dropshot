@@ -472,7 +472,11 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        Box::pin(http_request_handle_wrap(Arc::clone(&self.server), self.remote_addr, req))
+        Box::pin(http_request_handle_wrap(
+            Arc::clone(&self.server),
+            self.remote_addr,
+            req,
+        ))
     }
 }
 
