@@ -30,7 +30,7 @@ Dependabot uses different https://docs.github.com/en/code-security/supply-chain-
 
 For applications (such as Oxide's internal Omicron project), we point Dependabot at the root of the https://doc.rust-lang.org/cargo/reference/workspaces.html[Cargo workspace] (the root of the repository).  This causes Dependabot to find Cargo.lock, treat the package as an application, and update Cargo.lock and the Cargo.toml files for all packages in the workspace.
 
-We do not do this in Dropshot.  We _do_ <<_checking_in_cargo_lock_file,check in a Cargo.lock file>>, but we point Dependabot at the individual packages in the Dropshot workspace.  Dependabot does not find the Cargo.lock file and so treats Dropshot as a library, only updating Cargo.toml when _necessary_ to accommodate a new dependency.
+We currently configure Dependabot to treat Dropshot as an application so that it can ensure that Cargo.toml and Cargo.lock files are in sync.  One downside is that Dependabot may update Cargo.toml when new versions of dependencies are released, even if Dropshot works okay on older versions, which means we're essentially forcing consumers to update their dependencies.  We should be able to mitigate this by avoiding very specific dependencies in Cargo.toml.  (For example, use "1.2" rather than "1.2.3".  This way, when 1.2.4 comes out, Dependabot doesn't need to update Cargo.toml -- 1.2.4 is still compatible with 1.2.)
 
 === Debugging Dependabot
 
