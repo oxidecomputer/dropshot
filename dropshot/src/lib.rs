@@ -497,6 +497,39 @@
  * structure that includes a `PaginationParams` using `#[serde(flatten)]`, and
  * this ought to work, but it currently doesn't due to serde_urlencoded#33,
  * which is really serde#1183.
+ *
+ * ### DTrace probes
+ *
+ * Dropshot optionally exposes two DTrace probes, `request_start` and
+ * `request_finish`. These provide detailed information about each request,
+ * such as their ID, the local and remote IPs, and the response information.
+ * See the [`RequestInfo`] and [`ResponseInfo`] types for a complete listing
+ * of what's available.
+ *
+ * These probes are implemented via the [`usdt`] crate, and require a nightly
+ * toolchain. As such, they're behind the feature flag `"usdt-probes"`. You
+ * can build Dropshot with these probes via `cargo +nightly build --features usdt-probes`.
+ *
+ * Once in place, the probes can be seen via DTrace. For example, running:
+ *
+ * ```bash
+ * $ cargo +nightly run --example basic --features usdt-probes
+ * ```
+ *
+ * And making several requests to it with `curl`, we can see the DTrace
+ * probes with an invocation like:
+ *
+ * ```bash
+ * # dtrace -n 'dropshot*:::request_* { printf("%s", copyinstr(arg0)); }'
+dtrace: description 'dropshot*:::request_* ' matched 2 probes
+CPU     ID                    FUNCTION:NAME
+ 18  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","method":"GET","path":"/counter","query":null}}
+ 18  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","status_code":200,"message":""}}
+  3  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","method":"PUT","path":"/counter","query":null}}
+  3  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","status_code":204,"message":""}}
+  0  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","method":"POST","path":"/counter","query":null}}
+  0  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","status_code":405,"message":"Method Not Allowed"}}
+ * ```
  */
 
 /*
@@ -504,6 +537,46 @@
  * automated enforcement.
  */
 #![allow(clippy::style)]
+
+/*
+ * The `usdt` crate requires nightly, enabled if our consumer is enabling
+ * DTrace probes.
+ */
+#![cfg_attr(feature = "usdt-probes", feature(asm))]
+
+#[derive(Debug, Clone, serde::Serialize)] 
+pub(crate) struct RequestInfo {
+    id: uuid::Uuid,
+    local_addr: std::net::SocketAddr,
+    remote_addr: std::net::SocketAddr,
+    method: String,
+    path: String,
+    query: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)] 
+pub(crate) struct ResponseInfo {
+    id: uuid::Uuid,
+    local_addr: std::net::SocketAddr,
+    remote_addr: std::net::SocketAddr,
+    status_code: u16,
+    message: String,
+}
+
+#[usdt::provider]
+mod dropshot {
+    use crate::{RequestInfo, ResponseInfo};
+    fn request_start(_: RequestInfo) {}
+    fn request_finish(_: ResponseInfo) {}
+}
+
+pub fn register_probes() -> Result<(), usdt::Error> {
+    if cfg!(feature = "usdt-probes") {
+        usdt::register_probes()
+    } else {
+        Ok(())
+    }
+}
 
 mod api_description;
 mod config;

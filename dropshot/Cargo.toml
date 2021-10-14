@@ -55,6 +55,10 @@ features = [ "max_level_trace", "release_max_level_debug" ]
 version = "1.0"
 features = [ "full" ]
 
+[dependencies.usdt]
+version = "0.1.16"
+default-features = false
+
 [dependencies.uuid]
 version = "0.8.0"
 features = [ "serde", "v4" ]
@@ -76,3 +80,6 @@ trybuild = "=1.0.46"
 [dev-dependencies.schemars]
 version = "0.8.0"
 features = [ "chrono", "uuid" ]
+
+[features]
+usdt-probes = ["usdt/asm"]
