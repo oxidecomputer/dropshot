@@ -698,9 +698,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .components
             .get_or_insert_with(openapiv3::Components::default)
             .schemas;
-        generator.definitions().iter().for_each(|(key, schema)| {
+
+        let root_schema = generator.into_root_schema_for::<()>();
+        root_schema.definitions.iter().for_each(|(key, schema)| {
             schemas.insert(key.clone(), j2oas_schema(None, schema));
         });
+
         definitions.into_iter().for_each(|(key, schema)| {
             if !schemas.contains_key(&key) {
                 schemas.insert(key, j2oas_schema(None, &schema));
@@ -752,7 +755,6 @@ fn j2oas_schema(
     name: Option<&String>,
     schema: &schemars::schema::Schema,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
-    println!("{:#?}", schema);
     match schema {
         /*
          * The permissive, "match anything" schema. We'll typically see this
@@ -778,32 +780,9 @@ fn j2oas_schema_object(
     obj: &schemars::schema::SchemaObject,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     if let Some(reference) = &obj.reference {
-        // When operated in its OpenAPI 3.0.x compatibility mode, schemars has
-        // a special handling for option types that inserts "nullable" as an
-        // extension. It is a bit odd in that it will mix "nullable" with
-        // references which is not technically permitted. We convert a nullable
-        // reference to a nullable allOf with a single subschema.
-        match obj.extensions.get("nullable") {
-            Some(serde_json::Value::Bool(true)) => {
-                return openapiv3::ReferenceOr::Item(openapiv3::Schema {
-                    schema_data: openapiv3::SchemaData {
-                        nullable: true,
-                        ..Default::default()
-                    },
-                    schema_kind: openapiv3::SchemaKind::AllOf {
-                        all_of: vec![openapiv3::ReferenceOr::Reference {
-                            reference: reference.clone(),
-                        }],
-                    },
-                })
-            }
-            Some(serde_json::Value::Bool(false)) | None => {
-                return openapiv3::ReferenceOr::Reference {
-                    reference: reference.clone(),
-                }
-            }
-            Some(value) => panic!("unexpected value for nullable: {:?}", value),
-        }
+        return openapiv3::ReferenceOr::Reference {
+            reference: reference.clone(),
+        };
     }
 
     let ty = match &obj.instance_type {
@@ -835,11 +814,20 @@ fn j2oas_schema_object(
             j2oas_integer(&obj.format, &obj.number, &obj.enum_values)
         }
         (None, Some(subschema)) => j2oas_subschemas(subschema),
-        (None, None) => todo!("missed a valid case {:?}", obj),
+        (None, None) => {
+            openapiv3::SchemaKind::Any(openapiv3::AnySchema::default())
+        }
         _ => panic!("invalid"),
     };
 
     let mut data = openapiv3::SchemaData::default();
+
+    if matches!(
+        &obj.extensions.get("nullable"),
+        Some(serde_json::Value::Bool(true))
+    ) {
+        data.nullable = true;
+    }
 
     if let Some(metadata) = &obj.metadata {
         data.title = metadata.title.clone();
@@ -1306,6 +1294,7 @@ mod test {
     use super::ApiDescription;
     use super::ApiEndpoint;
     use crate as dropshot; /* for "endpoint" macro */
+    use crate::api_description::j2oas_schema_object;
     use crate::endpoint;
     use crate::Query;
     use crate::TypedBody;
@@ -1532,14 +1521,16 @@ mod test {
             bar: String,
         }
         let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
-        let schema = Option::<Foo>::json_schema(&mut generator);
-        let os = j2oas_schema(None, &schema);
+        let generator = schemars::gen::SchemaGenerator::new(settings);
+        let root_schema = generator.into_root_schema_for::<Option<Foo>>();
+        let schema = root_schema.schema;
+        let os = j2oas_schema_object(None, &schema);
 
         assert_eq!(
             os,
             openapiv3::ReferenceOr::Item(openapiv3::Schema {
                 schema_data: openapiv3::SchemaData {
+                    title: Some("Nullable_Foo".to_string()),
                     nullable: true,
                     ..Default::default()
                 },
