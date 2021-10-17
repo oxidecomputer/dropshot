@@ -752,6 +752,7 @@ fn j2oas_schema(
     name: Option<&String>,
     schema: &schemars::schema::Schema,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
+    println!("{:#?}", schema);
     match schema {
         /*
          * The permissive, "match anything" schema. We'll typically see this
@@ -777,9 +778,32 @@ fn j2oas_schema_object(
     obj: &schemars::schema::SchemaObject,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     if let Some(reference) = &obj.reference {
-        return openapiv3::ReferenceOr::Reference {
-            reference: reference.clone(),
-        };
+        // When operated in its OpenAPI 3.0.x compatibility mode, schemars has
+        // a special handling for option types that inserts "nullable" as an
+        // extension. It is a bit odd in that it will mix "nullable" with
+        // references which is not technically permitted. We convert a nullable
+        // reference to a nullable allOf with a single subschema.
+        match obj.extensions.get("nullable") {
+            Some(serde_json::Value::Bool(true)) => {
+                return openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                    schema_data: openapiv3::SchemaData {
+                        nullable: true,
+                        ..Default::default()
+                    },
+                    schema_kind: openapiv3::SchemaKind::AllOf {
+                        all_of: vec![openapiv3::ReferenceOr::Reference {
+                            reference: reference.clone(),
+                        }],
+                    },
+                })
+            }
+            Some(serde_json::Value::Bool(false)) | None => {
+                return openapiv3::ReferenceOr::Reference {
+                    reference: reference.clone(),
+                }
+            }
+            Some(value) => panic!("unexpected value for nullable: {:?}", value),
+        }
     }
 
     let ty = match &obj.instance_type {
@@ -1498,5 +1522,33 @@ mod test {
         for (key, schema) in generator.definitions().iter() {
             let _ = j2oas_schema(Some(key), schema);
         }
+    }
+
+    #[test]
+    fn test_nullable() {
+        #[allow(dead_code)]
+        #[derive(JsonSchema)]
+        struct Foo {
+            bar: String,
+        }
+        let settings = schemars::gen::SchemaSettings::openapi3();
+        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let schema = Option::<Foo>::json_schema(&mut generator);
+        let os = j2oas_schema(None, &schema);
+
+        assert_eq!(
+            os,
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData {
+                    nullable: true,
+                    ..Default::default()
+                },
+                schema_kind: openapiv3::SchemaKind::AllOf {
+                    all_of: vec![openapiv3::ReferenceOr::Reference {
+                        reference: "#/components/schemas/Foo".to_string()
+                    }],
+                },
+            })
+        );
     }
 }
