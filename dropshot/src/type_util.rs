@@ -144,8 +144,7 @@ fn type_resolve<'a>(
         if set.contains(ref_schema) {
             eprintln!("{:#?}", schema);
             eprintln!(
-                "consider #[schemars(rename = \"...\")] or \
-                 #[schemars(transparent)]"
+                "consider #[serde(rename = \"...\")] or #[serde(transparent)]"
             );
             panic!("type reference cycle detected");
         }
