@@ -20,7 +20,7 @@ async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
     _: Arc<RequestContext<S>>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     S::do_stuff();
-    Ok(HttpResponseOk(()))
+    panic!()
 }
 
 fn main() {}
