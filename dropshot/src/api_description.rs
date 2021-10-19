@@ -429,52 +429,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
     }
 
     /**
-     * Emit the OpenAPI Spec document describing this API in its JSON form.
-     *
-     * This routine is deprecated in favour of the new openapi() builder
-     * routine.
-     */
-    #[allow(clippy::too_many_arguments)]
-    #[deprecated(note = "switch to openapi()")]
-    pub fn print_openapi(
-        &self,
-        out: &mut dyn std::io::Write,
-        title: &dyn ToString,
-        description: Option<&dyn ToString>,
-        terms_of_service: Option<&dyn ToString>,
-        contact_name: Option<&dyn ToString>,
-        contact_url: Option<&dyn ToString>,
-        contact_email: Option<&dyn ToString>,
-        license_name: Option<&dyn ToString>,
-        license_url: Option<&dyn ToString>,
-        version: &dyn ToString,
-    ) -> serde_json::Result<()> {
-        let mut oapi = self.openapi(title.to_string(), version.to_string());
-        if let Some(s) = description {
-            oapi.description(s.to_string());
-        }
-        if let Some(s) = terms_of_service {
-            oapi.terms_of_service(s.to_string());
-        }
-        if let Some(s) = contact_name {
-            oapi.contact_name(s.to_string());
-        }
-        if let Some(s) = contact_url {
-            oapi.contact_url(s.to_string());
-        }
-        if let Some(s) = contact_email {
-            oapi.contact_email(s.to_string());
-        }
-        if let (Some(name), Some(url)) = (license_name, license_url) {
-            oapi.license(name.to_string(), url.to_string());
-        } else if let Some(name) = license_name {
-            oapi.license_name(name.to_string());
-        }
-
-        oapi.write(out)
-    }
-
-    /**
      * Internal routine for constructing the OpenAPI definition describing this
      * API in its JSON form.
      */
@@ -493,7 +447,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             if !endpoint.visible {
                 continue;
             }
-            let path = openapi.paths.entry(path).or_insert(
+            let path = openapi.paths.paths.entry(path).or_insert(
                 openapiv3::ReferenceOr::Item(openapiv3::PathItem::default()),
             );
 
@@ -612,9 +566,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         mime_type.to_string(),
                         openapiv3::MediaType {
                             schema: Some(schema),
-                            example: None,
-                            examples: indexmap::IndexMap::new(),
-                            encoding: indexmap::IndexMap::new(),
+                            ..Default::default()
                         },
                     );
 
@@ -653,9 +605,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
                             schema: Some(j2oas_schema(name.as_ref(), &js)),
-                            example: None,
-                            examples: indexmap::IndexMap::new(),
-                            encoding: indexmap::IndexMap::new(),
+                            ..Default::default()
                         },
                     );
                 }
@@ -788,7 +738,7 @@ fn j2oas_schema_object(
     let ty = match &obj.instance_type {
         Some(schemars::schema::SingleOrVec::Single(ty)) => Some(ty.as_ref()),
         Some(schemars::schema::SingleOrVec::Vec(_)) => {
-            unimplemented!("unsupported by openapiv3")
+            panic!("unsupported by openapiv3")
         }
         None => None,
     };
@@ -870,8 +820,7 @@ fn j2oas_subschemas(
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
-        (None, None, None) => todo!("missed a valid case"),
-        _ => panic!("invalid"),
+        _ => panic!("invalid subschema {:#?}", subschemas),
     }
 }
 
@@ -1045,7 +994,13 @@ fn j2oas_string(
 
     let enumeration = enum_values
         .iter()
-        .flat_map(|v| v.iter().map(|vv| vv.as_str().unwrap().to_string()))
+        .flat_map(|v| {
+            v.iter().map(|vv| match vv {
+                serde_json::Value::Null => None,
+                serde_json::Value::String(s) => Some(s.clone()),
+                _ => panic!("unexpected enumeration value {:?}", vv),
+            })
+        })
         .collect::<Vec<_>>();
 
     openapiv3::SchemaKind::Type(openapiv3::Type::String(
@@ -1067,9 +1022,12 @@ fn j2oas_array(
     openapiv3::SchemaKind::Type(openapiv3::Type::Array(openapiv3::ArrayType {
         items: match &arr.items {
             Some(schemars::schema::SingleOrVec::Single(schema)) => {
-                box_reference_or(j2oas_schema(None, &schema))
+                Some(box_reference_or(j2oas_schema(None, &schema)))
             }
-            _ => unimplemented!("don't think this is valid"),
+            Some(schemars::schema::SingleOrVec::Vec(_)) => {
+                panic!("OpenAPI v3.0.x cannot support tuple-like arrays")
+            }
+            None => None,
         },
         min_items: arr.min_items.map(|n| n as usize),
         max_items: arr.max_items.map(|n| n as usize),
