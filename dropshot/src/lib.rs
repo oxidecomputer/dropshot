@@ -512,23 +512,23 @@
  *
  * Once in place, the probes can be seen via DTrace. For example, running:
  *
- * ```bash
+ * ```ignore
  * $ cargo +nightly run --example basic --features usdt-probes
  * ```
  *
  * And making several requests to it with `curl`, we can see the DTrace
  * probes with an invocation like:
  *
- * ```bash
+ * ```ignore
  * # dtrace -n 'dropshot*:::request_* { printf("%s", copyinstr(arg0)); }'
-dtrace: description 'dropshot*:::request_* ' matched 2 probes
-CPU     ID                    FUNCTION:NAME
- 18  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","method":"GET","path":"/counter","query":null}}
- 18  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","status_code":200,"message":""}}
-  3  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","method":"PUT","path":"/counter","query":null}}
-  3  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","status_code":204,"message":""}}
-  0  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","method":"POST","path":"/counter","query":null}}
-  0  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","status_code":405,"message":"Method Not Allowed"}}
+ * dtrace: description 'dropshot*:::request_* ' matched 2 probes
+ * CPU     ID                    FUNCTION:NAME
+ * 18  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","method":"GET","path":"/counter","query":null}}
+ * 18  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","status_code":200,"message":""}}
+ * 3  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","method":"PUT","path":"/counter","query":null}}
+ * 3  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","status_code":204,"message":""}}
+ * 0  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","method":"POST","path":"/counter","query":null}}
+ * 0  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","status_code":405,"message":"Method Not Allowed"}}
  * ```
  */
 
