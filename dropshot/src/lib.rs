@@ -537,14 +537,13 @@ CPU     ID                    FUNCTION:NAME
  * automated enforcement.
  */
 #![allow(clippy::style)]
-
 /*
  * The `usdt` crate requires nightly, enabled if our consumer is enabling
  * DTrace probes.
  */
 #![cfg_attr(feature = "usdt-probes", feature(asm))]
 
-#[derive(Debug, Clone, serde::Serialize)] 
+#[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct RequestInfo {
     id: uuid::Uuid,
     local_addr: std::net::SocketAddr,
@@ -554,7 +553,7 @@ pub(crate) struct RequestInfo {
     query: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)] 
+#[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct ResponseInfo {
     id: uuid::Uuid,
     local_addr: std::net::SocketAddr,

@@ -155,7 +155,11 @@ impl<C: ServerContext> HttpServerStarter<C> {
         info!(app_state.log, "listening");
 
         if let Err(e) = crate::register_probes() {
-            warn!(app_state.log, "failed to register DTrace probes, {}", e.to_string());
+            warn!(
+                app_state.log,
+                "failed to register DTrace probes, {}",
+                e.to_string()
+            );
         } else {
             debug!(app_state.log, "registered DTrace probes");
         }
