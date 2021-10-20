@@ -372,7 +372,7 @@ impl LogContext {
                 );
                 let new_path = log_file_for_test(test_name);
                 let new_path_str = new_path.as_path().display().to_string();
-                eprintln!("log file: {:?}", new_path_str);
+                eprintln!("server log file: {:?}", new_path_str);
                 (Some(new_path), ConfigLogging::File {
                     level: level.clone(),
                     path: new_path_str,
