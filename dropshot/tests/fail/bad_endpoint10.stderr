@@ -2,10 +2,13 @@ error[E0271]: type mismatch resolving `<String as TypeEq>::This == HttpError`
   --> $DIR/bad_endpoint10.rs:16:6
    |
 16 | ) -> Result<HttpResponseOk<()>, String> {
-   |      ^^^^^^
-   |      |
-   |      expected struct `HttpError`, found struct `String`
-   |      required by this bound in `validate_result_error_type`
+   |      ^^^^^^ expected struct `HttpError`, found struct `String`
+   |
+note: required by a bound in `validate_result_error_type`
+  --> $DIR/bad_endpoint10.rs:16:6
+   |
+16 | ) -> Result<HttpResponseOk<()>, String> {
+   |      ^^^^^^ required by this bound in `validate_result_error_type`
 
 error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_error_type> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_error_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> $DIR/bad_endpoint10.rs:14:10
@@ -13,7 +16,8 @@ error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future {<impl
 14 | async fn bad_error_type(
    |          ^^^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>) -> impl Future {<impl From<bad_error_type> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_error_type}`
    |
-  ::: $WORKSPACE/dropshot/src/api_description.rs
+note: required by a bound in `ApiEndpoint::<Context>::new`
+  --> $DIR/api_description.rs:54:33
    |
-   |         FuncParams: Extractor + 'static,
-   |                                 ------- required by this bound in `ApiEndpoint::<Context>::new`
+54 |         FuncParams: Extractor + 'static,
+   |                                 ^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`
