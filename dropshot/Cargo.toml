@@ -66,7 +66,7 @@ features = [ "uuid" ]
 [dev-dependencies]
 expectorate = "1.0.2"
 lazy_static = "1.4.0"
-libc = "0.2.71"
+libc = "0.2.104"
 mime_guess = "2.0.3"
 subprocess = "0.2.8"
 # Version subsequent to 1.0.46 cause our "fail" tests to vary in the face of
