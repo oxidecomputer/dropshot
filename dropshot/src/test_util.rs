@@ -174,7 +174,6 @@ impl ClientTestContext {
         request: Request<Body>,
         expected_status: StatusCode,
     ) -> Result<Response<Body>, HttpErrorResponseBody> {
-
         let time_before = chrono::offset::Utc::now().timestamp();
         info!(self.client_log, "client request";
             "method" => %request.method(),
