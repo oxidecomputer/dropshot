@@ -52,7 +52,7 @@ version = "2.5.0"
 features = [ "max_level_trace", "release_max_level_debug" ]
 
 [dependencies.tokio]
-version = "1.0"
+version = "1.12"
 features = [ "full" ]
 
 [dependencies.uuid]
