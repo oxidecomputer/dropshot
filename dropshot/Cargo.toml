@@ -69,9 +69,7 @@ lazy_static = "1.4.0"
 libc = "0.2.104"
 mime_guess = "2.0.3"
 subprocess = "0.2.8"
-# Version subsequent to 1.0.46 cause our "fail" tests to vary in the face of
-# minor, internal code changes. See dtolnay/trybuild#136.
-trybuild = "=1.0.50"
+trybuild = "1.0.50"
 
 [dev-dependencies.schemars]
 version = "0.8.6"
