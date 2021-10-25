@@ -60,7 +60,7 @@ version = "0.8.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.0"
+version = "0.8.6"
 features = [ "uuid" ]
 
 [dev-dependencies]
@@ -71,8 +71,8 @@ mime_guess = "2.0.3"
 subprocess = "0.2.8"
 # Version subsequent to 1.0.46 cause our "fail" tests to vary in the face of
 # minor, internal code changes. See dtolnay/trybuild#136.
-trybuild = "=1.0.46"
+trybuild = "=1.0.50"
 
 [dev-dependencies.schemars]
-version = "0.8.0"
+version = "0.8.6"
 features = [ "chrono", "uuid" ]
