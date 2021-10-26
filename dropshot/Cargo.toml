@@ -69,7 +69,7 @@ lazy_static = "1.4.0"
 libc = "0.2.104"
 mime_guess = "2.0.3"
 subprocess = "0.2.8"
-trybuild = "1.0.50"
+trybuild = "1.0.51"
 
 [dev-dependencies.schemars]
 version = "0.8.6"
