@@ -6,7 +6,7 @@ error: Endpoint handlers must have the following signature:
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
-  --> $DIR/bad_endpoint13.rs:19:1
+  --> tests/fail/bad_endpoint13.rs:19:1
    |
 19 | / async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
 20 | |     _: Arc<RequestContext<S>>,
@@ -14,13 +14,13 @@ error: Endpoint handlers must have the following signature:
    | |______________________________________________^
 
 error: generics are not permitted for endpoint handlers
-  --> $DIR/bad_endpoint13.rs:19:27
+  --> tests/fail/bad_endpoint13.rs:19:27
    |
 19 | async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0412]: cannot find type `S` in this scope
-  --> $DIR/bad_endpoint13.rs:20:27
+  --> tests/fail/bad_endpoint13.rs:20:27
    |
 20 |     _: Arc<RequestContext<S>>,
    |           -               ^ not found in this scope
@@ -28,7 +28,7 @@ error[E0412]: cannot find type `S` in this scope
    |           help: you might be missing a type parameter: `<S>`
 
 error[E0412]: cannot find type `S` in this scope
-  --> $DIR/bad_endpoint13.rs:20:27
+  --> tests/fail/bad_endpoint13.rs:20:27
    |
 20 |     _: Arc<RequestContext<S>>,
    |                           ^ not found in this scope
