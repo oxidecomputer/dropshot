@@ -1,25 +1,30 @@
 error[E0277]: the trait bound `String: Extractor` is not satisfied
-  --> $DIR/bad_endpoint3.rs:17:12
+  --> tests/fail/bad_endpoint3.rs:17:12
+   |
+17 |     param: String,
+   |            ^^^^^^ the trait `Extractor` is not implemented for `String`
+   |
+note: required by a bound in `need_extractor`
+  --> tests/fail/bad_endpoint3.rs:11:1
    |
 11 | / #[endpoint {
 12 | |     method = GET,
 13 | |     path = "/test",
 14 | | }]
-   | |__- required by this bound in `need_extractor`
+   | |__^ required by this bound in `need_extractor`
 ...
 17 |       param: String,
-   |              ^^^^^^
-   |              |
-   |              the trait `Extractor` is not implemented for `String`
-   |              required by a bound in this
+   |              ------ required by a bound in this
+   = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(Arc<RequestContext<()>>, String) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
-  --> $DIR/bad_endpoint3.rs:15:10
+  --> tests/fail/bad_endpoint3.rs:15:10
    |
 15 | async fn bad_endpoint(
    |          ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>, String) -> impl Future {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}`
    |
-  ::: $WORKSPACE/dropshot/src/api_description.rs
+note: required by a bound in `ApiEndpoint::<Context>::new`
+  --> src/api_description.rs
    |
    |         FuncParams: Extractor + 'static,
-   |                                 ------- required by this bound in `ApiEndpoint::<Context>::new`
+   |                                 ^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`

@@ -6,7 +6,7 @@ error: Endpoint handlers must have the following signature:
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
-  --> $DIR/bad_endpoint8.rs:20:1
+  --> tests/fail/bad_endpoint8.rs:20:1
    |
 20 | / fn bad_endpoint(
 21 | |     _rqctx: Arc<RequestContext<()>>,
@@ -14,7 +14,7 @@ error: Endpoint handlers must have the following signature:
    | |___________________________________________^
 
 error: endpoint handler functions must be async
-  --> $DIR/bad_endpoint8.rs:20:1
+  --> tests/fail/bad_endpoint8.rs:20:1
    |
 20 | fn bad_endpoint(
    | ^^

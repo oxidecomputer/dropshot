@@ -1,5 +1,5 @@
 error: expected identifier, found `"Oxide"`
-  --> $DIR/bad_endpoint6.rs:29:29
+  --> tests/fail/bad_endpoint6.rs:29:29
    |
 29 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
    |                       ---   ^^^^^^^ expected identifier
@@ -7,7 +7,7 @@ error: expected identifier, found `"Oxide"`
    |                       while parsing this struct
 
 error: expected identifier, found `0x1de`
-  --> $DIR/bad_endpoint6.rs:29:50
+  --> tests/fail/bad_endpoint6.rs:29:50
    |
 29 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
    |                       ---                        ^^^^^ expected identifier
@@ -15,7 +15,7 @@ error: expected identifier, found `0x1de`
    |                       while parsing this struct
 
 error[E0063]: missing fields `x` and `y` in initializer of `Ret`
-  --> $DIR/bad_endpoint6.rs:29:23
+  --> tests/fail/bad_endpoint6.rs:29:23
    |
 29 |     Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
    |                       ^^^ missing `x` and `y`
