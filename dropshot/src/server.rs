@@ -153,17 +153,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
         let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
         info!(app_state.log, "listening");
-
-        if let Err(e) = crate::register_probes() {
-            warn!(
-                app_state.log,
-                "failed to register DTrace probes, {}",
-                e.to_string()
-            );
-        } else {
-            debug!(app_state.log, "registered DTrace probes");
-        }
-
         Ok(HttpServerStarter {
             app_state,
             server,
@@ -303,7 +292,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     dropshot_request_start!(|| {
         let uri = request.uri();
         crate::RequestInfo {
-            id: request_id.parse().unwrap(),
+            id: request_id.clone(),
             local_addr: server.local_addr,
             remote_addr,
             method: request.method().to_string(),
@@ -332,7 +321,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
             dropshot_request_finish!(|| {
                 crate::ResponseInfo {
-                    id: request_id.parse().unwrap(),
+                    id: request_id.clone(),
                     local_addr,
                     remote_addr,
                     status_code: r.status().as_u16(),

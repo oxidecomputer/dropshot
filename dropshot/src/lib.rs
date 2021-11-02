@@ -510,6 +510,11 @@
  * toolchain. As such, they're behind the feature flag `"usdt-probes"`. You
  * can build Dropshot with these probes via `cargo +nightly build --features usdt-probes`.
  *
+ * > *Important:* The probes _must_ be registered with the DTrace kernel
+ * mdoule for them to be visible via `dtrace(1M)`. This should be done with
+ * the public function `dropshot::register_probes()`. Though unlikely, registration
+ * may fail, and it's up to the caller to decide how to proceed.
+ *
  * Once in place, the probes can be seen via DTrace. For example, running:
  *
  * ```ignore
@@ -520,15 +525,13 @@
  * probes with an invocation like:
  *
  * ```ignore
- * # dtrace -n 'dropshot*:::request_* { printf("%s", copyinstr(arg0)); }'
- * dtrace: description 'dropshot*:::request_* ' matched 2 probes
- * CPU     ID                    FUNCTION:NAME
- * 18  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","method":"GET","path":"/counter","query":null}}
- * 18  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"c15659af-adb2-4785-b053-768ded70a7d8","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:42850","status_code":200,"message":""}}
- * 3  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","method":"PUT","path":"/counter","query":null}}
- * 3  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"678ddbe6-8433-4ddf-a8b6-732fea22f368","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:45707","status_code":204,"message":""}}
- * 0  81674 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_start {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","method":"POST","path":"/counter","query":null}}
- * 0  81673 _ZN8dropshot6server24http_request_handle_wrap28_$u7b$$u7b$closure$u7d$$u7d$17h00739672f19564edE:request_finish {"ok": {"id":"0fea32fb-12de-463e-a0a9-17c6542dd51a","local_addr":"127.0.0.1:37458","remote_addr":"127.0.0.1:58478","status_code":405,"message":"Method Not Allowed"}}
+ * # dtrace -Zq -n 'dropshot*:::request_* { printf("%s\n", copyinstr(arg0)); }'
+ * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","method":"GET","path":"/counter","query":null}}
+ * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","status_code":200,"message":""}}
+ * {"ok":{"id":"9050e30a-1ce3-4d6f-be1c-69a11c618800","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:41101","method":"PUT","path":"/counter","query":null}}
+ * {"ok":{"id":"9050e30a-1ce3-4d6f-be1c-69a11c618800","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:41101","status_code":400,"message":"do not like the number 10"}}
+ * {"ok":{"id":"a53696af-543d-452f-81b6-5a045dd9921d","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:57376","method":"PUT","path":"/counter","query":null}}
+ * {"ok":{"id":"a53696af-543d-452f-81b6-5a045dd9921d","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:57376","status_code":204,"message":""}}
  * ```
  */
 
@@ -545,7 +548,7 @@
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct RequestInfo {
-    id: uuid::Uuid,
+    id: String,
     local_addr: std::net::SocketAddr,
     remote_addr: std::net::SocketAddr,
     method: String,
@@ -555,7 +558,7 @@ pub(crate) struct RequestInfo {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct ResponseInfo {
-    id: uuid::Uuid,
+    id: String,
     local_addr: std::net::SocketAddr,
     remote_addr: std::net::SocketAddr,
     status_code: u16,
@@ -565,16 +568,16 @@ pub(crate) struct ResponseInfo {
 #[usdt::provider]
 mod dropshot {
     use crate::{RequestInfo, ResponseInfo};
-    fn request_start(_: RequestInfo) {}
-    fn request_finish(_: ResponseInfo) {}
+    fn request_start(_: &RequestInfo) {}
+    fn request_finish(_: &ResponseInfo) {}
 }
 
+/// Register DTrace probes exposed by Dropshot.
+///
+/// This method _must_ be called for any of the DTrace probes in Dropshot
+/// to be visible from the `dtrace(1M)` command-line tool.
 pub fn register_probes() -> Result<(), usdt::Error> {
-    if cfg!(feature = "usdt-probes") {
-        usdt::register_probes()
-    } else {
-        Ok(())
-    }
+    usdt::register_probes()
 }
 
 mod api_description;

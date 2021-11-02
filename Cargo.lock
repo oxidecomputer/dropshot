@@ -1128,6 +1128,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread-id"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fdfe0627923f7411a43ec9ec9c39c3a9b4151be313e0922042581fb6c9b717f"
+dependencies = [
+ "libc",
+ "redox_syscall",
+ "winapi",
+]
+
+[[package]]
 name = "thread_local"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,12 +1286,13 @@ checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 
 [[package]]
 name = "usdt"
-version = "0.1.17"
+version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9520f6ffcd471d285809a69bd10dd62a783c9e662630aba6387c68dc3861160a"
+checksum = "5879d464141646213a984575329dc0d881411612f904fc5e6765f11ccf0e44ec"
 dependencies = [
  "dof",
  "dtrace-parser",
+ "serde",
  "usdt-attr-macro",
  "usdt-impl",
  "usdt-macro",
@@ -1288,9 +1300,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-attr-macro"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee18d68aa617f5d6f220b6504aaabd5505daf0a64b61dc9a3f6850e9db202322"
+checksum = "81b9f37efad75f03a79374907e03c5845d97788dfae82ceff58355baac86e65a"
 dependencies = [
  "dtrace-parser",
  "proc-macro2",
@@ -1302,9 +1314,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-impl"
-version = "0.1.12"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fda7cc788bd91a8d7024965378f24fd565cf8153488fc3835b7c36c7f1657062"
+checksum = "212a3e5d031a10e5b33328c39a11b1e061eb9a94aee2da548a3e28b58fd6f1f0"
 dependencies = [
  "byteorder",
  "dof",
@@ -1313,15 +1325,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
+ "serde_json",
  "syn",
  "thiserror",
+ "thread-id",
 ]
 
 [[package]]
 name = "usdt-macro"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19a3f03dad02b54d7859e939b25e10f81538604f3a970441b938a77b9f748e15"
+checksum = "79aa3a0c93b2e799559c961404383f3abe72acd1b9eb952f5cfd908e8964132f"
 dependencies = [
  "dtrace-parser",
  "proc-macro2",
