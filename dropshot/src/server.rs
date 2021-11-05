@@ -9,6 +9,7 @@ use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
+use super::ProbeRegistration;
 
 use futures::future::BoxFuture;
 use futures::future::FusedFuture;
@@ -103,7 +104,34 @@ impl<C: ServerContext> HttpServerStarter<C> {
 
         let join_handle = tokio::spawn(async { graceful.await });
 
+        let probe_registration = if cfg!(feature = "usdt-probes") {
+            match usdt::register_probes() {
+                Ok(_) => {
+                    debug!(
+                        self.app_state.log,
+                        "successfully registered DTrace USDT probes"
+                    );
+                    ProbeRegistration::Succeeded
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    error!(
+                        self.app_state.log,
+                        "failed to register DTrace USDT probes: {}", msg
+                    );
+                    ProbeRegistration::Failed(msg)
+                }
+            }
+        } else {
+            debug!(
+                self.app_state.log,
+                "DTrace USDT probes compiled out, not registering"
+            );
+            ProbeRegistration::Disabled
+        };
+
         HttpServer {
+            probe_registration,
             app_state: self.app_state,
             local_addr: self.local_addr,
             join_handle: Some(join_handle),
@@ -173,6 +201,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
  * Panics if dropped without invoking `close`.
  */
 pub struct HttpServer<C: ServerContext> {
+    probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
@@ -205,6 +234,15 @@ impl<C: ServerContext> HttpServer<C> {
         } else {
             Ok(())
         }
+    }
+
+    /**
+     * Return the result of registering the server's DTrace USDT probes.
+     *
+     * See [`ProbeRegistration`] for details.
+     */
+    pub fn probe_registration(&self) -> &ProbeRegistration {
+        &self.probe_registration
     }
 }
 

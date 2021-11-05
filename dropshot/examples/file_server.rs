@@ -24,11 +24,6 @@ struct FileServerContext {
 #[tokio::main]
 async fn main() -> Result<(), String> {
     /*
-     * Register DTrace probes.
-     */
-    dropshot::register_probes().expect("Failed to register DTrace probes");
-
-    /*
      * We must specify a configuration with a bind address.  We'll use 127.0.0.1
      * since it's available and won't expose this server outside the host.  We
      * request port 0, which allows the operating system to pick any available

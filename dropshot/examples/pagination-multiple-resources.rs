@@ -282,11 +282,6 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    /*
-     * Register DTrace probes.
-     */
-    dropshot::register_probes().expect("Failed to register DTrace probes");
-
     let port = std::env::args()
         .nth(1)
         .map(|p| p.parse::<u16>())

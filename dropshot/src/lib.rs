@@ -510,10 +510,12 @@
  * toolchain. As such, they're behind the feature flag `"usdt-probes"`. You
  * can build Dropshot with these probes via `cargo +nightly build --features usdt-probes`.
  *
- * > *Important:* The probes _must_ be registered with the DTrace kernel
- * mdoule for them to be visible via `dtrace(1M)`. This should be done with
- * the public function `dropshot::register_probes()`. Though unlikely, registration
- * may fail, and it's up to the caller to decide how to proceed.
+ * > *Important:* The probes are internally registered with the DTrace kernel
+ * module, making them visible via `dtrace(1M)`. This is done when an `HttpServer`
+ * object is created, but it's possible that registration fails. The result of
+ * registration is stored in the server after creation, and can be accessed with
+ * the [`HttpServer::probe_registration()`] method. This allows callers to decide
+ * how to handle failures, but ensures that probes are always enabled if possible.
  *
  * Once in place, the probes can be seen via DTrace. For example, running:
  *
@@ -572,12 +574,17 @@ mod dropshot {
     fn request_finish(_: &ResponseInfo) {}
 }
 
-/// Register DTrace probes exposed by Dropshot.
-///
-/// This method _must_ be called for any of the DTrace probes in Dropshot
-/// to be visible from the `dtrace(1M)` command-line tool.
-pub fn register_probes() -> Result<(), usdt::Error> {
-    usdt::register_probes()
+/// The result of registering a server's DTrace USDT probes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProbeRegistration {
+    /// The probes are explicitly disabled at compile time.
+    Disabled,
+
+    /// Probes were successfully registered.
+    Succeeded,
+
+    /// Registration failed, with an error message explaining the cause.
+    Failed(String),
 }
 
 mod api_description;
