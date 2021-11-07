@@ -9,6 +9,7 @@ use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
+use super::ProbeRegistration;
 
 use futures::future::BoxFuture;
 use futures::future::FusedFuture;
@@ -103,7 +104,34 @@ impl<C: ServerContext> HttpServerStarter<C> {
 
         let join_handle = tokio::spawn(async { graceful.await });
 
+        let probe_registration = if cfg!(feature = "usdt-probes") {
+            match usdt::register_probes() {
+                Ok(_) => {
+                    debug!(
+                        self.app_state.log,
+                        "successfully registered DTrace USDT probes"
+                    );
+                    ProbeRegistration::Succeeded
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    error!(
+                        self.app_state.log,
+                        "failed to register DTrace USDT probes: {}", msg
+                    );
+                    ProbeRegistration::Failed(msg)
+                }
+            }
+        } else {
+            debug!(
+                self.app_state.log,
+                "DTrace USDT probes compiled out, not registering"
+            );
+            ProbeRegistration::Disabled
+        };
+
         HttpServer {
+            probe_registration,
             app_state: self.app_state,
             local_addr: self.local_addr,
             join_handle: Some(join_handle),
@@ -153,7 +181,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
         let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
         info!(app_state.log, "listening");
-
         Ok(HttpServerStarter {
             app_state,
             server,
@@ -174,6 +201,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
  * Panics if dropped without invoking `close`.
  */
 pub struct HttpServer<C: ServerContext> {
+    probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
@@ -206,6 +234,15 @@ impl<C: ServerContext> HttpServer<C> {
         } else {
             Ok(())
         }
+    }
+
+    /**
+     * Return the result of registering the server's DTrace USDT probes.
+     *
+     * See [`ProbeRegistration`] for details.
+     */
+    pub fn probe_registration(&self) -> &ProbeRegistration {
+        &self.probe_registration
     }
 }
 
@@ -290,6 +327,22 @@ async fn http_request_handle_wrap<C: ServerContext>(
         "uri" => format!("{}", request.uri()),
     ));
     trace!(request_log, "incoming request");
+    dropshot_request_start!(|| {
+        let uri = request.uri();
+        crate::RequestInfo {
+            id: request_id.clone(),
+            local_addr: server.local_addr,
+            remote_addr,
+            method: request.method().to_string(),
+            path: uri.path().to_string(),
+            query: uri.query().map(|x| x.to_string()),
+        }
+    });
+
+    // Copy local address to report later during the finish probe, as the
+    // server is passed by value to the request handler function.
+    let local_addr = server.local_addr;
+
     let maybe_response = http_request_handle(
         server,
         request,
@@ -303,6 +356,16 @@ async fn http_request_handle_wrap<C: ServerContext>(
             let message_external = error.external_message.clone();
             let message_internal = error.internal_message.clone();
             let r = error.into_response(&request_id);
+
+            dropshot_request_finish!(|| {
+                crate::ResponseInfo {
+                    id: request_id.clone(),
+                    local_addr,
+                    remote_addr,
+                    status_code: r.status().as_u16(),
+                    message: message_external.clone(),
+                }
+            });
 
             /* TODO-debug: add request and response headers here */
             info!(request_log, "request completed";
@@ -319,6 +382,16 @@ async fn http_request_handle_wrap<C: ServerContext>(
             info!(request_log, "request completed";
                 "response_code" => response.status().as_str().to_string()
             );
+
+            dropshot_request_finish!(|| {
+                crate::ResponseInfo {
+                    id: request_id.parse().unwrap(),
+                    local_addr,
+                    remote_addr,
+                    status_code: response.status().as_u16(),
+                    message: "".to_string(),
+                }
+            });
 
             response
         }

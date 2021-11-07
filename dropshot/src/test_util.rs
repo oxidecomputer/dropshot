@@ -161,23 +161,29 @@ impl ClientTestContext {
         expected_status: StatusCode,
     ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let uri = self.url(path);
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .body(body)
+            .expect("attempted to construct invalid request");
+        self.make_request_with_request(request, expected_status).await
+    }
 
+    pub async fn make_request_with_request(
+        &self,
+        request: Request<Body>,
+        expected_status: StatusCode,
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let time_before = chrono::offset::Utc::now().timestamp();
         info!(self.client_log, "client request";
-            "method" => %method,
-            "uri" => %uri,
-            "body" => ?&body,
+            "method" => %request.method(),
+            "uri" => %request.uri(),
+            "body" => ?&request.body(),
         );
 
         let mut response = self
             .client
-            .request(
-                Request::builder()
-                    .method(method)
-                    .uri(uri)
-                    .body(body)
-                    .expect("attempted to construct invalid request"),
-            )
+            .request(request)
             .await
             .expect("failed to make request to server");
 

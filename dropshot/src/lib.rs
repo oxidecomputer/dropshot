@@ -497,6 +497,44 @@
  * structure that includes a `PaginationParams` using `#[serde(flatten)]`, and
  * this ought to work, but it currently doesn't due to serde_urlencoded#33,
  * which is really serde#1183.
+ *
+ * ### DTrace probes
+ *
+ * Dropshot optionally exposes two DTrace probes, `request_start` and
+ * `request_finish`. These provide detailed information about each request,
+ * such as their ID, the local and remote IPs, and the response information.
+ * See the [`RequestInfo`] and [`ResponseInfo`] types for a complete listing
+ * of what's available.
+ *
+ * These probes are implemented via the [`usdt`] crate, and require a nightly
+ * toolchain. As such, they're behind the feature flag `"usdt-probes"`. You
+ * can build Dropshot with these probes via `cargo +nightly build --features usdt-probes`.
+ *
+ * > *Important:* The probes are internally registered with the DTrace kernel
+ * module, making them visible via `dtrace(1M)`. This is done when an `HttpServer`
+ * object is created, but it's possible that registration fails. The result of
+ * registration is stored in the server after creation, and can be accessed with
+ * the [`HttpServer::probe_registration()`] method. This allows callers to decide
+ * how to handle failures, but ensures that probes are always enabled if possible.
+ *
+ * Once in place, the probes can be seen via DTrace. For example, running:
+ *
+ * ```ignore
+ * $ cargo +nightly run --example basic --features usdt-probes
+ * ```
+ *
+ * And making several requests to it with `curl`, we can see the DTrace
+ * probes with an invocation like:
+ *
+ * ```ignore
+ * # dtrace -Zq -n 'dropshot*:::request_* { printf("%s\n", copyinstr(arg0)); }'
+ * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","method":"GET","path":"/counter","query":null}}
+ * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","status_code":200,"message":""}}
+ * {"ok":{"id":"9050e30a-1ce3-4d6f-be1c-69a11c618800","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:41101","method":"PUT","path":"/counter","query":null}}
+ * {"ok":{"id":"9050e30a-1ce3-4d6f-be1c-69a11c618800","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:41101","status_code":400,"message":"do not like the number 10"}}
+ * {"ok":{"id":"a53696af-543d-452f-81b6-5a045dd9921d","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:57376","method":"PUT","path":"/counter","query":null}}
+ * {"ok":{"id":"a53696af-543d-452f-81b6-5a045dd9921d","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:57376","status_code":204,"message":""}}
+ * ```
  */
 
 /*
@@ -504,6 +542,50 @@
  * automated enforcement.
  */
 #![allow(clippy::style)]
+/*
+ * The `usdt` crate requires nightly, enabled if our consumer is enabling
+ * DTrace probes.
+ */
+#![cfg_attr(feature = "usdt-probes", feature(asm))]
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct RequestInfo {
+    id: String,
+    local_addr: std::net::SocketAddr,
+    remote_addr: std::net::SocketAddr,
+    method: String,
+    path: String,
+    query: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct ResponseInfo {
+    id: String,
+    local_addr: std::net::SocketAddr,
+    remote_addr: std::net::SocketAddr,
+    status_code: u16,
+    message: String,
+}
+
+#[usdt::provider]
+mod dropshot {
+    use crate::{RequestInfo, ResponseInfo};
+    fn request_start(_: &RequestInfo) {}
+    fn request_finish(_: &ResponseInfo) {}
+}
+
+/// The result of registering a server's DTrace USDT probes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProbeRegistration {
+    /// The probes are explicitly disabled at compile time.
+    Disabled,
+
+    /// Probes were successfully registered.
+    Succeeded,
+
+    /// Registration failed, with an error message explaining the cause.
+    Failed(String),
+}
 
 mod api_description;
 mod config;

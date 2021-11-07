@@ -6,13 +6,13 @@ error: Endpoint handlers must have the following signature:
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
     ) -> Result<HttpResponse*, HttpError>
-  --> $DIR/bad_endpoint11.rs:13:1
+  --> tests/fail/bad_endpoint11.rs:13:1
    |
 13 | async fn bad_no_result(_: Arc<RequestContext<()>>) {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: Endpoint must return a Result
-  --> $DIR/bad_endpoint11.rs:13:1
+  --> tests/fail/bad_endpoint11.rs:13:1
    |
 13 | async fn bad_no_result(_: Arc<RequestContext<()>>) {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

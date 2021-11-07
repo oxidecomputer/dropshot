@@ -1,12 +1,12 @@
 error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
-   --> $DIR/bad_endpoint5.rs:26:14
+   --> tests/fail/bad_endpoint5.rs:26:14
     |
 26  |     _params: Query<QueryParams>,
     |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
     |
-   ::: $WORKSPACE/dropshot/src/handler.rs
+    = note: required because of the requirements on the impl of `serde::de::DeserializeOwned` for `QueryParams`
+note: required by a bound in `dropshot::Query`
+   --> src/handler.rs
     |
     | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
-    |                             ---------------- required by this bound in `dropshot::Query`
-    |
-    = note: required because of the requirements on the impl of `serde::de::DeserializeOwned` for `QueryParams`
+    |                             ^^^^^^^^^^^^^^^^ required by this bound in `dropshot::Query`

@@ -16,19 +16,19 @@ base64 = "0.13.0"
 bytes = "1"
 futures = "0.3.1"
 hostname = "0.3.0"
-http = "0.2.0"
-indexmap = "1.0.0"
+http = "0.2.5"
+indexmap = "1.7.0"
 openapiv3 = "1.0.0-beta.2"
 paste = "1.0.0"
 percent-encoding = "2.1.0"
-proc-macro2 = "1.0.27"
-serde_json = "1.0.0"
+proc-macro2 = "1.0.32"
+serde_json = "1.0.68"
 serde_urlencoded = "0.7.0"
 slog-async = "2.4.0"
 slog-bunyan = "2.2.0"
 slog-json = "2.4.0"
 slog-term = "2.5.0"
-syn = "1.0.73"
+syn = "1.0.81"
 toml = "0.5.6"
 
 [dependencies.chrono]
@@ -44,7 +44,7 @@ version = "0.14"
 features = [ "full" ]
 
 [dependencies.serde]
-version = "1.0.0"
+version = "1.0.130"
 features = [ "derive" ]
 
 [dependencies.slog]
@@ -52,27 +52,32 @@ version = "2.5.0"
 features = [ "max_level_trace", "release_max_level_debug" ]
 
 [dependencies.tokio]
-version = "1.0"
+version = "1.12"
 features = [ "full" ]
+
+[dependencies.usdt]
+version = "0.1.18"
+default-features = false
 
 [dependencies.uuid]
 version = "0.8.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.0"
+version = "0.8.6"
 features = [ "uuid" ]
 
 [dev-dependencies]
-expectorate = "1.0.2"
+expectorate = "1.0.4"
 lazy_static = "1.4.0"
-libc = "0.2.71"
+libc = "0.2.104"
 mime_guess = "2.0.3"
-subprocess = "0.2.4"
-# Version subsequent to 1.0.46 cause our "fail" tests to vary in the face of
-# minor, internal code changes. See dtolnay/trybuild#136.
-trybuild = "=1.0.46"
+subprocess = "0.2.8"
+trybuild = "1.0.52"
 
 [dev-dependencies.schemars]
-version = "0.8.0"
+version = "0.8.6"
 features = [ "chrono", "uuid" ]
+
+[features]
+usdt-probes = ["usdt/asm"]
