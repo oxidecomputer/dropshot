@@ -226,9 +226,9 @@ checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
 
 [[package]]
 name = "dtrace-parser"
-version = "0.1.11"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1b6ae072fe941bb529d87dc78d18a1a5693da8245a99eef1f22cb2b3a1735a3"
+checksum = "5bbb93fb1a0c517bf20f37caaf5d1f7d20f144c6c35a7d751ecad077b6c042e8"
 dependencies = [
  "pest",
  "pest_derive",
@@ -1286,9 +1286,9 @@ checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 
 [[package]]
 name = "usdt"
-version = "0.1.18"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5879d464141646213a984575329dc0d881411612f904fc5e6765f11ccf0e44ec"
+checksum = "9aba50f80946d1ef9b21f40e46b74dd211b9ff5e603ad028c0d58871835ada4f"
 dependencies = [
  "dof",
  "dtrace-parser",
@@ -1300,9 +1300,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-attr-macro"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81b9f37efad75f03a79374907e03c5845d97788dfae82ceff58355baac86e65a"
+checksum = "dd55281622053408612f20f3d92df0db533d4b15ec4842883e94c23b1e9351f2"
 dependencies = [
  "dtrace-parser",
  "proc-macro2",
@@ -1314,9 +1314,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-impl"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "212a3e5d031a10e5b33328c39a11b1e061eb9a94aee2da548a3e28b58fd6f1f0"
+checksum = "e71989deee492038dec04ea3e5ad68bd876947b5ba35562d0bee04e784557f6a"
 dependencies = [
  "byteorder",
  "dof",
@@ -1333,9 +1333,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-macro"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79aa3a0c93b2e799559c961404383f3abe72acd1b9eb952f5cfd908e8964132f"
+checksum = "95e4feae7fabf18bc31413acb5bdeb52581c093e2578e80ab7c2a8402ad4e039"
 dependencies = [
  "dtrace-parser",
  "proc-macro2",
