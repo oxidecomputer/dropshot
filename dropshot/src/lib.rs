@@ -568,7 +568,7 @@ pub(crate) struct ResponseInfo {
 }
 
 #[usdt::provider]
-mod dropshot {
+mod probes {
     use crate::{RequestInfo, ResponseInfo};
     fn request_start(_: &RequestInfo) {}
     fn request_finish(_: &ResponseInfo) {}
