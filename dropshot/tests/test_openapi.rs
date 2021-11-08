@@ -286,36 +286,12 @@ fn make_api() -> Result<ApiDescription<()>, String> {
 }
 
 #[test]
-fn test_openapi_old() -> Result<(), String> {
-    let api = make_api()?;
-    let mut output = Cursor::new(Vec::new());
-
-    #[allow(deprecated)]
-    let _ = api.print_openapi(
-        &mut output,
-        &"test",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        &"threeve",
-    );
-    let actual = from_utf8(&output.get_ref()).unwrap();
-
-    expectorate::assert_contents("tests/test_openapi_old.json", actual);
-    Ok(())
-}
-
-#[test]
 fn test_openapi() -> Result<(), String> {
     let api = make_api()?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api.openapi("test", "threeve").write(&mut output);
-    let actual = from_utf8(&output.get_ref()).unwrap();
+    let actual = from_utf8(output.get_ref()).unwrap();
 
     expectorate::assert_contents("tests/test_openapi.json", actual);
     Ok(())
@@ -333,7 +309,7 @@ fn test_openapi_fuller() -> Result<(), String> {
         .license_name("CDDL")
         .terms_of_service("no hat, no cane? no service!")
         .write(&mut output);
-    let actual = from_utf8(&output.get_ref()).unwrap();
+    let actual = from_utf8(output.get_ref()).unwrap();
 
     expectorate::assert_contents("tests/test_openapi_fuller.json", actual);
     Ok(())
