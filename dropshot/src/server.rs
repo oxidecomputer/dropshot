@@ -8,6 +8,7 @@ use super::config::ConfigDropshot;
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
+use super::probes;
 use super::router::HttpRouter;
 use super::ProbeRegistration;
 
@@ -327,7 +328,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         "uri" => format!("{}", request.uri()),
     ));
     trace!(request_log, "incoming request");
-    dropshot_request_start!(|| {
+    probes::request_start!(|| {
         let uri = request.uri();
         crate::RequestInfo {
             id: request_id.clone(),
@@ -357,7 +358,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             let message_internal = error.internal_message.clone();
             let r = error.into_response(&request_id);
 
-            dropshot_request_finish!(|| {
+            probes::request_finish!(|| {
                 crate::ResponseInfo {
                     id: request_id.clone(),
                     local_addr,
@@ -383,7 +384,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 "response_code" => response.status().as_str().to_string()
             );
 
-            dropshot_request_finish!(|| {
+            probes::request_finish!(|| {
                 crate::ResponseInfo {
                     id: request_id.parse().unwrap(),
                     local_addr,

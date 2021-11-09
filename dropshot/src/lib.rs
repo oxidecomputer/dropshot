@@ -567,7 +567,7 @@ pub(crate) struct ResponseInfo {
     message: String,
 }
 
-#[usdt::provider]
+#[usdt::provider(probe_path = "probes")]
 mod dropshot {
     use crate::{RequestInfo, ResponseInfo};
     fn request_start(_: &RequestInfo) {}
