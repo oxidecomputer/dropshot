@@ -874,7 +874,15 @@ fn j2oas_integer(
 
     let enumeration = enum_values
         .iter()
-        .flat_map(|v| v.iter().map(|vv| vv.as_u64().unwrap() as i64))
+        .flat_map(|v| {
+            v.iter().map(|vv| match vv {
+                serde_json::Value::Null => None,
+                serde_json::Value::Number(value) => {
+                    Some(value.as_i64().unwrap())
+                }
+                _ => panic!("unexpected enumeration value {:?}", vv),
+            })
+        })
         .collect::<Vec<_>>();
 
     openapiv3::SchemaKind::Type(openapiv3::Type::Integer(
@@ -940,7 +948,15 @@ fn j2oas_number(
 
     let enumeration = enum_values
         .iter()
-        .flat_map(|v| v.iter().map(|vv| vv.as_f64().unwrap() as f64))
+        .flat_map(|v| {
+            v.iter().map(|vv| match vv {
+                serde_json::Value::Null => None,
+                serde_json::Value::Number(value) => {
+                    Some(value.as_f64().unwrap())
+                }
+                _ => panic!("unexpected enumeration value {:?}", vv),
+            })
+        })
         .collect::<Vec<_>>();
 
     openapiv3::SchemaKind::Type(openapiv3::Type::Number(
