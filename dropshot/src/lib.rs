@@ -519,15 +519,15 @@
  *
  * Once in place, the probes can be seen via DTrace. For example, running:
  *
- * ```ignore
+ * ```text
  * $ cargo +nightly run --example basic --features usdt-probes
  * ```
  *
  * And making several requests to it with `curl`, we can see the DTrace
  * probes with an invocation like:
  *
- * ```ignore
- * # dtrace -Zq -n 'dropshot*:::request_* { printf("%s\n", copyinstr(arg0)); }'
+ * ```text
+ * ## dtrace -Zq -n 'dropshot*:::request_* { printf("%s\n", copyinstr(arg0)); }'
  * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","method":"GET","path":"/counter","query":null}}
  * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","status_code":200,"message":""}}
  * {"ok":{"id":"9050e30a-1ce3-4d6f-be1c-69a11c618800","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:41101","method":"PUT","path":"/counter","query":null}}
