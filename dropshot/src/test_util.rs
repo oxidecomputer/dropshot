@@ -620,6 +620,21 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
 }
 
 /**
+ * Issues an HTTP PUT to the specified collection URL to update an object.
+ */
+pub async fn object_update<S: Serialize + Debug, T: DeserializeOwned>(
+    client: &ClientTestContext,
+    object_url: &str,
+    input: S,
+    status: StatusCode,
+) {
+    client
+        .make_request(Method::PUT, &object_url, Some(input), status)
+        .await
+        .unwrap();
+}
+
+/**
  * Issues an HTTP DELETE to the specified object URL to delete an object.
  */
 pub async fn object_delete(client: &ClientTestContext, object_url: &str) {
