@@ -567,8 +567,8 @@ pub(crate) struct ResponseInfo {
     message: String,
 }
 
-#[usdt::provider(probe_path = "probes")]
-mod dropshot {
+#[usdt::provider(provider = "dropshot")]
+mod probes {
     use crate::{RequestInfo, ResponseInfo};
     fn request_start(_: &RequestInfo) {}
     fn request_finish(_: &ResponseInfo) {}

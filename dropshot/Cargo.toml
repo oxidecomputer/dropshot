@@ -56,7 +56,7 @@ version = "1.13"
 features = [ "full" ]
 
 [dependencies.usdt]
-version = "0.1.19"
+version = "0.2.0"
 default-features = false
 
 [dependencies.uuid]
