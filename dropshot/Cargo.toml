@@ -64,7 +64,7 @@ version = "0.8.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.6"
+version = "0.8.7"
 features = [ "uuid" ]
 
 [dev-dependencies]
@@ -76,7 +76,7 @@ subprocess = "0.2.8"
 trybuild = "1.0.52"
 
 [dev-dependencies.schemars]
-version = "0.8.6"
+version = "0.8.7"
 features = [ "chrono", "uuid" ]
 
 [features]
