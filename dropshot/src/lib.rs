@@ -614,6 +614,7 @@ pub use config::ConfigDropshot;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
 pub use handler::Extractor;
+pub use handler::ExtractorMetadata;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
