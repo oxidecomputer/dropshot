@@ -622,7 +622,7 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
 /**
  * Issues an HTTP PUT to the specified collection URL to update an object.
  */
-pub async fn object_update<S: Serialize + Debug, T: DeserializeOwned>(
+pub async fn object_put<S: Serialize + Debug, T: DeserializeOwned>(
     client: &ClientTestContext,
     object_url: &str,
     input: S,
