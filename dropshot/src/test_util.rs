@@ -48,11 +48,11 @@ const ALLOWED_HEADER_NAMES: [&str; 4] =
  */
 pub struct ClientTestContext {
     /** actual bind address of the HTTP server under test */
-    bind_address: SocketAddr,
+    pub bind_address: SocketAddr,
     /** HTTP client, used for making requests against the test server */
-    client: Client<HttpConnector>,
+    pub client: Client<HttpConnector>,
     /** logger for the test suite HTTP client */
-    client_log: Logger,
+    pub client_log: Logger,
 }
 
 impl ClientTestContext {
