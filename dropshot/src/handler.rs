@@ -1232,13 +1232,36 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
 }
 
 /**
+ * An "empty" type used to represent responses that have no associatd data
+ * payload.
+ */
+#[derive(Serialize)]
+pub struct Empty;
+
+impl JsonSchema for Empty {
+    fn schema_name() -> String {
+        "Empty".to_string()
+    }
+
+    fn json_schema(
+        _: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        schemars::schema::Schema::Bool(false)
+    }
+
+    fn is_referenceable() -> bool {
+        false
+    }
+}
+
+/**
  * `HttpResponseDeleted` represents an HTTP 204 "No Content" response, intended
  * for use when an API operation has successfully deleted an object.
  */
 pub struct HttpResponseDeleted();
 
 impl HttpTypedResponse for HttpResponseDeleted {
-    type Body = ();
+    type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "successful deletion";
 }
@@ -1256,8 +1279,9 @@ impl From<HttpResponseDeleted> for HttpHandlerResult {
  * has nothing to return.
  */
 pub struct HttpResponseUpdatedNoContent();
+
 impl HttpTypedResponse for HttpResponseUpdatedNoContent {
-    type Body = ();
+    type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "resource updated";
 }

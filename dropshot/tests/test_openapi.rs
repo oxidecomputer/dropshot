@@ -133,7 +133,7 @@ async fn handler6(
 async fn handler7(
     _rqctx: Arc<RequestContext<()>>,
     _dump: UntypedBody,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -195,7 +195,7 @@ struct NeverDuplicatedBodyNextLevel {
 async fn handler10(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -206,7 +206,7 @@ async fn handler10(
 async fn handler11(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -234,7 +234,7 @@ struct NeverDuplicatedNext {
 async fn handler12(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedTop>,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -266,6 +266,16 @@ async fn handler14(
     unimplemented!();
 }
 
+#[endpoint {
+    method = GET,
+    path = "/unit_please",
+}]
+async fn handler15(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -282,6 +292,7 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler12)?;
     api.register(handler13)?;
     api.register(handler14)?;
+    api.register(handler15)?;
     Ok(api)
 }
 

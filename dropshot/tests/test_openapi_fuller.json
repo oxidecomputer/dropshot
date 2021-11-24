@@ -28,8 +28,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -82,8 +82,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -102,8 +102,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -122,8 +122,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -251,7 +251,18 @@
         "operationId": "handler1",
         "responses": {
           "200": {
-            "description": "successful operation"
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -307,7 +318,18 @@
         },
         "responses": {
           "202": {
-            "description": "successfully enqueued operation"
+            "description": "successfully enqueued operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -339,6 +361,27 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          }
+        }
+      }
+    },
+    "/unit_please": {
+      "get": {
+        "operationId": "handler15",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
           }
         }
       }
