@@ -1232,7 +1232,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
 }
 
 /**
- * An "empty" type used to represent responses that have no associatd data
+ * An "empty" type used to represent responses that have no associated data
  * payload.
  */
 #[derive(Serialize)]
