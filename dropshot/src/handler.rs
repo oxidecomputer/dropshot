@@ -1119,12 +1119,17 @@ pub trait HttpTypedResponse:
      * trait method to allow callers to avoid redundant type specification.
      */
     fn for_object(body_object: &Self::Body) -> HttpHandlerResult {
-        let serialized = serde_json::to_string(&body_object)
-            .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
-        Ok(Response::builder()
-            .status(Self::STATUS_CODE)
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-            .body(serialized.into())?)
+        let response = Response::builder().status(Self::STATUS_CODE);
+
+        if <dyn std::any::Any>::is::<Empty>(body_object) {
+            Ok(response.body(Body::empty())?)
+        } else {
+            let serialized = serde_json::to_string(&body_object)
+                .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+            Ok(response
+                .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+                .body(serialized.into())?)
+        }
     }
 }
 
@@ -1235,7 +1240,6 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
  * An "empty" type used to represent responses that have no associated data
  * payload.
  */
-#[derive(Serialize)]
 pub struct Empty;
 
 impl JsonSchema for Empty {
@@ -1251,6 +1255,15 @@ impl JsonSchema for Empty {
 
     fn is_referenceable() -> bool {
         false
+    }
+}
+
+impl Serialize for Empty {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("Empty::serialize() should never be called");
     }
 }
 
@@ -1295,14 +1308,18 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 
 #[cfg(test)]
 mod test {
+    use crate::handler::HttpHandlerResult;
+    use crate::HttpResponseOk;
     use crate::{
         api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
     };
+    use hyper::body::HttpBody;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
     use super::get_metadata;
+    use super::Empty;
     use super::ExtractorMetadata;
 
     #[derive(Deserialize, Serialize, JsonSchema)]
@@ -1408,5 +1425,12 @@ mod test {
         ];
 
         compare(params, true, expected);
+    }
+
+    #[test]
+    fn test_empty_serialized() {
+        let response = HttpResponseOk::<Empty>(Empty);
+        let result = HttpHandlerResult::from(response);
+        assert_eq!(result.unwrap().body().size_hint().exact().unwrap(), 0);
     }
 }
