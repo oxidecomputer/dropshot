@@ -1,0 +1,6 @@
+error: paths that contain a wildcard match must include 'unpublished = true'
+  --> tests/fail/bad_endpoint14.rs:20:5
+   |
+20 | /     method = GET,
+21 | |     path = "/assets/{stuff:.*}",
+   | |________________________________^
