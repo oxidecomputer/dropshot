@@ -547,6 +547,10 @@
  * DTrace probes.
  */
 #![cfg_attr(feature = "usdt-probes", feature(asm))]
+#![cfg_attr(
+    all(feature = "usdt-probes", target_os = "macos"),
+    feature(asm_sym)
+)]
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct RequestInfo {

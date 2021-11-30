@@ -18,6 +18,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of co
 === Breaking Changes
 
 * https://github.com/oxidecomputer/dropshot/pull/197[#197] Endpoints using wildcard path params (i.e. those using the `/foo/{bar:.*}` syntax) previously could be included in OpenAPI output albeit in a form that was invalid. Specifying a wildcard path **without** also specifying `unpublished = true` is now a **compile-time error**.
+* https://github.com/oxidecomputer/dropshot/pull/204[#204] Rust 1.58.0-nightly introduced a new feature `asm_sym` which the `usdt` crate requires on macOS. As of this change 1.58.0-nightly or later is required to build with the `usdt-probes` feature on macOS.
 
 == 0.6.0 (released 2021-11-18)
 
