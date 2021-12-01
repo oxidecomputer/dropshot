@@ -55,13 +55,14 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         let func_parameters = FuncParams::metadata();
+        let response = ResponseType::metadata();
         ApiEndpoint {
             operation_id,
             handler: HttpRouteHandler::new(handler),
             method,
             path: path.to_string(),
             parameters: func_parameters.parameters,
-            response: ResponseType::metadata(),
+            response,
             description: None,
             tags: vec![],
             paginated: func_parameters.paginated,
@@ -600,7 +601,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     }
                 };
                 let mut content = indexmap::IndexMap::new();
-                if !is_null(&js) {
+                if !is_empty(&js) {
+                    println!("not empty");
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
@@ -674,18 +676,60 @@ impl<Context: ServerContext> ApiDescription<Context> {
 }
 
 /**
- * Returns true iff the schema represents the null type i.e. the rust type `()`.
+ * Returns true iff the schema represents the void schema that matches no data.
  */
-fn is_null(schema: &schemars::schema::Schema) -> bool {
+fn is_empty(schema: &schemars::schema::Schema) -> bool {
+    if let schemars::schema::Schema::Bool(false) = schema {
+        return true;
+    }
     if let schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-        instance_type: Some(schemars::schema::SingleOrVec::Single(it)),
-        ..
+        metadata: _,
+        instance_type: None,
+        format: None,
+        enum_values: None,
+        const_value: None,
+        subschemas: Some(subschemas),
+        number: None,
+        string: None,
+        array: None,
+        object: None,
+        reference: None,
+        extensions: _,
     }) = schema
     {
-        if let schemars::schema::InstanceType::Null = it.as_ref() {
-            return true;
+        if let schemars::schema::SubschemaValidation {
+            all_of: None,
+            any_of: None,
+            one_of: None,
+            not: Some(not),
+            if_schema: None,
+            then_schema: None,
+            else_schema: None,
+        } = subschemas.as_ref()
+        {
+            match not.as_ref() {
+                schemars::schema::Schema::Bool(true) => return true,
+                schemars::schema::Schema::Object(
+                    schemars::schema::SchemaObject {
+                        metadata: _,
+                        instance_type: None,
+                        format: None,
+                        enum_values: None,
+                        const_value: None,
+                        subschemas: None,
+                        number: None,
+                        string: None,
+                        array: None,
+                        object: None,
+                        reference: None,
+                        extensions: _,
+                    },
+                ) => return true,
+                _ => {}
+            }
         }
     }
+
     false
 }
 
@@ -744,7 +788,14 @@ fn j2oas_schema_object(
     };
 
     let kind = match (ty, &obj.subschemas) {
-        (Some(schemars::schema::InstanceType::Null), None) => todo!(),
+        (Some(schemars::schema::InstanceType::Null), None) => {
+            openapiv3::SchemaKind::Type(openapiv3::Type::String(
+                openapiv3::StringType {
+                    enumeration: vec![None],
+                    ..Default::default()
+                },
+            ))
+        }
         (Some(schemars::schema::InstanceType::Boolean), None) => {
             openapiv3::SchemaKind::Type(openapiv3::Type::Boolean {})
         }
@@ -801,24 +852,32 @@ fn j2oas_schema_object(
 fn j2oas_subschemas(
     subschemas: &schemars::schema::SubschemaValidation,
 ) -> openapiv3::SchemaKind {
-    match (&subschemas.all_of, &subschemas.any_of, &subschemas.one_of) {
-        (Some(all_of), None, None) => openapiv3::SchemaKind::AllOf {
+    match (
+        &subschemas.all_of,
+        &subschemas.any_of,
+        &subschemas.one_of,
+        &subschemas.not,
+    ) {
+        (Some(all_of), None, None, None) => openapiv3::SchemaKind::AllOf {
             all_of: all_of
                 .iter()
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
-        (None, Some(any_of), None) => openapiv3::SchemaKind::AnyOf {
+        (None, Some(any_of), None, None) => openapiv3::SchemaKind::AnyOf {
             any_of: any_of
                 .iter()
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
-        (None, None, Some(one_of)) => openapiv3::SchemaKind::OneOf {
+        (None, None, Some(one_of), None) => openapiv3::SchemaKind::OneOf {
             one_of: one_of
                 .iter()
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
+        },
+        (None, None, None, Some(not)) => openapiv3::SchemaKind::Not {
+            not: Box::new(j2oas_schema(None, not)),
         },
         _ => panic!("invalid subschema {:#?}", subschemas),
     }

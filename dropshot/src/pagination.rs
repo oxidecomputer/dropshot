@@ -644,6 +644,7 @@ mod test {
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
         struct MyOptionalScanParams {
             the_field: Option<String>,
             only_good: Option<String>,
@@ -799,6 +800,7 @@ mod test {
          * precedence (and it's not clear how else this could work).
          */
         #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
         struct SketchyScanParams {
             page_token: String,
         }

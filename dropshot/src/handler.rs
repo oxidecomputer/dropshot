@@ -1232,13 +1232,46 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
 }
 
 /**
+ * An "empty" type used to represent responses that have no associated data
+ * payload. This isn't intended for general use, but must be pub since it's
+ * used as the Body type for certain responses.
+ */
+#[doc(hidden)]
+pub struct Empty;
+
+impl JsonSchema for Empty {
+    fn schema_name() -> String {
+        "Empty".to_string()
+    }
+
+    fn json_schema(
+        _: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        schemars::schema::Schema::Bool(false)
+    }
+
+    fn is_referenceable() -> bool {
+        false
+    }
+}
+
+impl Serialize for Empty {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("Empty::serialize() should never be called");
+    }
+}
+
+/**
  * `HttpResponseDeleted` represents an HTTP 204 "No Content" response, intended
  * for use when an API operation has successfully deleted an object.
  */
 pub struct HttpResponseDeleted();
 
 impl HttpTypedResponse for HttpResponseDeleted {
-    type Body = ();
+    type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "successful deletion";
 }
@@ -1256,8 +1289,9 @@ impl From<HttpResponseDeleted> for HttpHandlerResult {
  * has nothing to return.
  */
 pub struct HttpResponseUpdatedNoContent();
+
 impl HttpTypedResponse for HttpResponseUpdatedNoContent {
-    type Body = ();
+    type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "resource updated";
 }
@@ -1271,6 +1305,8 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 
 #[cfg(test)]
 mod test {
+    use crate::handler::HttpHandlerResult;
+    use crate::HttpResponseOk;
     use crate::{
         api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
@@ -1279,6 +1315,7 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use super::get_metadata;
+    use super::Empty;
     use super::ExtractorMetadata;
 
     #[derive(Deserialize, Serialize, JsonSchema)]
@@ -1384,5 +1421,12 @@ mod test {
         ];
 
         compare(params, true, expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_empty_serialized() {
+        let response = HttpResponseOk::<Empty>(Empty);
+        let _ = HttpHandlerResult::from(response);
     }
 }
