@@ -1311,7 +1311,6 @@ mod test {
         api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
     };
-    use hyper::body::HttpBody;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 

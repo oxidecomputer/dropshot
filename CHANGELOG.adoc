@@ -19,6 +19,10 @@ https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of co
 
 * https://github.com/oxidecomputer/dropshot/pull/197[#197] Endpoints using wildcard path params (i.e. those using the `/foo/{bar:.*}` syntax) previously could be included in OpenAPI output albeit in a form that was invalid. Specifying a wildcard path **without** also specifying `unpublished = true` is now a **compile-time error**.
 
+=== Other notable changes
+
+* https://github.com/oxidecomputer/dropshot/pull/198[#198] Responses that used `()` (the unit type) as their `Body` type parameter previously (and inaccurately) were represented in OpenAPI as an empty `responseBody`. They are now more accurately represented as a body whose value is `null` (4 bytes). We encourage those use cases to instead use either `HttpResponseUpdatedNoContent` or `HttpResponseDeleted` both of which have empty response bodies. If there are other situations where you would like a response type with no body, please file an issue.
+
 == 0.6.0 (released 2021-11-18)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...v0.6.0[Full list of commits]
