@@ -15,6 +15,10 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of commits]
 
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/197[#197] Endpoints using wildcard path params (i.e. those using the `/foo/{bar:.*}` syntax) previously could be included in OpenAPI output albeit in a form that was invalid. Specifying a wildcard path **without** also specifying `unpublished = true` is now a **compile-time error**.
+
 == 0.6.0 (released 2021-11-18)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.5.1\...v0.6.0[Full list of commits]

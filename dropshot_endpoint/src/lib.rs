@@ -10,8 +10,6 @@
  */
 #![allow(clippy::style)]
 
-extern crate proc_macro;
-
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
@@ -395,6 +393,14 @@ fn do_endpoint(
     // Prepend the usage message if any errors were detected.
     if !errors.is_empty() {
         errors.insert(0, Error::new_spanned(&ast.sig, USAGE));
+    }
+
+    if path.contains(":.*}") && metadata.unpublished != Some(true) {
+        errors.push(Error::new_spanned(
+            &attr,
+            "paths that contain a wildcard match must include 'unpublished = \
+             true'",
+        ));
     }
 
     Ok((stream, errors))
