@@ -602,7 +602,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 };
                 let mut content = indexmap::IndexMap::new();
                 if !is_empty(&js) {
-                    println!("not empty");
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
