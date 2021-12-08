@@ -8,6 +8,7 @@ use super::config::ConfigDropshot;
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
+#[cfg(feature = "usdt-probes")]
 use super::probes;
 use super::router::HttpRouter;
 use super::ProbeRegistration;
@@ -328,6 +329,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         "uri" => format!("{}", request.uri()),
     ));
     trace!(request_log, "incoming request");
+    #[cfg(feature = "usdt-probes")]
     probes::request_start!(|| {
         let uri = request.uri();
         crate::RequestInfo {
@@ -342,6 +344,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
     // Copy local address to report later during the finish probe, as the
     // server is passed by value to the request handler function.
+    #[cfg(feature = "usdt-probes")]
     let local_addr = server.local_addr;
 
     let maybe_response = http_request_handle(
@@ -358,6 +361,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             let message_internal = error.internal_message.clone();
             let r = error.into_response(&request_id);
 
+            #[cfg(feature = "usdt-probes")]
             probes::request_finish!(|| {
                 crate::ResponseInfo {
                     id: request_id.clone(),
@@ -384,6 +388,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 "response_code" => response.status().as_str().to_string()
             );
 
+            #[cfg(feature = "usdt-probes")]
             probes::request_finish!(|| {
                 crate::ResponseInfo {
                     id: request_id.parse().unwrap(),
