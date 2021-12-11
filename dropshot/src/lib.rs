@@ -527,7 +527,7 @@
  * probes with an invocation like:
  *
  * ```text
- * ## dtrace -Zq -n 'dropshot*:::request_* { printf("%s\n", copyinstr(arg0)); }'
+ * ## dtrace -Zq -n 'dropshot*:::request-* { printf("%s\n", copyinstr(arg0)); }'
  * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","method":"GET","path":"/counter","query":null}}
  * {"ok":{"id":"b793c62e-60e4-45c5-9274-198a04d9abb1","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:34286","status_code":200,"message":""}}
  * {"ok":{"id":"9050e30a-1ce3-4d6f-be1c-69a11c618800","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:41101","method":"PUT","path":"/counter","query":null}}
@@ -574,8 +574,8 @@ pub(crate) struct ResponseInfo {
 #[usdt::provider(provider = "dropshot")]
 mod probes {
     use crate::{RequestInfo, ResponseInfo};
-    fn request_start(_: &RequestInfo) {}
-    fn request_finish(_: &ResponseInfo) {}
+    fn request__start(_: &RequestInfo) {}
+    fn request__done(_: &ResponseInfo) {}
 }
 
 /// The result of registering a server's DTrace USDT probes.
