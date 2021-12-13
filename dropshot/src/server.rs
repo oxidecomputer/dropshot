@@ -330,7 +330,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     ));
     trace!(request_log, "incoming request");
     #[cfg(feature = "usdt-probes")]
-    probes::request_start!(|| {
+    probes::request__start!(|| {
         let uri = request.uri();
         crate::RequestInfo {
             id: request_id.clone(),
@@ -362,7 +362,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             let r = error.into_response(&request_id);
 
             #[cfg(feature = "usdt-probes")]
-            probes::request_finish!(|| {
+            probes::request__done!(|| {
                 crate::ResponseInfo {
                     id: request_id.clone(),
                     local_addr,
@@ -389,7 +389,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             );
 
             #[cfg(feature = "usdt-probes")]
-            probes::request_finish!(|| {
+            probes::request__done!(|| {
                 crate::ResponseInfo {
                     id: request_id.parse().unwrap(),
                     local_addr,
