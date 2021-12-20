@@ -6,6 +6,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 /**
  * Configuration for a Dropshot server.
@@ -47,19 +48,37 @@ use std::net::SocketAddr;
 pub struct ConfigDropshot {
     /** IP address and TCP port to which to bind for accepting connections */
     pub bind_address: SocketAddr,
+    /** maximum allowed size of a request body, defaults to 1024 */
+    pub request_body_max_bytes: usize,
+
+    // TLS settings
     /** Whether to use HTTPS. For now, this defaults to false, but we
      * should think about making it default to true in the future. */
     pub https: bool,
-    /** maximum allowed size of a request body, defaults to 1024 */
-    pub request_body_max_bytes: usize,
+    /** Path to a PEM file containing a certificate chain for the
+     *  server to identify itself with. The first certificate is the
+     *  end-entity certificate, and the remaining are intermediate
+     *  certificates on the way to a trusted CA.
+     *
+     *  Only valid if https=true
+     */
+    pub cert_file: PathBuf,
+    /** Path to a PEM-encoded PKCS #8 file containing the private key the
+     *  server will use.
+     *
+     *  Only valid if https=true
+     */
+    pub key_file: PathBuf,
 }
 
 impl Default for ConfigDropshot {
     fn default() -> Self {
         ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
-            https: false,
             request_body_max_bytes: 1024,
+            https: false,
+            cert_file: PathBuf::new(),
+            key_file: PathBuf::new(),
         }
     }
 }

@@ -31,6 +31,7 @@ use rustls;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -391,17 +392,11 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         }
 
         let (conn, local_addr) = {
-            let dont_use_this_cert = load_certs(
-                "/Users/gk/oxide/src/dropshot/dropshot/data/\
-                 dont_use_this_cert.pem",
-            )?;
-            let dont_use_this_key = load_private_key(
-                "/Users/gk/oxide/src/dropshot/dropshot/data/dont_use_this_key.\
-                 rsa",
-            )?;
+            let cert = load_certs(&config.cert_file)?;
+            let key = load_private_key(&config.key_file)?;
             let mut cfg =
                 rustls::ServerConfig::new(rustls::NoClientAuth::new());
-            cfg.set_single_cert(dont_use_this_cert, dont_use_this_key)?;
+            cfg.set_single_cert(cert, key)?;
             cfg.set_protocols(&[b"h2".to_vec(), b"http/1.1".to_vec()]);
             let cfg = Arc::new(cfg);
             let acceptor = TlsAcceptor::from(cfg);
@@ -819,10 +814,11 @@ fn error(err: String) -> std::io::Error {
 }
 
 // Load public certificate from file.
-fn load_certs(filename: &str) -> std::io::Result<Vec<rustls::Certificate>> {
+fn load_certs(filename: &Path) -> std::io::Result<Vec<rustls::Certificate>> {
     // Open certificate file.
-    let certfile = std::fs::File::open(filename)
-        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
+    let certfile = std::fs::File::open(filename).map_err(|e| {
+        error(format!("failed to open {}: {}", filename.display(), e))
+    })?;
     let mut reader = std::io::BufReader::new(certfile);
 
     // Load and return certificate.
@@ -831,14 +827,15 @@ fn load_certs(filename: &str) -> std::io::Result<Vec<rustls::Certificate>> {
 }
 
 // Load private key from file.
-fn load_private_key(filename: &str) -> std::io::Result<rustls::PrivateKey> {
+fn load_private_key(filename: &Path) -> std::io::Result<rustls::PrivateKey> {
     // Open keyfile.
-    let keyfile = std::fs::File::open(filename)
-        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
+    let keyfile = std::fs::File::open(filename).map_err(|e| {
+        error(format!("failed to open {}: {}", filename.display(), e))
+    })?;
     let mut reader = std::io::BufReader::new(keyfile);
 
     // Load and return a single private key.
-    let keys = rustls::internal::pemfile::rsa_private_keys(&mut reader)
+    let keys = rustls::internal::pemfile::pkcs8_private_keys(&mut reader)
         .map_err(|_| error("failed to load private key".into()))?;
     if keys.len() != 1 {
         return Err(error("expected a single private key".into()));
