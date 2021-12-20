@@ -39,8 +39,8 @@ use crate::server::{HttpServer, HttpServerStarter, ServerContext};
  * List of allowed HTTP headers in responses.  This is used to make sure we
  * don't leak headers unexpectedly.
  */
-const ALLOWED_HEADER_NAMES: [&str; 4] =
-    ["content-length", "content-type", "date", "x-request-id"];
+const ALLOWED_HEADER_NAMES: [&str; 5] =
+    ["content-length", "content-type", "date", "x-request-id", "transfer-encoding"];
 
 /**
  * ClientTestContext encapsulates several facilities associated with using an
