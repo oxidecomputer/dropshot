@@ -7,9 +7,10 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
+use serde::Serialize;
 use std::sync::Arc;
 
-#[derive(JsonSchema)]
+#[derive(JsonSchema, Serialize)]
 #[allow(dead_code)]
 struct Ret {
     x: String,

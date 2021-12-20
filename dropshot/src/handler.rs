@@ -755,8 +755,8 @@ fn schema2parameters(
 ) -> Vec<ApiEndpointParameter> {
     /*
      * We ignore schema.metadata, which includes things like doc comments, and
-     * schema.extensions. We call these out explicitly rather than .. since we
-     * match all other fields in the structure.
+     * schema.extensions. We call these out explicitly rather than eliding them
+     * as .. since we match all other fields in the structure.
      */
     match schema {
         /* We expect references to be on their own. */
@@ -779,7 +779,8 @@ fn schema2parameters(
             generator,
             required,
         ),
-        // Match objects and subschemas.
+
+        /* Match objects and subschemas. */
         schemars::schema::Schema::Object(schemars::schema::SchemaObject {
             metadata: _,
             instance_type: Some(schemars::schema::SingleOrVec::Single(_)),
@@ -801,8 +802,6 @@ fn schema2parameters(
             if let Some(object) = object {
                 parameters.extend(object.properties.iter().map(
                     |(name, schema)| {
-                        validate_parameter_schema(loc, name, schema, generator);
-
                         // We won't often see referenced schemas here, but we may
                         // in the case of enumerated strings. To handle this, we
                         // package up the dependencies to include in the top-
@@ -877,148 +876,6 @@ fn schema2parameters(
          * The generated schema should be an object.
          */
         invalid => panic!("invalid type {:#?}", invalid),
-    }
-}
-
-/**
- * Confirm that the parameter schema type is either an atomic value (i.e.
- * string, number, boolean) or an array of strings (to accommodate wild card
- * paths).
- */
-fn validate_parameter_schema(
-    loc: &ApiEndpointParameterLocation,
-    name: &String,
-    schema: &schemars::schema::Schema,
-    generator: &schemars::gen::SchemaGenerator,
-) {
-    match schema {
-        /*
-         * We expect references to be on their own.
-         */
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            metadata: _,
-            instance_type: None,
-            format: None,
-            enum_values: None,
-            const_value: None,
-            subschemas: None,
-            number: None,
-            string: None,
-            array: None,
-            object: None,
-            reference: Some(_),
-            extensions: _,
-        }) => validate_parameter_schema(
-            loc,
-            name,
-            generator.dereference(schema).expect("invalid reference"),
-            generator,
-        ),
-
-        /*
-         * Match atomic value types.
-         */
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            instance_type:
-                Some(schemars::schema::SingleOrVec::Single(instance_type)),
-            subschemas: None,
-            array: None,
-            object: None,
-            reference: None,
-            ..
-        }) if match instance_type.as_ref() {
-            InstanceType::Boolean
-            | InstanceType::Number
-            | InstanceType::String
-            | InstanceType::Integer => true,
-            _ => false,
-        } =>
-        { /* All good. */ }
-
-        /*
-         * For path parameters only, match array types and validate that their
-         * items are strings.
-         */
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            metadata: _,
-            instance_type:
-                Some(schemars::schema::SingleOrVec::Single(instance_type)),
-            format: None,
-            enum_values: None,
-            const_value: None,
-            subschemas: None,
-            number: None,
-            string: None,
-            array: Some(array_validation),
-            object: None,
-            reference: None,
-            extensions: _,
-        }) if matches!(loc, ApiEndpointParameterLocation::Path)
-            && matches!(instance_type.as_ref(), InstanceType::Array) =>
-        {
-            match array_validation.as_ref() {
-                schemars::schema::ArrayValidation {
-                    items:
-                        Some(schemars::schema::SingleOrVec::Single(item_schema)),
-                    additional_items: None,
-                    ..
-                } => validate_string_schema(name, item_schema, generator),
-                _ => panic!("parameter {} has an invalid array type", name),
-            }
-        }
-
-        _ => panic!("parameter {} has an invalid type", name),
-    }
-}
-
-/**
- * Validate that the given schema is for a simple string type.
- */
-fn validate_string_schema(
-    name: &String,
-    schema: &schemars::schema::Schema,
-    generator: &schemars::gen::SchemaGenerator,
-) {
-    match schema {
-        /*
-         * We expect references to be on their own.
-         */
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            metadata: _,
-            instance_type: None,
-            format: None,
-            enum_values: None,
-            const_value: None,
-            subschemas: None,
-            number: None,
-            string: None,
-            array: None,
-            object: None,
-            reference: Some(_),
-            extensions: _,
-        }) => validate_string_schema(
-            name,
-            generator.dereference(schema).expect("invalid reference"),
-            generator,
-        ),
-
-        /*
-         * Match string value types.
-         */
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            instance_type:
-                Some(schemars::schema::SingleOrVec::Single(instance_type)),
-            subschemas: None,
-            array: None,
-            object: None,
-            reference: None,
-            ..
-        }) if matches!(instance_type.as_ref(), InstanceType::String) => { /* All good. */
-        }
-
-        _ => {
-            panic!("parameter {} is an array of a type other than string", name)
-        }
     }
 }
 
@@ -1375,13 +1232,46 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
 }
 
 /**
+ * An "empty" type used to represent responses that have no associated data
+ * payload. This isn't intended for general use, but must be pub since it's
+ * used as the Body type for certain responses.
+ */
+#[doc(hidden)]
+pub struct Empty;
+
+impl JsonSchema for Empty {
+    fn schema_name() -> String {
+        "Empty".to_string()
+    }
+
+    fn json_schema(
+        _: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        schemars::schema::Schema::Bool(false)
+    }
+
+    fn is_referenceable() -> bool {
+        false
+    }
+}
+
+impl Serialize for Empty {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("Empty::serialize() should never be called");
+    }
+}
+
+/**
  * `HttpResponseDeleted` represents an HTTP 204 "No Content" response, intended
  * for use when an API operation has successfully deleted an object.
  */
 pub struct HttpResponseDeleted();
 
 impl HttpTypedResponse for HttpResponseDeleted {
-    type Body = ();
+    type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "successful deletion";
 }
@@ -1399,8 +1289,9 @@ impl From<HttpResponseDeleted> for HttpHandlerResult {
  * has nothing to return.
  */
 pub struct HttpResponseUpdatedNoContent();
+
 impl HttpTypedResponse for HttpResponseUpdatedNoContent {
-    type Body = ();
+    type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "resource updated";
 }
@@ -1414,6 +1305,8 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 
 #[cfg(test)]
 mod test {
+    use crate::handler::HttpHandlerResult;
+    use crate::HttpResponseOk;
     use crate::{
         api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
@@ -1422,6 +1315,7 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use super::get_metadata;
+    use super::Empty;
     use super::ExtractorMetadata;
 
     #[derive(Deserialize, Serialize, JsonSchema)]
@@ -1527,5 +1421,12 @@ mod test {
         ];
 
         compare(params, true, expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_empty_serialized() {
+        let response = HttpResponseOk::<Empty>(Empty);
+        let _ = HttpHandlerResult::from(response);
     }
 }

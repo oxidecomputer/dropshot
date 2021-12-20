@@ -8,7 +8,10 @@ use super::config::ConfigDropshot;
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
+#[cfg(feature = "usdt-probes")]
+use super::probes;
 use super::router::HttpRouter;
+use super::ProbeRegistration;
 
 use async_stream::stream;
 use futures::future::BoxFuture;
@@ -62,6 +65,8 @@ pub struct DropshotState<C: ServerContext> {
     pub router: HttpRouter<C>,
     /** server-wide log handle */
     pub log: Logger,
+    /** bound local address for the server. */
+    pub local_addr: SocketAddr,
 }
 
 /**
@@ -153,7 +158,34 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
 
         let join_handle = tokio::spawn(async { graceful.await });
 
+        let probe_registration = if cfg!(feature = "usdt-probes") {
+            match usdt::register_probes() {
+                Ok(_) => {
+                    debug!(
+                        self.app_state.log,
+                        "successfully registered DTrace USDT probes"
+                    );
+                    ProbeRegistration::Succeeded
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    error!(
+                        self.app_state.log,
+                        "failed to register DTrace USDT probes: {}", msg
+                    );
+                    ProbeRegistration::Failed(msg)
+                }
+            }
+        } else {
+            debug!(
+                self.app_state.log,
+                "DTrace USDT probes compiled out, not registering"
+            );
+            ProbeRegistration::Disabled
+        };
+
         HttpServer {
+            probe_registration,
             app_state: self.app_state,
             local_addr: self.local_addr,
             join_handle: Some(join_handle),
@@ -175,6 +207,9 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<InnerHttpServerStarter<C>, hyper::Error> {
+        let incoming = AddrIncoming::bind(&config.bind_address)?;
+        let local_addr = incoming.local_addr();
+
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
@@ -185,7 +220,8 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
                 page_default_nitems: NonZeroU32::new(100).unwrap(),
             },
             router: api.into_router(),
-            log: log.new(o!()),
+            log: log.new(o!("local_addr" => local_addr)),
+            local_addr,
         });
 
         for (path, method, _) in &app_state.router {
@@ -196,16 +232,9 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         }
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-        let builder = hyper::Server::try_bind(&config.bind_address)?;
+        let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
-        let local_addr = server.local_addr();
-        info!(app_state.log, "listening"; "local_addr" => %local_addr);
-
-        Ok(InnerHttpServerStarter {
-            app_state,
-            server,
-            local_addr,
-        })
+        Ok(InnerHttpServerStarter { app_state, server, local_addr })
     }
 }
 
@@ -216,10 +245,7 @@ struct TlsConn {
 
 impl TlsConn {
     fn new(stream: TlsStream<TcpStream>, remote_addr: SocketAddr) -> TlsConn {
-        TlsConn {
-            stream,
-            remote_addr,
-        }
+        TlsConn { stream, remote_addr }
     }
 
     fn remote_addr(&self) -> SocketAddr {
@@ -290,13 +316,9 @@ struct InnerHttpsServerStarter<C: ServerContext> {
 
 impl<C: ServerContext> InnerHttpsServerStarter<C> {
     fn start(self) -> HttpServer<C> {
-        let app_state = self.app_state;
-        let server = self.server;
-        let local_addr = self.local_addr;
-
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let log_close = app_state.log.new(o!());
-        let graceful = server.with_graceful_shutdown(async move {
+        let log_close = self.app_state.log.new(o!());
+        let graceful = self.server.with_graceful_shutdown(async move {
             rx.await.expect(
                 "dropshot server shutting down without invoking close()",
             );
@@ -305,9 +327,36 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
 
         let join_handle = tokio::spawn(async { graceful.await });
 
+        let probe_registration = if cfg!(feature = "usdt-probes") {
+            match usdt::register_probes() {
+                Ok(_) => {
+                    debug!(
+                        self.app_state.log,
+                        "successfully registered DTrace USDT probes"
+                    );
+                    ProbeRegistration::Succeeded
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    error!(
+                        self.app_state.log,
+                        "failed to register DTrace USDT probes: {}", msg
+                    );
+                    ProbeRegistration::Failed(msg)
+                }
+            }
+        } else {
+            debug!(
+                self.app_state.log,
+                "DTrace USDT probes compiled out, not registering"
+            );
+            ProbeRegistration::Disabled
+        };
+
         HttpServer {
-            app_state,
-            local_addr,
+            probe_registration,
+            app_state: self.app_state,
+            local_addr: self.local_addr,
             join_handle: Some(join_handle),
             close_channel: Some(tx),
         }
@@ -319,6 +368,9 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<InnerHttpsServerStarter<C>, GenericError> {
+        let incoming = AddrIncoming::bind(&config.bind_address)?;
+        let local_addr = incoming.local_addr();
+
         let app_state = Arc::new(DropshotState {
             private,
             config: ServerConfig {
@@ -327,7 +379,8 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
                 page_default_nitems: NonZeroU32::new(100).unwrap(),
             },
             router: api.into_router(),
-            log: log.new(o!()),
+            log: log.new(o!("local_addr" => local_addr)),
+            local_addr,
         });
 
         for (path, method, _) in &app_state.router {
@@ -379,11 +432,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         .serve(make_service);
         info!(app_state.log, "listening"; "local_addr" => %local_addr);
 
-        Ok(InnerHttpsServerStarter {
-            app_state,
-            server,
-            local_addr,
-        })
+        Ok(InnerHttpsServerStarter { app_state, server, local_addr })
     }
 }
 
@@ -414,6 +463,7 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
  * Panics if dropped without invoking `close`.
  */
 pub struct HttpServer<C: ServerContext> {
+    probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
@@ -446,6 +496,15 @@ impl<C: ServerContext> HttpServer<C> {
         } else {
             Ok(())
         }
+    }
+
+    /**
+     * Return the result of registering the server's DTrace USDT probes.
+     *
+     * See [`ProbeRegistration`] for details.
+     */
+    pub fn probe_registration(&self) -> &ProbeRegistration {
+        &self.probe_registration
     }
 }
 
@@ -502,7 +561,7 @@ async fn http_connection_handle<C: ServerContext>(
     remote_addr: SocketAddr,
 ) -> Result<ServerRequestHandler<C>, GenericError> {
     info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
-    Ok(ServerRequestHandler::new(server))
+    Ok(ServerRequestHandler::new(server, remote_addr))
 }
 
 /**
@@ -513,6 +572,7 @@ async fn http_connection_handle<C: ServerContext>(
  */
 async fn http_request_handle_wrap<C: ServerContext>(
     server: Arc<DropshotState<C>>,
+    remote_addr: SocketAddr,
     request: Request<Body>,
 ) -> Result<Response<Body>, GenericError> {
     /*
@@ -523,11 +583,30 @@ async fn http_request_handle_wrap<C: ServerContext>(
      */
     let request_id = generate_request_id();
     let request_log = server.log.new(o!(
+        "remote_addr" => remote_addr,
         "req_id" => request_id.clone(),
         "method" => request.method().as_str().to_string(),
         "uri" => format!("{}", request.uri()),
     ));
     trace!(request_log, "incoming request");
+    #[cfg(feature = "usdt-probes")]
+    probes::request__start!(|| {
+        let uri = request.uri();
+        crate::RequestInfo {
+            id: request_id.clone(),
+            local_addr: server.local_addr,
+            remote_addr,
+            method: request.method().to_string(),
+            path: uri.path().to_string(),
+            query: uri.query().map(|x| x.to_string()),
+        }
+    });
+
+    // Copy local address to report later during the finish probe, as the
+    // server is passed by value to the request handler function.
+    #[cfg(feature = "usdt-probes")]
+    let local_addr = server.local_addr;
+
     let maybe_response = http_request_handle(
         server,
         request,
@@ -541,6 +620,17 @@ async fn http_request_handle_wrap<C: ServerContext>(
             let message_external = error.external_message.clone();
             let message_internal = error.internal_message.clone();
             let r = error.into_response(&request_id);
+
+            #[cfg(feature = "usdt-probes")]
+            probes::request__done!(|| {
+                crate::ResponseInfo {
+                    id: request_id.clone(),
+                    local_addr,
+                    remote_addr,
+                    status_code: r.status().as_u16(),
+                    message: message_external.clone(),
+                }
+            });
 
             /* TODO-debug: add request and response headers here */
             info!(request_log, "request completed";
@@ -557,6 +647,17 @@ async fn http_request_handle_wrap<C: ServerContext>(
             info!(request_log, "request completed";
                 "response_code" => response.status().as_str().to_string()
             );
+
+            #[cfg(feature = "usdt-probes")]
+            probes::request__done!(|| {
+                crate::ResponseInfo {
+                    id: request_id.parse().unwrap(),
+                    local_addr,
+                    remote_addr,
+                    status_code: response.status().as_u16(),
+                    message: "".to_string(),
+                }
+            });
 
             response
         }
@@ -627,9 +728,7 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
      * will be made available to the handler.
      */
     fn new(server: Arc<DropshotState<C>>) -> Self {
-        ServerConnectionHandler {
-            server,
-        }
+        ServerConnectionHandler { server }
     }
 }
 
@@ -680,6 +779,7 @@ impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
 pub struct ServerRequestHandler<C: ServerContext> {
     /** backend state that will be made available to the request handler */
     server: Arc<DropshotState<C>>,
+    remote_addr: SocketAddr,
 }
 
 impl<C: ServerContext> ServerRequestHandler<C> {
@@ -687,10 +787,8 @@ impl<C: ServerContext> ServerRequestHandler<C> {
      * Create a ServerRequestHandler object with the given state object that
      * will be provided to the handler function.
      */
-    fn new(server: Arc<DropshotState<C>>) -> Self {
-        ServerRequestHandler {
-            server,
-        }
+    fn new(server: Arc<DropshotState<C>>, remote_addr: SocketAddr) -> Self {
+        ServerRequestHandler { server, remote_addr }
     }
 }
 
@@ -708,7 +806,11 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        Box::pin(http_request_handle_wrap(Arc::clone(&self.server), req))
+        Box::pin(http_request_handle_wrap(
+            Arc::clone(&self.server),
+            self.remote_addr,
+            req,
+        ))
     }
 }
 
@@ -789,9 +891,8 @@ mod test {
         let mut api = ApiDescription::new();
         api.register(handler).unwrap();
 
-        let config_logging = ConfigLogging::StderrTerminal {
-            level: ConfigLoggingLevel::Warn,
-        };
+        let config_logging =
+            ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Warn };
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
@@ -799,9 +900,7 @@ mod test {
             .unwrap()
             .start();
 
-        (server, TestConfig {
-            log_context,
-        })
+        (server, TestConfig { log_context })
     }
 
     async fn single_client_request(addr: SocketAddr, log: &slog::Logger) {

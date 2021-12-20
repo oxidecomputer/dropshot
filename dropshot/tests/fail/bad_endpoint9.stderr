@@ -1,11 +1,11 @@
 error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgument` is not satisfied
-  --> $DIR/bad_endpoint9.rs:25:14
+  --> tests/fail/bad_endpoint9.rs:25:14
    |
 25 |     _params: Query<QueryParams>,
    |              ^^^^^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
 
 error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgument` is not satisfied
-  --> $DIR/bad_endpoint9.rs:20:1
+  --> tests/fail/bad_endpoint9.rs:20:1
    |
 20 | / #[endpoint {
 21 | |     method = GET,
@@ -13,4 +13,4 @@ error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgum
 23 | | }]
    | |__^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
    |
-   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)

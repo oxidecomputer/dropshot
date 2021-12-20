@@ -29,6 +29,7 @@
             "in": "query",
             "name": "limit",
             "schema": {
+              "nullable": true,
               "description": "Maximum number of items returned by a single call",
               "type": "integer",
               "format": "uint32",
@@ -40,6 +41,7 @@
             "in": "query",
             "name": "page_token",
             "schema": {
+              "nullable": true,
               "description": "Token returned by previous call to retreive the subsequent page",
               "type": "string"
             },
@@ -87,6 +89,7 @@
             }
           },
           "next_page": {
+            "nullable": true,
             "description": "token used to fetch the next page of results (if any)",
             "type": "string"
           }

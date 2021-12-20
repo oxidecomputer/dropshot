@@ -28,8 +28,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -82,8 +82,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -102,8 +102,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -122,8 +122,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "successful operation"
+          "204": {
+            "description": "resource updated"
           }
         }
       }
@@ -163,6 +163,7 @@
             "in": "query",
             "name": "limit",
             "schema": {
+              "nullable": true,
               "description": "Maximum number of items returned by a single call",
               "type": "integer",
               "format": "uint32",
@@ -174,6 +175,7 @@
             "in": "query",
             "name": "page_token",
             "schema": {
+              "nullable": true,
               "description": "Token returned by previous call to retreive the subsequent page",
               "type": "string"
             },
@@ -249,7 +251,18 @@
         "operationId": "handler1",
         "responses": {
           "200": {
-            "description": "successful operation"
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -287,6 +300,7 @@
             "in": "query",
             "name": "xamot",
             "schema": {
+              "nullable": true,
               "type": "string"
             },
             "style": "form"
@@ -304,7 +318,18 @@
         },
         "responses": {
           "202": {
-            "description": "successfully enqueued operation"
+            "description": "successfully enqueued operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -327,6 +352,7 @@
             "in": "query",
             "name": "xamot",
             "schema": {
+              "nullable": true,
               "type": "string"
             },
             "style": "form"
@@ -335,6 +361,27 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          }
+        }
+      }
+    },
+    "/unit_please": {
+      "get": {
+        "operationId": "handler15",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -447,6 +494,7 @@
             }
           },
           "next_page": {
+            "nullable": true,
             "description": "token used to fetch the next page of results (if any)",
             "type": "string"
           }

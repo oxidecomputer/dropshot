@@ -48,11 +48,11 @@ const ALLOWED_HEADER_NAMES: [&str; 4] =
  */
 pub struct ClientTestContext {
     /** actual bind address of the HTTP server under test */
-    bind_address: SocketAddr,
+    pub bind_address: SocketAddr,
     /** HTTP client, used for making requests against the test server */
-    client: Client<HttpConnector>,
+    pub client: Client<HttpConnector>,
     /** logger for the test suite HTTP client */
-    client_log: Logger,
+    pub client_log: Logger,
 }
 
 impl ClientTestContext {
@@ -161,23 +161,29 @@ impl ClientTestContext {
         expected_status: StatusCode,
     ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let uri = self.url(path);
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .body(body)
+            .expect("attempted to construct invalid request");
+        self.make_request_with_request(request, expected_status).await
+    }
 
+    pub async fn make_request_with_request(
+        &self,
+        request: Request<Body>,
+        expected_status: StatusCode,
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let time_before = chrono::offset::Utc::now().timestamp();
         info!(self.client_log, "client request";
-            "method" => %method,
-            "uri" => %uri,
-            "body" => ?&body,
+            "method" => %request.method(),
+            "uri" => %request.uri(),
+            "body" => ?&request.body(),
         );
 
         let mut response = self
             .client
-            .request(
-                Request::builder()
-                    .method(method)
-                    .uri(uri)
-                    .body(body)
-                    .expect("attempted to construct invalid request"),
-            )
+            .request(request)
             .await
             .expect("failed to make request to server");
 
@@ -611,6 +617,35 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
         .await
         .unwrap();
     read_json::<T>(&mut response).await
+}
+
+/**
+ * Issues an HTTP PUT to the specified collection URL to update an object.
+ */
+pub async fn object_put<S: Serialize + Debug, T: DeserializeOwned>(
+    client: &ClientTestContext,
+    object_url: &str,
+    input: S,
+    status: StatusCode,
+) {
+    client
+        .make_request(Method::PUT, &object_url, Some(input), status)
+        .await
+        .unwrap();
+}
+
+/**
+ * Issues an HTTP DELETE to the specified object URL to delete an object.
+ */
+pub async fn object_delete(client: &ClientTestContext, object_url: &str) {
+    client
+        .make_request_no_body(
+            Method::DELETE,
+            &object_url,
+            StatusCode::NO_CONTENT,
+        )
+        .await
+        .unwrap();
 }
 
 /**

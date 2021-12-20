@@ -11,12 +11,15 @@ use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
 use crate::server::ServerContext;
+use crate::type_util::type_is_scalar;
+use crate::type_util::type_is_string_enum;
 use crate::Extractor;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
 
 use http::Method;
 use http::StatusCode;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 /**
@@ -52,13 +55,14 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         let func_parameters = FuncParams::metadata();
+        let response = ResponseType::metadata();
         ApiEndpoint {
             operation_id,
             handler: HttpRouteHandler::new(handler),
             method,
             path: path.to_string(),
             parameters: func_parameters.parameters,
-            response: ResponseType::metadata(),
+            response,
             description: None,
             tags: vec![],
             paginated: func_parameters.paginated,
@@ -232,6 +236,23 @@ impl<Context: ServerContext> ApiDescription<Context> {
     {
         let e = endpoint.into();
 
+        self.validate_path_parameters(&e)?;
+        self.validate_body_parameters(&e)?;
+        self.validate_named_parameters(&e)?;
+
+        self.router.insert(e);
+
+        Ok(())
+    }
+
+    /**
+     * Validate that the parameters specified in the path match the parameters
+     * specified by the path parameter arguments to the handler function.
+     */
+    fn validate_path_parameters(
+        &self,
+        e: &ApiEndpoint<Context>,
+    ) -> Result<(), String> {
         // Gather up the path parameters and the path variable components, and
         // make sure they're identical.
         let path = route_path_to_segments(&e.path)
@@ -262,7 +283,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             let vv =
                 v.iter().map(|s| s.as_str()).collect::<Vec<&str>>().join(",");
 
-            return match (p.is_empty(), v.is_empty()) {
+            match (p.is_empty(), v.is_empty()) {
                 (false, true) => Err(format!(
                     "{} ({})",
                     "path parameters are not consumed", pp,
@@ -278,9 +299,19 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     "specified parameters do not appear in the path",
                     vv,
                 )),
-            };
+            }?;
         }
 
+        Ok(())
+    }
+
+    /**
+     * Validate that we have a single body parameter.
+     */
+    fn validate_body_parameters(
+        &self,
+        e: &ApiEndpoint<Context>,
+    ) -> Result<(), String> {
         // Explicitly disallow any attempt to consume the body twice.
         let nbodyextractors = e
             .parameters
@@ -298,7 +329,81 @@ impl<Context: ServerContext> ApiDescription<Context> {
             ));
         }
 
-        self.router.insert(e);
+        Ok(())
+    }
+
+    /**
+     * Validate that named parameters have appropriate types and their aren't
+     * duplicates. Parameters must have scalar types except in the case of the
+     * received for a wildcard path which must be an array of String.
+     */
+    fn validate_named_parameters(
+        &self,
+        e: &ApiEndpoint<Context>,
+    ) -> Result<(), String> {
+        enum SegmentOrWildcard {
+            Segment,
+            Wildcard,
+        }
+        let path_segments = route_path_to_segments(&e.path)
+            .iter()
+            .filter_map(|segment| {
+                let seg = PathSegment::from(segment);
+                match seg {
+                    PathSegment::VarnameSegment(v) => {
+                        Some((v, SegmentOrWildcard::Segment))
+                    }
+                    PathSegment::VarnameWildcard(v) => {
+                        Some((v, SegmentOrWildcard::Wildcard))
+                    }
+                    PathSegment::Literal(_) => None,
+                }
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        for param in &e.parameters {
+            /* Skip anything that's not a path or query parameter (i.e. body) */
+            match &param.metadata {
+                ApiEndpointParameterMetadata::Path(_)
+                | ApiEndpointParameterMetadata::Query(_) => (),
+                _ => continue,
+            }
+            /* Only body parameters should have unresolved schemas */
+            let (schema, dependencies) = match &param.schema {
+                ApiSchemaGenerator::Static {
+                    schema,
+                    dependencies,
+                } => (schema, dependencies),
+                _ => unreachable!(),
+            };
+
+            match &param.metadata {
+                ApiEndpointParameterMetadata::Path(ref name) => {
+                    match path_segments.get(name) {
+                        Some(SegmentOrWildcard::Segment) => {
+                            type_is_scalar(name, schema, dependencies)?;
+                        }
+                        Some(SegmentOrWildcard::Wildcard) => {
+                            type_is_string_enum(name, schema, dependencies)?;
+                        }
+                        None => {
+                            panic!("all path variables should be accounted for")
+                        }
+                    }
+                }
+                ApiEndpointParameterMetadata::Query(ref name) => {
+                    if path_segments.get(name).is_some() {
+                        return Err(format!(
+                            "the parameter '{}' is specified for both query \
+                             and path parameters",
+                            name
+                        ));
+                    }
+                    type_is_scalar(name, schema, dependencies)?;
+                }
+                _ => (),
+            }
+        }
 
         Ok(())
     }
@@ -325,57 +430,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
     }
 
     /**
-     * Emit the OpenAPI Spec document describing this API in its JSON form.
-     *
-     * This routine is deprecated in favour of the new openapi() builder
-     * routine.
-     */
-    #[allow(clippy::too_many_arguments)]
-    #[deprecated(note = "switch to openapi()")]
-    pub fn print_openapi(
-        &self,
-        out: &mut dyn std::io::Write,
-        title: &dyn ToString,
-        description: Option<&dyn ToString>,
-        terms_of_service: Option<&dyn ToString>,
-        contact_name: Option<&dyn ToString>,
-        contact_url: Option<&dyn ToString>,
-        contact_email: Option<&dyn ToString>,
-        license_name: Option<&dyn ToString>,
-        license_url: Option<&dyn ToString>,
-        version: &dyn ToString,
-    ) -> serde_json::Result<()> {
-        let mut oapi = self.openapi(title.to_string(), version.to_string());
-        if let Some(s) = description {
-            oapi.description(s.to_string());
-        }
-        if let Some(s) = terms_of_service {
-            oapi.terms_of_service(s.to_string());
-        }
-        if let Some(s) = contact_name {
-            oapi.contact_name(s.to_string());
-        }
-        if let Some(s) = contact_url {
-            oapi.contact_url(s.to_string());
-        }
-        if let Some(s) = contact_email {
-            oapi.contact_email(s.to_string());
-        }
-        if let (Some(name), Some(url)) = (license_name, license_url) {
-            oapi.license(name.to_string(), url.to_string());
-        } else if let Some(name) = license_name {
-            oapi.license_name(name.to_string());
-        }
-
-        oapi.write(out)
-    }
-
-    /**
      * Internal routine for constructing the OpenAPI definition describing this
      * API in its JSON form.
      */
-    // TODO: There's a bunch of error handling we need here such as checking
-    // for duplicate parameter names.
     fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
@@ -391,7 +448,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             if !endpoint.visible {
                 continue;
             }
-            let path = openapi.paths.entry(path).or_insert(
+            let path = openapi.paths.paths.entry(path).or_insert(
                 openapiv3::ReferenceOr::Item(openapiv3::PathItem::default()),
             );
 
@@ -510,9 +567,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         mime_type.to_string(),
                         openapiv3::MediaType {
                             schema: Some(schema),
-                            example: None,
-                            examples: indexmap::IndexMap::new(),
-                            encoding: indexmap::IndexMap::new(),
+                            ..Default::default()
                         },
                     );
 
@@ -546,14 +601,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     }
                 };
                 let mut content = indexmap::IndexMap::new();
-                if !is_null(&js) {
+                if !is_empty(&js) {
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
                             schema: Some(j2oas_schema(name.as_ref(), &js)),
-                            example: None,
-                            examples: indexmap::IndexMap::new(),
-                            encoding: indexmap::IndexMap::new(),
+                            ..Default::default()
                         },
                     );
                 }
@@ -596,9 +649,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .components
             .get_or_insert_with(openapiv3::Components::default)
             .schemas;
-        generator.definitions().iter().for_each(|(key, schema)| {
+
+        let root_schema = generator.into_root_schema_for::<()>();
+        root_schema.definitions.iter().for_each(|(key, schema)| {
             schemas.insert(key.clone(), j2oas_schema(None, schema));
         });
+
         definitions.into_iter().for_each(|(key, schema)| {
             if !schemas.contains_key(&key) {
                 schemas.insert(key, j2oas_schema(None, &schema));
@@ -619,18 +675,60 @@ impl<Context: ServerContext> ApiDescription<Context> {
 }
 
 /**
- * Returns true iff the schema represents the null type i.e. the rust type `()`.
+ * Returns true iff the schema represents the void schema that matches no data.
  */
-fn is_null(schema: &schemars::schema::Schema) -> bool {
+fn is_empty(schema: &schemars::schema::Schema) -> bool {
+    if let schemars::schema::Schema::Bool(false) = schema {
+        return true;
+    }
     if let schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-        instance_type: Some(schemars::schema::SingleOrVec::Single(it)),
-        ..
+        metadata: _,
+        instance_type: None,
+        format: None,
+        enum_values: None,
+        const_value: None,
+        subschemas: Some(subschemas),
+        number: None,
+        string: None,
+        array: None,
+        object: None,
+        reference: None,
+        extensions: _,
     }) = schema
     {
-        if let schemars::schema::InstanceType::Null = it.as_ref() {
-            return true;
+        if let schemars::schema::SubschemaValidation {
+            all_of: None,
+            any_of: None,
+            one_of: None,
+            not: Some(not),
+            if_schema: None,
+            then_schema: None,
+            else_schema: None,
+        } = subschemas.as_ref()
+        {
+            match not.as_ref() {
+                schemars::schema::Schema::Bool(true) => return true,
+                schemars::schema::Schema::Object(
+                    schemars::schema::SchemaObject {
+                        metadata: _,
+                        instance_type: None,
+                        format: None,
+                        enum_values: None,
+                        const_value: None,
+                        subschemas: None,
+                        number: None,
+                        string: None,
+                        array: None,
+                        object: None,
+                        reference: None,
+                        extensions: _,
+                    },
+                ) => return true,
+                _ => {}
+            }
         }
     }
+
     false
 }
 
@@ -683,13 +781,20 @@ fn j2oas_schema_object(
     let ty = match &obj.instance_type {
         Some(schemars::schema::SingleOrVec::Single(ty)) => Some(ty.as_ref()),
         Some(schemars::schema::SingleOrVec::Vec(_)) => {
-            unimplemented!("unsupported by openapiv3")
+            panic!("unsupported by openapiv3")
         }
         None => None,
     };
 
     let kind = match (ty, &obj.subschemas) {
-        (Some(schemars::schema::InstanceType::Null), None) => todo!(),
+        (Some(schemars::schema::InstanceType::Null), None) => {
+            openapiv3::SchemaKind::Type(openapiv3::Type::String(
+                openapiv3::StringType {
+                    enumeration: vec![None],
+                    ..Default::default()
+                },
+            ))
+        }
         (Some(schemars::schema::InstanceType::Boolean), None) => {
             openapiv3::SchemaKind::Type(openapiv3::Type::Boolean {})
         }
@@ -709,11 +814,20 @@ fn j2oas_schema_object(
             j2oas_integer(&obj.format, &obj.number, &obj.enum_values)
         }
         (None, Some(subschema)) => j2oas_subschemas(subschema),
-        (None, None) => todo!("missed a valid case {:?}", obj),
+        (None, None) => {
+            openapiv3::SchemaKind::Any(openapiv3::AnySchema::default())
+        }
         _ => panic!("invalid"),
     };
 
     let mut data = openapiv3::SchemaData::default();
+
+    if matches!(
+        &obj.extensions.get("nullable"),
+        Some(serde_json::Value::Bool(true))
+    ) {
+        data.nullable = true;
+    }
 
     if let Some(metadata) = &obj.metadata {
         data.title = metadata.title.clone();
@@ -737,27 +851,34 @@ fn j2oas_schema_object(
 fn j2oas_subschemas(
     subschemas: &schemars::schema::SubschemaValidation,
 ) -> openapiv3::SchemaKind {
-    match (&subschemas.all_of, &subschemas.any_of, &subschemas.one_of) {
-        (Some(all_of), None, None) => openapiv3::SchemaKind::AllOf {
+    match (
+        &subschemas.all_of,
+        &subschemas.any_of,
+        &subschemas.one_of,
+        &subschemas.not,
+    ) {
+        (Some(all_of), None, None, None) => openapiv3::SchemaKind::AllOf {
             all_of: all_of
                 .iter()
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
-        (None, Some(any_of), None) => openapiv3::SchemaKind::AnyOf {
+        (None, Some(any_of), None, None) => openapiv3::SchemaKind::AnyOf {
             any_of: any_of
                 .iter()
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
-        (None, None, Some(one_of)) => openapiv3::SchemaKind::OneOf {
+        (None, None, Some(one_of), None) => openapiv3::SchemaKind::OneOf {
             one_of: one_of
                 .iter()
                 .map(|schema| j2oas_schema(None, schema))
                 .collect::<Vec<_>>(),
         },
-        (None, None, None) => todo!("missed a valid case"),
-        _ => panic!("invalid"),
+        (None, None, None, Some(not)) => openapiv3::SchemaKind::Not {
+            not: Box::new(j2oas_schema(None, not)),
+        },
+        _ => panic!("invalid subschema {:#?}", subschemas),
     }
 }
 
@@ -811,7 +932,15 @@ fn j2oas_integer(
 
     let enumeration = enum_values
         .iter()
-        .flat_map(|v| v.iter().map(|vv| vv.as_u64().unwrap() as i64))
+        .flat_map(|v| {
+            v.iter().map(|vv| match vv {
+                serde_json::Value::Null => None,
+                serde_json::Value::Number(value) => {
+                    Some(value.as_i64().unwrap())
+                }
+                _ => panic!("unexpected enumeration value {:?}", vv),
+            })
+        })
         .collect::<Vec<_>>();
 
     openapiv3::SchemaKind::Type(openapiv3::Type::Integer(
@@ -877,7 +1006,15 @@ fn j2oas_number(
 
     let enumeration = enum_values
         .iter()
-        .flat_map(|v| v.iter().map(|vv| vv.as_f64().unwrap() as f64))
+        .flat_map(|v| {
+            v.iter().map(|vv| match vv {
+                serde_json::Value::Null => None,
+                serde_json::Value::Number(value) => {
+                    Some(value.as_f64().unwrap())
+                }
+                _ => panic!("unexpected enumeration value {:?}", vv),
+            })
+        })
         .collect::<Vec<_>>();
 
     openapiv3::SchemaKind::Type(openapiv3::Type::Number(
@@ -931,7 +1068,13 @@ fn j2oas_string(
 
     let enumeration = enum_values
         .iter()
-        .flat_map(|v| v.iter().map(|vv| vv.as_str().unwrap().to_string()))
+        .flat_map(|v| {
+            v.iter().map(|vv| match vv {
+                serde_json::Value::Null => None,
+                serde_json::Value::String(s) => Some(s.clone()),
+                _ => panic!("unexpected enumeration value {:?}", vv),
+            })
+        })
         .collect::<Vec<_>>();
 
     openapiv3::SchemaKind::Type(openapiv3::Type::String(
@@ -953,9 +1096,12 @@ fn j2oas_array(
     openapiv3::SchemaKind::Type(openapiv3::Type::Array(openapiv3::ArrayType {
         items: match &arr.items {
             Some(schemars::schema::SingleOrVec::Single(schema)) => {
-                box_reference_or(j2oas_schema(None, &schema))
+                Some(box_reference_or(j2oas_schema(None, &schema)))
             }
-            _ => unimplemented!("don't think this is valid"),
+            Some(schemars::schema::SingleOrVec::Vec(_)) => {
+                panic!("OpenAPI v3.0.x cannot support tuple-like arrays")
+            }
+            None => None,
         },
         min_items: arr.min_items.map(|n| n as usize),
         max_items: arr.max_items.map(|n| n as usize),
@@ -1180,7 +1326,9 @@ mod test {
     use super::ApiDescription;
     use super::ApiEndpoint;
     use crate as dropshot; /* for "endpoint" macro */
+    use crate::api_description::j2oas_schema_object;
     use crate::endpoint;
+    use crate::Query;
     use crate::TypedBody;
     use crate::UntypedBody;
     use http::Method;
@@ -1350,6 +1498,38 @@ mod test {
     }
 
     #[test]
+    fn test_dup_names() {
+        #[derive(Deserialize, JsonSchema)]
+        struct AStruct {}
+
+        #[allow(dead_code)]
+        #[derive(Deserialize, JsonSchema)]
+        struct TheThing {
+            thing: String,
+        }
+
+        #[endpoint {
+            method = PUT,
+            path = "/testing/{thing}"
+        }]
+        async fn test_dup_names_handler(
+            _: Arc<RequestContext<()>>,
+            _: Query<TheThing>,
+            _: Path<TheThing>,
+        ) -> Result<Response<Body>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        let error = api.register(test_dup_names_handler).unwrap_err();
+        assert_eq!(
+            error,
+            "the parameter 'thing' is specified for both query and path \
+             parameters",
+        );
+    }
+
+    #[test]
     fn test_additional_properties() {
         #[allow(dead_code)]
         #[derive(JsonSchema)]
@@ -1363,5 +1543,35 @@ mod test {
         for (key, schema) in generator.definitions().iter() {
             let _ = j2oas_schema(Some(key), schema);
         }
+    }
+
+    #[test]
+    fn test_nullable() {
+        #[allow(dead_code)]
+        #[derive(JsonSchema)]
+        struct Foo {
+            bar: String,
+        }
+        let settings = schemars::gen::SchemaSettings::openapi3();
+        let generator = schemars::gen::SchemaGenerator::new(settings);
+        let root_schema = generator.into_root_schema_for::<Option<Foo>>();
+        let schema = root_schema.schema;
+        let os = j2oas_schema_object(None, &schema);
+
+        assert_eq!(
+            os,
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData {
+                    title: Some("Nullable_Foo".to_string()),
+                    nullable: true,
+                    ..Default::default()
+                },
+                schema_kind: openapiv3::SchemaKind::AllOf {
+                    all_of: vec![openapiv3::ReferenceOr::Reference {
+                        reference: "#/components/schemas/Foo".to_string()
+                    }],
+                },
+            })
+        );
     }
 }

@@ -133,7 +133,7 @@ async fn handler6(
 async fn handler7(
     _rqctx: Arc<RequestContext<()>>,
     _dump: UntypedBody,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -195,7 +195,7 @@ struct NeverDuplicatedBodyNextLevel {
 async fn handler10(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -206,7 +206,7 @@ async fn handler10(
 async fn handler11(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -234,7 +234,7 @@ struct NeverDuplicatedNext {
 async fn handler12(
     _rqctx: Arc<RequestContext<()>>,
     _b: TypedBody<NeverDuplicatedTop>,
-) -> Result<HttpResponseOk<()>, HttpError> {
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
 
@@ -251,7 +251,7 @@ async fn handler13(
 #[allow(dead_code)]
 #[derive(JsonSchema, Deserialize)]
 struct AllPath {
-    path: String,
+    path: Vec<String>,
 }
 
 #[endpoint {
@@ -263,6 +263,16 @@ async fn handler14(
     _rqctx: Arc<RequestContext<()>>,
     _path: Path<AllPath>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/unit_please",
+}]
+async fn handler15(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
 }
 
@@ -282,31 +292,8 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler12)?;
     api.register(handler13)?;
     api.register(handler14)?;
+    api.register(handler15)?;
     Ok(api)
-}
-
-#[test]
-fn test_openapi_old() -> Result<(), String> {
-    let api = make_api()?;
-    let mut output = Cursor::new(Vec::new());
-
-    #[allow(deprecated)]
-    let _ = api.print_openapi(
-        &mut output,
-        &"test",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        &"threeve",
-    );
-    let actual = from_utf8(&output.get_ref()).unwrap();
-
-    expectorate::assert_contents("tests/test_openapi_old.json", actual);
-    Ok(())
 }
 
 #[test]
@@ -315,7 +302,7 @@ fn test_openapi() -> Result<(), String> {
     let mut output = Cursor::new(Vec::new());
 
     let _ = api.openapi("test", "threeve").write(&mut output);
-    let actual = from_utf8(&output.get_ref()).unwrap();
+    let actual = from_utf8(output.get_ref()).unwrap();
 
     expectorate::assert_contents("tests/test_openapi.json", actual);
     Ok(())
@@ -333,7 +320,7 @@ fn test_openapi_fuller() -> Result<(), String> {
         .license_name("CDDL")
         .terms_of_service("no hat, no cane? no service!")
         .write(&mut output);
-    let actual = from_utf8(&output.get_ref()).unwrap();
+    let actual = from_utf8(output.get_ref()).unwrap();
 
     expectorate::assert_contents("tests/test_openapi_fuller.json", actual);
     Ok(())
