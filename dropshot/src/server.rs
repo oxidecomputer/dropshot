@@ -392,12 +392,19 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         }
 
         let (conn, local_addr) = {
-            let cert = load_certs(&config.cert_file)?;
-            let key = load_private_key(&config.key_file)?;
-            let mut cfg =
-                rustls::ServerConfig::new(rustls::NoClientAuth::new());
-            cfg.set_single_cert(cert, key)?;
-            cfg.set_protocols(&[b"h2".to_vec(), b"http/1.1".to_vec()]);
+            let certs = load_certs(&config.cert_file)?;
+            let private_key = load_private_key(&config.key_file)?;
+            let mut cfg = rustls::ServerConfig::builder()
+                // TODO: We may want to expose protocol configuration in our
+                // config
+                .with_safe_default_cipher_suites()
+                .with_safe_default_kx_groups()
+                .with_safe_default_protocol_versions()
+                .unwrap()
+                .with_client_cert_verifier(rustls::server::NoClientAuth::new())
+                .with_single_cert(certs, private_key)
+                .expect("bad certificate/key");
+            cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
             let cfg = Arc::new(cfg);
             let acceptor = TlsAcceptor::from(cfg);
 
@@ -822,8 +829,9 @@ fn load_certs(filename: &Path) -> std::io::Result<Vec<rustls::Certificate>> {
     let mut reader = std::io::BufReader::new(certfile);
 
     // Load and return certificate.
-    rustls::internal::pemfile::certs(&mut reader)
+    rustls_pemfile::certs(&mut reader)
         .map_err(|_| error("failed to load certificate".into()))
+        .map(|mut chain| chain.drain(..).map(rustls::Certificate).collect())
 }
 
 // Load private key from file.
@@ -835,12 +843,12 @@ fn load_private_key(filename: &Path) -> std::io::Result<rustls::PrivateKey> {
     let mut reader = std::io::BufReader::new(keyfile);
 
     // Load and return a single private key.
-    let keys = rustls::internal::pemfile::pkcs8_private_keys(&mut reader)
+    let keys = rustls_pemfile::pkcs8_private_keys(&mut reader)
         .map_err(|_| error("failed to load private key".into()))?;
     if keys.len() != 1 {
         return Err(error("expected a single private key".into()));
     }
-    Ok(keys[0].clone())
+    Ok(rustls::PrivateKey(keys[0].clone()))
 }
 
 #[cfg(test)]
