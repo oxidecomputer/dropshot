@@ -365,6 +365,16 @@
         }
       }
     },
+    "/too/smart/for/my/own/good": {
+      "get": {
+        "operationId": "handler16",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/unit_please": {
       "get": {
         "operationId": "handler15",
