@@ -79,6 +79,34 @@ fn test_config_bad_request_body_max_bytes_too_large() {
 }
 
 /*
+ * Bad values for "key_file"
+ */
+
+#[test]
+fn test_config_bad_key_file_garbage() {
+    let error =
+        read_config::<ConfigDropshot>("bad_key_file_garbage", "key_file = 23")
+            .unwrap_err()
+            .to_string();
+    assert!(error.starts_with("invalid type: integer"));
+}
+
+/*
+ * Bad values for "cert_file"
+ */
+
+#[test]
+fn test_config_bad_cert_file_garbage() {
+    let error = read_config::<ConfigDropshot>(
+        "bad_cert_file_garbage",
+        "cert_file = 23",
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.starts_with("invalid type: integer"));
+}
+
+/*
  * Bad values for "https"
  */
 
@@ -99,14 +127,28 @@ fn make_server(
         .unwrap()
 }
 
+#[derive(Clone, Copy)]
+struct TlsConfig<'a> {
+    pub cert_file: &'a str,
+    pub key_file: &'a str,
+}
+
 fn make_config(
     bind_ip_str: &str,
     bind_port: u16,
-    https: bool,
+    tls: Option<TlsConfig>,
 ) -> ConfigDropshot {
+    let (https, cert_file, key_file) = match tls {
+        Some(config) => (true, config.cert_file, config.key_file),
+        None => (false, "", ""),
+    };
     let config_text = format!(
-        "bind_address = \"{}:{}\"\nrequest_body_max_bytes = 1024\nhttps = {}",
-        bind_ip_str, bind_port, https
+        "bind_address = \"{}:{}\"\n\
+         request_body_max_bytes = 1024\n\
+         https = {}\n\
+         cert_file = {}\n\
+         key_file = {}",
+        bind_ip_str, bind_port, https, cert_file, key_file,
     );
     read_config::<ConfigDropshot>("bind_address", &config_text).unwrap()
 }
@@ -165,8 +207,8 @@ async fn test_config_bind_address_http() {
      * don't want to depend on too much from the ApiServer here -- but we
      * should have successfully made the request.)
      */
-    let https = false;
-    let config = make_config(bind_ip_str, bind_port, https);
+    let tls = None;
+    let config = make_config(bind_ip_str, bind_port, tls);
     let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port)).await.unwrap();
     server.close().await.unwrap();
@@ -187,7 +229,7 @@ async fn test_config_bind_address_http() {
      * Start a server on another TCP port and make sure we can reach that
      * one (and NOT the one we just shut down).
      */
-    let config = make_config(bind_ip_str, bind_port + 1, https);
+    let config = make_config(bind_ip_str, bind_port + 1, tls);
     let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port + 1)).await.unwrap();
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
@@ -204,6 +246,8 @@ async fn test_config_bind_address_http() {
 
 #[tokio::test]
 async fn test_config_bind_address_https() {
+    // TODO: Generate certificates for testing here
+
     let log_path =
         dropshot::test_util::log_file_for_test("config_bind_address")
             .as_path()
@@ -258,8 +302,8 @@ async fn test_config_bind_address_https() {
      * don't want to depend on too much from the ApiServer here -- but we
      * should have successfully made the request.)
      */
-    let https = true;
-    let config = make_config(bind_ip_str, bind_port, https);
+    let tls = Some(TlsConfig { cert_file: "", key_file: "" });
+    let config = make_config(bind_ip_str, bind_port, tls);
     let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port)).await.unwrap();
     server.close().await.unwrap();
@@ -281,7 +325,7 @@ async fn test_config_bind_address_https() {
      * Start a server on another TCP port and make sure we can reach that
      * one (and NOT the one we just shut down).
      */
-    let config = make_config(bind_ip_str, bind_port + 1, https);
+    let config = make_config(bind_ip_str, bind_port + 1, tls);
     let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port + 1)).await.unwrap();
     let error = client.request(cons_request(bind_port)).await.unwrap_err();

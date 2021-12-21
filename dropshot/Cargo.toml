@@ -80,6 +80,9 @@ libc = "0.2.111"
 mime_guess = "2.0.3"
 subprocess = "0.2.8"
 trybuild = "1.0.53"
+# Used by the https examples and tests
+tempfile = "3.2.0"
+rcgen = "0.8.14"
 
 [dev-dependencies.schemars]
 version = "0.8.8"

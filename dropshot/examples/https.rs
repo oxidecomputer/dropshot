@@ -17,12 +17,44 @@ use dropshot::TypedBody;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::io::Write;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use tempfile::NamedTempFile;
+
+/*
+ * This function would not be used in a normal application. It is used to
+ * generate temporary keys and certificates for the purpose of this demo.
+ */
+fn generate_keys() -> Result<(NamedTempFile, NamedTempFile), String> {
+    let keypair =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
+            .map_err(|e| e.to_string())?;
+    let cert = keypair.serialize_pem().map_err(|e| e.to_string())?;
+    let priv_key = keypair.serialize_private_key_pem();
+
+    let mut cert_file =
+        NamedTempFile::new().map_err(|_| "failed to create cert_file")?;
+    cert_file
+        .write(cert.as_bytes())
+        .map_err(|_| "failed to write cert_file")?;
+    let mut key_file =
+        NamedTempFile::new().map_err(|_| "failed to create key_file")?;
+    key_file
+        .write(priv_key.as_bytes())
+        .map_err(|_| "failed to write key_file")?;
+    Ok((cert_file, key_file))
+}
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+    /*
+     * Begin by generating TLS certificates and keys. A normal application would
+     * just pass the paths to these via ConfigDropshot.
+     */
+    let (cert_file, key_file) = generate_keys()?;
+
     /*
      * We must specify a configuration with a bind address.  We'll use 127.0.0.1
      * since it's available and won't expose this server outside the host.  We
@@ -33,6 +65,8 @@ async fn main() -> Result<(), String> {
      */
     let config_dropshot = ConfigDropshot {
         https: true,
+        cert_file: cert_file.path().to_path_buf(),
+        key_file: key_file.path().to_path_buf(),
         ..Default::default()
     };
 
@@ -40,9 +74,8 @@ async fn main() -> Result<(), String> {
      * For simplicity, we'll configure an "info"-level logger that writes to
      * stderr assuming that it's a terminal.
      */
-    let config_logging = ConfigLogging::StderrTerminal {
-        level: ConfigLoggingLevel::Info,
-    };
+    let config_logging =
+        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Trace };
     let log = config_logging
         .to_logger("example-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
@@ -87,9 +120,7 @@ impl ExampleContext {
      * Return a new ExampleContext.
      */
     pub fn new() -> ExampleContext {
-        ExampleContext {
-            counter: AtomicU64::new(0),
-        }
+        ExampleContext { counter: AtomicU64::new(0) }
     }
 }
 

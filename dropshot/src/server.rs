@@ -369,28 +369,6 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<InnerHttpsServerStarter<C>, GenericError> {
-        let incoming = AddrIncoming::bind(&config.bind_address)?;
-        let local_addr = incoming.local_addr();
-
-        let app_state = Arc::new(DropshotState {
-            private,
-            config: ServerConfig {
-                request_body_max_bytes: config.request_body_max_bytes,
-                page_max_nitems: NonZeroU32::new(10000).unwrap(),
-                page_default_nitems: NonZeroU32::new(100).unwrap(),
-            },
-            router: api.into_router(),
-            log: log.new(o!("local_addr" => local_addr)),
-            local_addr,
-        });
-
-        for (path, method, _) in &app_state.router {
-            debug!(app_state.log, "registered endpoint";
-                "method" => &method,
-                "path" => &path
-            );
-        }
-
         let (conn, local_addr) = {
             let certs = load_certs(&config.cert_file)?;
             let private_key = load_private_key(&config.key_file)?;
@@ -413,12 +391,29 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             )?)?;
 
             let local_addr = tcp.local_addr()?;
+            let logger = log.new(o!("local_addr" => local_addr));
 
             (
                 stream! {
                     loop {
-                        let (socket, addr) = tcp.accept().await?;
-                        let stream = acceptor.accept(socket).await?;
+                        info!(logger, "Waiting for connection");
+                        let (socket, addr) = tcp.accept().await.map_err(|e| {
+                                info!(logger, "tcp accept err: {}", e);
+                                // Note that returning an error here terminates
+                                // the stream
+                                e
+                            })?;
+                        let stream = match acceptor.accept(socket).await {
+                            Ok(stream) => stream,
+                            Err(e) =>  {
+                                info!(logger, "tls accept err: {}", e);
+                                // We continue to the next socket here since
+                                // errors at this point will be protocol
+                                // errors (e.g., a client sending the server
+                                // a fatal alert event).
+                                continue;
+                            }
+                        };
                         let conn = TlsConn::new(stream, addr);
                         yield Ok(conn)
                     }
@@ -427,12 +422,31 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             )
         };
 
+        let app_state = Arc::new(DropshotState {
+            private,
+            config: ServerConfig {
+                request_body_max_bytes: config.request_body_max_bytes,
+                page_max_nitems: NonZeroU32::new(10000).unwrap(),
+                page_default_nitems: NonZeroU32::new(100).unwrap(),
+            },
+            router: api.into_router(),
+            log: log.new(o!("local_addr" => local_addr)),
+            local_addr,
+        });
+
+        for (path, method, _) in &app_state.router {
+            debug!(app_state.log, "registered endpoint";
+                "method" => &method,
+                "path" => &path
+            );
+        }
+
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
         let server = Server::builder(HttpsAcceptor {
             acceptor: Box::new(Box::pin(conn)),
         })
         .serve(make_service);
-        info!(app_state.log, "listening"; "local_addr" => %local_addr);
+        info!(app_state.log, "listening");
 
         Ok(InnerHttpsServerStarter { app_state, server, local_addr })
     }
