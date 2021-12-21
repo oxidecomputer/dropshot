@@ -638,6 +638,17 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         );
                     }
                 }
+            } else {
+                // If no schema was specified, the response is hand-rolled. In
+                // this case we'll fall back to the default response type.
+                operation.responses.default =
+                    Some(openapiv3::ReferenceOr::Item(openapiv3::Response {
+                        // TODO: perhaps we should require even free-form
+                        // responses to have a description since it's required
+                        // by OpenAPI.
+                        description: "".to_string(),
+                        ..Default::default()
+                    }))
             }
 
             // Drop in the operation.
