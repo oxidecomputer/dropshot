@@ -1,6 +1,7 @@
 // Copyright 2020 Oxide Computer Company
+
 /*!
- * Example use of Dropshot.
+ * Example use of Dropshot with TLS enabled
  */
 
 use dropshot::endpoint;
