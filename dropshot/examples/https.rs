@@ -75,7 +75,7 @@ async fn main() -> Result<(), String> {
      * stderr assuming that it's a terminal.
      */
     let config_logging =
-        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Trace };
+        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
         .to_logger("example-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
