@@ -144,14 +144,20 @@ fn make_config(
         Some(config) => (true, config.cert_file, config.key_file),
         None => (false, "", ""),
     };
-    let config_text = format!(
+    let mut config_text = format!(
         "bind_address = \"{}:{}\"\n\
-         request_body_max_bytes = 1024\n\
-         https = {}\n\
-         cert_file = \"{}\"\n\
-         key_file = \"{}\"",
-        bind_ip_str, bind_port, https, cert_file, key_file,
+         request_body_max_bytes = 1024",
+        bind_ip_str, bind_port,
     );
+    if https {
+        config_text = format!(
+            "{}\n\
+             https = {}\n\
+             cert_file = \"{}\"\n\
+             key_file = \"{}\"",
+            config_text, https, cert_file, key_file
+        );
+    }
     read_config::<ConfigDropshot>("bind_address", &config_text).unwrap()
 }
 
