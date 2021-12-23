@@ -16,8 +16,7 @@ use super::ProbeRegistration;
 use async_stream::stream;
 use futures::future::{BoxFuture, FusedFuture, FutureExt, TryFutureExt};
 use futures::lock::Mutex;
-use futures::stream::StreamExt;
-use futures_core::stream::Stream;
+use futures::stream::{Stream, StreamExt};
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
     Server,

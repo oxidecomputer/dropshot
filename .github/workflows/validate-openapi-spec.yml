@@ -1,0 +1,27 @@
+name: validate-openapi-spec
+on:
+  pull_request:
+    paths:
+      - .github/workflows/validate-openapi-spec.yml
+      - dropshot/tests/test_openapi.json
+      - dropshot/tests/test_openapi_fuller.json
+  workflow_dispatch:
+    inputs:
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - name: Install our tools
+        shell: bash
+        run: |
+          npm install -g @apidevtools/swagger-cli
+      - name: Run validation
+        shell: bash
+        run: |
+          swagger-cli validate dropshot/tests/test_openapi.json &&
+          swagger-cli validate dropshot/tests/test_openapi_fuller.json
+

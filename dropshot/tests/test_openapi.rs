@@ -6,6 +6,7 @@ use dropshot::{
     HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TypedBody, UntypedBody,
 };
+use hyper::Body;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{io::Cursor, str::from_utf8, sync::Arc};
@@ -276,6 +277,16 @@ async fn handler15(
     unimplemented!();
 }
 
+#[endpoint {
+    method = GET,
+    path = "/too/smart/for/my/own/good",
+}]
+async fn handler16(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<http::Response<Body>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -292,6 +303,7 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler12)?;
     api.register(handler13)?;
     api.register(handler14)?;
+    api.register(handler16)?;
     api.register(handler15)?;
     Ok(api)
 }
