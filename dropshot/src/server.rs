@@ -14,10 +14,9 @@ use super::router::HttpRouter;
 use super::ProbeRegistration;
 
 use async_stream::stream;
-use futures::future::BoxFuture;
-use futures::future::FusedFuture;
-use futures::future::FutureExt;
+use futures::future::{BoxFuture, FusedFuture, FutureExt, TryFutureExt};
 use futures::lock::Mutex;
+use futures::stream::StreamExt;
 use futures_core::stream::Stream;
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
@@ -239,6 +238,8 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
     }
 }
 
+/// Wrapper for TlsStream<TcpStream> that also carries the remote SocketAddr
+#[derive(Debug)]
 struct TlsConn {
     stream: TlsStream<TcpStream>,
     remote_addr: SocketAddr,
@@ -254,6 +255,7 @@ impl TlsConn {
     }
 }
 
+/// Forward AsyncRead to the underlying stream
 impl tokio::io::AsyncRead for TlsConn {
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -265,6 +267,7 @@ impl tokio::io::AsyncRead for TlsConn {
     }
 }
 
+/// Forward AsyncWrite to the underlying stream
 impl tokio::io::AsyncWrite for TlsConn {
     fn poll_write(
         mut self: Pin<&mut Self>,
@@ -292,8 +295,90 @@ impl tokio::io::AsyncWrite for TlsConn {
     }
 }
 
+/// This is our bridge between tokio-rustls and hyper. It implements
+/// `hyper::server::accept::Accept` interface, producing TLS-over-TCP
+/// connections.
+///
+/// Internally, it creates a stream that produces fully negotiated TLS
+/// connections as they come in from a TCP listen socket.  This stream allows
+/// for multiple TLS connections to be negotiated concurrently with new
+/// connections being accepted.
 struct HttpsAcceptor {
-    acceptor: Box<dyn Stream<Item = std::io::Result<TlsConn>> + Send + Unpin>,
+    stream: Box<dyn Stream<Item = std::io::Result<TlsConn>> + Send + Unpin>,
+}
+
+impl HttpsAcceptor {
+    pub fn new(
+        log: slog::Logger,
+        tls_acceptor: TlsAcceptor,
+        tcp_listener: TcpListener,
+    ) -> HttpsAcceptor {
+        HttpsAcceptor {
+            stream: Box::new(Box::pin(Self::new_stream(
+                log,
+                tls_acceptor,
+                tcp_listener,
+            ))),
+        }
+    }
+
+    fn new_stream(
+        log: slog::Logger,
+        tls_acceptor: TlsAcceptor,
+        tcp_listener: TcpListener,
+    ) -> impl Stream<Item = std::io::Result<TlsConn>> {
+        stream! {
+            let mut tls_negotiations = futures::stream::FuturesUnordered::new();
+            loop {
+                tokio::select! {
+                    Some(negotiation) = tls_negotiations.next(), if
+                            !tls_negotiations.is_empty() => {
+
+                        match negotiation {
+                            Ok(conn) => yield Ok(conn),
+                            Err(e) => {
+                                // If TLS negotiation fails, log the cause but
+                                // don't forward it along. Yielding an error
+                                // from here will terminate the server.
+                                // TODO: We may want to export a counter for
+                                // different error types, since this may contain
+                                // useful things like "your certificate is
+                                // invalid"
+                                info!(log, "tls accept err: {}", e);
+                            },
+                        }
+                    },
+                    accept_result = tcp_listener.accept() => {
+                        let (socket, addr) = match accept_result {
+                            Ok(v) => v,
+                            Err(e) => {
+                                match e.kind() {
+                                    std::io::ErrorKind::ConnectionAborted => {
+                                        continue;
+                                    },
+                                    // The other errors that can be returned
+                                    // under POSIX are all programming errors or
+                                    // resource exhaustion. For now, handle
+                                    // these by no longer accepting new
+                                    // connections.
+                                    _ => {
+                                        yield Err(e);
+                                        break;
+                                    }
+                                }
+                            }
+                        };
+
+                        let tls_negotiation = tls_acceptor
+                            .accept(socket)
+                            .map_ok(move |stream| TlsConn::new(stream, addr));
+                        tls_negotiations.push(tls_negotiation);
+                    },
+                    else => break,
+                }
+            }
+        }
+    }
 }
 
 impl hyper::server::accept::Accept for HttpsAcceptor {
@@ -304,7 +389,7 @@ impl hyper::server::accept::Accept for HttpsAcceptor {
         mut self: Pin<&mut Self>,
         ctx: &mut core::task::Context,
     ) -> core::task::Poll<Option<Result<Self::Conn, Self::Error>>> {
-        let pinned = Pin::new(&mut self.acceptor);
+        let pinned = Pin::new(&mut self.stream);
         pinned.poll_next(ctx)
     }
 }
@@ -369,7 +454,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<InnerHttpsServerStarter<C>, GenericError> {
-        let (conn, local_addr) = {
+        let acceptor = {
             let certs = load_certs(&config.cert_file)?;
             let private_key = load_private_key(&config.key_file)?;
             let mut cfg = rustls::ServerConfig::builder()
@@ -383,44 +468,21 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
                 .with_single_cert(certs, private_key)
                 .expect("bad certificate/key");
             cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-            let cfg = Arc::new(cfg);
-            let acceptor = TlsAcceptor::from(cfg);
-
-            let tcp = TcpListener::from_std(std::net::TcpListener::bind(
-                &config.bind_address,
-            )?)?;
-
-            let local_addr = tcp.local_addr()?;
-            let logger = log.new(o!("local_addr" => local_addr));
-
-            (
-                stream! {
-                    loop {
-                        info!(logger, "Waiting for connection");
-                        let (socket, addr) = tcp.accept().await.map_err(|e| {
-                                info!(logger, "tcp accept err: {}", e);
-                                // Note that returning an error here terminates
-                                // the stream
-                                e
-                            })?;
-                        let stream = match acceptor.accept(socket).await {
-                            Ok(stream) => stream,
-                            Err(e) =>  {
-                                info!(logger, "tls accept err: {}", e);
-                                // We continue to the next socket here since
-                                // errors at this point will be protocol
-                                // errors (e.g., a client sending the server
-                                // a fatal alert event).
-                                continue;
-                            }
-                        };
-                        let conn = TlsConn::new(stream, addr);
-                        yield Ok(conn)
-                    }
-                },
-                local_addr,
-            )
+            TlsAcceptor::from(Arc::new(cfg))
         };
+
+        let tcp = {
+            let listener = std::net::TcpListener::bind(&config.bind_address)?;
+            listener.set_nonblocking(true)?;
+            // We use `from_std` instead of just calling `bind` here directly
+            // to avoid invoking an async function, to match the interface
+            // provided by `HttpServerStarter::new`.
+            TcpListener::from_std(listener)?
+        };
+
+        let local_addr = tcp.local_addr()?;
+        let logger = log.new(o!("local_addr" => local_addr));
+        let https_acceptor = HttpsAcceptor::new(logger.clone(), acceptor, tcp);
 
         let app_state = Arc::new(DropshotState {
             private,
@@ -430,7 +492,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
                 page_default_nitems: NonZeroU32::new(100).unwrap(),
             },
             router: api.into_router(),
-            log: log.new(o!("local_addr" => local_addr)),
+            log: logger,
             local_addr,
         });
 
@@ -442,10 +504,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         }
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-        let server = Server::builder(HttpsAcceptor {
-            acceptor: Box::new(Box::pin(conn)),
-        })
-        .serve(make_service);
+        let server = Server::builder(https_acceptor).serve(make_service);
         info!(app_state.log, "listening");
 
         Ok(InnerHttpsServerStarter { app_state, server, local_addr })
