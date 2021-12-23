@@ -9,6 +9,8 @@ use dropshot::HttpServerStarter;
 use slog::Logger;
 use std::fs;
 
+mod common;
+
 /*
  * Bad values for "bind_address"
  */
@@ -146,8 +148,8 @@ fn make_config(
         "bind_address = \"{}:{}\"\n\
          request_body_max_bytes = 1024\n\
          https = {}\n\
-         cert_file = {}\n\
-         key_file = {}",
+         cert_file = \"{}\"\n\
+         key_file = \"{}\"",
         bind_ip_str, bind_port, https, cert_file, key_file,
     );
     read_config::<ConfigDropshot>("bind_address", &config_text).unwrap()
@@ -156,7 +158,7 @@ fn make_config(
 #[tokio::test]
 async fn test_config_bind_address_http() {
     let log_path =
-        dropshot::test_util::log_file_for_test("config_bind_address")
+        dropshot::test_util::log_file_for_test("config_bind_address_http")
             .as_path()
             .display()
             .to_string();
@@ -167,7 +169,7 @@ async fn test_config_bind_address_http() {
         path: log_path.clone(),
         if_exists: dropshot::ConfigLoggingIfExists::Append,
     };
-    let log = log_config.to_logger("test_config_bind_address").unwrap();
+    let log = log_config.to_logger("test_config_bind_address_http").unwrap();
 
     let client = hyper::Client::new();
     let bind_ip_str = "127.0.0.1";
@@ -246,10 +248,8 @@ async fn test_config_bind_address_http() {
 
 #[tokio::test]
 async fn test_config_bind_address_https() {
-    // TODO: Generate certificates for testing here
-
     let log_path =
-        dropshot::test_util::log_file_for_test("config_bind_address")
+        dropshot::test_util::log_file_for_test("config_bind_address_https")
             .as_path()
             .display()
             .to_string();
@@ -260,10 +260,31 @@ async fn test_config_bind_address_https() {
         path: log_path.clone(),
         if_exists: dropshot::ConfigLoggingIfExists::Append,
     };
-    let log = log_config.to_logger("test_config_bind_address").unwrap();
+    let log = log_config.to_logger("test_config_bind_address_https").unwrap();
 
-    let client =
-        hyper::Client::builder().build(hyper_tls::HttpsConnector::new());
+    // Generate key for the server
+    let (cert, key) = common::generate_tls_key();
+    let (cert_file, key_file) = common::tls_key_to_file(&cert, &key);
+
+    let make_client = || {
+        // Configure TLS to trust the self-signed cert
+        let mut root_store = rustls::RootCertStore { roots: vec![] };
+        root_store.add(&cert).expect("adding root cert");
+
+        let tls_config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_only()
+            .enable_http1()
+            .build();
+        hyper::Client::builder().build(https_connector)
+    };
+
+    let client = make_client();
+    let hostname = "localhost";
     let bind_ip_str = "127.0.0.1";
     /* This must be different than the bind_port used in the http test. */
     let bind_port = 12217;
@@ -276,7 +297,7 @@ async fn test_config_bind_address_https() {
     let cons_request = |port: u16| {
         let uri = hyper::Uri::builder()
             .scheme("https")
-            .authority(format!("{}:{}", bind_ip_str, port).as_str())
+            .authority(format!("{}:{}", hostname, port).as_str())
             .path_and_query("/")
             .build()
             .unwrap();
@@ -302,7 +323,10 @@ async fn test_config_bind_address_https() {
      * don't want to depend on too much from the ApiServer here -- but we
      * should have successfully made the request.)
      */
-    let tls = Some(TlsConfig { cert_file: "", key_file: "" });
+    let tls = Some(TlsConfig {
+        cert_file: cert_file.path().to_str().unwrap(),
+        key_file: key_file.path().to_str().unwrap(),
+    });
     let config = make_config(bind_ip_str, bind_port, tls);
     let server = make_server(&config, &log).start();
     client.request(cons_request(bind_port)).await.unwrap();
@@ -316,8 +340,7 @@ async fn test_config_bind_address_https() {
      * stack return with ECONNRESET, which gets in the way of what we're trying
      * to test here.)
      */
-    let client =
-        hyper::Client::builder().build(hyper_tls::HttpsConnector::new());
+    let client = make_client();
     let error = client.request(cons_request(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
 
