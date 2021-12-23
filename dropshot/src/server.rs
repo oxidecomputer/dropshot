@@ -86,8 +86,11 @@ pub struct ServerConfig {
  * A thin wrapper around a Hyper Server object that exposes some interfaces that
  * we find useful.
  */
-
-pub struct HttpServerStarter<C: ServerContext>(WrappedHttpServerStarter<C>);
+pub struct HttpServerStarter<C: ServerContext> {
+    app_state: Arc<DropshotState<C>>,
+    local_addr: SocketAddr,
+    wrapped: WrappedHttpServerStarter<C>,
+}
 
 impl<C: ServerContext> HttpServerStarter<C> {
     pub fn new(
@@ -96,67 +99,61 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        let wrapped = WrappedHttpServerStarter::new(config, api, private, log)?;
-        Ok(HttpServerStarter(wrapped))
-    }
+        let server_config = ServerConfig {
+            /* We start aggressively to ensure test coverage. */
+            request_body_max_bytes: config.request_body_max_bytes,
+            page_max_nitems: NonZeroU32::new(10000).unwrap(),
+            page_default_nitems: NonZeroU32::new(100).unwrap(),
+        };
 
-    pub fn start(self) -> HttpServer<C> {
-        self.0.start()
-    }
-}
-
-enum WrappedHttpServerStarter<C: ServerContext> {
-    Http(InnerHttpServerStarter<C>),
-    Https(InnerHttpsServerStarter<C>),
-}
-
-impl<C: ServerContext> WrappedHttpServerStarter<C> {
-    pub fn new(
-        config: &ConfigDropshot,
-        api: ApiDescription<C>,
-        private: C,
-        log: &Logger,
-    ) -> Result<WrappedHttpServerStarter<C>, GenericError> {
-        if config.https {
-            let starter =
-                InnerHttpsServerStarter::new(config, api, private, log)?;
-            Ok(WrappedHttpServerStarter::Https(starter))
+        let starter = if config.https {
+            let (starter, app_state, local_addr) =
+                InnerHttpsServerStarter::new(
+                    config,
+                    server_config,
+                    api,
+                    private,
+                    log,
+                )?;
+            HttpServerStarter {
+                app_state,
+                local_addr,
+                wrapped: WrappedHttpServerStarter::Https(starter),
+            }
         } else {
-            let starter =
-                InnerHttpServerStarter::new(config, api, private, log)?;
-            Ok(WrappedHttpServerStarter::Http(starter))
+            let (starter, app_state, local_addr) = InnerHttpServerStarter::new(
+                config,
+                server_config,
+                api,
+                private,
+                log,
+            )?;
+            HttpServerStarter {
+                app_state,
+                local_addr,
+                wrapped: WrappedHttpServerStarter::Http(starter),
+            }
+        };
+
+        for (path, method, _) in &starter.app_state.router {
+            debug!(starter.app_state.log, "registered endpoint";
+                "method" => &method,
+                "path" => &path
+            );
         }
+
+        Ok(starter)
     }
 
     pub fn start(self) -> HttpServer<C> {
-        match self {
-            WrappedHttpServerStarter::Http(http) => http.start(),
-            WrappedHttpServerStarter::Https(https) => https.start(),
-        }
-    }
-}
-
-struct InnerHttpServerStarter<C: ServerContext> {
-    app_state: Arc<DropshotState<C>>,
-    server: Server<AddrIncoming, ServerConnectionHandler<C>>,
-    local_addr: SocketAddr,
-}
-
-impl<C: ServerContext> InnerHttpServerStarter<C> {
-    /**
-     * Begins execution of the underlying Http server.
-     */
-    fn start(self) -> HttpServer<C> {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let log_close = self.app_state.log.new(o!());
-        let graceful = self.server.with_graceful_shutdown(async move {
-            rx.await.expect(
-                "dropshot server shutting down without invoking close()",
-            );
-            info!(log_close, "received request to begin graceful shutdown");
-        });
-
-        let join_handle = tokio::spawn(async { graceful.await });
+        let join_handle = match self.wrapped {
+            WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
+            WrappedHttpServerStarter::Https(https) => {
+                https.start(rx, log_close)
+            }
+        };
 
         let probe_registration = if cfg!(feature = "usdt-probes") {
             match usdt::register_probes() {
@@ -192,6 +189,33 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             close_channel: Some(tx),
         }
     }
+}
+
+enum WrappedHttpServerStarter<C: ServerContext> {
+    Http(InnerHttpServerStarter<C>),
+    Https(InnerHttpsServerStarter<C>),
+}
+
+struct InnerHttpServerStarter<C: ServerContext>(
+    Server<AddrIncoming, ServerConnectionHandler<C>>,
+);
+
+impl<C: ServerContext> InnerHttpServerStarter<C> {
+    /// Begins execution of the underlying Http server.
+    fn start(
+        self,
+        close_signal: tokio::sync::oneshot::Receiver<()>,
+        log_close: Logger,
+    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
+        let graceful = self.0.with_graceful_shutdown(async move {
+            close_signal.await.expect(
+                "dropshot server shutting down without invoking close()",
+            );
+            info!(log_close, "received request to begin graceful shutdown");
+        });
+
+        tokio::spawn(async { graceful.await })
+    }
 
     /**
      * Set up an HTTP server bound on the specified address that runs registered
@@ -203,38 +227,30 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
      */
     fn new(
         config: &ConfigDropshot,
+        server_config: ServerConfig,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<InnerHttpServerStarter<C>, hyper::Error> {
+    ) -> Result<
+        (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr),
+        hyper::Error,
+    > {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
 
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
-            config: ServerConfig {
-                /* We start aggressively to ensure test coverage. */
-                request_body_max_bytes: config.request_body_max_bytes,
-                page_max_nitems: NonZeroU32::new(10000).unwrap(),
-                page_default_nitems: NonZeroU32::new(100).unwrap(),
-            },
+            config: server_config,
             router: api.into_router(),
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
         });
 
-        for (path, method, _) in &app_state.router {
-            debug!(app_state.log, "registered endpoint";
-                "method" => &method,
-                "path" => &path
-            );
-        }
-
-        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
+        let make_service = ServerConnectionHandler::new(app_state.clone());
         let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
-        Ok(InnerHttpServerStarter { app_state, server, local_addr })
+        Ok((InnerHttpServerStarter(server), app_state, local_addr))
     }
 }
 
@@ -394,66 +410,37 @@ impl hyper::server::accept::Accept for HttpsAcceptor {
     }
 }
 
-struct InnerHttpsServerStarter<C: ServerContext> {
-    app_state: Arc<DropshotState<C>>,
-    server: Server<HttpsAcceptor, ServerConnectionHandler<C>>,
-    local_addr: SocketAddr,
-}
+struct InnerHttpsServerStarter<C: ServerContext>(
+    Server<HttpsAcceptor, ServerConnectionHandler<C>>,
+);
 
 impl<C: ServerContext> InnerHttpsServerStarter<C> {
-    fn start(self) -> HttpServer<C> {
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let log_close = self.app_state.log.new(o!());
-        let graceful = self.server.with_graceful_shutdown(async move {
-            rx.await.expect(
+    /// Begins execution of the underlying Http server.
+    fn start(
+        self,
+        close_signal: tokio::sync::oneshot::Receiver<()>,
+        log_close: Logger,
+    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
+        let graceful = self.0.with_graceful_shutdown(async move {
+            close_signal.await.expect(
                 "dropshot server shutting down without invoking close()",
             );
             info!(log_close, "received request to begin graceful shutdown");
         });
 
-        let join_handle = tokio::spawn(async { graceful.await });
-
-        let probe_registration = if cfg!(feature = "usdt-probes") {
-            match usdt::register_probes() {
-                Ok(_) => {
-                    debug!(
-                        self.app_state.log,
-                        "successfully registered DTrace USDT probes"
-                    );
-                    ProbeRegistration::Succeeded
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    error!(
-                        self.app_state.log,
-                        "failed to register DTrace USDT probes: {}", msg
-                    );
-                    ProbeRegistration::Failed(msg)
-                }
-            }
-        } else {
-            debug!(
-                self.app_state.log,
-                "DTrace USDT probes compiled out, not registering"
-            );
-            ProbeRegistration::Disabled
-        };
-
-        HttpServer {
-            probe_registration,
-            app_state: self.app_state,
-            local_addr: self.local_addr,
-            join_handle: Some(join_handle),
-            close_channel: Some(tx),
-        }
+        tokio::spawn(async { graceful.await })
     }
 
-    pub fn new(
+    fn new(
         config: &ConfigDropshot,
+        server_config: ServerConfig,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<InnerHttpsServerStarter<C>, GenericError> {
+    ) -> Result<
+        (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr),
+        GenericError,
+    > {
         let acceptor = {
             let certs = load_certs(&config.cert_file)?;
             let private_key = load_private_key(&config.key_file)?;
@@ -486,28 +473,16 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
 
         let app_state = Arc::new(DropshotState {
             private,
-            config: ServerConfig {
-                request_body_max_bytes: config.request_body_max_bytes,
-                page_max_nitems: NonZeroU32::new(10000).unwrap(),
-                page_default_nitems: NonZeroU32::new(100).unwrap(),
-            },
+            config: server_config,
             router: api.into_router(),
             log: logger,
             local_addr,
         });
 
-        for (path, method, _) in &app_state.router {
-            debug!(app_state.log, "registered endpoint";
-                "method" => &method,
-                "path" => &path
-            );
-        }
-
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
         let server = Server::builder(https_acceptor).serve(make_service);
-        info!(app_state.log, "listening");
 
-        Ok(InnerHttpsServerStarter { app_state, server, local_addr })
+        Ok((InnerHttpsServerStarter(server), app_state, local_addr))
     }
 }
 
