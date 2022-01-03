@@ -262,7 +262,10 @@ struct TlsConn {
 
 impl TlsConn {
     fn new(stream: TlsStream<TcpStream>, remote_addr: SocketAddr) -> TlsConn {
-        TlsConn { stream, remote_addr }
+        TlsConn {
+            stream,
+            remote_addr,
+        }
     }
 
     fn remote_addr(&self) -> SocketAddr {
@@ -777,7 +780,9 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
      * will be made available to the handler.
      */
     fn new(server: Arc<DropshotState<C>>) -> Self {
-        ServerConnectionHandler { server }
+        ServerConnectionHandler {
+            server,
+        }
     }
 }
 
@@ -837,7 +842,10 @@ impl<C: ServerContext> ServerRequestHandler<C> {
      * will be provided to the handler function.
      */
     fn new(server: Arc<DropshotState<C>>, remote_addr: SocketAddr) -> Self {
-        ServerRequestHandler { server, remote_addr }
+        ServerRequestHandler {
+            server,
+            remote_addr,
+        }
     }
 }
 
@@ -943,8 +951,9 @@ mod test {
         let mut api = ApiDescription::new();
         api.register(handler).unwrap();
 
-        let config_logging =
-            ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Warn };
+        let config_logging = ConfigLogging::StderrTerminal {
+            level: ConfigLoggingLevel::Warn,
+        };
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
@@ -952,7 +961,9 @@ mod test {
             .unwrap()
             .start();
 
-        (server, TestConfig { log_context })
+        (server, TestConfig {
+            log_context,
+        })
     }
 
     async fn single_client_request(addr: SocketAddr, log: &slog::Logger) {
