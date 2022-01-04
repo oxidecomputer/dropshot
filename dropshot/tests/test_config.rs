@@ -179,7 +179,7 @@ async fn test_config_bind_address_http() {
 
     /*
      * This helper constructs a GET HTTP request to
-     * https://$bind_ip_str:$port/, where $port is the argument to the
+     * http://$bind_ip_str:$port/, where $port is the argument to the
      * closure.
      */
     let cons_request = |port: u16| {
@@ -295,7 +295,7 @@ async fn test_config_bind_address_https() {
 
     /*
      * This helper constructs a GET HTTP request to
-     * http://$bind_ip_str:$port/, where $port is the argument to the
+     * https://$bind_ip_str:$port/, where $port is the argument to the
      * closure.
      */
     let cons_request = |port: u16| {

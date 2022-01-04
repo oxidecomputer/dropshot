@@ -359,11 +359,14 @@ impl HttpsAcceptor {
                                 // If TLS negotiation fails, log the cause but
                                 // don't forward it along. Yielding an error
                                 // from here will terminate the server.
+                                // These failures may be a fatal TLS alert
+                                // message, or a client disconnection during
+                                // negotiation, or other issues.
                                 // TODO: We may want to export a counter for
                                 // different error types, since this may contain
                                 // useful things like "your certificate is
                                 // invalid"
-                                info!(log, "tls accept err: {}", e);
+                                warn!(log, "tls accept err: {}", e);
                             },
                         }
                     },
@@ -380,6 +383,8 @@ impl HttpsAcceptor {
                                     // resource exhaustion. For now, handle
                                     // these by no longer accepting new
                                     // connections.
+                                    // TODO-robustness: Consider handling these
+                                    // more gracefully.
                                     _ => {
                                         yield Err(e);
                                         break;

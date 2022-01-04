@@ -86,6 +86,8 @@ tempfile = "3.2.0"
 
 [dev-dependencies.rustls]
 version = "0.20.2"
+# This is needed to use with_custom_certificate_verifier in tests
+# https://docs.rs/rustls/0.20.2/src/rustls/client/builder.rs.html#34-49
 features = [ "dangerous_configuration" ]
 
 [dev-dependencies.schemars]
