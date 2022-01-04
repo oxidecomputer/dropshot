@@ -200,6 +200,9 @@ struct InnerHttpServerStarter<C: ServerContext>(
     Server<AddrIncoming, ServerConnectionHandler<C>>,
 );
 
+type InnerHttpServerStarterNewReturn<C> =
+    (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
+
 impl<C: ServerContext> InnerHttpServerStarter<C> {
     /// Begins execution of the underlying Http server.
     fn start(
@@ -231,10 +234,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<
-        (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr),
-        hyper::Error,
-    > {
+    ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
 
@@ -446,6 +446,9 @@ impl TryFrom<&ConfigDropshot> for rustls::ServerConfig {
     }
 }
 
+type InnerHttpsServerStarterNewReturn<C> =
+    (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
+
 impl<C: ServerContext> InnerHttpsServerStarter<C> {
     /// Begins execution of the underlying Http server.
     fn start(
@@ -469,10 +472,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<
-        (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr),
-        GenericError,
-    > {
+    ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = TlsAcceptor::from(Arc::new(
             rustls::ServerConfig::try_from(config)?,
         ));
