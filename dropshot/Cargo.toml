@@ -84,6 +84,10 @@ pem = "1.0"
 rcgen = "0.8.14"
 tempfile = "3.2.0"
 
+[dev-dependencies.rustls]
+version = "0.20.2"
+features = [ "dangerous_configuration" ]
+
 [dev-dependencies.schemars]
 version = "0.8.8"
 features = [ "chrono", "uuid" ]

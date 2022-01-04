@@ -39,10 +39,9 @@ use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
-#[macro_use]
 extern crate slog;
 
-mod common;
+pub mod common;
 
 fn demo_api() -> ApiDescription<usize> {
     let mut api = ApiDescription::<usize>::new();
@@ -201,10 +200,7 @@ async fn test_demo2json() {
     let testctx = common::test_setup("demo2json", api);
 
     /* Test case: optional field */
-    let input = DemoJsonBody {
-        test1: "bar".to_string(),
-        test2: None,
-    };
+    let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
     let mut response = testctx
         .client_testctx
         .make_request(
@@ -220,10 +216,7 @@ async fn test_demo2json() {
     assert_eq!(json.test2, None);
 
     /* Test case: both fields populated */
-    let input = DemoJsonBody {
-        test1: "bar".to_string(),
-        test2: Some(15),
-    };
+    let input = DemoJsonBody { test1: "bar".to_string(), test2: Some(15) };
     let mut response = testctx
         .client_testctx
         .make_request(
@@ -295,10 +288,7 @@ async fn test_demo3json() {
     let testctx = common::test_setup("demo3json", api);
 
     /* Test case: everything filled in. */
-    let json_input = DemoJsonBody {
-        test1: "bart".to_string(),
-        test2: Some(0),
-    };
+    let json_input = DemoJsonBody { test1: "bart".to_string(), test2: Some(0) };
 
     let mut response = testctx
         .client_testctx
@@ -317,10 +307,7 @@ async fn test_demo3json() {
     assert_eq!(json.query.test2.unwrap(), 2);
 
     /* Test case: error parsing query */
-    let json_input = DemoJsonBody {
-        test1: "bart".to_string(),
-        test2: Some(0),
-    };
+    let json_input = DemoJsonBody { test1: "bart".to_string(), test2: Some(0) };
     let error = testctx
         .client_testctx
         .make_request(
@@ -681,10 +668,8 @@ async fn demo_handler_args_3(
     query: Query<DemoQueryArgs>,
     json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
-    let combined = DemoJsonAndQuery {
-        query: query.into_inner(),
-        json: json.into_inner(),
-    };
+    let combined =
+        DemoJsonAndQuery { query: query.into_inner(), json: json.into_inner() };
     http_echo(&combined)
 }
 
@@ -761,10 +746,7 @@ async fn demo_handler_untyped_body(
         None
     };
 
-    Ok(HttpResponseOk(DemoUntyped {
-        nbytes,
-        as_utf8,
-    }))
+    Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

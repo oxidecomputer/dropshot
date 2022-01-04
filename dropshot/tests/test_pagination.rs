@@ -54,7 +54,7 @@ extern crate slog;
 #[macro_use]
 extern crate lazy_static;
 
-mod common;
+pub mod common;
 
 /*
  * Common helpers
@@ -156,9 +156,7 @@ struct IntegersPageSelector {
 }
 
 fn page_selector_for(n: &u16, _p: &EmptyScanParams) -> IntegersPageSelector {
-    IntegersPageSelector {
-        last_seen: *n,
-    }
+    IntegersPageSelector { last_seen: *n }
 }
 
 /**
@@ -206,9 +204,7 @@ async fn api_integers(
 
     let start = match &pag_params.page {
         WhichPage::First(..) => 0,
-        WhichPage::Next(IntegersPageSelector {
-            last_seen,
-        }) => *last_seen,
+        WhichPage::Next(IntegersPageSelector { last_seen }) => *last_seen,
     };
 
     Ok(HttpResponseOk(ResultsPage::new(
@@ -471,9 +467,7 @@ async fn api_with_extra_params(
 
     let start = match &pag_params.page {
         WhichPage::First(..) => 0,
-        WhichPage::Next(IntegersPageSelector {
-            last_seen,
-        }) => *last_seen,
+        WhichPage::Next(IntegersPageSelector { last_seen }) => *last_seen,
     };
 
     Ok(HttpResponseOk(ExtraResultsPage {
@@ -565,9 +559,7 @@ async fn api_with_required_params(
     let limit = rqctx.page_limit(&pag_params)?.get() as u16;
 
     let start = match &pag_params.page {
-        WhichPage::First(ReqScanParams {
-            doit,
-        }) => {
+        WhichPage::First(ReqScanParams { doit }) => {
             if !doit {
                 return Err(HttpError::for_bad_request(
                     None,
@@ -577,9 +569,7 @@ async fn api_with_required_params(
 
             0
         }
-        WhichPage::Next(IntegersPageSelector {
-            last_seen,
-        }) => *last_seen,
+        WhichPage::Next(IntegersPageSelector { last_seen }) => *last_seen,
     };
 
     Ok(HttpResponseOk(ResultsPage::new(
@@ -685,10 +675,9 @@ async fn api_dictionary(
 
     let (bound, scan_params) = match &pag_params.page {
         WhichPage::First(scan) => (Bound::Unbounded, scan),
-        WhichPage::Next(DictionaryPageSelector {
-            scan,
-            last_seen,
-        }) => (Bound::Excluded(last_seen), scan),
+        WhichPage::Next(DictionaryPageSelector { scan, last_seen }) => {
+            (Bound::Excluded(last_seen), scan)
+        }
     };
 
     let (range_bounds, reverse) = match scan_params.order {
@@ -701,10 +690,7 @@ async fn api_dictionary(
         if reverse { Box::new(iter) } else { Box::new(iter.rev()) };
     let iter = iter.filter_map(|word| {
         if word.len() >= scan_params.min_length {
-            Some(DictionaryWord {
-                word: word.to_string(),
-                length: word.len(),
-            })
+            Some(DictionaryWord { word: word.to_string(), length: word.len() })
         } else {
             None
         }
@@ -779,11 +765,10 @@ async fn test_paginate_dictionary() {
     .await;
     let found_words =
         page.items.iter().map(|dw| dw.word.as_str()).collect::<Vec<&str>>();
-    assert_eq!(found_words, vec![
-        "Addressograph",
-        "Aristotelean",
-        "Aristotelian",
-    ]);
+    assert_eq!(
+        found_words,
+        vec!["Addressograph", "Aristotelean", "Aristotelian",]
+    );
     let token = page.next_page.unwrap();
     let page = objects_list_page::<DictionaryWord>(
         &client,
@@ -792,11 +777,10 @@ async fn test_paginate_dictionary() {
     .await;
     let found_words =
         page.items.iter().map(|dw| dw.word.as_str()).collect::<Vec<&str>>();
-    assert_eq!(found_words, vec![
-        "Bhagavadgita",
-        "Brontosaurus",
-        "Cantabrigian",
-    ]);
+    assert_eq!(
+        found_words,
+        vec!["Bhagavadgita", "Brontosaurus", "Cantabrigian",]
+    );
 
     /*
      * Let's page through the filtered collection one item at a time.  This is
@@ -883,11 +867,14 @@ impl Drop for ExampleContext {
  * process and a ClientTestContext for making requests against that server.
  */
 async fn start_example(path: &str, port: u16) -> ExampleContext {
-    let logctx = LogContext::new(path, &ConfigLogging::File {
-        level: ConfigLoggingLevel::Info,
-        path: "UNUSED".to_string(),
-        if_exists: ConfigLoggingIfExists::Fail,
-    });
+    let logctx = LogContext::new(
+        path,
+        &ConfigLogging::File {
+            level: ConfigLoggingLevel::Info,
+            path: "UNUSED".to_string(),
+            if_exists: ConfigLoggingIfExists::Fail,
+        },
+    );
 
     let log = logctx.log.new(o!());
     let cmd_path = {
@@ -921,11 +908,7 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
     let client = ClientTestContext::new(server_addr, logctx.log.new(o!()));
     let url = client.url("/");
     let raw_client = Client::new();
-    let rv = ExampleContext {
-        child,
-        client,
-        logctx: Some(logctx),
-    };
+    let rv = ExampleContext { child, client, logctx: Some(logctx) };
 
     while start.elapsed().as_secs() < 10 {
         trace!(&log, "making test request to see if the server is up");

@@ -9,7 +9,7 @@ use dropshot::HttpServerStarter;
 use slog::Logger;
 use std::fs;
 
-mod common;
+pub mod common;
 
 /*
  * Bad values for "bind_address"
@@ -179,7 +179,7 @@ async fn test_config_bind_address_http() {
 
     /*
      * This helper constructs a GET HTTP request to
-     * http://$bind_ip_str:$port/, where $port is the argument to the
+     * https://$bind_ip_str:$port/, where $port is the argument to the
      * closure.
      */
     let cons_request = |port: u16| {
@@ -265,15 +265,13 @@ async fn test_config_bind_address_https() {
     let log = log_config.to_logger("test_config_bind_address_https").unwrap();
 
     // Generate key for the server
-    let (cert, key) = common::generate_tls_key();
-    let (cert_file, key_file) = common::tls_key_to_file(&cert, &key);
+    let (certs, key) = common::generate_tls_key();
+    let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
     let make_client = || {
         // Configure TLS to trust the self-signed cert
-        let mut root_store = rustls::RootCertStore {
-            roots: vec![],
-        };
-        root_store.add(&cert).expect("adding root cert");
+        let mut root_store = rustls::RootCertStore { roots: vec![] };
+        root_store.add(&certs[certs.len() - 1]).expect("adding root cert");
 
         let tls_config = rustls::ClientConfig::builder()
             .with_safe_defaults()

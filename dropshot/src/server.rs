@@ -26,6 +26,7 @@ use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use rustls;
+use std::convert::TryFrom;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
@@ -262,10 +263,7 @@ struct TlsConn {
 
 impl TlsConn {
     fn new(stream: TlsStream<TcpStream>, remote_addr: SocketAddr) -> TlsConn {
-        TlsConn {
-            stream,
-            remote_addr,
-        }
+        TlsConn { stream, remote_addr }
     }
 
     fn remote_addr(&self) -> SocketAddr {
@@ -416,6 +414,30 @@ struct InnerHttpsServerStarter<C: ServerContext>(
     Server<HttpsAcceptor, ServerConnectionHandler<C>>,
 );
 
+/// Create a TLS configuration from the Dropshot config structure.
+// Eventually we may want to change the APIs to allow users to pass
+// a rustls::ServerConfig themselves
+impl TryFrom<&ConfigDropshot> for rustls::ServerConfig {
+    type Error = std::io::Error;
+
+    fn try_from(config: &ConfigDropshot) -> std::io::Result<Self> {
+        let certs = load_certs(&config.cert_file)?;
+        let private_key = load_private_key(&config.key_file)?;
+        let mut cfg = rustls::ServerConfig::builder()
+            // TODO: We may want to expose protocol configuration in our
+            // config
+            .with_safe_default_cipher_suites()
+            .with_safe_default_kx_groups()
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_client_cert_verifier(rustls::server::NoClientAuth::new())
+            .with_single_cert(certs, private_key)
+            .expect("bad certificate/key");
+        cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        Ok(cfg)
+    }
+}
+
 impl<C: ServerContext> InnerHttpsServerStarter<C> {
     /// Begins execution of the underlying Http server.
     fn start(
@@ -443,22 +465,9 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr),
         GenericError,
     > {
-        let acceptor = {
-            let certs = load_certs(&config.cert_file)?;
-            let private_key = load_private_key(&config.key_file)?;
-            let mut cfg = rustls::ServerConfig::builder()
-                // TODO: We may want to expose protocol configuration in our
-                // config
-                .with_safe_default_cipher_suites()
-                .with_safe_default_kx_groups()
-                .with_safe_default_protocol_versions()
-                .unwrap()
-                .with_client_cert_verifier(rustls::server::NoClientAuth::new())
-                .with_single_cert(certs, private_key)
-                .expect("bad certificate/key");
-            cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-            TlsAcceptor::from(Arc::new(cfg))
-        };
+        let acceptor = TlsAcceptor::from(Arc::new(
+            rustls::ServerConfig::try_from(config)?,
+        ));
 
         let tcp = {
             let listener = std::net::TcpListener::bind(&config.bind_address)?;
@@ -780,9 +789,7 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
      * will be made available to the handler.
      */
     fn new(server: Arc<DropshotState<C>>) -> Self {
-        ServerConnectionHandler {
-            server,
-        }
+        ServerConnectionHandler { server }
     }
 }
 
@@ -842,10 +849,7 @@ impl<C: ServerContext> ServerRequestHandler<C> {
      * will be provided to the handler function.
      */
     fn new(server: Arc<DropshotState<C>>, remote_addr: SocketAddr) -> Self {
-        ServerRequestHandler {
-            server,
-            remote_addr,
-        }
+        ServerRequestHandler { server, remote_addr }
     }
 }
 
@@ -951,9 +955,8 @@ mod test {
         let mut api = ApiDescription::new();
         api.register(handler).unwrap();
 
-        let config_logging = ConfigLogging::StderrTerminal {
-            level: ConfigLoggingLevel::Warn,
-        };
+        let config_logging =
+            ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Warn };
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
@@ -961,9 +964,7 @@ mod test {
             .unwrap()
             .start();
 
-        (server, TestConfig {
-            log_context,
-        })
+        (server, TestConfig { log_context })
     }
 
     async fn single_client_request(addr: SocketAddr, log: &slog::Logger) {
