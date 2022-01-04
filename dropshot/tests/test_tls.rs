@@ -204,3 +204,78 @@ async fn test_tls_only() {
 
     server.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_tls_aborted_negotiation() {
+    let log = create_log("test_tls_aborted_negotiation");
+
+    // Generate key for the server
+    let (certs, key) = common::generate_tls_key();
+    let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
+
+    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let port = server.local_addr().port();
+
+    let uri: hyper::Uri =
+        format!("https://localhost:{}/", port).parse().unwrap();
+
+    // Make the client abort connections in interesting ways
+    let errors = [
+        // We don't send InappropriateMessage and InappropriateHandshakeMessage
+        // since it triggers a debug_assert on the client side, as it's not an
+        // expected error to be returned from the verifier.
+        rustls::Error::CorruptMessage,
+        rustls::Error::CorruptMessagePayload(
+            rustls::internal::msgs::enums::ContentType::Handshake,
+        ),
+        rustls::Error::NoCertificatesPresented,
+        rustls::Error::UnsupportedNameType,
+        rustls::Error::DecryptError,
+        rustls::Error::EncryptError,
+        rustls::Error::PeerIncompatibleError(
+            "test_tls_aborted_negotiation".to_string(),
+        ),
+        rustls::Error::PeerMisbehavedError(
+            "test_tls_aborted_negotiation".to_string(),
+        ),
+        rustls::Error::InvalidCertificateEncoding,
+        rustls::Error::InvalidCertificateSignatureType,
+        rustls::Error::InvalidCertificateSignature,
+        rustls::Error::InvalidCertificateData(
+            "test_tls_aborted_negotiation".to_string(),
+        ),
+        rustls::Error::General("test_tls_aborted_negotiation".to_string()),
+        rustls::Error::HandshakeNotComplete,
+        rustls::Error::PeerSentOversizedRecord,
+        rustls::Error::NoApplicationProtocol,
+    ];
+    for error in errors {
+        let verifier_called = Arc::new(AtomicUsize::new(0));
+        let verifier_called_clone = verifier_called.clone();
+        let cert_verifier = move |_end_entity: &rustls::Certificate,
+                                  _intermediates: &[rustls::Certificate],
+                                  _server_name: &rustls::ServerName,
+                                  _scts: &mut dyn Iterator<Item = &[u8]>,
+                                  _ocsp_response: &[u8],
+                                  _now: SystemTime|
+              -> Result<
+            rustls::client::ServerCertVerified,
+            rustls::Error,
+        > {
+            // Tracking to ensure this method was invoked
+            verifier_called_clone.fetch_add(1, Ordering::SeqCst);
+
+            Err(error.clone())
+        };
+        let client =
+            make_https_client(CertificateVerifier(Box::new(cert_verifier)));
+        client.get(uri.clone()).await.unwrap_err();
+        assert_eq!(verifier_called.load(Ordering::SeqCst), 1);
+    }
+
+    // Send a valid request and make sure it still works
+    let client = make_https_client(make_pki_verifier(&certs));
+    client.get(uri.clone()).await.unwrap();
+
+    server.close().await.unwrap();
+}
