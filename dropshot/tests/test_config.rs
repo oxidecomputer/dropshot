@@ -5,11 +5,13 @@
 
 use dropshot::test_util::read_config;
 use dropshot::ConfigDropshot;
-use dropshot::HttpServerStarter;
+use dropshot::{HttpServer, HttpServerStarter};
+use slog::o;
 use slog::Logger;
-use std::fs;
+use tempfile::NamedTempFile;
 
 pub mod common;
+use common::create_log_context;
 
 /*
  * Bad values for "bind_address"
@@ -157,51 +159,34 @@ fn make_config(
     read_config::<ConfigDropshot>("bind_address", &config_text).unwrap()
 }
 
-#[tokio::test]
-async fn test_config_bind_address_http() {
-    let log_path =
-        dropshot::test_util::log_file_for_test("config_bind_address_http")
-            .as_path()
-            .display()
-            .to_string();
-    eprintln!("log file: {}", log_path);
+// Trait for abstracting out test case specific properties from the common bind
+// test logic
+trait TestConfigBindServer<C>
+where
+    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+{
+    fn make_client(&self) -> hyper::Client<C>;
+    fn make_server(&self, bind_port: u16) -> HttpServer<i32>;
+    fn make_uri(&self, bind_port: u16) -> hyper::Uri;
 
-    let log_config = dropshot::ConfigLogging::File {
-        level: dropshot::ConfigLoggingLevel::Debug,
-        path: log_path.clone(),
-        if_exists: dropshot::ConfigLoggingIfExists::Append,
-    };
-    let log = log_config.to_logger("test_config_bind_address_http").unwrap();
+    fn log(&self) -> &slog::Logger;
+}
 
-    let client = hyper::Client::new();
-    let bind_ip_str = "127.0.0.1";
-    let bind_port = 12215;
-
-    /*
-     * This helper constructs a GET HTTP request to
-     * http://$bind_ip_str:$port/, where $port is the argument to the
-     * closure.
-     */
-    let cons_request = |port: u16| {
-        let uri = hyper::Uri::builder()
-            .scheme("http")
-            .authority(format!("{}:{}", bind_ip_str, port).as_str())
-            .path_and_query("/")
-            .build()
-            .unwrap();
-        hyper::Request::builder()
-            .method(http::method::Method::GET)
-            .uri(&uri)
-            .body(hyper::Body::empty())
-            .unwrap()
-    };
+// Validate that we can create a server with the given configuration and that
+// it binds to ports as expected.
+async fn test_config_bind_server<C, T>(test_config: T, bind_port: u16)
+where
+    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+    T: TestConfigBindServer<C>,
+{
+    let client = test_config.make_client();
 
     /*
      * Make sure there is not currently a server running on our expected
      * port so that when we subsequently create a server and run it we know
      * we're getting the one we configured.
      */
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
+    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
 
     /*
@@ -211,10 +196,8 @@ async fn test_config_bind_address_http() {
      * don't want to depend on too much from the ApiServer here -- but we
      * should have successfully made the request.)
      */
-    let tls = None;
-    let config = make_config(bind_ip_str, bind_port, tls);
-    let server = make_server(&config, &log).start();
-    client.request(cons_request(bind_port)).await.unwrap();
+    let server = test_config.make_server(bind_port);
+    client.get(test_config.make_uri(bind_port)).await.unwrap();
     server.close().await.unwrap();
 
     /*
@@ -225,144 +208,142 @@ async fn test_config_bind_address_http() {
      * stack return with ECONNRESET, which gets in the way of what we're trying
      * to test here.)
      */
-    let client = hyper::Client::new();
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
+    let client = test_config.make_client();
+    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
 
     /*
      * Start a server on another TCP port and make sure we can reach that
      * one (and NOT the one we just shut down).
      */
-    let config = make_config(bind_ip_str, bind_port + 1, tls);
-    let server = make_server(&config, &log).start();
-    client.request(cons_request(bind_port + 1)).await.unwrap();
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
+    let server = test_config.make_server(bind_port + 1);
+    client.get(test_config.make_uri(bind_port + 1)).await.unwrap();
+    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
     server.close().await.unwrap();
 
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
+    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
-    let error = client.request(cons_request(bind_port + 1)).await.unwrap_err();
+    let error =
+        client.get(test_config.make_uri(bind_port + 1)).await.unwrap_err();
     assert!(error.is_connect());
+}
 
-    fs::remove_file(log_path).unwrap();
+#[tokio::test]
+async fn test_config_bind_address_http() {
+    let logctx = create_log_context("config_bind_address_http");
+    let log = logctx.log.new(o!());
+
+    struct ConfigBindServerHttp {
+        log: slog::Logger,
+    }
+    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+        for ConfigBindServerHttp
+    {
+        fn make_client(
+            &self,
+        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
+            hyper::Client::new()
+        }
+
+        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
+            format!("http://localhost:{}/", bind_port).parse().unwrap()
+        }
+        fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
+            let tls = None;
+            let config = make_config("127.0.0.1", bind_port, tls);
+            make_server(&config, &self.log).start()
+        }
+
+        fn log(&self) -> &slog::Logger {
+            &self.log
+        }
+    }
+
+    let test_config = ConfigBindServerHttp {
+        log,
+    };
+    let bind_port = 12215;
+    test_config_bind_server::<_, ConfigBindServerHttp>(test_config, bind_port)
+        .await;
+
+    logctx.cleanup_successful();
 }
 
 #[tokio::test]
 async fn test_config_bind_address_https() {
-    let log_path =
-        dropshot::test_util::log_file_for_test("config_bind_address_https")
-            .as_path()
-            .display()
-            .to_string();
-    eprintln!("log file: {}", log_path);
+    struct ConfigBindServerHttps {
+        log: slog::Logger,
+        certs: Vec<rustls::Certificate>,
+        cert_file: NamedTempFile,
+        key_file: NamedTempFile,
+    }
 
-    let log_config = dropshot::ConfigLogging::File {
-        level: dropshot::ConfigLoggingLevel::Debug,
-        path: log_path.clone(),
-        if_exists: dropshot::ConfigLoggingIfExists::Append,
-    };
-    let log = log_config.to_logger("test_config_bind_address_https").unwrap();
+    impl
+        TestConfigBindServer<
+            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        > for ConfigBindServerHttps
+    {
+        fn make_client(
+            &self,
+        ) -> hyper::Client<
+            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        > {
+            // Configure TLS to trust the self-signed cert
+            let mut root_store = rustls::RootCertStore {
+                roots: vec![],
+            };
+            root_store
+                .add(&self.certs[self.certs.len() - 1])
+                .expect("adding root cert");
+
+            let tls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
+            let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+                .with_tls_config(tls_config)
+                .https_only()
+                .enable_http1()
+                .build();
+            hyper::Client::builder().build(https_connector)
+        }
+
+        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
+            format!("https://localhost:{}/", bind_port).parse().unwrap()
+        }
+
+        fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
+            let tls = Some(TlsConfig {
+                cert_file: self.cert_file.path().to_str().unwrap(),
+                key_file: self.key_file.path().to_str().unwrap(),
+            });
+            let config = make_config("127.0.0.1", bind_port, tls);
+            make_server(&config, &self.log).start()
+        }
+
+        fn log(&self) -> &Logger {
+            &self.log
+        }
+    }
+
+    let logctx = create_log_context("config_bind_address_https");
+    let log = logctx.log.new(o!());
 
     // Generate key for the server
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
-
-    let make_client = || {
-        // Configure TLS to trust the self-signed cert
-        let mut root_store = rustls::RootCertStore {
-            roots: vec![],
-        };
-        root_store.add(&certs[certs.len() - 1]).expect("adding root cert");
-
-        let tls_config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(tls_config)
-            .https_only()
-            .enable_http1()
-            .build();
-        hyper::Client::builder().build(https_connector)
+    let test_config = ConfigBindServerHttps {
+        log,
+        certs,
+        cert_file,
+        key_file,
     };
 
-    let client = make_client();
-    let hostname = "localhost";
-    let bind_ip_str = "127.0.0.1";
     /* This must be different than the bind_port used in the http test. */
     let bind_port = 12217;
+    test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
+        .await;
 
-    /*
-     * This helper constructs a GET HTTP request to
-     * https://$bind_ip_str:$port/, where $port is the argument to the
-     * closure.
-     */
-    let cons_request = |port: u16| {
-        let uri = hyper::Uri::builder()
-            .scheme("https")
-            .authority(format!("{}:{}", hostname, port).as_str())
-            .path_and_query("/")
-            .build()
-            .unwrap();
-        hyper::Request::builder()
-            .method(http::method::Method::GET)
-            .uri(&uri)
-            .body(hyper::Body::empty())
-            .unwrap()
-    };
-
-    /*
-     * Make sure there is not currently a server running on our expected
-     * port so that when we subsequently create a server and run it we know
-     * we're getting the one we configured.
-     */
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    /*
-     * Now start a server with our configuration and make the request again.
-     * This should succeed in terms of making the request.  (The request
-     * itself might fail with a 400-level or 500-level response code -- we
-     * don't want to depend on too much from the ApiServer here -- but we
-     * should have successfully made the request.)
-     */
-    let tls = Some(TlsConfig {
-        cert_file: cert_file.path().to_str().unwrap(),
-        key_file: key_file.path().to_str().unwrap(),
-    });
-    let config = make_config(bind_ip_str, bind_port, tls);
-    let server = make_server(&config, &log).start();
-    client.request(cons_request(bind_port)).await.unwrap();
-    server.close().await.unwrap();
-
-    /*
-     * Make another request to make sure it fails now that we've shut down
-     * the server.  We need a new client to make sure our client-side connection
-     * starts from a clean slate.  (Otherwise, a race during shutdown could
-     * cause us to successfully send a request packet, only to have the TCP
-     * stack return with ECONNRESET, which gets in the way of what we're trying
-     * to test here.)
-     */
-    let client = make_client();
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    /*
-     * Start a server on another TCP port and make sure we can reach that
-     * one (and NOT the one we just shut down).
-     */
-    let config = make_config(bind_ip_str, bind_port + 1, tls);
-    let server = make_server(&config, &log).start();
-    client.request(cons_request(bind_port + 1)).await.unwrap();
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-    server.close().await.unwrap();
-
-    let error = client.request(cons_request(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-    let error = client.request(cons_request(bind_port + 1)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    fs::remove_file(log_path).unwrap();
+    logctx.cleanup_successful();
 }

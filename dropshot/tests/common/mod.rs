@@ -29,15 +29,18 @@ pub fn test_setup(
      */
     let config_dropshot: ConfigDropshot = Default::default();
 
-    let config_logging = ConfigLogging::File {
-        level: ConfigLoggingLevel::Debug,
-        path: "UNUSED".to_string(),
-        if_exists: ConfigLoggingIfExists::Fail,
-    };
-
-    let logctx = LogContext::new(test_name, &config_logging);
+    let logctx = create_log_context(test_name);
     let log = logctx.log.new(o!());
     TestContext::new(api, 0 as usize, &config_dropshot, Some(logctx), log)
+}
+
+pub fn create_log_context(test_name: &str) -> LogContext {
+    let log_config = ConfigLogging::File {
+        level: ConfigLoggingLevel::Debug,
+        path: "UNUSED".to_string(),
+        if_exists: ConfigLoggingIfExists::Append,
+    };
+    LogContext::new(test_name, &log_config)
 }
 
 /// Generate a TLS key and a certificate chain containing a certificate for

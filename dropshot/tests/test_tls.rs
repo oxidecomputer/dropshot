@@ -6,6 +6,7 @@
 
 use dropshot::ConfigDropshot;
 use dropshot::HttpServerStarter;
+use slog::o;
 use slog::Logger;
 use std::convert::TryFrom;
 use std::path::Path;
@@ -14,22 +15,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 pub mod common;
-
-fn create_log(test_name: &str) -> slog::Logger {
-    let log_path = dropshot::test_util::log_file_for_test(test_name)
-        .as_path()
-        .display()
-        .to_string();
-    eprintln!("log file: {}", log_path);
-
-    let log_config = dropshot::ConfigLogging::File {
-        level: dropshot::ConfigLoggingLevel::Debug,
-        path: log_path.clone(),
-        if_exists: dropshot::ConfigLoggingIfExists::Append,
-    };
-
-    log_config.to_logger(test_name).unwrap()
-}
+use common::create_log_context;
 
 /// See rustls::client::ServerCertVerifier::verify_server_cert for argument
 /// meanings
@@ -109,7 +95,8 @@ fn make_pki_verifier(
 
 #[tokio::test]
 async fn test_tls_certificate_loading() {
-    let log = create_log("test_tls_certificate_loading");
+    let logctx = create_log_context("test_tls_certificate_loading");
+    let log = logctx.log.new(o!());
 
     // Generate key for the server
     let (certs, key) = common::generate_tls_key();
@@ -156,11 +143,14 @@ async fn test_tls_certificate_loading() {
     assert_eq!(verifier_called.load(Ordering::SeqCst), 1);
 
     server.close().await.unwrap();
+
+    logctx.cleanup_successful();
 }
 
 #[tokio::test]
 async fn test_tls_only() {
-    let log = create_log("test_tls_only");
+    let logctx = create_log_context("test_tls_only");
+    let log = logctx.log.new(o!());
 
     // Generate key for the server
     let (certs, key) = common::generate_tls_key();
@@ -203,11 +193,14 @@ async fn test_tls_only() {
     https_client.request(https_request).await.unwrap();
 
     server.close().await.unwrap();
+
+    logctx.cleanup_successful();
 }
 
 #[tokio::test]
 async fn test_tls_aborted_negotiation() {
-    let log = create_log("test_tls_aborted_negotiation");
+    let logctx = create_log_context("test_tls_aborted_negotiation");
+    let log = logctx.log.new(o!());
 
     // Generate key for the server
     let (certs, key) = common::generate_tls_key();
@@ -278,4 +271,6 @@ async fn test_tls_aborted_negotiation() {
     client.get(uri.clone()).await.unwrap();
 
     server.close().await.unwrap();
+
+    logctx.cleanup_successful();
 }
