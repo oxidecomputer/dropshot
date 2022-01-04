@@ -270,7 +270,9 @@ async fn test_config_bind_address_https() {
 
     let make_client = || {
         // Configure TLS to trust the self-signed cert
-        let mut root_store = rustls::RootCertStore { roots: vec![] };
+        let mut root_store = rustls::RootCertStore {
+            roots: vec![],
+        };
         root_store.add(&certs[certs.len() - 1]).expect("adding root cert");
 
         let tls_config = rustls::ClientConfig::builder()
