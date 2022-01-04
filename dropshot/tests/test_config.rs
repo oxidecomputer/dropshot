@@ -152,7 +152,7 @@ fn make_config(
     );
     if https {
         config_text = format!(
-            "{}\nhttps = {}\ncert_file = \"{}\"\nkey_file = \"{}\"",
+            "{}\nhttps = {}\ncert_file = '{}'\nkey_file = '{}'",
             config_text, https, cert_file, key_file
         );
     }
