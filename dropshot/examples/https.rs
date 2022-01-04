@@ -35,13 +35,19 @@ fn generate_keys() -> Result<(NamedTempFile, NamedTempFile), String> {
     let cert = keypair.serialize_pem().map_err(|e| e.to_string())?;
     let priv_key = keypair.serialize_private_key_pem();
 
+    let make_temp = || {
+        tempfile::Builder::new()
+            .prefix("dropshot-https-example-")
+            .rand_bytes(5)
+            .tempfile()
+    };
+
     let mut cert_file =
-        NamedTempFile::new().map_err(|_| "failed to create cert_file")?;
+        make_temp().map_err(|_| "failed to create cert_file")?;
     cert_file
         .write(cert.as_bytes())
         .map_err(|_| "failed to write cert_file")?;
-    let mut key_file =
-        NamedTempFile::new().map_err(|_| "failed to create key_file")?;
+    let mut key_file = make_temp().map_err(|_| "failed to create key_file")?;
     key_file
         .write(priv_key.as_bytes())
         .map_err(|_| "failed to write key_file")?;

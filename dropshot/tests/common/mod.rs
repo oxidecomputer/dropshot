@@ -79,13 +79,16 @@ pub fn generate_tls_key() -> (Vec<rustls::Certificate>, rustls::PrivateKey) {
     (vec![end_cert, intermediate_cert, root_cert], key)
 }
 
+fn make_temp_file() -> std::io::Result<NamedTempFile> {
+    tempfile::Builder::new().prefix("dropshot-test-").rand_bytes(5).tempfile()
+}
+
 /// Write keys to a temporary file for passing to the server config
 pub fn tls_key_to_file(
     certs: &Vec<rustls::Certificate>,
     key: &rustls::PrivateKey,
 ) -> (NamedTempFile, NamedTempFile) {
-    let mut cert_file =
-        NamedTempFile::new().expect("failed to create cert_file");
+    let mut cert_file = make_temp_file().expect("failed to create cert_file");
     for cert in certs {
         let encoded_cert = pem::encode(&pem::Pem {
             tag: "CERTIFICATE".to_string(),
@@ -96,7 +99,7 @@ pub fn tls_key_to_file(
             .expect("failed to write cert_file");
     }
 
-    let mut key_file = NamedTempFile::new().expect("failed to create key_file");
+    let mut key_file = make_temp_file().expect("failed to create key_file");
     let encoded_key = pem::encode(&pem::Pem {
         tag: "PRIVATE KEY".to_string(),
         contents: key.0.clone(),
