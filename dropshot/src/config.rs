@@ -32,6 +32,11 @@ use std::path::PathBuf;
  *             [http_api_server]
  *             bind_address = "127.0.0.1:12345"
  *             request_body_max_bytes = 1024
+ *             ## Optional, to enable TLS
+ *             [http_api_server.tls]
+ *             cert_file = "/path/to/certs.pem"
+ *             key_file = "/path/to/key.pem"
+ *
  *
  *             ## ... (other app-specific config)
  *         "##
@@ -51,10 +56,12 @@ pub struct ConfigDropshot {
     /** maximum allowed size of a request body, defaults to 1024 */
     pub request_body_max_bytes: usize,
 
-    // TLS settings
-    /** Whether to use HTTPS. For now, this defaults to false, but we
-     * should think about making it default to true in the future. */
-    pub https: bool,
+    /** If present, enables TLS with the given configuration */
+    pub tls: Option<ConfigTls>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ConfigTls {
     /** Path to a PEM file containing a certificate chain for the
      *  server to identify itself with. The first certificate is the
      *  end-entity certificate, and the remaining are intermediate
@@ -76,9 +83,7 @@ impl Default for ConfigDropshot {
         ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
             request_body_max_bytes: 1024,
-            https: false,
-            cert_file: PathBuf::new(),
-            key_file: PathBuf::new(),
+            tls: None,
         }
     }
 }

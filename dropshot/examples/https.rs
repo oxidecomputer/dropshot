@@ -9,6 +9,7 @@ use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
+use dropshot::ConfigTls;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpResponseUpdatedNoContent;
@@ -71,9 +72,10 @@ async fn main() -> Result<(), String> {
      * In addition, we'll make this an HTTPS server.
      */
     let config_dropshot = ConfigDropshot {
-        https: true,
-        cert_file: cert_file.path().to_path_buf(),
-        key_file: key_file.path().to_path_buf(),
+        tls: Some(ConfigTls {
+            cert_file: cert_file.path().to_path_buf(),
+            key_file: key_file.path().to_path_buf(),
+        }),
         ..Default::default()
     };
 

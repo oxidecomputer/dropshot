@@ -4,7 +4,7 @@
  */
 
 use dropshot::test_util::read_config;
-use dropshot::ConfigDropshot;
+use dropshot::{ConfigDropshot, ConfigTls};
 use dropshot::{HttpServer, HttpServerStarter};
 use slog::o;
 use slog::Logger;
@@ -88,10 +88,12 @@ fn test_config_bad_request_body_max_bytes_too_large() {
 
 #[test]
 fn test_config_bad_key_file_garbage() {
-    let error =
-        read_config::<ConfigDropshot>("bad_key_file_garbage", "key_file = 23")
-            .unwrap_err()
-            .to_string();
+    let error = read_config::<ConfigDropshot>(
+        "bad_key_file_garbage",
+        "[tls]\ncert_file = ''\nkey_file = 23",
+    )
+    .unwrap_err()
+    .to_string();
     assert!(error.starts_with("invalid type: integer"));
 }
 
@@ -103,7 +105,7 @@ fn test_config_bad_key_file_garbage() {
 fn test_config_bad_cert_file_garbage() {
     let error = read_config::<ConfigDropshot>(
         "bad_cert_file_garbage",
-        "cert_file = 23",
+        "[tls]\ncert_file = 23\nkey_file=''",
     )
     .unwrap_err()
     .to_string();
@@ -111,16 +113,34 @@ fn test_config_bad_cert_file_garbage() {
 }
 
 /*
- * Bad values for "https"
+ * Bad values for "tls"
  */
 
 #[test]
-fn test_config_bad_https_garbage() {
-    let error =
-        read_config::<ConfigDropshot>("bad_https_garbage", "https = 23")
-            .unwrap_err()
-            .to_string();
+fn test_config_bad_tls_garbage() {
+    let error = read_config::<ConfigDropshot>("bad_tls_garbage", "tls = 23")
+        .unwrap_err()
+        .to_string();
     assert!(error.starts_with("invalid type: integer"));
+}
+
+#[test]
+fn test_config_bad_tls_incomplete() {
+    let error = read_config::<ConfigDropshot>(
+        "bad_tls_incomplete",
+        "[tls]\ncert_file = ''",
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.starts_with("missing field `key_file`"));
+
+    let error = read_config::<ConfigDropshot>(
+        "bad_tls_incomplete",
+        "[tls]\nkey_file = ''",
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.starts_with("missing field `cert_file`"));
 }
 
 fn make_server(
@@ -131,29 +151,21 @@ fn make_server(
         .unwrap()
 }
 
-#[derive(Clone, Copy)]
-struct TlsConfig<'a> {
-    pub cert_file: &'a str,
-    pub key_file: &'a str,
-}
-
 fn make_config(
     bind_ip_str: &str,
     bind_port: u16,
-    tls: Option<TlsConfig>,
+    tls: Option<ConfigTls>,
 ) -> ConfigDropshot {
-    let (https, cert_file, key_file) = match tls {
-        Some(config) => (true, config.cert_file, config.key_file),
-        None => (false, "", ""),
-    };
     let mut config_text = format!(
         "bind_address = \"{}:{}\"\nrequest_body_max_bytes = 1024",
         bind_ip_str, bind_port,
     );
-    if https {
+    if let Some(tls) = tls {
         config_text = format!(
-            "{}\nhttps = {}\ncert_file = '{}'\nkey_file = '{}'",
-            config_text, https, cert_file, key_file
+            "{}\n[tls]\ncert_file = '{}'\nkey_file = '{}'",
+            config_text,
+            tls.cert_file.to_str().unwrap(),
+            tls.key_file.to_str().unwrap(),
         );
     }
     read_config::<ConfigDropshot>("bind_address", &config_text).unwrap()
@@ -314,9 +326,9 @@ async fn test_config_bind_address_https() {
         }
 
         fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
-            let tls = Some(TlsConfig {
-                cert_file: self.cert_file.path().to_str().unwrap(),
-                key_file: self.key_file.path().to_str().unwrap(),
+            let tls = Some(ConfigTls {
+                cert_file: self.cert_file.path().to_path_buf(),
+                key_file: self.key_file.path().to_path_buf(),
             });
             let config = make_config("127.0.0.1", bind_port, tls);
             make_server(&config, &self.log).start()

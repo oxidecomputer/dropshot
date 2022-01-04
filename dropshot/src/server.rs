@@ -4,7 +4,7 @@
  */
 
 use super::api_description::ApiDescription;
-use super::config::ConfigDropshot;
+use super::config::{ConfigDropshot, ConfigTls};
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
@@ -106,32 +106,36 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_default_nitems: NonZeroU32::new(100).unwrap(),
         };
 
-        let starter = if config.https {
-            let (starter, app_state, local_addr) =
-                InnerHttpsServerStarter::new(
-                    config,
-                    server_config,
-                    api,
-                    private,
-                    log,
-                )?;
-            HttpServerStarter {
-                app_state,
-                local_addr,
-                wrapped: WrappedHttpServerStarter::Https(starter),
+        let starter = match config.tls {
+            Some(_) => {
+                let (starter, app_state, local_addr) =
+                    InnerHttpsServerStarter::new(
+                        config,
+                        server_config,
+                        api,
+                        private,
+                        log,
+                    )?;
+                HttpServerStarter {
+                    app_state,
+                    local_addr,
+                    wrapped: WrappedHttpServerStarter::Https(starter),
+                }
             }
-        } else {
-            let (starter, app_state, local_addr) = InnerHttpServerStarter::new(
-                config,
-                server_config,
-                api,
-                private,
-                log,
-            )?;
-            HttpServerStarter {
-                app_state,
-                local_addr,
-                wrapped: WrappedHttpServerStarter::Http(starter),
+            None => {
+                let (starter, app_state, local_addr) =
+                    InnerHttpServerStarter::new(
+                        config,
+                        server_config,
+                        api,
+                        private,
+                        log,
+                    )?;
+                HttpServerStarter {
+                    app_state,
+                    local_addr,
+                    wrapped: WrappedHttpServerStarter::Http(starter),
+                }
             }
         };
 
@@ -425,10 +429,10 @@ struct InnerHttpsServerStarter<C: ServerContext>(
 /// Create a TLS configuration from the Dropshot config structure.
 // Eventually we may want to change the APIs to allow users to pass
 // a rustls::ServerConfig themselves
-impl TryFrom<&ConfigDropshot> for rustls::ServerConfig {
+impl TryFrom<&ConfigTls> for rustls::ServerConfig {
     type Error = std::io::Error;
 
-    fn try_from(config: &ConfigDropshot) -> std::io::Result<Self> {
+    fn try_from(config: &ConfigTls) -> std::io::Result<Self> {
         let certs = load_certs(&config.cert_file)?;
         let private_key = load_private_key(&config.key_file)?;
         let mut cfg = rustls::ServerConfig::builder()
@@ -474,7 +478,9 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         log: &Logger,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = TlsAcceptor::from(Arc::new(
-            rustls::ServerConfig::try_from(config)?,
+            // Unwrap is safe here because we cannot enter this code path
+            // without a TLS configuration
+            rustls::ServerConfig::try_from(config.tls.as_ref().unwrap())?,
         ));
 
         let tcp = {

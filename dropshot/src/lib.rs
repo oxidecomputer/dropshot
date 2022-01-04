@@ -70,9 +70,7 @@
  *             &ConfigDropshot {
  *                 bind_address: "127.0.0.1:0".parse().unwrap(),
  *                 request_body_max_bytes: 1024,
- *                 https: false,
- *                 cert_file: "/path/to/cert.pem".into(),
- *                 key_file: "/path/to/key.pem".into(),
+ *                 tls: None,
  *             },
  *             api,
  *             Arc::new(()),
@@ -618,6 +616,7 @@ pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
 pub use api_description::OpenApiDefinition;
 pub use config::ConfigDropshot;
+pub use config::ConfigTls;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
 pub use handler::Extractor;

@@ -4,10 +4,8 @@
  * including certificate loading and supported modes.
  */
 
-use dropshot::ConfigDropshot;
-use dropshot::HttpServerStarter;
-use slog::o;
-use slog::Logger;
+use dropshot::{ConfigDropshot, ConfigTls, HttpServerStarter};
+use slog::{o, Logger};
 use std::convert::TryFrom;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -75,9 +73,10 @@ fn make_server(
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        https: true,
-        cert_file: cert_file.to_path_buf(),
-        key_file: key_file.to_path_buf(),
+        tls: Some(ConfigTls {
+            cert_file: cert_file.to_path_buf(),
+            key_file: key_file.to_path_buf(),
+        }),
     };
     HttpServerStarter::new(&config, dropshot::ApiDescription::new(), 0, log)
         .unwrap()
