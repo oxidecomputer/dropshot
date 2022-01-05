@@ -66,14 +66,10 @@ pub struct ConfigTls {
      *  server to identify itself with. The first certificate is the
      *  end-entity certificate, and the remaining are intermediate
      *  certificates on the way to a trusted CA.
-     *
-     *  Only valid if https=true
      */
     pub cert_file: PathBuf,
     /** Path to a PEM-encoded PKCS #8 file containing the private key the
      *  server will use.
-     *
-     *  Only valid if https=true
      */
     pub key_file: PathBuf,
 }
