@@ -1,6 +1,6 @@
 // Copyright 2021 Oxide Computer Company
 
-//! Test cases for streaming reqeusts.
+//! Test cases for streaming requests.
 
 use dropshot::{endpoint, ApiDescription, HttpError, RequestContext};
 use http::{Method, Response, StatusCode};
@@ -17,6 +17,7 @@ mod common;
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
     api.register(api_streaming).unwrap();
+    api.register(api_not_streaming).unwrap();
     api
 }
 
@@ -31,7 +32,12 @@ async fn api_streaming(
     _rqctx: Arc<RequestContext<usize>>,
 ) -> Result<Response<Body>, HttpError> {
     let mut file = tempfile::tempfile()
-        .map_err(|_| HttpError::for_bad_request(None, "EBADF".to_string()))
+        .map_err(|_| {
+            HttpError::for_bad_request(
+                None,
+                "Cannot create tempfile".to_string(),
+            )
+        })
         .map(|f| tokio::fs::File::from_std(f))?;
 
     // Fill the file with some arbitrary contents.
@@ -48,13 +54,34 @@ async fn api_streaming(
         .body(file_stream.into_body())?)
 }
 
-fn check_has_chunked_headers(response: &Response<Body>) {
-    let transfer_encoding_header =
-        response.headers().get("transfer-encoding").expect(
-            "Expected 'transfer-encoding' header to be set on streaming \
-             response",
-        );
-    assert_eq!("chunked", transfer_encoding_header);
+#[endpoint {
+    method = GET,
+    path = "/not-streaming",
+}]
+async fn api_not_streaming(
+    _rqctx: Arc<RequestContext<usize>>,
+) -> Result<Response<Body>, HttpError> {
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .body(serde_json::to_string("not-streaming").unwrap().into())?)
+}
+
+fn check_has_transfer_encoding(
+    response: &Response<Body>,
+    expected_value: Option<&str>,
+) {
+    let transfer_encoding_header = response.headers().get("transfer-encoding");
+    match expected_value {
+        Some(expected_value) => {
+            assert_eq!(
+                expected_value,
+                transfer_encoding_header.expect("expected value")
+            );
+        }
+        None => {
+            assert!(transfer_encoding_header.is_none())
+        }
+    }
 }
 
 #[tokio::test]
@@ -67,7 +94,7 @@ async fn test_streaming_server_streaming_client() {
         .make_request_no_body(Method::GET, "/streaming", StatusCode::OK)
         .await
         .expect("Expected GET request to succeed");
-    check_has_chunked_headers(&response);
+    check_has_transfer_encoding(&response, Some("chunked"));
 
     let mut chunk_count = 0;
     let mut byte_count = 0;
@@ -101,7 +128,7 @@ async fn test_streaming_server_buffered_client() {
         .make_request_no_body(Method::GET, "/streaming", StatusCode::OK)
         .await
         .expect("Expected GET request to succeed");
-    check_has_chunked_headers(&response);
+    check_has_transfer_encoding(&response, Some("chunked"));
 
     let body_bytes = hyper::body::to_bytes(response.body_mut())
         .await
@@ -112,5 +139,22 @@ async fn test_streaming_server_buffered_client() {
         "Mismatch of sent vs received byte count"
     );
 
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_non_streaming_servers_do_not_use_transfer_encoding() {
+    let api = api();
+    let testctx = common::test_setup(
+        "non_streaming_servers_do_not_use_transfer_encoding",
+        api,
+    );
+    let client = &testctx.client_testctx;
+
+    let response = client
+        .make_request_no_body(Method::GET, "/not-streaming", StatusCode::OK)
+        .await
+        .expect("Expected GET request to succeed");
+    check_has_transfer_encoding(&response, None);
     testctx.teardown().await;
 }
