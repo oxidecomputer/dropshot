@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "anyhow"
+version = "1.0.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84450d0b4a8bd1ba4144ce8ce718fbc5d071358b1e5384bace6536b3d1f2d5b3"
+
+[[package]]
 name = "async-trait"
 version = "0.1.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -175,7 +181,7 @@ dependencies = [
  "base64",
  "bytes",
  "chrono",
- "dropshot_endpoint",
+ "dropshot_endpoint 0.6.1-dev",
  "expectorate",
  "futures",
  "hostname",
@@ -208,8 +214,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "dropshot"
+version = "0.6.1-dev"
+source = "git+https://github.com/oxidecomputer/dropshot#7da41858adaf672d82582b09751bc6f730a62da1"
+dependencies = [
+ "async-trait",
+ "base64",
+ "bytes",
+ "chrono",
+ "dropshot_endpoint 0.6.1-dev (git+https://github.com/oxidecomputer/dropshot)",
+ "futures",
+ "hostname",
+ "http",
+ "hyper",
+ "indexmap",
+ "openapiv3",
+ "paste",
+ "percent-encoding",
+ "proc-macro2",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "slog",
+ "slog-async",
+ "slog-bunyan",
+ "slog-json",
+ "slog-term",
+ "syn",
+ "tokio",
+ "toml",
+ "usdt",
+ "uuid",
+]
+
+[[package]]
 name = "dropshot_endpoint"
 version = "0.6.1-dev"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_tokenstream",
+ "syn",
+]
+
+[[package]]
+name = "dropshot_endpoint"
+version = "0.6.1-dev"
+source = "git+https://github.com/oxidecomputer/dropshot#7da41858adaf672d82582b09751bc6f730a62da1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -585,6 +638,22 @@ checksum = "2684d4c2e97d99848d30b324b00c8fcc7e5c897b7cbb5819b09e7c90e8baf212"
 dependencies = [
  "mime",
  "unicase",
+]
+
+[[package]]
+name = "minimal_example"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dropshot 0.6.1-dev (git+https://github.com/oxidecomputer/dropshot)",
+ "schemars",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-async",
+ "slog-term",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
