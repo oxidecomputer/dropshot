@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
     # actions/checkout@v2
-    - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
     - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
       with:
         toolchain: nightly-2021-03-25
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
     # actions/checkout@v2
-    - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
     - name: Report cargo version
       run: cargo --version
     - name: Report Clippy version
@@ -46,7 +46,7 @@ jobs:
         os: [ ubuntu-18.04, windows-2019, macos-10.15 ]
     steps:
     # actions/checkout@v2
-    - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+    - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
     - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
       with:
         profile: minimal
