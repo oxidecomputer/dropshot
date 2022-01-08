@@ -5,5 +5,5 @@
 [toolchain]
 # NOTE: This toolchain is also specified within .github/workflows/rust.yml
 # If you update it here, update that file too.
-channel = "1.55.0"
+channel = "1.57.0"
 profile = "default"
