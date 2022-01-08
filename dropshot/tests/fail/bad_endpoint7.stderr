@@ -4,7 +4,8 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
 25   | ) -> Result<HttpResponseOk<Ret>, HttpError> {
      |             ^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
      |
-    ::: src/handler.rs:1216:43
+note: required by a bound in `HttpResponseOk`
+    --> src/handler.rs
      |
-1216 | pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
-     |                                           --------- required by this bound in `HttpResponseOk`
+     | pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
+     |                                           ^^^^^^^^^ required by this bound in `HttpResponseOk`

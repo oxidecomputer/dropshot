@@ -5,21 +5,25 @@
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
+use dropshot::Path;
 use dropshot::RequestContext;
+use schemars::JsonSchema;
+use serde::Deserialize;
 use std::sync::Arc;
 
-trait Stuff {
-    fn do_stuff();
+#[derive(JsonSchema, Deserialize)]
+struct PathParams {
+    stuff: Vec<String>,
 }
 
 #[endpoint {
     method = GET,
-    path = "/test",
+    path = "/assets/{stuff:.*}",
 }]
-async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
-    _: Arc<RequestContext<S>>,
+async fn must_be_unpublished(
+    _: Arc<RequestContext<()>>,
+    _: Path<PathParams>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
-    S::do_stuff();
     panic!()
 }
 

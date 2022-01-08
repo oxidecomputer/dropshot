@@ -1,5 +1,20 @@
+error: Endpoint handlers must have the following signature:
+    async fn(
+        rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
+        [query_params: Query<Q>,]
+        [path_params: Path<P>,]
+        [body_param: TypedBody<J>,]
+        [body_param: UntypedBody<J>,]
+    ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_endpoint8.rs:20:1
+   |
+20 | / fn bad_endpoint(
+21 | |     _rqctx: Arc<RequestContext<()>>,
+22 | | ) -> Result<HttpResponseOk<Ret>, HttpError> {
+   | |___________________________________________^
+
 error: endpoint handler functions must be async
-  --> $DIR/bad_endpoint8.rs:20:1
+  --> tests/fail/bad_endpoint8.rs:20:1
    |
 20 | fn bad_endpoint(
    | ^^

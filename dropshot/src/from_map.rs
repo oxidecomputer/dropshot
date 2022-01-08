@@ -475,6 +475,8 @@ mod test {
 
     #[test]
     fn test_deep() {
+        #![allow(dead_code)]
+
         #[derive(Deserialize, Debug)]
         struct A {
             b: B,
@@ -494,6 +496,8 @@ mod test {
     }
     #[test]
     fn test_missing_data1() {
+        #![allow(dead_code)]
+
         #[derive(Deserialize, Debug)]
         struct A {
             aaa: String,
@@ -513,6 +517,8 @@ mod test {
     }
     #[test]
     fn test_missing_data2() {
+        #![allow(dead_code)]
+
         #[derive(Deserialize, Debug)]
         struct A {
             aaa: String,
@@ -576,6 +582,8 @@ mod test {
     }
     #[test]
     fn wherefore_art_thou_a_valid_sequence_when_in_fact_you_are_a_lone_value() {
+        #![allow(dead_code)]
+
         #[derive(Deserialize, Debug)]
         struct A {
             b: Vec<String>,

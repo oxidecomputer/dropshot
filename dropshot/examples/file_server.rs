@@ -139,9 +139,10 @@ async fn static_content(
             .header(http::header::CONTENT_TYPE, "text/html")
             .body(body.into())?)
     } else {
-        let body = tokio::fs::read(&entry).await.map_err(|_| {
+        let file = tokio::fs::File::open(&entry).await.map_err(|_| {
             HttpError::for_bad_request(None, "EBADF".to_string())
         })?;
+        let file_stream = hyper_staticfile::FileBytesStream::new(file);
 
         /* Derive the MIME type from the file name */
         let content_type = mime_guess::from_path(&entry)
@@ -151,7 +152,7 @@ async fn static_content(
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(http::header::CONTENT_TYPE, content_type)
-            .body(body.into())?)
+            .body(file_stream.into_body())?)
     }
 }
 
