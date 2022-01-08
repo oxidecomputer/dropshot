@@ -47,7 +47,8 @@ jobs:
     steps:
       # actions/checkout@v2
       - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
-      - uses: zephraph/toolchain@cebe54f42a333ba96d769887d0842f34c7253147
+      # Temporary fork until https://github.com/actions-rs/toolchain/pull/209 is merged
+      - uses: zephraph/toolchain@4fdb216e1826d75b42342a7753d9a5872af3db56
         with:
           profile: minimal
           override: true
