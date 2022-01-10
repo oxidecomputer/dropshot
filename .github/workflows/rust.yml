@@ -13,31 +13,31 @@ jobs:
   check-style:
     runs-on: ubuntu-18.04
     steps:
-      # actions/checkout@v2
-      - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
-      - uses: actions-rs/toolchain@88dc2356392166efad76775c878094f4e83ff746
-        with:
-          toolchain: nightly-2021-03-25
-          default: false
-          components: rustfmt
-      - name: Report cargo version
-        run: cargo +nightly-2021-03-25 --version
-      - name: Report rustfmt version
-        run: cargo +nightly-2021-03-25 fmt -- --version
-      - name: Check style
-        run: cargo +nightly-2021-03-25 fmt -- --check
+    # actions/checkout@v2
+    - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
+    - uses: actions-rs/toolchain@88dc2356392166efad76775c878094f4e83ff746
+      with:
+        toolchain: nightly-2021-03-25
+        default: false
+        components: rustfmt
+    - name: Report cargo version
+      run: cargo +nightly-2021-03-25 --version
+    - name: Report rustfmt version
+      run: cargo +nightly-2021-03-25 fmt -- --version
+    - name: Check style
+      run: cargo +nightly-2021-03-25 fmt -- --check
 
   clippy-lint:
     runs-on: ubuntu-18.04
     steps:
-      # actions/checkout@v2
-      - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
-      - name: Report cargo version
-        run: cargo --version
-      - name: Report Clippy version
-        run: cargo clippy -- --version
-      - name: Run Clippy Lints
-        run: cargo clippy -- -D warnings
+    # actions/checkout@v2
+    - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
+    - name: Report cargo version
+      run: cargo --version
+    - name: Report Clippy version
+      run: cargo clippy -- --version
+    - name: Run Clippy Lints
+      run: cargo clippy -- -D warnings
 
   build-and-test:
     runs-on: ${{ matrix.os }}
@@ -46,7 +46,7 @@ jobs:
         os: [ubuntu-18.04, windows-2019, macos-10.15]
     steps:
       # actions/checkout@v2
-      - uses: actions/checkout@28c7f3d2b5162b5ddd3dfd9a45aa55eaf396478b
+      - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
       # Temporary fork until https://github.com/actions-rs/toolchain/pull/209 is merged
       - uses: zephraph/toolchain@6bbb331ffcc44b148bf62cd68a72bb0132181cdd
         with:
