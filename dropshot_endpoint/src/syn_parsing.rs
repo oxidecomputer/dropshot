@@ -20,12 +20,7 @@ impl Parse for ItemFnForSignature {
         let vis: Visibility = input.parse()?;
         let sig: Signature = input.parse()?;
         let block = input.parse()?;
-        Ok(ItemFnForSignature {
-            attrs,
-            vis,
-            sig,
-            _block: block,
-        })
+        Ok(ItemFnForSignature { attrs, vis, sig, _block: block })
     }
 }
 

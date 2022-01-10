@@ -85,9 +85,7 @@ fn make_server(
 fn make_pki_verifier(
     certs: &Vec<rustls::Certificate>,
 ) -> impl rustls::client::ServerCertVerifier {
-    let mut root_store = rustls::RootCertStore {
-        roots: vec![],
-    };
+    let mut root_store = rustls::RootCertStore { roots: vec![] };
     root_store.add(&certs[certs.len() - 1]).expect("adding root cert");
     rustls::client::WebPkiVerifier::new(root_store, None)
 }

@@ -80,20 +80,14 @@ impl ConfigLogging {
         log_name: S,
     ) -> Result<Logger, io::Error> {
         match self {
-            ConfigLogging::StderrTerminal {
-                level,
-            } => {
+            ConfigLogging::StderrTerminal { level } => {
                 let decorator = slog_term::TermDecorator::new().build();
                 let drain =
                     slog_term::FullFormat::new(decorator).build().fuse();
                 Ok(async_root_logger(level, drain))
             }
 
-            ConfigLogging::File {
-                level,
-                path,
-                if_exists,
-            } => {
+            ConfigLogging::File { level, path, if_exists } => {
                 let mut open_options = std::fs::OpenOptions::new();
                 open_options.write(true);
                 open_options.create(true);
@@ -528,12 +522,15 @@ mod test {
         let time_after = chrono::offset::Utc::now();
         let log_records = read_bunyan_log(&logpath);
         let expected_hostname = hostname::get().unwrap().into_string().unwrap();
-        verify_bunyan_records(log_records.iter(), &BunyanLogRecordSpec {
-            name: Some("test-logger".to_string()),
-            hostname: Some(expected_hostname.clone()),
-            v: Some(0),
-            pid: Some(std::process::id()),
-        });
+        verify_bunyan_records(
+            log_records.iter(),
+            &BunyanLogRecordSpec {
+                name: Some("test-logger".to_string()),
+                hostname: Some(expected_hostname.clone()),
+                v: Some(0),
+                pid: Some(std::process::id()),
+            },
+        );
         verify_bunyan_records_sequential(
             log_records.iter(),
             Some(&time_before),
@@ -570,12 +567,15 @@ mod test {
         }
 
         let log_records = read_bunyan_log(&logpath);
-        verify_bunyan_records(log_records.iter(), &BunyanLogRecordSpec {
-            name: Some("test-logger".to_string()),
-            hostname: Some(expected_hostname),
-            v: Some(0),
-            pid: Some(std::process::id()),
-        });
+        verify_bunyan_records(
+            log_records.iter(),
+            &BunyanLogRecordSpec {
+                name: Some("test-logger".to_string()),
+                hostname: Some(expected_hostname),
+                v: Some(0),
+                pid: Some(std::process::id()),
+            },
+        );
         verify_bunyan_records_sequential(
             log_records.iter(),
             Some(&time_before),

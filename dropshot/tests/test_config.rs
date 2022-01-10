@@ -272,9 +272,7 @@ async fn test_config_bind_address_http() {
         }
     }
 
-    let test_config = ConfigBindServerHttp {
-        log,
-    };
+    let test_config = ConfigBindServerHttp { log };
     let bind_port = 12215;
     test_config_bind_server::<_, ConfigBindServerHttp>(test_config, bind_port)
         .await;
@@ -302,9 +300,7 @@ async fn test_config_bind_address_https() {
             hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
         > {
             // Configure TLS to trust the self-signed cert
-            let mut root_store = rustls::RootCertStore {
-                roots: vec![],
-            };
+            let mut root_store = rustls::RootCertStore { roots: vec![] };
             root_store
                 .add(&self.certs[self.certs.len() - 1])
                 .expect("adding root cert");
@@ -345,12 +341,7 @@ async fn test_config_bind_address_https() {
     // Generate key for the server
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
-    let test_config = ConfigBindServerHttps {
-        log,
-        certs,
-        cert_file,
-        key_file,
-    };
+    let test_config = ConfigBindServerHttps { log, certs, cert_file, key_file };
 
     /* This must be different than the bind_port used in the http test. */
     let bind_port = 12217;
