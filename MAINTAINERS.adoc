@@ -36,6 +36,17 @@ We currently configure Dependabot to treat Dropshot as an application so that it
 
 If you find yourself trying to debug what Dependabot is doing, you can https://github.com/oxidecomputer/dropshot/network/updates[view its activity on GitHub by clicking the Insights tab, then "Dependency Graph" on the left, and then the "Dependabot" subtab].  You'll see sections for dropshot/Cargo.toml and dropshot_endpoint/Cargo.toml.  For each one, you can click the "Last checked" link to get a log of its last run.  This may only make sense if you've looked at the https://github.com/dependabot/dependabot-core/[source].
 
+== Renovate
+
+Renovate is another dependency management tool which we're utilizing for a smaller set of automated updates. It's currently responsible for opening update PRs for GitHub actions and rust-toolchain versions. The repo's renovate configuration can be found https://github.com/oxidecomputer/dropshot/blob/main/.github/renovate.json[here] with most of the functionality coming from our https://github.com/oxidecomputer/renovate-config[shared renovate config repo]. Refer to the readme of that repo for more information about what shared renovate rules exist and how to configure them. 
+
+=== Dependency Dashboard
+
+Renovate includes the ability to gate dependency updates behind an automated issue called a dependency dashboard. Dropshot's dependency dashboard is at https://github.com/oxidecomputer/dropshot/issues/238[oxidecomputer/dropshot#238]. This functionality is useful to test what types of updates Renovate may queue up on a configuration change without creating unnecessary PRs. The issue itself is created automatically and must be https://docs.renovatebot.com/key-concepts/dashboard/#how-to-disable-the-dashboard[disabled via configuration] if it's no longer needed. 
+
+=== Debugging Renovate
+
+Like Dependabot, Renovate provides a log for update runs related to the project. See https://app.renovatebot.com/dashboard#github/oxidecomputer/dropshot[Dropshot's renovate log].
 
 == Publishing a new release
 
