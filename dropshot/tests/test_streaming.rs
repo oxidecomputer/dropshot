@@ -9,10 +9,9 @@ use hyper_staticfile::FileBytesStream;
 use std::sync::Arc;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
-#[macro_use]
 extern crate slog;
 
-mod common;
+pub mod common;
 
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
