@@ -35,12 +35,37 @@ use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
 use crate::server::{HttpServer, HttpServerStarter, ServerContext};
 
-/**
- * List of allowed HTTP headers in responses.  This is used to make sure we
- * don't leak headers unexpectedly.
- */
-const ALLOWED_HEADER_NAMES: [&str; 4] =
-    ["content-length", "content-type", "date", "x-request-id"];
+enum AllowedValue<'a> {
+    Any,
+    OneOf(&'a [&'a str]),
+}
+
+struct AllowedHeader<'a> {
+    name: &'a str,
+    value: AllowedValue<'a>,
+}
+
+impl<'a> AllowedHeader<'a> {
+    const fn new(name: &'a str) -> Self {
+        Self {
+            name,
+            value: AllowedValue::Any,
+        }
+    }
+}
+
+// List of allowed HTTP headers in responsees.
+// Used to make sure we don't leak headers unexpectedly.
+const ALLOWED_HEADERS: [AllowedHeader<'static>; 5] = [
+    AllowedHeader::new("content-length"),
+    AllowedHeader::new("content-type"),
+    AllowedHeader::new("date"),
+    AllowedHeader::new("x-request-id"),
+    AllowedHeader {
+        name: "transfer-encoding",
+        value: AllowedValue::OneOf(&["chunked"]),
+    },
+];
 
 /**
  * ClientTestContext encapsulates several facilities associated with using an
@@ -199,11 +224,21 @@ impl ClientTestContext {
          * statically-defined above.
          */
         let headers = response.headers();
-        for header_name in headers.keys() {
+        for (header_name, header_value) in headers {
             let mut okay = false;
-            for allowed_name in ALLOWED_HEADER_NAMES.iter() {
-                if header_name == allowed_name {
-                    okay = true;
+            for allowed_header in ALLOWED_HEADERS.iter() {
+                if header_name == allowed_header.name {
+                    match allowed_header.value {
+                        AllowedValue::Any => {
+                            okay = true;
+                        }
+                        AllowedValue::OneOf(allowed_values) => {
+                            let header = header_value
+                                .to_str()
+                                .expect("Cannot turn header value to string");
+                            okay = allowed_values.contains(&header);
+                        }
+                    }
                     break;
                 }
             }
