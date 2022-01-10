@@ -15,7 +15,7 @@ jobs:
     steps:
     # actions/checkout@v2
     - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
-    - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
+    - uses: actions-rs/toolchain@88dc2356392166efad76775c878094f4e83ff746
       with:
         toolchain: nightly-2021-03-25
         default: false
@@ -47,7 +47,7 @@ jobs:
     steps:
     # actions/checkout@v2
     - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
-    - uses: actions-rs/toolchain@b223206e28798aa3c3668bdd6409258e6dc29172
+    - uses: actions-rs/toolchain@88dc2356392166efad76775c878094f4e83ff746
       with:
         profile: minimal
         toolchain: stable
