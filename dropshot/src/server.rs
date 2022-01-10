@@ -4,7 +4,7 @@
  */
 
 use super::api_description::ApiDescription;
-use super::config::ConfigDropshot;
+use super::config::{ConfigDropshot, ConfigTls};
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
@@ -13,10 +13,10 @@ use super::probes;
 use super::router::HttpRouter;
 use super::ProbeRegistration;
 
-use futures::future::BoxFuture;
-use futures::future::FusedFuture;
-use futures::future::FutureExt;
+use async_stream::stream;
+use futures::future::{BoxFuture, FusedFuture, FutureExt, TryFutureExt};
 use futures::lock::Mutex;
+use futures::stream::{Stream, StreamExt};
 use hyper::server::{
     conn::{AddrIncoming, AddrStream},
     Server,
@@ -25,12 +25,18 @@ use hyper::service::Service;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use rustls;
+use std::convert::TryFrom;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use tokio::io::ReadBuf;
+use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
 use slog::Logger;
@@ -82,29 +88,76 @@ pub struct ServerConfig {
  */
 pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
-    server: Server<AddrIncoming, ServerConnectionHandler<C>>,
     local_addr: SocketAddr,
+    wrapped: WrappedHttpServerStarter<C>,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
-    pub fn local_addr(&self) -> SocketAddr {
-        self.local_addr
+    pub fn new(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+    ) -> Result<HttpServerStarter<C>, GenericError> {
+        let server_config = ServerConfig {
+            /* We start aggressively to ensure test coverage. */
+            request_body_max_bytes: config.request_body_max_bytes,
+            page_max_nitems: NonZeroU32::new(10000).unwrap(),
+            page_default_nitems: NonZeroU32::new(100).unwrap(),
+        };
+
+        let starter = match config.tls {
+            Some(_) => {
+                let (starter, app_state, local_addr) =
+                    InnerHttpsServerStarter::new(
+                        config,
+                        server_config,
+                        api,
+                        private,
+                        log,
+                    )?;
+                HttpServerStarter {
+                    app_state,
+                    local_addr,
+                    wrapped: WrappedHttpServerStarter::Https(starter),
+                }
+            }
+            None => {
+                let (starter, app_state, local_addr) =
+                    InnerHttpServerStarter::new(
+                        config,
+                        server_config,
+                        api,
+                        private,
+                        log,
+                    )?;
+                HttpServerStarter {
+                    app_state,
+                    local_addr,
+                    wrapped: WrappedHttpServerStarter::Http(starter),
+                }
+            }
+        };
+
+        for (path, method, _) in &starter.app_state.router {
+            debug!(starter.app_state.log, "registered endpoint";
+                "method" => &method,
+                "path" => &path
+            );
+        }
+
+        Ok(starter)
     }
 
-    /**
-     * Begins execution of the underlying Http server.
-     */
     pub fn start(self) -> HttpServer<C> {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let log_close = self.app_state.log.new(o!());
-        let graceful = self.server.with_graceful_shutdown(async move {
-            rx.await.expect(
-                "dropshot server shutting down without invoking close()",
-            );
-            info!(log_close, "received request to begin graceful shutdown");
-        });
-
-        let join_handle = tokio::spawn(async { graceful.await });
+        let join_handle = match self.wrapped {
+            WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
+            WrappedHttpServerStarter::Https(https) => {
+                https.start(rx, log_close)
+            }
+        };
 
         let probe_registration = if cfg!(feature = "usdt-probes") {
             match usdt::register_probes() {
@@ -140,6 +193,36 @@ impl<C: ServerContext> HttpServerStarter<C> {
             close_channel: Some(tx),
         }
     }
+}
+
+enum WrappedHttpServerStarter<C: ServerContext> {
+    Http(InnerHttpServerStarter<C>),
+    Https(InnerHttpsServerStarter<C>),
+}
+
+struct InnerHttpServerStarter<C: ServerContext>(
+    Server<AddrIncoming, ServerConnectionHandler<C>>,
+);
+
+type InnerHttpServerStarterNewReturn<C> =
+    (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
+
+impl<C: ServerContext> InnerHttpServerStarter<C> {
+    /// Begins execution of the underlying Http server.
+    fn start(
+        self,
+        close_signal: tokio::sync::oneshot::Receiver<()>,
+        log_close: Logger,
+    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
+        let graceful = self.0.with_graceful_shutdown(async move {
+            close_signal.await.expect(
+                "dropshot server shutting down without invoking close()",
+            );
+            info!(log_close, "received request to begin graceful shutdown");
+        });
+
+        tokio::spawn(async { graceful.await })
+    }
 
     /**
      * Set up an HTTP server bound on the specified address that runs registered
@@ -149,49 +232,301 @@ impl<C: ServerContext> HttpServerStarter<C> {
      * TODO-cleanup We should be able to take a reference to the ApiDescription.
      * We currently can't because we need to hang onto the router.
      */
-    pub fn new(
+    fn new(
         config: &ConfigDropshot,
+        server_config: ServerConfig,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<HttpServerStarter<C>, hyper::Error> {
+    ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
 
         /* TODO-cleanup too many Arcs? */
         let app_state = Arc::new(DropshotState {
             private,
-            config: ServerConfig {
-                /* We start aggressively to ensure test coverage. */
-                request_body_max_bytes: config.request_body_max_bytes,
-                page_max_nitems: NonZeroU32::new(10000).unwrap(),
-                page_default_nitems: NonZeroU32::new(100).unwrap(),
-            },
+            config: server_config,
             router: api.into_router(),
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
         });
 
-        for (path, method, _) in &app_state.router {
-            debug!(app_state.log, "registered endpoint";
-                "method" => &method,
-                "path" => &path
-            );
-        }
-
-        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
+        let make_service = ServerConnectionHandler::new(app_state.clone());
         let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
-        info!(app_state.log, "listening");
-        Ok(HttpServerStarter {
-            app_state,
-            server,
-            local_addr,
-        })
+        Ok((InnerHttpServerStarter(server), app_state, local_addr))
+    }
+}
+
+/// Wrapper for TlsStream<TcpStream> that also carries the remote SocketAddr
+#[derive(Debug)]
+struct TlsConn {
+    stream: TlsStream<TcpStream>,
+    remote_addr: SocketAddr,
+}
+
+impl TlsConn {
+    fn new(stream: TlsStream<TcpStream>, remote_addr: SocketAddr) -> TlsConn {
+        TlsConn {
+            stream,
+            remote_addr,
+        }
     }
 
-    pub fn app_private(&self) -> &C {
-        &self.app_state.private
+    fn remote_addr(&self) -> SocketAddr {
+        self.remote_addr
+    }
+}
+
+/// Forward AsyncRead to the underlying stream
+impl tokio::io::AsyncRead for TlsConn {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+        buf: &mut ReadBuf,
+    ) -> Poll<std::io::Result<()>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_read(ctx, buf)
+    }
+}
+
+/// Forward AsyncWrite to the underlying stream
+impl tokio::io::AsyncWrite for TlsConn {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+        data: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_write(ctx, data)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+    ) -> Poll<std::io::Result<()>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_flush(ctx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+    ) -> Poll<std::io::Result<()>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_shutdown(ctx)
+    }
+}
+
+/// This is our bridge between tokio-rustls and hyper. It implements
+/// `hyper::server::accept::Accept` interface, producing TLS-over-TCP
+/// connections.
+///
+/// Internally, it creates a stream that produces fully negotiated TLS
+/// connections as they come in from a TCP listen socket.  This stream allows
+/// for multiple TLS connections to be negotiated concurrently with new
+/// connections being accepted.
+struct HttpsAcceptor {
+    stream: Box<dyn Stream<Item = std::io::Result<TlsConn>> + Send + Unpin>,
+}
+
+impl HttpsAcceptor {
+    pub fn new(
+        log: slog::Logger,
+        tls_acceptor: TlsAcceptor,
+        tcp_listener: TcpListener,
+    ) -> HttpsAcceptor {
+        HttpsAcceptor {
+            stream: Box::new(Box::pin(Self::new_stream(
+                log,
+                tls_acceptor,
+                tcp_listener,
+            ))),
+        }
+    }
+
+    fn new_stream(
+        log: slog::Logger,
+        tls_acceptor: TlsAcceptor,
+        tcp_listener: TcpListener,
+    ) -> impl Stream<Item = std::io::Result<TlsConn>> {
+        stream! {
+            let mut tls_negotiations = futures::stream::FuturesUnordered::new();
+            loop {
+                tokio::select! {
+                    Some(negotiation) = tls_negotiations.next(), if
+                            !tls_negotiations.is_empty() => {
+
+                        match negotiation {
+                            Ok(conn) => yield Ok(conn),
+                            Err(e) => {
+                                // If TLS negotiation fails, log the cause but
+                                // don't forward it along. Yielding an error
+                                // from here will terminate the server.
+                                // These failures may be a fatal TLS alert
+                                // message, or a client disconnection during
+                                // negotiation, or other issues.
+                                // TODO: We may want to export a counter for
+                                // different error types, since this may contain
+                                // useful things like "your certificate is
+                                // invalid"
+                                warn!(log, "tls accept err: {}", e);
+                            },
+                        }
+                    },
+                    accept_result = tcp_listener.accept() => {
+                        let (socket, addr) = match accept_result {
+                            Ok(v) => v,
+                            Err(e) => {
+                                match e.kind() {
+                                    std::io::ErrorKind::ConnectionAborted => {
+                                        continue;
+                                    },
+                                    // The other errors that can be returned
+                                    // under POSIX are all programming errors or
+                                    // resource exhaustion. For now, handle
+                                    // these by no longer accepting new
+                                    // connections.
+                                    // TODO-robustness: Consider handling these
+                                    // more gracefully.
+                                    _ => {
+                                        yield Err(e);
+                                        break;
+                                    }
+                                }
+                            }
+                        };
+
+                        let tls_negotiation = tls_acceptor
+                            .accept(socket)
+                            .map_ok(move |stream| TlsConn::new(stream, addr));
+                        tls_negotiations.push(tls_negotiation);
+                    },
+                    else => break,
+                }
+            }
+        }
+    }
+}
+
+impl hyper::server::accept::Accept for HttpsAcceptor {
+    type Conn = TlsConn;
+    type Error = std::io::Error;
+
+    fn poll_accept(
+        mut self: Pin<&mut Self>,
+        ctx: &mut core::task::Context,
+    ) -> core::task::Poll<Option<Result<Self::Conn, Self::Error>>> {
+        let pinned = Pin::new(&mut self.stream);
+        pinned.poll_next(ctx)
+    }
+}
+
+struct InnerHttpsServerStarter<C: ServerContext>(
+    Server<HttpsAcceptor, ServerConnectionHandler<C>>,
+);
+
+/// Create a TLS configuration from the Dropshot config structure.
+// Eventually we may want to change the APIs to allow users to pass
+// a rustls::ServerConfig themselves
+impl TryFrom<&ConfigTls> for rustls::ServerConfig {
+    type Error = std::io::Error;
+
+    fn try_from(config: &ConfigTls) -> std::io::Result<Self> {
+        let certs = load_certs(&config.cert_file)?;
+        let private_key = load_private_key(&config.key_file)?;
+        let mut cfg = rustls::ServerConfig::builder()
+            // TODO: We may want to expose protocol configuration in our
+            // config
+            .with_safe_default_cipher_suites()
+            .with_safe_default_kx_groups()
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_client_cert_verifier(rustls::server::NoClientAuth::new())
+            .with_single_cert(certs, private_key)
+            .expect("bad certificate/key");
+        cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        Ok(cfg)
+    }
+}
+
+type InnerHttpsServerStarterNewReturn<C> =
+    (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
+
+impl<C: ServerContext> InnerHttpsServerStarter<C> {
+    /// Begins execution of the underlying Http server.
+    fn start(
+        self,
+        close_signal: tokio::sync::oneshot::Receiver<()>,
+        log_close: Logger,
+    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
+        let graceful = self.0.with_graceful_shutdown(async move {
+            close_signal.await.expect(
+                "dropshot server shutting down without invoking close()",
+            );
+            info!(log_close, "received request to begin graceful shutdown");
+        });
+
+        tokio::spawn(async { graceful.await })
+    }
+
+    fn new(
+        config: &ConfigDropshot,
+        server_config: ServerConfig,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+    ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
+        let acceptor = TlsAcceptor::from(Arc::new(
+            // Unwrap is safe here because we cannot enter this code path
+            // without a TLS configuration
+            rustls::ServerConfig::try_from(config.tls.as_ref().unwrap())?,
+        ));
+
+        let tcp = {
+            let listener = std::net::TcpListener::bind(&config.bind_address)?;
+            listener.set_nonblocking(true)?;
+            // We use `from_std` instead of just calling `bind` here directly
+            // to avoid invoking an async function, to match the interface
+            // provided by `HttpServerStarter::new`.
+            TcpListener::from_std(listener)?
+        };
+
+        let local_addr = tcp.local_addr()?;
+        let logger = log.new(o!("local_addr" => local_addr));
+        let https_acceptor = HttpsAcceptor::new(logger.clone(), acceptor, tcp);
+
+        let app_state = Arc::new(DropshotState {
+            private,
+            config: server_config,
+            router: api.into_router(),
+            log: logger,
+            local_addr,
+        });
+
+        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
+        let server = Server::builder(https_acceptor).serve(make_service);
+
+        Ok((InnerHttpsServerStarter(server), app_state, local_addr))
+    }
+}
+
+impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
+    type Response = ServerRequestHandler<C>;
+    type Error = GenericError;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        _ctx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, conn: &TlsConn) -> Self::Future {
+        let server = Arc::clone(&self.server);
+        let remote_addr = conn.remote_addr();
+        Box::pin(http_connection_handle(server, remote_addr))
     }
 }
 
@@ -559,6 +894,41 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     }
 }
 
+fn error(err: String) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, err)
+}
+
+// Load public certificate from file.
+fn load_certs(filename: &Path) -> std::io::Result<Vec<rustls::Certificate>> {
+    // Open certificate file.
+    let certfile = std::fs::File::open(filename).map_err(|e| {
+        error(format!("failed to open {}: {}", filename.display(), e))
+    })?;
+    let mut reader = std::io::BufReader::new(certfile);
+
+    // Load and return certificate.
+    rustls_pemfile::certs(&mut reader)
+        .map_err(|_| error("failed to load certificate".into()))
+        .map(|mut chain| chain.drain(..).map(rustls::Certificate).collect())
+}
+
+// Load private key from file.
+fn load_private_key(filename: &Path) -> std::io::Result<rustls::PrivateKey> {
+    // Open keyfile.
+    let keyfile = std::fs::File::open(filename).map_err(|e| {
+        error(format!("failed to open {}: {}", filename.display(), e))
+    })?;
+    let mut reader = std::io::BufReader::new(keyfile);
+
+    // Load and return a single private key.
+    let keys = rustls_pemfile::pkcs8_private_keys(&mut reader)
+        .map_err(|_| error("failed to load private key".into()))?;
+    if keys.len() != 1 {
+        return Err(error("expected a single private key".into()));
+    }
+    Ok(rustls::PrivateKey(keys[0].clone()))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -641,7 +1011,7 @@ mod test {
     #[tokio::test]
     async fn test_server_run_then_close() {
         let (mut server, config) = create_test_server();
-        let client = single_client_request(server.local_addr, config.log());
+        let client = single_client_request(server.local_addr(), config.log());
 
         futures::select! {
             _ = client.fuse() => {},

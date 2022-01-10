@@ -39,10 +39,9 @@ use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
-#[macro_use]
 extern crate slog;
 
-mod common;
+pub mod common;
 
 fn demo_api() -> ApiDescription<usize> {
     let mut api = ApiDescription::<usize>::new();

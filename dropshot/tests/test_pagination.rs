@@ -54,7 +54,7 @@ extern crate slog;
 #[macro_use]
 extern crate lazy_static;
 
-mod common;
+pub mod common;
 
 /*
  * Common helpers
