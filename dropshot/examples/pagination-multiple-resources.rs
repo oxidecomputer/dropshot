@@ -119,27 +119,25 @@ fn page_selector<T: HasIdentity>(
     scan_params: &ExScanParams,
 ) -> ExPageSelector {
     match scan_params {
-        ExScanParams {
-            sort: ExSortMode::ByIdAscending,
-        } => ExPageSelector::Id(Ascending, *item.id()),
-        ExScanParams {
-            sort: ExSortMode::ByIdDescending,
-        } => ExPageSelector::Id(Descending, *item.id()),
-        ExScanParams {
-            sort: ExSortMode::ByNameAscending,
-        } => ExPageSelector::Name(Ascending, item.name().to_string()),
-        ExScanParams {
-            sort: ExSortMode::ByNameDescending,
-        } => ExPageSelector::Name(Descending, item.name().to_string()),
+        ExScanParams { sort: ExSortMode::ByIdAscending } => {
+            ExPageSelector::Id(Ascending, *item.id())
+        }
+        ExScanParams { sort: ExSortMode::ByIdDescending } => {
+            ExPageSelector::Id(Descending, *item.id())
+        }
+        ExScanParams { sort: ExSortMode::ByNameAscending } => {
+            ExPageSelector::Name(Ascending, item.name().to_string())
+        }
+        ExScanParams { sort: ExSortMode::ByNameDescending } => {
+            ExPageSelector::Name(Descending, item.name().to_string())
+        }
     }
 }
 
 fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
     ExScanParams {
         sort: match p {
-            WhichPage::First(ExScanParams {
-                sort,
-            }) => sort.clone(),
+            WhichPage::First(ExScanParams { sort }) => sort.clone(),
 
             WhichPage::Next(ExPageSelector::Id(Ascending, ..)) => {
                 ExSortMode::ByIdAscending
@@ -297,9 +295,8 @@ async fn main() -> Result<(), String> {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         ..Default::default()
     };
-    let config_logging = ConfigLogging::StderrTerminal {
-        level: ConfigLoggingLevel::Debug,
-    };
+    let config_logging =
+        ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Debug };
     let log = config_logging
         .to_logger("example-pagination-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
@@ -346,26 +343,20 @@ impl DataCollection {
         };
         for n in 1..1000 {
             let pname = format!("project{:03}", n);
-            let project = Arc::new(Project {
-                id: Uuid::new_v4(),
-                name: pname.clone(),
-            });
+            let project =
+                Arc::new(Project { id: Uuid::new_v4(), name: pname.clone() });
             data.projects_by_name.insert(pname.clone(), Arc::clone(&project));
             data.projects_by_id.insert(project.id, project);
 
             let dname = format!("disk{:03}", n);
-            let disk = Arc::new(Disk {
-                id: Uuid::new_v4(),
-                name: dname.clone(),
-            });
+            let disk =
+                Arc::new(Disk { id: Uuid::new_v4(), name: dname.clone() });
             data.disks_by_name.insert(dname.clone(), Arc::clone(&disk));
             data.disks_by_id.insert(disk.id, disk);
 
             let iname = format!("disk{:03}", n);
-            let instance = Arc::new(Instance {
-                id: Uuid::new_v4(),
-                name: iname.clone(),
-            });
+            let instance =
+                Arc::new(Instance { id: Uuid::new_v4(), name: iname.clone() });
             data.instances_by_name.insert(iname.clone(), Arc::clone(&instance));
             data.instances_by_id.insert(instance.id, instance);
         }

@@ -211,10 +211,7 @@ where
             MapDeserializer::Map(map) => {
                 let xx = map.clone();
                 let x = Box::new(xx.into_iter());
-                let m = MapMapAccess::<Z> {
-                    iter: x,
-                    value: None,
-                };
+                let m = MapMapAccess::<Z> { iter: x, value: None };
                 visitor.visit_map(m)
             }
             MapDeserializer::Value(_) => Err(MapError(
@@ -305,9 +302,7 @@ where
         V: Visitor<'de>,
     {
         self.value(|raw_value| {
-            visitor.visit_seq(MapSeqAccess {
-                iter: raw_value.as_seq()?,
-            })
+            visitor.visit_seq(MapSeqAccess { iter: raw_value.as_seq()? })
         })
     }
 }

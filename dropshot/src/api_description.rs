@@ -200,12 +200,10 @@ pub enum ApiSchemaGenerator {
 impl std::fmt::Debug for ApiSchemaGenerator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ApiSchemaGenerator::Gen {
-                ..
-            } => f.write_str("[schema generator]"),
-            ApiSchemaGenerator::Static {
-                schema, ..
-            } => f.write_str(format!("{:?}", schema).as_str()),
+            ApiSchemaGenerator::Gen { .. } => f.write_str("[schema generator]"),
+            ApiSchemaGenerator::Static { schema, .. } => {
+                f.write_str(format!("{:?}", schema).as_str())
+            }
         }
     }
 }
@@ -222,9 +220,7 @@ pub struct ApiDescription<Context: ServerContext> {
 
 impl<Context: ServerContext> ApiDescription<Context> {
     pub fn new() -> Self {
-        ApiDescription {
-            router: HttpRouter::new(),
-        }
+        ApiDescription { router: HttpRouter::new() }
     }
 
     /**
@@ -370,10 +366,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
             }
             /* Only body parameters should have unresolved schemas */
             let (schema, dependencies) = match &param.schema {
-                ApiSchemaGenerator::Static {
-                    schema,
-                    dependencies,
-                } => (schema, dependencies),
+                ApiSchemaGenerator::Static { schema, dependencies } => {
+                    (schema, dependencies)
+                }
                 _ => unreachable!(),
             };
 
@@ -488,10 +483,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     };
 
                     let schema = match &param.schema {
-                        ApiSchemaGenerator::Static {
-                            schema,
-                            dependencies,
-                        } => {
+                        ApiSchemaGenerator::Static { schema, dependencies } => {
                             definitions.extend(dependencies.clone());
                             j2oas_schema(None, schema)
                         }
@@ -548,14 +540,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     };
 
                     let (name, js) = match &param.schema {
-                        ApiSchemaGenerator::Gen {
-                            name,
-                            schema,
-                        } => (Some(name()), schema(&mut generator)),
-                        ApiSchemaGenerator::Static {
-                            schema,
-                            dependencies,
-                        } => {
+                        ApiSchemaGenerator::Gen { name, schema } => {
+                            (Some(name()), schema(&mut generator))
+                        }
+                        ApiSchemaGenerator::Static { schema, dependencies } => {
                             definitions.extend(dependencies.clone());
                             (None, schema.as_ref().clone())
                         }
@@ -588,14 +576,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
             if let Some(schema) = &endpoint.response.schema {
                 let (name, js) = match schema {
-                    ApiSchemaGenerator::Gen {
-                        name,
-                        schema,
-                    } => (Some(name()), schema(&mut generator)),
-                    ApiSchemaGenerator::Static {
-                        schema,
-                        dependencies,
-                    } => {
+                    ApiSchemaGenerator::Gen { name, schema } => {
+                        (Some(name()), schema(&mut generator))
+                    }
+                    ApiSchemaGenerator::Static { schema, dependencies } => {
                         definitions.extend(dependencies.clone());
                         (None, schema.as_ref().clone())
                     }
@@ -1127,11 +1111,9 @@ fn box_reference_or<T>(
         openapiv3::ReferenceOr::Item(schema) => {
             openapiv3::ReferenceOr::boxed_item(schema)
         }
-        openapiv3::ReferenceOr::Reference {
-            reference,
-        } => openapiv3::ReferenceOr::Reference {
-            reference,
-        },
+        openapiv3::ReferenceOr::Reference { reference } => {
+            openapiv3::ReferenceOr::Reference { reference }
+        }
     }
 }
 
@@ -1197,10 +1179,7 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
             version: version.to_string(),
             ..Default::default()
         };
-        OpenApiDefinition {
-            api,
-            info,
-        }
+        OpenApiDefinition { api, info }
     }
 
     /**
