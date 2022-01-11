@@ -47,10 +47,7 @@ struct AllowedHeader<'a> {
 
 impl<'a> AllowedHeader<'a> {
     const fn new(name: &'a str) -> Self {
-        Self {
-            name,
-            value: AllowedValue::Any,
-        }
+        Self { name, value: AllowedValue::Any }
     }
 }
 
@@ -399,11 +396,7 @@ impl LogContext {
          * environment variable or other flag.
          */
         let (log_path, log_config) = match initial_config_logging {
-            ConfigLogging::File {
-                level,
-                path: dummy_path,
-                if_exists,
-            } => {
+            ConfigLogging::File { level, path: dummy_path, if_exists } => {
                 assert_eq!(
                     dummy_path, "UNUSED",
                     "for test suite logging configuration, when mode = \
@@ -414,20 +407,20 @@ impl LogContext {
                 let new_path = log_file_for_test(test_name);
                 let new_path_str = new_path.as_path().display().to_string();
                 eprintln!("log file: {:?}", new_path_str);
-                (Some(new_path), ConfigLogging::File {
-                    level: level.clone(),
-                    path: new_path_str,
-                    if_exists: if_exists.clone(),
-                })
+                (
+                    Some(new_path),
+                    ConfigLogging::File {
+                        level: level.clone(),
+                        path: new_path_str,
+                        if_exists: if_exists.clone(),
+                    },
+                )
             }
             other_config => (None, other_config.clone()),
         };
 
         let log = log_config.to_logger(test_name).unwrap();
-        LogContext {
-            log,
-            log_path,
-        }
+        LogContext { log, log_path }
     }
 
     /**
@@ -487,12 +480,7 @@ impl<Context: ServerContext> TestContext<Context> {
         let client_log = log.new(o!("http_client" => "dropshot test suite"));
         let client_testctx = ClientTestContext::new(server_addr, client_log);
 
-        TestContext {
-            client_testctx,
-            server,
-            log,
-            log_context,
-        }
+        TestContext { client_testctx, server, log, log_context }
     }
 
     /**
@@ -889,72 +877,93 @@ mod test {
         /* Test case: nothing to check. */
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: None,
-            pid: None,
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: None,
+                pid: None,
+                v: None,
+            },
+        );
 
         /* Test case: check name, no problem. */
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: Some("n1".to_string()),
-            hostname: None,
-            pid: None,
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: Some("n1".to_string()),
+                hostname: None,
+                pid: None,
+                v: None,
+            },
+        );
 
         /* Test case: check hostname, no problem. */
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: Some("h1".to_string()),
-            pid: None,
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: Some("h1".to_string()),
+                pid: None,
+                v: None,
+            },
+        );
 
         /* Test case: check pid, no problem. */
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: None,
-            pid: Some(1),
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: None,
+                pid: Some(1),
+                v: None,
+            },
+        );
 
         /* Test case: check hostname, no problem. */
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: None,
-            pid: None,
-            v: Some(0),
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: None,
+                pid: None,
+                v: Some(0),
+            },
+        );
 
         /* Test case: check all, no problem. */
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: Some("n1".to_string()),
-            hostname: Some("h1".to_string()),
-            pid: Some(1),
-            v: Some(0),
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: Some("n1".to_string()),
+                hostname: Some("h1".to_string()),
+                pid: Some(1),
+                v: Some(0),
+            },
+        );
 
         /* Test case: check multiple records, no problem. */
         let records: Vec<&BunyanLogRecord> = vec![&r1, &r2];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: Some("n1".to_string()),
-            hostname: None,
-            pid: Some(1),
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: Some("n1".to_string()),
+                hostname: None,
+                pid: Some(1),
+                v: None,
+            },
+        );
     }
 
     /*
@@ -967,12 +976,15 @@ mod test {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: Some("n2".to_string()),
-            hostname: None,
-            pid: None,
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: Some("n2".to_string()),
+                hostname: None,
+                pid: None,
+                v: None,
+            },
+        );
     }
 
     #[test]
@@ -981,12 +993,15 @@ mod test {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: Some("h2".to_string()),
-            pid: None,
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: Some("h2".to_string()),
+                pid: None,
+                v: None,
+            },
+        );
     }
 
     #[test]
@@ -995,12 +1010,15 @@ mod test {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: None,
-            pid: Some(2),
-            v: None,
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: None,
+                pid: Some(2),
+                v: None,
+            },
+        );
     }
 
     #[test]
@@ -1009,12 +1027,15 @@ mod test {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
-        verify_bunyan_records(iter, &BunyanLogRecordSpec {
-            name: None,
-            hostname: None,
-            pid: None,
-            v: Some(1),
-        });
+        verify_bunyan_records(
+            iter,
+            &BunyanLogRecordSpec {
+                name: None,
+                hostname: None,
+                pid: None,
+                v: Some(1),
+            },
+        );
     }
 
     /*

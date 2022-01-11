@@ -14,17 +14,12 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
-      - uses: actions-rs/toolchain@88dc2356392166efad76775c878094f4e83ff746
-        with:
-          toolchain: nightly-2021-03-25
-          default: false
-          components: rustfmt
       - name: Report cargo version
-        run: cargo +nightly-2021-03-25 --version
+        run: cargo --version
       - name: Report rustfmt version
-        run: cargo +nightly-2021-03-25 fmt -- --version
+        run: cargo fmt -- --version
       - name: Check style
-        run: cargo +nightly-2021-03-25 fmt -- --check
+        run: cargo fmt -- --check
 
   clippy-lint:
     runs-on: ubuntu-18.04
@@ -44,11 +39,6 @@ jobs:
         os: [ubuntu-18.04, windows-2019, macos-10.15]
     steps:
       - uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
-      # Temporary fork until https://github.com/actions-rs/toolchain/pull/209 is merged
-      - uses: oxidecomputer/actions-rs_toolchain@ad3f86084a8a5acf2c09cb691421b31cf8af7a36
-        with:
-          profile: minimal
-          override: true
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version

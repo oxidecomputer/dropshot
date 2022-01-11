@@ -572,9 +572,7 @@ where
      * TODO-correctness: are query strings defined to be urlencoded in this way?
      */
     match serde_urlencoded::from_str(raw_query_string) {
-        Ok(q) => Ok(Query {
-            inner: q,
-        }),
+        Ok(q) => Ok(Query { inner: q }),
         Err(e) => Err(HttpError::for_bad_request(
             None,
             format!("unable to parse query string: {}", e),
@@ -644,9 +642,7 @@ where
         rqctx: Arc<RequestContext<Context>>,
     ) -> Result<Path<PathType>, HttpError> {
         let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
-        Ok(Path {
-            inner: params,
-        })
+        Ok(Path { inner: params })
     }
 
     fn metadata() -> ExtractorMetadata {
@@ -692,10 +688,7 @@ struct ReferenceVisitor<'a> {
 
 impl<'a> ReferenceVisitor<'a> {
     fn new(generator: &'a schemars::gen::SchemaGenerator) -> Self {
-        Self {
-            generator,
-            dependencies: indexmap::IndexMap::new(),
-        }
+        Self { generator, dependencies: indexmap::IndexMap::new() }
     }
 
     fn dependencies(
@@ -925,9 +918,7 @@ where
     let value: Result<BodyType, serde_json::Error> =
         serde_json::from_slice(&body_bytes);
     match value {
-        Ok(j) => Ok(TypedBody {
-            inner: j,
-        }),
+        Ok(j) => Ok(TypedBody { inner: j }),
         Err(e) => Err(HttpError::for_bad_request(
             None,
             format!("unable to parse body: {}", e),
@@ -965,10 +956,7 @@ where
             },
             vec![],
         );
-        ExtractorMetadata {
-            paginated: false,
-            parameters: vec![body],
-        }
+        ExtractorMetadata { paginated: false, parameters: vec![body] }
     }
 }
 
@@ -1021,9 +1009,7 @@ impl Extractor for UntypedBody {
             server.config.request_body_max_bytes,
         )
         .await?;
-        Ok(UntypedBody {
-            content: body_bytes,
-        })
+        Ok(UntypedBody { content: body_bytes })
     }
 
     fn metadata() -> ExtractorMetadata {
@@ -1084,11 +1070,7 @@ impl HttpResponse for Response<Body> {
         Ok(self)
     }
     fn metadata() -> ApiEndpointResponse {
-        ApiEndpointResponse {
-            schema: None,
-            success: None,
-            description: None,
-        }
+        ApiEndpointResponse { schema: None, success: None, description: None }
     }
 }
 

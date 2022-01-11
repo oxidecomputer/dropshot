@@ -175,10 +175,7 @@ impl<ItemType> ResultsPage<ItemType> {
             })
             .transpose()?;
 
-        Ok(ResultsPage {
-            next_page,
-            items,
-        })
+        Ok(ResultsPage { next_page, items })
     }
 }
 
@@ -436,10 +433,8 @@ fn serialize_page_token<PageSelector: Serialize>(
     page_start: PageSelector,
 ) -> Result<String, HttpError> {
     let token_bytes = {
-        let serialized_token = SerializedToken {
-            v: PaginationVersion::V1,
-            page_start,
-        };
+        let serialized_token =
+            SerializedToken { v: PaginationVersion::V1, page_start };
 
         let json_bytes =
             serde_json::to_vec(&serialized_token).map_err(|e| {
@@ -544,9 +539,7 @@ mod test {
          * The most basic functionality is that if we serialize something and
          * then deserialize the result of that, we get back the original thing.
          */
-        let before = MyToken {
-            x: 1025,
-        };
+        let before = MyToken { x: 1025 };
         let serialized = serialize_page_token(&before).unwrap();
         let after: MyToken = deserialize_page_token(&serialized).unwrap();
         assert_eq!(after.x, 1025);
@@ -567,9 +560,8 @@ mod test {
         struct TokenWithStr {
             s: String,
         }
-        let input = TokenWithStr {
-            s: String::from_utf8(vec![b'e'; 352]).unwrap(),
-        };
+        let input =
+            TokenWithStr { s: String::from_utf8(vec![b'e'; 352]).unwrap() };
         let serialized = serialize_page_token(&input).unwrap();
         assert_eq!(serialized.len(), super::MAX_TOKEN_LENGTH);
         let output: TokenWithStr = deserialize_page_token(&serialized).unwrap();
@@ -581,9 +573,8 @@ mod test {
          * Start by attempting to serialize a token larger than the maximum
          * allowed size.
          */
-        let input = TokenWithStr {
-            s: String::from_utf8(vec![b'e'; 353]).unwrap(),
-        };
+        let input =
+            TokenWithStr { s: String::from_utf8(vec![b'e'; 353]).unwrap() };
         let error = serialize_page_token(&input).unwrap_err();
         assert_eq!(error.status_code, http::StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(error.external_message, "Internal Server Error");
@@ -764,10 +755,8 @@ mod test {
         }
 
         /* basic case */
-        let token = serialize_page_token(&MyPageSelector {
-            the_page: 123,
-        })
-        .unwrap();
+        let token =
+            serialize_page_token(&MyPageSelector { the_page: 123 }).unwrap();
         let (page_selector, limit) =
             parse_as_next_page(&format!("page_token={}", token));
         assert_eq!(page_selector.the_page, 123);

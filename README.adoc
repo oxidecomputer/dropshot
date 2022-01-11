@@ -15,34 +15,16 @@ You can build the documentation yourself with:
 $ cargo +nightly doc
 ----
 
-
 == Contributing
-
-For maintainers (e.g., publishing new releases and managing dependabot), see link:./MAINTAINERS.adoc[MAINTAINERS.adoc].
-
-=== Building and testing
 
 You can **build and run the whole test suite** with `cargo test`.  The test
 suite runs cleanly and should remain clean.
 
-=== Code formatting and lint
-
-Dropshot works with stable Rust versions, but for consistency the code is
-_formatted_ with a specific version of `rustfmt`.  To contribute to Dropshot,
-you will need to have installed the `nightly-2021-03-25` version of the Rust
-toolchain:
-
-----
-$ rustup install nightly-2021-03-25
-----
-
-You can then **format the code** using `cargo +nightly-2021-03-25 fmt` or
-`rustfmt +nightly-2021-03-25`.  Make sure to run this before pushing changes.
-The CI uses this version of `rustfmt` to check that the code is correctly
-formatted.
+You can format the code using `cargo fmt`.  CI checks that code is correctly formatted.
 
 https://github.com/rust-lang/rust-clippy[Clippy] is used to check for common code issues.  (We disable the style checks.)  You can run it with `cargo clippy`.  CI will run clippy as well.
 
+For maintainers (e.g., publishing new releases and managing dependabot), see link:./MAINTAINERS.adoc[MAINTAINERS.adoc].
 
 == Configuration reference
 
