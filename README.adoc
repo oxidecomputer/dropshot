@@ -66,7 +66,7 @@ include:
 |`request_body_max_bytes`
 |`4096`
 |No
-|Specifies that the server should bind to the given IP address and TCP port.  In general, servers can bind to more than one IP address and port, but this is not (yet?) supported. Defaults to 1024.
+|Specifies the maximum number of bytes allowed in a request body. Larger requests will receive a 400 error. Defaults to 1024.
 
 |`tls.cert_file`
 |`"/path/to/cert.pem"`
