@@ -5,8 +5,8 @@
  *
  * When you run this program, it will start an HTTP server on an available local
  * port.  See the log for example URLs to use.  Try passing different values of
- * the `limit` query parameter.  Try passing the `next_page` token from the
- * response as a query parameter called `page_token`, too.
+ * the `limit` query parameter.  Try passing the `nextPage` token from the
+ * response as a query parameter called `pageToken`, too.
  *
  * For background, see src/pagination.rs.  This example uses a resource called a
  * "Project", which only has a "name" and an "mtime" (modification time).  The
@@ -20,7 +20,7 @@
  * ```ignore
  * $ curl -s http://127.0.0.1:50800/projects?limit=3 | json
  * {
- *   "next_page": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwMyJdfX0=",
+ *   "nextPage": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwMyJdfX0=",
  *   "items": [
  *     {
  *       "name": "project001",
@@ -39,13 +39,13 @@
  * ```
  *
  * This should be pretty self-explanatory: we have three projects here and
- * they're sorted in ascending order by name.  The "next_page" token is used to
+ * they're sorted in ascending order by name.  The "nextPage" token is used to
  * fetch the next page of results as follows:
  *
  * ```ignore
- * $ curl -s http://127.0.0.1:50800/projects?limit=3'&'page_token=eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwMyJdfX0= | json
+ * $ curl -s http://127.0.0.1:50800/projects?limit=3'&'pageToken=eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwMyJdfX0= | json
  * {
- *   "next_page": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwNiJdfX0=",
+ *   "nextPage": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwNiJdfX0=",
  *   "items": [
  *     {
  *       "name": "project004",

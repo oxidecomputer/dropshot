@@ -384,7 +384,7 @@
  *
  * ```json
  * {
- *     "page_token": "abc123...",
+ *     "pageToken": "abc123...",
  *     "items": [
  *         {
  *             "name": "aardvark",
@@ -401,11 +401,11 @@
  * }
  * ```
  *
- * The subsequent request to the API fetches `"/animals?page_token=abc123..."`.
+ * The subsequent request to the API fetches `"/animals?pageToken=abc123..."`.
  * The page token `"abc123..."` is an opaque token to the client, but typically
  * encodes the scan parameters and the value of the last item seen
  * (`"name=badger"`).  The client knows it has completed the scan when it
- * receives a response with no `page_token` in it.
+ * receives a response with no `pageToken` in it.
  *
  * Our API endpoint can also support scanning in reverse order.  In this case,
  * when the client makes the first request, it should fetch
@@ -423,7 +423,7 @@
  * reptiles.  The main requirement is that the combination of fields used for
  * pagination must be unique.  We cannot paginate by the animal's class alone.
  * (To see why: there are over 6,000 mammals.  If the page size is, say, 1000,
- * then the page_token would say `"mammal"`, but there's not enough information
+ * then the pageToken would say `"mammal"`, but there's not enough information
  * there to see where we are within the list of mammals.  It doesn't matter
  * whether there are 2 mammals or 6,000 because clients can limit the page size
  * to just one item if they want and that ought to work.)

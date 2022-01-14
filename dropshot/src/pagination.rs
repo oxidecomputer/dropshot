@@ -118,6 +118,7 @@ use std::num::NonZeroU32;
  * results page) and on the client side (to parse it).
  */
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ResultsPage<ItemType> {
     /** token used to fetch the next page of results (if any) */
     pub next_page: Option<String>,
@@ -125,6 +126,8 @@ pub struct ResultsPage<ItemType> {
     pub items: Vec<ItemType>,
 }
 
+// This is just to provide external documentation for the ResultsPage type
+// that differs from the internal documentation intended for Dropshot users.
 impl<ItemType> JsonSchema for ResultsPage<ItemType>
 where
     ItemType: JsonSchema,
@@ -144,6 +147,7 @@ where
  * A single page of results
  */
 #[derive(JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ResultsPageSchema<ItemType> {
     /** token used to fetch the next page of results (if any) */
     pub next_page: Option<String>,
@@ -198,7 +202,7 @@ impl<ItemType> ResultsPage<ItemType> {
  * or sorting so that your function can apply those, too.  The entire
  * `PageSelector` will be serialized to an opaque string and included in the
  * [`ResultsPage`].  The client is expected to provide this string as the
- * `"page_token"` querystring parameter in the subsequent request.
+ * `"pageToken"` querystring parameter in the subsequent request.
  * `PageSelector` must implement both [`Deserialize`] and [`Serialize`].
  * (Unlike `ScanParams`, `PageSelector` will not be deserialized directly from
  * the querystring.)
@@ -286,13 +290,14 @@ struct SchemaPaginationParams<ScanParams> {
     /** Maximum number of items returned by a single call */
     limit: Option<NonZeroU32>,
     /** Token returned by previous call to retreive the subsequent page */
+    #[serde(rename = "pageToken")]
     page_token: Option<String>,
 }
 
 /*
  * Deserialize `WhichPage` for `PaginationParams`. In REST APIs, callers
  * typically provide either the parameters to resume a scan (in our case, just
- * "page_token") or the parameters to begin a new one (which can be
+ * "pageToken") or the parameters to begin a new one (which can be
  * any set of parameters that our consumer wants).  There's generally no
  * separate field to indicate which case they're requesting. We deserialize into
  * a generic map first and then either interpret the page token or deserialize
@@ -308,7 +313,7 @@ where
 {
     let raw_params = BTreeMap::<String, String>::deserialize(deserializer)?;
 
-    match raw_params.get("page_token") {
+    match raw_params.get("pageToken") {
         Some(page_token) => {
             let page_start = deserialize_page_token(&page_token)
                 .map_err(serde::de::Error::custom)?;
@@ -735,7 +740,7 @@ mod test {
          * Invalid page token (bad base64 length)
          * Other test cases for deserializing tokens are tested elsewhere.
          */
-        parse_as_error("page_token=q");
+        parse_as_error("pageToken=q");
 
         /*
          * "Next page" cases
@@ -758,13 +763,13 @@ mod test {
         let token =
             serialize_page_token(&MyPageSelector { the_page: 123 }).unwrap();
         let (page_selector, limit) =
-            parse_as_next_page(&format!("page_token={}", token));
+            parse_as_next_page(&format!("pageToken={}", token));
         assert_eq!(page_selector.the_page, 123);
         assert_eq!(limit, None);
 
         /* limit is also accepted */
         let (page_selector, limit) =
-            parse_as_next_page(&format!("page_token={}&limit=12", token));
+            parse_as_next_page(&format!("pageToken={}&limit=12", token));
         assert_eq!(page_selector.the_page, 123);
         assert_eq!(limit.unwrap().get(), 12);
 
@@ -773,34 +778,35 @@ mod test {
          * way this is interpreted.
          */
         let (page_selector, limit) = parse_as_next_page(&format!(
-            "the_field=name&page_token={}&limit=3",
+            "the_field=name&pageToken={}&limit=3",
             token
         ));
         assert_eq!(page_selector.the_page, 123);
         assert_eq!(limit.unwrap().get(), 3);
 
         /* invalid limits (same as above) */
-        parse_as_error(&format!("page_token={}&limit=0", token));
-        parse_as_error(&format!("page_token={}&limit=-3", token));
+        parse_as_error(&format!("pageToken={}&limit=0", token));
+        parse_as_error(&format!("pageToken={}&limit=-3", token));
 
         /*
          * We ought not to promise much about what happens if the user's
-         * ScanParams has a "page_token" field.  In practice, ours always takes
+         * ScanParams has a "pageToken" field.  In practice, ours always takes
          * precedence (and it's not clear how else this could work).
          */
         #[derive(Debug, Deserialize)]
         #[allow(dead_code)]
         struct SketchyScanParams {
+            #[serde(rename = "pageToken")]
             page_token: String,
         }
 
         let pagparams: PaginationParams<SketchyScanParams, MyPageSelector> =
-            serde_urlencoded::from_str(&format!("page_token={}", token))
+            serde_urlencoded::from_str(&format!("pageToken={}", token))
                 .unwrap();
         assert_eq!(pagparams.limit, None);
         match &pagparams.page {
             WhichPage::First(..) => {
-                panic!("expected NextPage even with page_token in ScanParams")
+                panic!("expected NextPage even with pageToken in ScanParams")
             }
             WhichPage::Next(p) => {
                 assert_eq!(p.the_page, 123);

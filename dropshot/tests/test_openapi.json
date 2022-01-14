@@ -165,7 +165,7 @@
           },
           {
             "in": "query",
-            "name": "page_token",
+            "name": "pageToken",
             "schema": {
               "nullable": true,
               "description": "Token returned by previous call to retreive the subsequent page",
@@ -495,7 +495,7 @@
               "$ref": "#/components/schemas/ResponseItem"
             }
           },
-          "next_page": {
+          "nextPage": {
             "nullable": true,
             "description": "token used to fetch the next page of results (if any)",
             "type": "string"

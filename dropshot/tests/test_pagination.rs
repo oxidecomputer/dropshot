@@ -245,7 +245,7 @@ async fn test_paginate_errors() {
                       in target type",
         },
         ErrorTestCase {
-            path: "/intapi?page_token=q".to_string(),
+            path: "/intapi?pageToken=q".to_string(),
             message: "unable to parse query string: failed to parse \
                       pagination token: Encoded text cannot have a 6-bit \
                       remainder.",
@@ -317,7 +317,7 @@ async fn test_paginate_basic() {
 
     let page = objects_list_page::<u16>(
         &client,
-        &format!("/intapi?page_token={}", next_page_token,),
+        &format!("/intapi?pageToken={}", next_page_token,),
     )
     .await;
     assert_sequence_from(&page.items, next_page_start, expected_default);
@@ -326,7 +326,7 @@ async fn test_paginate_basic() {
     let page = objects_list_page::<u16>(
         &client,
         &format!(
-            "/intapi?page_token={}&limit={}",
+            "/intapi?pageToken={}&limit={}",
             next_page_token,
             2 * expected_max
         ),
@@ -337,7 +337,7 @@ async fn test_paginate_basic() {
 
     let page = objects_list_page::<u16>(
         &client,
-        &format!("/intapi?page_token={}&limit={}", next_page_token, count),
+        &format!("/intapi?pageToken={}&limit={}", next_page_token, count),
     )
     .await;
     assert_sequence_from(&page.items, next_page_start, count);
@@ -368,7 +368,7 @@ async fn test_paginate_basic() {
             page = objects_list_page::<u16>(
                 &client,
                 &format!(
-                    "/intapi?page_token={}&limit={}",
+                    "/intapi?pageToken={}&limit={}",
                     &next_token, expected_max
                 ),
             )
@@ -433,7 +433,7 @@ async fn test_paginate_empty() {
 
     assert_error(
         &client,
-        "/empty?page_token=q",
+        "/empty?pageToken=q",
         "unable to parse query string: failed to parse pagination token: \
          Encoded text cannot have a 6-bit remainder.",
     )
@@ -524,7 +524,7 @@ async fn test_paginate_extra_params() {
     /* Provide a value for the extra query parameter in the NextPage case. */
     let page = object_get::<ExtraResultsPage>(
         &client,
-        &format!("/ints_extra?page_token={}&debug=false&limit=7", token),
+        &format!("/ints_extra?pageToken={}&debug=false&limit=7", token),
     )
     .await;
     assert_eq!(page.page.items, vec![6, 7, 8, 9, 10, 11, 12]);
@@ -730,7 +730,7 @@ async fn test_paginate_dictionary() {
     let token = page.next_page.unwrap();
     let page = objects_list_page::<DictionaryWord>(
         &client,
-        &format!("/dictionary?limit=3&page_token={}", token),
+        &format!("/dictionary?limit=3&pageToken={}", token),
     )
     .await;
     let found_words =
@@ -750,7 +750,7 @@ async fn test_paginate_dictionary() {
     /* Critically, we don't have to pass order=descending again. */
     let page = objects_list_page::<DictionaryWord>(
         &client,
-        &format!("/dictionary?limit=3&page_token={}", token),
+        &format!("/dictionary?limit=3&pageToken={}", token),
     )
     .await;
     let found_words =
@@ -772,7 +772,7 @@ async fn test_paginate_dictionary() {
     let token = page.next_page.unwrap();
     let page = objects_list_page::<DictionaryWord>(
         &client,
-        &format!("/dictionary?limit=3&page_token={}", token),
+        &format!("/dictionary?limit=3&pageToken={}", token),
     )
     .await;
     let found_words =

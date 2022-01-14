@@ -693,7 +693,7 @@ pub async fn iter_collection<T: Clone + DeserializeOwned>(
     while let Some(token) = page.next_page {
         page = objects_list_page::<T>(
             &client,
-            &format!("{}?limit={}&page_token={}", collection_url, limit, token),
+            &format!("{}?limit={}&pageToken={}", collection_url, limit, token),
         )
         .await;
         assert!(page.items.len() <= limit);

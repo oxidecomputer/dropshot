@@ -1302,10 +1302,11 @@ mod test {
 
     #[derive(Deserialize, Serialize, JsonSchema)]
     #[allow(dead_code)]
+    #[serde(rename_all = "camelCase")]
     struct A {
         foo: String,
         bar: u32,
-        baz: Option<String>,
+        baz_baz: Option<String>,
     }
 
     #[derive(JsonSchema)]
@@ -1322,7 +1323,10 @@ mod test {
     #[schemars(untagged)]
     enum C<T> {
         First(T),
-        Next { page_token: String },
+        #[schemars(rename_all = "camelCase")]
+        Next {
+            page_token: String,
+        },
     }
 
     fn compare(
@@ -1356,7 +1360,7 @@ mod test {
     #[test]
     fn test_metadata_simple() {
         let params = get_metadata::<A>(&ApiEndpointParameterLocation::Path);
-        let expected = vec![("bar", true), ("baz", false), ("foo", true)];
+        let expected = vec![("bar", true), ("bazBaz", false), ("foo", true)];
 
         compare(params, false, expected);
     }
@@ -1366,7 +1370,7 @@ mod test {
         let params = get_metadata::<B<A>>(&ApiEndpointParameterLocation::Path);
         let expected = vec![
             ("bar", true),
-            ("baz", false),
+            ("bazBaz", false),
             ("foo", true),
             ("limit", false),
         ];
@@ -1381,9 +1385,9 @@ mod test {
         let expected = vec![
             ("limit", false),
             ("bar", false),
-            ("baz", false),
+            ("bazBaz", false),
             ("foo", false),
-            ("page_token", false),
+            ("pageToken", false),
         ];
 
         compare(params, false, expected);
@@ -1396,10 +1400,10 @@ mod test {
         );
         let expected = vec![
             ("bar", false),
-            ("baz", false),
+            ("bazBaz", false),
             ("foo", false),
             ("limit", false),
-            ("page_token", false),
+            ("pageToken", false),
         ];
 
         compare(params, true, expected);
