@@ -654,9 +654,11 @@ pub use handler::RequestContextArgument;
 pub use http::Method;
 
 /*
- * Users constructing HttpError need the status code
+ * Expose dropshot's http and hyper dependencies so users don't have to track
+ * them.
  */
-pub use http::StatusCode;
+pub use http;
+pub use hyper;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::endpoint;
