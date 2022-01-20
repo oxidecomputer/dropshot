@@ -653,5 +653,10 @@ pub use server::{HttpServer, HttpServerStarter};
 pub use handler::RequestContextArgument;
 pub use http::Method;
 
+/*
+ * Users constructing HttpError need the status code
+ */
+pub use http::StatusCode;
+
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::endpoint;
