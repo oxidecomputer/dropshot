@@ -452,7 +452,13 @@ fn extract_doc_from_attrs(
         Vec::new()
     });
 
-    let summary = lines.next();
+    // Skip initial blank lines; they make for excessively terse summaries.
+    let summary = loop {
+        match lines.next() {
+            Some(s) if s.is_empty() => (),
+            next => break next,
+        }
+    };
     let first = lines.next();
 
     match (summary, first) {
@@ -460,48 +466,46 @@ fn extract_doc_from_attrs(
         (summary, None) => (summary, None),
         (Some(summary), Some(first)) => (
             Some(summary),
-            Some(lines.fold(first, |acc, comment| {
-                if acc.ends_with('-') || acc.is_empty() {
-                    format!("{}{}", acc, comment)
-                } else {
-                    format!("{} {}", acc, comment)
-                }
-            })),
+            Some(
+                lines
+                    .fold(first, |acc, comment| {
+                        if acc.ends_with('-')
+                            || acc.ends_with('\n')
+                            || acc.is_empty()
+                        {
+                            // Continuation lines and newlines.
+                            format!("{}{}", acc, comment)
+                        } else if comment.is_empty() {
+                            // Handle fully blank comments as newlines we keep.
+                            format!("{}\n", acc)
+                        } else {
+                            // Default to space-separating comment fragments.
+                            format!("{} {}", acc, comment)
+                        }
+                    })
+                    .trim_end()
+                    .to_string(),
+            ),
         ),
     }
 }
 fn normalize_comment_string(s: String) -> Vec<String> {
-    let mut ret = s
-        .split('\n')
+    s.split('\n')
         .enumerate()
         .map(|(idx, s)| {
+            // Rust-style comments are intrinsically single-line. We don't want
+            // to trim away formatting such as an initial '*'.
             if idx == 0 {
-                s.trim_start()
+                s.trim_start().trim_end()
             } else {
-                let trimmed = s.trim_start();
+                let trimmed = s.trim_start().trim_end();
                 trimmed.strip_prefix("* ").unwrap_or_else(|| {
                     trimmed.strip_prefix('*').unwrap_or(trimmed)
                 })
             }
         })
-        .map(|s| s.trim_end())
         .map(ToString::to_string)
-        .collect::<Vec<_>>();
-
-    loop {
-        match ret.first() {
-            Some(s) if s.is_empty() => {
-                let _ = ret.remove(0);
-            }
-            _ => break,
-        }
-    }
-
-    while ret.last().map(|s| s.is_empty()) == Some(true) {
-        ret.pop();
-    }
-
-    ret
+        .collect()
 }
 
 #[cfg(test)]
@@ -1007,11 +1011,11 @@ mod tests {
             };
 
             #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handle \"xyz\" requests"]
+            #[doc = "API Endpoint: handler_xyz\nhandle \"xyz\" requests"]
             struct handler_xyz {}
 
             #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handle \"xyz\" requests"]
+            #[doc = "API Endpoint: handler_xyz\nhandle \"xyz\" requests"]
             const handler_xyz: handler_xyz = handler_xyz {};
 
             impl From<handler_xyz>
@@ -1032,7 +1036,7 @@ mod tests {
                         dropshot::Method::GET,
                         "/a/b/c",
                     )
-                    .description("handle \"xyz\" requests")
+                    .summary("handle \"xyz\" requests")
                 }
             }
         };
@@ -1185,6 +1189,14 @@ mod tests {
             )
         );
 
+        /** Terse Javadoc summary */
+        #[derive(Schema)]
+        struct JavadocCommentsTerse;
+        assert_eq!(
+            extract_doc_from_attrs(&JavadocCommentsTerse::schema().attrs),
+            (Some("Terse Javadoc summary".to_string()), None)
+        );
+
         /// Rustdoc summary
         /// Did other folks do this or what this an invention I can right-
         /// fully ascribe to Rust?
@@ -1221,6 +1233,22 @@ mod tests {
         assert_eq!(
             extract_doc_from_attrs(&JustTheSummary::schema().attrs),
             (Some("Just a summary".to_string()), None)
+        );
+
+        /// Summary
+        /// Text
+        /// More
+        ///
+        /// Even
+        /// More
+        #[derive(Schema)]
+        struct SummaryDescriptionBreak;
+        assert_eq!(
+            extract_doc_from_attrs(&SummaryDescriptionBreak::schema().attrs),
+            (
+                Some("Summary".to_string()),
+                Some("Text More\nEven More".to_string())
+            )
         );
     }
 }
