@@ -15,9 +15,10 @@ use std::{io::Cursor, str::from_utf8, sync::Arc};
     method = GET,
     path = "/test/person",
 }]
+/// Rust style comment
+///
 /// This is a multi-
 /// line comment.
-/// It uses Rust-style.
 async fn handler1(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -36,9 +37,10 @@ struct QueryArgs {
     path = "/test/woman",
 }]
 /**
+ * C-style comment
+ *
  * This is a multi-
  * line comment.
- * It uses C-style.
  */
 async fn handler2(
     _rqctx: Arc<RequestContext<()>>,

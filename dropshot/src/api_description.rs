@@ -36,6 +36,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub path: String,
     pub parameters: Vec<ApiEndpointParameter>,
     pub response: ApiEndpointResponse,
+    pub summary: Option<String>,
     pub description: Option<String>,
     pub tags: Vec<String>,
     pub paginated: bool,
@@ -63,11 +64,17 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             path: path.to_string(),
             parameters: func_parameters.parameters,
             response,
+            summary: None,
             description: None,
             tags: vec![],
             paginated: func_parameters.paginated,
             visible: true,
         }
+    }
+
+    pub fn summary<T: ToString>(mut self, description: T) -> Self {
+        self.summary.replace(description.to_string());
+        self
     }
 
     pub fn description<T: ToString>(mut self, description: T) -> Self {
@@ -465,6 +472,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             };
             let mut operation = openapiv3::Operation::default();
             operation.operation_id = Some(endpoint.operation_id.clone());
+            operation.summary = endpoint.summary.clone();
             operation.description = endpoint.description.clone();
             operation.tags = endpoint.tags.clone();
 
@@ -812,7 +820,7 @@ fn j2oas_schema_object(
         (None, None) => {
             openapiv3::SchemaKind::Any(openapiv3::AnySchema::default())
         }
-        _ => panic!("invalid"),
+        _ => panic!("invalid {:#?}", obj),
     };
 
     let mut data = openapiv3::SchemaData::default();

@@ -271,6 +271,7 @@ version = "0.6.1-dev"
 dependencies = [
  "proc-macro2",
  "quote",
+ "schema",
  "serde",
  "serde_tokenstream",
  "syn",
@@ -1082,6 +1083,30 @@ checksum = "8f05ba609c234e60bee0d547fe94a4c7e9da733d1c962cf6e59efa4cd9c8bc75"
 dependencies = [
  "lazy_static",
  "winapi",
+]
+
+[[package]]
+name = "schema"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c264b3fd73f2b0b7360f7ae10779dbcb3a3d0f2b1326347c16cd4da32a0db43"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "schema-derive",
+ "syn",
+]
+
+[[package]]
+name = "schema-derive"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c5081f42984166c05c533e4ae3a75e8c1f973071be7ef442912d7f83fc9e762"
+dependencies = [
+ "paste",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

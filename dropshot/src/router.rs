@@ -849,6 +849,7 @@ mod test {
                 success: None,
                 description: None,
             },
+            summary: None,
             description: None,
             tags: vec![],
             paginated: false,
