@@ -247,7 +247,8 @@
     },
     "/test/person": {
       "get": {
-        "description": "This is a multi-line comment. It uses Rust-style.",
+        "summary": "Rust style comment",
+        "description": "This is a multi-line comment.",
         "operationId": "handler1",
         "responses": {
           "200": {
@@ -336,7 +337,8 @@
     },
     "/test/woman": {
       "put": {
-        "description": "This is a multi-line comment. It uses C-style.",
+        "summary": "C-style comment",
+        "description": "This is a multi-line comment.",
         "operationId": "handler2",
         "parameters": [
           {

@@ -166,18 +166,30 @@ fn do_endpoint(
     let method_ident = format_ident!("{}", method);
     let visibility = &ast.vis;
 
-    let description_text_provided = extract_doc_from_attrs(&ast.attrs);
-    let description_text_annotated = format!(
-        "API Endpoint: {}",
-        description_text_provided.as_ref().unwrap_or(&name_str).as_str().trim()
-    );
-    let description_doc_comment = quote! {
-        #[doc = #description_text_annotated]
-    };
-    let description = description_text_provided.map(|description| {
-        quote! {
-            .description(#description)
+    let (summary_text, description_text) = extract_doc_from_attrs(&ast.attrs);
+    let comment_text = {
+        let mut buf = String::new();
+        buf.push_str("API Endpoint: ");
+        buf.push_str(&name_str);
+        if let Some(s) = &summary_text {
+            buf.push_str("\n");
+            buf.push_str(&s);
         }
+        if let Some(s) = &description_text {
+            buf.push_str("\n");
+            buf.push_str(&s);
+        }
+        buf
+    };
+    let description_doc_comment = quote! {
+        #[doc = #comment_text]
+    };
+
+    let summary = summary_text.map(|summary| {
+        quote! { .summary(#summary) }
+    });
+    let description = description_text.map(|description| {
+        quote! { .description(#description) }
     });
 
     let tags = metadata
@@ -351,6 +363,7 @@ fn do_endpoint(
                 #dropshot::Method::#method_ident,
                 #path,
             )
+            #summary
             #description
             #(#tags)*
             #visible
@@ -421,49 +434,80 @@ fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
     quote!(#(#compile_errors)*)
 }
 
-fn extract_doc_from_attrs(attrs: &[syn::Attribute]) -> Option<String> {
+fn extract_doc_from_attrs(
+    attrs: &[syn::Attribute],
+) -> (Option<String>, Option<String>) {
     let doc = syn::Ident::new("doc", proc_macro2::Span::call_site());
 
-    attrs
-        .iter()
-        .filter_map(|attr| {
-            if let Ok(meta) = attr.parse_meta() {
-                if let syn::Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident(&doc) {
-                        if let syn::Lit::Str(s) = nv.lit {
-                            return Some(normalize_comment_string(s.value()));
-                        }
+    let mut lines = attrs.iter().flat_map(|attr| {
+        if let Ok(meta) = attr.parse_meta() {
+            if let syn::Meta::NameValue(nv) = meta {
+                if nv.path.is_ident(&doc) {
+                    if let syn::Lit::Str(s) = nv.lit {
+                        return normalize_comment_string(s.value());
                     }
                 }
             }
-            None
-        })
-        .fold(None, |acc, comment| match acc {
-            None => Some(comment),
-            Some(prev) if prev.ends_with('-') => {
-                Some(format!("{}{}", prev, comment))
-            }
-            Some(prev) => Some(format!("{} {}", prev, comment)),
-        })
-}
+        }
+        Vec::new()
+    });
 
-fn normalize_comment_string(s: String) -> String {
-    let ret = s
-        .replace("-\n * ", "-")
-        .replace("\n * ", " ")
-        .trim_end_matches(&[' ', '\n'] as &[char])
-        .to_string();
-    if ret.starts_with(' ') && !ret.starts_with("  ") {
-        // Trim off the first character if the comment
-        // begins with a single space.
-        ret.as_str()[1..].to_string()
-    } else {
-        ret
+    let summary = lines.next();
+    let first = lines.next();
+
+    match (summary, first) {
+        (None, _) => (None, None),
+        (summary, None) => (summary, None),
+        (Some(summary), Some(first)) => (
+            Some(summary),
+            Some(lines.fold(first, |acc, comment| {
+                if acc.ends_with('-') || acc.is_empty() {
+                    format!("{}{}", acc, comment)
+                } else {
+                    format!("{} {}", acc, comment)
+                }
+            })),
+        ),
     }
+}
+fn normalize_comment_string(s: String) -> Vec<String> {
+    let mut ret = s
+        .split('\n')
+        .enumerate()
+        .map(|(idx, s)| {
+            if idx == 0 {
+                s.trim_start()
+            } else {
+                let trimmed = s.trim_start();
+                trimmed.strip_prefix("* ").unwrap_or_else(|| {
+                    trimmed.strip_prefix('*').unwrap_or(trimmed)
+                })
+            }
+        })
+        .map(|s| s.trim_end())
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+
+    loop {
+        match ret.first() {
+            Some(s) if s.is_empty() => {
+                let _ = ret.remove(0);
+            }
+            _ => break,
+        }
+    }
+
+    while ret.last().map(|s| s.is_empty()) == Some(true) {
+        ret.pop();
+    }
+
+    ret
 }
 
 #[cfg(test)]
 mod tests {
+    use schema::Schema;
+
     use super::*;
 
     #[test]
@@ -1102,6 +1146,81 @@ mod tests {
         assert_eq!(
             errors.get(1).map(ToString::to_string),
             Some("Endpoint requires arguments".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_summary_description() {
+        /**
+         * Javadoc summary
+         * Maybe there's another name for these...
+         * ... but Java is the first place I saw these types of comments.
+         */
+        #[derive(Schema)]
+        struct JavadocComments;
+        assert_eq!(
+            extract_doc_from_attrs(&JavadocComments::schema().attrs),
+            (
+                Some("Javadoc summary".to_string()),
+                Some(
+                    "Maybe there's another name for these... ... but Java \
+                    is the first place I saw these types of comments."
+                        .to_string()
+                )
+            )
+        );
+
+        /**
+         * Javadoc summary
+         *
+         * Skip that blank.
+         */
+        #[derive(Schema)]
+        struct JavadocCommentsWithABlank;
+        assert_eq!(
+            extract_doc_from_attrs(&JavadocCommentsWithABlank::schema().attrs),
+            (
+                Some("Javadoc summary".to_string()),
+                Some("Skip that blank.".to_string())
+            )
+        );
+
+        /// Rustdoc summary
+        /// Did other folks do this or what this an invention I can right-
+        /// fully ascribe to Rust?
+        #[derive(Schema)]
+        struct RustdocComments;
+        assert_eq!(
+            extract_doc_from_attrs(&RustdocComments::schema().attrs),
+            (
+                Some("Rustdoc summary".to_string()),
+                Some(
+                    "Did other folks do this or what this an invention \
+                    I can right-fully ascribe to Rust?"
+                        .to_string()
+                )
+            )
+        );
+
+        /// Rustdoc summary
+        ///
+        /// Skip that blank.
+        #[derive(Schema)]
+        struct RustdocCommentsWithABlank;
+        assert_eq!(
+            extract_doc_from_attrs(&RustdocCommentsWithABlank::schema().attrs),
+            (
+                Some("Rustdoc summary".to_string()),
+                Some("Skip that blank.".to_string())
+            )
+        );
+
+        /// Just a summary
+        #[derive(Schema)]
+        struct JustTheSummary;
+        assert_eq!(
+            extract_doc_from_attrs(&JustTheSummary::schema().attrs),
+            (Some("Just a summary".to_string()), None)
         );
     }
 }
