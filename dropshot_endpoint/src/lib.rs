@@ -459,7 +459,13 @@ fn extract_doc_from_attrs(
             next => break next,
         }
     };
-    let first = lines.next();
+    // Skip initial blank description lines.
+    let first = loop {
+        match lines.next() {
+            Some(s) if s.is_empty() => (),
+            next => break next,
+        }
+    };
 
     match (summary, first) {
         (None, _) => (None, None),
@@ -1227,12 +1233,22 @@ mod tests {
             )
         );
 
-        /// Just a summary
+        /// Just a Rustdoc summary
         #[derive(Schema)]
-        struct JustTheSummary;
+        struct JustTheRustdocSummary;
         assert_eq!(
-            extract_doc_from_attrs(&JustTheSummary::schema().attrs),
-            (Some("Just a summary".to_string()), None)
+            extract_doc_from_attrs(&JustTheRustdocSummary::schema().attrs),
+            (Some("Just a Rustdoc summary".to_string()), None)
+        );
+
+        /**
+         * Just a Javadoc summary
+         */
+        #[derive(Schema)]
+        struct JustTheJavadocSummary;
+        assert_eq!(
+            extract_doc_from_attrs(&JustTheJavadocSummary::schema().attrs),
+            (Some("Just a Javadoc summary".to_string()), None)
         );
 
         /// Summary
