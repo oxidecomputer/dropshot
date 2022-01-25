@@ -23,6 +23,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of co
 === Other notable changes
 
 * https://github.com/oxidecomputer/dropshot/pull/198[#198] Responses that used `()` (the unit type) as their `Body` type parameter previously (and inaccurately) were represented in OpenAPI as an empty `responseBody`. They are now more accurately represented as a body whose value is `null` (4 bytes). We encourage those use cases to instead use either `HttpResponseUpdatedNoContent` or `HttpResponseDeleted` both of which have empty response bodies. If there are other situations where you would like a response type with no body, please file an issue.
+* https://github.com/oxidecomputer/dropshot/pull/252[#252] Endpoints specified with the `#[endpoint ..]` attribute macro now use the first line of a doc comment as the OpenAPI `summary` and subsequent lines as the `description`. Previously all lines were used as the `description`.
 
 == 0.6.0 (released 2021-11-18)
 
