@@ -56,7 +56,7 @@ version = "2.5.0"
 features = [ "max_level_trace", "release_max_level_debug" ]
 
 [dependencies.tokio]
-version = "1.15"
+version = "1.16"
 features = [ "full" ]
 
 [dependencies.usdt]
