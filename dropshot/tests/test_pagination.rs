@@ -227,7 +227,8 @@ async fn test_paginate_errors() {
     let test_cases = vec![
         ErrorTestCase {
             path: "/intapi?limit=0".to_string(),
-            message: "unable to parse query string: expected a non-zero value",
+            message: "unable to parse query string: invalid value: \
+                integer `0`, expected a nonzero u32",
         },
         ErrorTestCase {
             path: "/intapi?limit=-3".to_string(),
@@ -427,7 +428,8 @@ async fn test_paginate_empty() {
     assert_error(
         &client,
         "/empty?limit=0",
-        "unable to parse query string: expected a non-zero value",
+        "unable to parse query string: invalid value: integer `0`, \
+        expected a nonzero u32",
     )
     .await;
 
