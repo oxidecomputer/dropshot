@@ -45,6 +45,7 @@
  */
 
 use hyper::Error as HyperError;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::error::Error;
@@ -107,9 +108,17 @@ pub struct HttpError {
  * deserialize an HTTP response corresponding to an error in order to access the
  * error code, message, etc.
  */
-#[derive(Debug, Deserialize, Serialize)]
+/*
+ * TODO: does this need to be pub if it's going to be expressed in the OpenAPI
+ * output?
+ */
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[schemars(rename = "Error")]
 pub struct HttpErrorResponseBody {
     pub request_id: String,
+    // The combination of default and required removes "nullable" from the
+    // OpenAPI-flavored JSON Schema output.
+    #[schemars(default, required)]
     pub error_code: Option<String>,
     pub message: String,
 }

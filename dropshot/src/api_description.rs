@@ -14,6 +14,7 @@ use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
 use crate::Extractor;
+use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
 
@@ -620,8 +621,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
                 match &endpoint.response.success {
                     None => {
-                        operation.responses.default =
-                            Some(openapiv3::ReferenceOr::Item(response))
+                        // Without knowing the specific status code we use the
+                        // 2xx range.
+                        operation.responses.responses.insert(
+                            openapiv3::StatusCode::Range(2),
+                            openapiv3::ReferenceOr::Item(response),
+                        );
                     }
                     Some(code) => {
                         operation.responses.responses.insert(
@@ -630,9 +635,23 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         );
                     }
                 }
+
+                // 4xx and 5xx responses all use the same error information
+                let err_ref = openapiv3::ReferenceOr::ref_(
+                    "#/components/responses/Error",
+                );
+                operation
+                    .responses
+                    .responses
+                    .insert(openapiv3::StatusCode::Range(4), err_ref.clone());
+                operation
+                    .responses
+                    .responses
+                    .insert(openapiv3::StatusCode::Range(5), err_ref);
             } else {
                 // If no schema was specified, the response is hand-rolled. In
-                // this case we'll fall back to the default response type.
+                // this case we'll fall back to the default response type which
+                // we assume to be inclusive of errors.
                 operation.responses.default =
                     Some(openapiv3::ReferenceOr::Item(openapiv3::Response {
                         // TODO: perhaps we should require even free-form
@@ -647,11 +666,35 @@ impl<Context: ServerContext> ApiDescription<Context> {
             method_ref.replace(operation);
         }
 
-        // Add the schemas for which we generated references.
-        let schemas = &mut openapi
+        let components = &mut openapi
             .components
-            .get_or_insert_with(openapiv3::Components::default)
-            .schemas;
+            .get_or_insert_with(openapiv3::Components::default);
+
+        // All endpoints share an error response
+        let responses = &mut components.responses;
+        let mut content = indexmap::IndexMap::new();
+        content.insert(
+            CONTENT_TYPE_JSON.to_string(),
+            openapiv3::MediaType {
+                schema: Some(j2oas_schema(
+                    None,
+                    &generator.subschema_for::<HttpErrorResponseBody>(),
+                )),
+                ..Default::default()
+            },
+        );
+
+        responses.insert(
+            "Error".to_string(),
+            openapiv3::ReferenceOr::Item(openapiv3::Response {
+                description: "Error".to_string(),
+                content: content,
+                ..Default::default()
+            }),
+        );
+
+        // Add the schemas for which we generated references.
+        let schemas = &mut components.schemas;
 
         let root_schema = generator.into_root_schema_for::<()>();
         root_schema.definitions.iter().for_each(|(key, schema)| {
