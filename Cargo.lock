@@ -255,7 +255,6 @@ dependencies = [
  "slog-json",
  "slog-term",
  "subprocess",
- "syn",
  "tempfile",
  "tokio",
  "tokio-rustls",
