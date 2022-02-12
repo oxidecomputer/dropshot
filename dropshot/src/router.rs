@@ -148,7 +148,7 @@ impl PathSegment {
             /*
              * Note that the only constraint on the variable name is that it is
              * not empty. Consumers may choose odd names like '_' or 'type'
-             * that are not valid Rust identifiers and use rename them with
+             * that are not valid Rust identifiers and rename them with
              * serde attributes during deserialization.
              */
             assert!(
