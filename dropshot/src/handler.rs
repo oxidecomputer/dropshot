@@ -1070,7 +1070,7 @@ impl HttpResponse for Response<Body> {
         Ok(self)
     }
     fn metadata() -> ApiEndpointResponse {
-        ApiEndpointResponse { schema: None, success: None, description: None }
+        ApiEndpointResponse::default()
     }
 }
 
@@ -1128,6 +1128,7 @@ where
             }),
             success: Some(T::STATUS_CODE),
             description: Some(T::DESCRIPTION.to_string()),
+            ..Default::default()
         }
     }
 }
@@ -1282,6 +1283,77 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
         Ok(Response::builder()
             .status(HttpResponseUpdatedNoContent::STATUS_CODE)
             .body(Body::empty())?)
+    }
+}
+
+struct HttpResponseHeaders<
+    T: HttpTypedResponse,
+    H: JsonSchema + Serialize + Send + Sync + 'static,
+>(pub T, pub H);
+impl<
+        T: HttpTypedResponse,
+        H: JsonSchema + Serialize + Send + Sync + 'static,
+    > HttpResponse for HttpResponseHeaders<T, H>
+{
+    fn to_result(self) -> HttpHandlerResult {
+        let HttpResponseHeaders(body, headers) = self;
+        let result = body.into()?;
+        // add in headers
+        Ok(result)
+    }
+
+    fn metadata() -> ApiEndpointResponse {
+        let mut metadata = T::metadata();
+
+        // TODO this is wrong. Need to defer schema generation...
+        let mut generator = schemars::gen::SchemaGenerator::new(
+            schemars::gen::SchemaSettings::openapi3(),
+        );
+        let schema = H::json_schema(&mut generator);
+        metadata.headers = schema2headers(&schema, &generator);
+        metadata
+    }
+}
+
+fn schema2headers(
+    schema: &schemars::schema::Schema,
+    generator: &schemars::gen::SchemaGenerator,
+) -> Vec<String> {
+    match schema {
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: None,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: Some(_),
+            extensions: _,
+        }) => schema2headers(
+            generator.dereference(schema).expect("invalid reference"),
+            generator,
+        ),
+
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: Some(schemars::schema::SingleOrVec::Single(_)),
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: None,
+            object: Some(object),
+            reference: None,
+            extensions: _,
+        }) => object.properties.keys().cloned().collect(),
+
+        _ => todo!(),
     }
 }
 

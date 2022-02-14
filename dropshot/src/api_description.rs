@@ -182,9 +182,10 @@ impl ApiEndpointBodyContentType {
 /**
  * Metadata for an API endpoint response: type information and status code.
  */
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
+    pub headers: Vec<String>,
     pub success: Option<StatusCode>,
     pub description: Option<String>,
 }
