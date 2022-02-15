@@ -23,6 +23,7 @@ use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
 use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Path;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -36,6 +37,7 @@ use hyper::Response;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -54,6 +56,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_u32).unwrap();
     api.register(demo_handler_untyped_body).unwrap();
     api.register(demo_handler_delete).unwrap();
+    api.register(demo_handler_header).unwrap();
 
     /*
      * We don't need to exhaustively test these cases, as they're tested by unit
@@ -607,6 +610,35 @@ async fn test_delete_request() {
 }
 
 /*
+ * Test response header
+ */
+#[tokio::test]
+async fn test_header_request() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_header_request", api);
+    let response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/header",
+            None as Option<()>,
+            StatusCode::NO_CONTENT,
+        )
+        .await
+        .expect("expected success");
+
+    println!("{:?}", response.headers());
+
+    let header = response
+        .headers()
+        .get("x-dropshot-test-header")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(header, "hi");
+}
+
+/*
  * Demo handler functions
  */
 
@@ -772,6 +804,20 @@ async fn demo_handler_delete(
     _rqctx: RequestCtx,
 ) -> Result<HttpResponseDeleted, HttpError> {
     Ok(HttpResponseDeleted())
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/header",
+}]
+async fn demo_handler_header(
+    rqctx: RequestCtx,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    rqctx.add_response_header(
+        http::header::HeaderName::from_str("x-dropshot-test-header").unwrap(),
+        http::header::HeaderValue::from_str("hi").unwrap(),
+    );
+    Ok(HttpResponseUpdatedNoContent())
 }
 
 fn http_echo<T: Serialize>(t: &T) -> Result<Response<Body>, HttpError> {

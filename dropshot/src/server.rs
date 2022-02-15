@@ -761,6 +761,7 @@ async fn http_request_handle<C: ServerContext>(
         request: Arc::new(Mutex::new(request)),
         path_variables: lookup_result.variables,
         request_id: request_id.to_string(),
+        mutable_state: std::sync::Mutex::default(),
         log: request_log,
     };
     let mut response = lookup_result.handler.handle_request(rqctx).await?;

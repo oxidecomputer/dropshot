@@ -96,8 +96,19 @@ pub struct RequestContext<Context: ServerContext> {
     pub path_variables: VariableSet,
     /** unique id assigned to this request */
     pub request_id: String,
+    /** mutable state for the request; the details of this are internal */
+    pub mutable_state: std::sync::Mutex<RequestContextMutableState>,
     /** logger for this specific request */
     pub log: Logger,
+}
+
+/**
+ * Container for state that consumers can change while handling a request.
+ */
+#[derive(Default)]
+pub struct RequestContextMutableState {
+    response_headers:
+        Vec<(http::header::HeaderName, http::header::HeaderValue)>,
 }
 
 impl<Context: ServerContext> RequestContext<Context> {
@@ -138,6 +149,21 @@ impl<Context: ServerContext> RequestContext<Context> {
              * default.
              */
             .unwrap_or(server_config.page_default_nitems))
+    }
+
+    /**
+     * Add a header that will be included with the HTTP response.
+     */
+    pub fn add_response_header(
+        self: Arc<Self>,
+        header: http::header::HeaderName,
+        value: http::header::HeaderValue,
+    ) {
+        self.mutable_state
+            .lock()
+            .unwrap()
+            .response_headers
+            .push((header, value));
     }
 }
 
@@ -486,9 +512,18 @@ where
          * resolved statically.
          */
         let rqctx = Arc::new(rqctx_raw);
+        let response_rqctx = rqctx.clone();
         let funcparams = Extractor::from_request(Arc::clone(&rqctx)).await?;
         let future = self.handler.handle_request(rqctx, funcparams);
-        future.await
+
+        future.await.map(|mut response| {
+            let mutable_state = response_rqctx.mutable_state.lock().unwrap();
+
+            for (header, value) in &mutable_state.response_headers {
+                response.headers_mut().insert(header, value.clone());
+            }
+            response
+        })
     }
 }
 

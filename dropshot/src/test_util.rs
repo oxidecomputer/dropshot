@@ -51,9 +51,9 @@ impl<'a> AllowedHeader<'a> {
     }
 }
 
-// List of allowed HTTP headers in responsees.
+// List of allowed HTTP headers in responses.
 // Used to make sure we don't leak headers unexpectedly.
-const ALLOWED_HEADERS: [AllowedHeader<'static>; 5] = [
+const ALLOWED_HEADERS: [AllowedHeader<'static>; 6] = [
     AllowedHeader::new("content-length"),
     AllowedHeader::new("content-type"),
     AllowedHeader::new("date"),
@@ -62,6 +62,7 @@ const ALLOWED_HEADERS: [AllowedHeader<'static>; 5] = [
         name: "transfer-encoding",
         value: AllowedValue::OneOf(&["chunked"]),
     },
+    AllowedHeader::new("x-dropshot-test-header"),
 ];
 
 /**
