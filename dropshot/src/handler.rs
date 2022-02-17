@@ -107,8 +107,7 @@ pub struct RequestContext<Context: ServerContext> {
  */
 #[derive(Default)]
 pub struct RequestContextMutableState {
-    response_headers:
-        Vec<(http::header::HeaderName, http::header::HeaderValue)>,
+    response_headers: http::header::HeaderMap,
 }
 
 impl<Context: ServerContext> RequestContext<Context> {
@@ -152,18 +151,50 @@ impl<Context: ServerContext> RequestContext<Context> {
     }
 
     /**
-     * Add a header that will be included with the HTTP response.
+     * Set a header that will be included with the HTTP response.
+     *
+     * If the header was previously unspecified, then None is returned.
+     *
+     * If the header was previously specified, the new value is associated with
+     * the key and all previous values are removed.
      */
-    pub fn add_response_header(
-        self: Arc<Self>,
-        header: http::header::HeaderName,
+    pub fn set_response_header<K>(
+        self: &Arc<Self>,
+        header: K,
         value: http::header::HeaderValue,
-    ) {
+    ) -> Option<http::header::HeaderValue>
+    where
+        K: http::header::IntoHeaderName,
+    {
         self.mutable_state
             .lock()
             .unwrap()
             .response_headers
-            .push((header, value));
+            .insert(header, value)
+    }
+
+    /**
+     * Set a header that will be included with the HTTP response.
+     *
+     * If the header was previously unspecified, then `false` is returned.
+     *
+     * If the header was previously specified, the new value is pushed to the
+     * end of the list of values associated with the key, and `true` is
+     * returned.
+     */
+    pub fn append_response_header<K>(
+        self: &Arc<Self>,
+        header: K,
+        value: http::header::HeaderValue,
+    ) -> bool
+    where
+        K: http::header::IntoHeaderName,
+    {
+        self.mutable_state
+            .lock()
+            .unwrap()
+            .response_headers
+            .append(header, value)
     }
 }
 
@@ -519,9 +550,10 @@ where
         future.await.map(|mut response| {
             let mutable_state = response_rqctx.mutable_state.lock().unwrap();
 
-            for (header, value) in &mutable_state.response_headers {
-                response.headers_mut().insert(header, value.clone());
-            }
+            response
+                .headers_mut()
+                .extend(mutable_state.response_headers.clone());
+
             response
         })
     }

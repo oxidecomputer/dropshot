@@ -19,6 +19,8 @@ use dropshot::endpoint;
 use dropshot::test_util::object_delete;
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
+use dropshot::test_util::TEST_HEADER_1;
+use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
@@ -37,7 +39,6 @@ use hyper::Response;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -627,15 +628,21 @@ async fn test_header_request() {
         .await
         .expect("expected success");
 
-    println!("{:?}", response.headers());
-
-    let header = response
+    let headers = response
         .headers()
-        .get("x-dropshot-test-header")
-        .unwrap()
-        .to_str()
-        .unwrap();
-    assert_eq!(header, "hi");
+        .get_all(TEST_HEADER_1)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["howdy"]);
+
+    let headers = response
+        .headers()
+        .get_all(TEST_HEADER_2)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["hi", "howdy"]);
 }
 
 /*
@@ -813,9 +820,21 @@ async fn demo_handler_delete(
 async fn demo_handler_header(
     rqctx: RequestCtx,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    rqctx.add_response_header(
-        http::header::HeaderName::from_str("x-dropshot-test-header").unwrap(),
-        http::header::HeaderValue::from_str("hi").unwrap(),
+    rqctx.set_response_header(
+        TEST_HEADER_1,
+        http::header::HeaderValue::from_static("hi"),
+    );
+    rqctx.set_response_header(
+        TEST_HEADER_1,
+        http::header::HeaderValue::from_static("howdy"),
+    );
+    rqctx.append_response_header(
+        TEST_HEADER_2,
+        http::header::HeaderValue::from_static("hi"),
+    );
+    rqctx.append_response_header(
+        TEST_HEADER_2,
+        http::header::HeaderValue::from_static("howdy"),
     );
     Ok(HttpResponseUpdatedNoContent())
 }

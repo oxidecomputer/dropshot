@@ -51,9 +51,12 @@ impl<'a> AllowedHeader<'a> {
     }
 }
 
+pub const TEST_HEADER_1: &str = "x-dropshot-test-header-1";
+pub const TEST_HEADER_2: &str = "x-dropshot-test-header-2";
+
 // List of allowed HTTP headers in responses.
 // Used to make sure we don't leak headers unexpectedly.
-const ALLOWED_HEADERS: [AllowedHeader<'static>; 6] = [
+const ALLOWED_HEADERS: [AllowedHeader<'static>; 7] = [
     AllowedHeader::new("content-length"),
     AllowedHeader::new("content-type"),
     AllowedHeader::new("date"),
@@ -62,7 +65,8 @@ const ALLOWED_HEADERS: [AllowedHeader<'static>; 6] = [
         name: "transfer-encoding",
         value: AllowedValue::OneOf(&["chunked"]),
     },
-    AllowedHeader::new("x-dropshot-test-header"),
+    AllowedHeader::new(TEST_HEADER_1),
+    AllowedHeader::new(TEST_HEADER_2),
 ];
 
 /**
