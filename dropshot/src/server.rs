@@ -56,6 +56,7 @@ impl<T: 'static> ServerContext for T where T: Send + Sync {}
 /**
  * Stores shared state used by the Dropshot server.
  */
+#[derive(Debug)]
 pub struct DropshotState<C: ServerContext> {
     /** caller-specific state */
     pub private: C,
@@ -73,6 +74,7 @@ pub struct DropshotState<C: ServerContext> {
  * Stores static configuration associated with the server
  * TODO-cleanup merge with ConfigDropshot
  */
+#[derive(Debug)]
 pub struct ServerConfig {
     /** maximum allowed size of a request body */
     pub request_body_max_bytes: usize,
