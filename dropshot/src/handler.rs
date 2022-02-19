@@ -40,6 +40,7 @@ use super::http_util::CONTENT_TYPE_JSON;
 use super::server::DropshotState;
 use super::server::ServerContext;
 use crate::api_description::ApiEndpointBodyContentType;
+use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointResponse;
@@ -47,10 +48,12 @@ use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::router::VariableSet;
+use crate::to_map::to_map;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::lock::Mutex;
+use http::HeaderMap;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Request;
@@ -62,6 +65,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use slog::Logger;
 use std::cmp::min;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
@@ -667,20 +671,55 @@ where
     let mut generator = schemars::gen::SchemaGenerator::new(
         schemars::gen::SchemaSettings::openapi3(),
     );
-    let schema = ParamType::json_schema(&mut generator);
-    match &schema {
-        schemars::schema::Schema::Object(object) => ExtractorMetadata {
-            paginated: object
-                .extensions
-                .get(&PAGINATION_PARAM_SENTINEL.to_string())
-                .is_some(),
-            parameters: schema2parameters(loc, &schema, &generator, true),
-        },
-        _ => panic!("unexpected catchall schema"),
+    let schema = generator.root_schema_for::<ParamType>().schema.into();
+
+    let paginated = match schema_extensions(&schema) {
+        Some(extensions) => {
+            extensions.get(&PAGINATION_PARAM_SENTINEL.to_string()).is_some()
+        }
+        None => false,
+    };
+
+    /*
+     * Convert our collection of (&String, &Schema, bool [required]) into a
+     * list of parameters.
+     */
+    let parameters = schema2struct(&schema, &generator, true)
+        .into_iter()
+        .map(|struct_member| {
+            let mut s = struct_member.schema;
+            let mut visitor = ReferenceVisitor::new(&generator);
+            schemars::visit::visit_schema(&mut visitor, &mut s);
+
+            ApiEndpointParameter::new_named(
+                loc,
+                struct_member.name,
+                struct_member.description,
+                struct_member.required,
+                ApiSchemaGenerator::Static {
+                    schema: Box::new(s),
+                    dependencies: visitor.dependencies(),
+                },
+                Vec::new(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    ExtractorMetadata { paginated, parameters }
+}
+
+fn schema_extensions(
+    schema: &schemars::schema::Schema,
+) -> Option<&schemars::Map<String, serde_json::Value>> {
+    match schema {
+        schemars::schema::Schema::Bool(_) => None,
+        schemars::schema::Schema::Object(object) => Some(&object.extensions),
     }
 }
 
-/// Used to visit all schemas and collect all dependencies.
+/**
+ * Used to visit all schemas and collect all dependencies.
+ */
 struct ReferenceVisitor<'a> {
     generator: &'a schemars::gen::SchemaGenerator,
     dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
@@ -724,28 +763,29 @@ impl<'a> schemars::visit::Visitor for ReferenceVisitor<'a> {
     }
 }
 
+struct StructMember {
+    name: String,
+    description: Option<String>,
+    schema: schemars::schema::Schema,
+    required: bool,
+}
+
 /*
- * This helper function produces a list of parameters. It is invoked
- * recursively with subschemas, which we will encounter in the case of enums
- * and structs that have been flattened into the containing structure. The
- * top-level structure must be flat--unflattened substructures will result
- * in an error.
+ * This helper function produces a list of the structure members for the
+ * given schema. For each it returns:
+ *   (name: &String, schema: &Schema, required: bool)
  *
- * - `loc` is the input to GetMetadata::metadata, query or path parameters.
- * - `schema` is what we're processing.
- * - `definitions` is the map of referenced schemas created in the generation
- * step (as noted above, we would ideally just have these all inline).
- * - `required` defines whether parameters are required. In the case of an
- * enum (which results in an `any_of` subschema) we set this as `false` for
- * all subschemas. There doesn't seem to be a way to express in OpenAPI
- * collections of co-required or mutually exclusive parameters.
+ * If the input schema is not a flat structure the result will be a runtime
+ * failure reflective of a programming error (likely an invalid type specified
+ * in a handler function).
+ *
+ * This function is invoked recursively on subschemas.
  */
-fn schema2parameters(
-    loc: &ApiEndpointParameterLocation,
+fn schema2struct(
     schema: &schemars::schema::Schema,
     generator: &schemars::gen::SchemaGenerator,
     required: bool,
-) -> Vec<ApiEndpointParameter> {
+) -> Vec<StructMember> {
     /*
      * We ignore schema.metadata, which includes things like doc comments, and
      * schema.extensions. We call these out explicitly rather than eliding them
@@ -766,8 +806,7 @@ fn schema2parameters(
             object: None,
             reference: Some(_),
             extensions: _,
-        }) => schema2parameters(
-            loc,
+        }) => schema2struct(
             generator.dereference(schema).expect("invalid reference"),
             generator,
             required,
@@ -788,41 +827,35 @@ fn schema2parameters(
             reference: None,
             extensions: _,
         }) => {
-            let mut parameters = vec![];
+            let mut results = vec![];
 
-            // If there's a top-level object, add its members to the list of
-            // parameters.
+            /*
+             * If there's a top-level object, add its members to the list of
+             * parameters.
+             */
             if let Some(object) = object {
-                parameters.extend(object.properties.iter().map(
+                results.extend(object.properties.iter().map(
                     |(name, schema)| {
-                        // We won't often see referenced schemas here, but we may
-                        // in the case of enumerated strings. To handle this, we
-                        // package up the dependencies to include in the top-
-                        // level definitions section.
-                        let mut s = schema.clone();
-                        let mut visitor = ReferenceVisitor::new(generator);
-                        schemars::visit::visit_schema(&mut visitor, &mut s);
-
-                        ApiEndpointParameter::new_named(
-                            loc,
-                            name.clone(),
-                            None,
-                            required && object.required.contains(name),
-                            ApiSchemaGenerator::Static {
-                                schema: Box::new(s),
-                                dependencies: visitor.dependencies(),
-                            },
-                            vec![],
-                        )
+                        let (description, schema) =
+                            schema_extract_description(schema);
+                        StructMember {
+                            name: name.clone(),
+                            description,
+                            schema,
+                            required: required
+                                && object.required.contains(name),
+                        }
                     },
                 ));
             }
 
-            // We might see subschemas here in the case of flattened enums
-            // or flattened structures that have associated doc comments.
+            /*
+             * We might see subschemas here in the case of flattened enums
+             * or flattened structures that have associated doc comments.
+             */
             if let Some(subschemas) = subschemas {
                 match subschemas.as_ref() {
-                    // We expect any_of in the case of an enum.
+                    /* We expect any_of in the case of an enum. */
                     schemars::schema::SubschemaValidation {
                         all_of: None,
                         any_of: Some(schemas),
@@ -831,17 +864,17 @@ fn schema2parameters(
                         if_schema: None,
                         then_schema: None,
                         else_schema: None,
-                    } => parameters.extend(schemas.iter().flat_map(
-                        |subschema| {
-                            // Note that all these parameters will be optional.
-                            schema2parameters(loc, subschema, generator, false)
-                        },
-                    )),
+                    } => results.extend(schemas.iter().flat_map(|subschema| {
+                        /* Note that all will be tagged as optional. */
+                        schema2struct(subschema, generator, false)
+                    })),
 
-                    // With an all_of, there should be a single element. We
-                    // typically see this in the case where there is a doc
-                    // comment on a structure as OpenAPI 3.0.x doesn't have
-                    // a description field directly on schemas.
+                    /*
+                     * With an all_of, there should be a single element. We
+                     * typically see this in the case where there is a doc
+                     * comment on a structure as OpenAPI 3.0.x doesn't have
+                     * a description field directly on schemas.
+                     */
                     schemars::schema::SubschemaValidation {
                         all_of: Some(schemas),
                         any_of: None,
@@ -850,24 +883,21 @@ fn schema2parameters(
                         if_schema: None,
                         then_schema: None,
                         else_schema: None,
-                    } if schemas.len() == 1 => parameters.extend(
-                        schemas.iter().flat_map(|subschema| {
-                            schema2parameters(
-                                loc, subschema, generator, required,
-                            )
-                        }),
-                    ),
+                    } if schemas.len() == 1 => {
+                        results.extend(schemas.iter().flat_map(|subschema| {
+                            schema2struct(subschema, generator, required)
+                        }))
+                    }
 
-                    // We don't expect any other types of subschemas.
+                    /* We don't expect any other types of subschemas. */
                     invalid => panic!("invalid subschema {:#?}", invalid),
                 }
             }
 
-            parameters
+            results
         }
-        /*
-         * The generated schema should be an object.
-         */
+
+        /* The generated schema should be an object. */
         invalid => panic!("invalid type {:#?}", invalid),
     }
 }
@@ -948,7 +978,6 @@ where
     fn metadata() -> ExtractorMetadata {
         let body = ApiEndpointParameter::new_body(
             ApiEndpointBodyContentType::Json,
-            None,
             true,
             ApiSchemaGenerator::Gen {
                 name: BodyType::schema_name,
@@ -1016,7 +1045,6 @@ impl Extractor for UntypedBody {
         ExtractorMetadata {
             parameters: vec![ApiEndpointParameter::new_body(
                 ApiEndpointBodyContentType::Bytes,
-                None,
                 true,
                 ApiSchemaGenerator::Static {
                     schema: Box::new(
@@ -1286,74 +1314,124 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     }
 }
 
-struct HttpResponseHeaders<
+#[derive(Serialize, JsonSchema)]
+pub struct NoHeaders {}
+pub struct HttpResponseHeaders<
     T: HttpTypedResponse,
-    H: JsonSchema + Serialize + Send + Sync + 'static,
->(pub T, pub H);
+    H: JsonSchema + Serialize + Send + Sync + 'static = NoHeaders,
+> {
+    body: T,
+    structured_headers: H,
+    other_headers: HeaderMap,
+}
+impl<T: HttpTypedResponse> HttpResponseHeaders<T, NoHeaders> {
+    pub fn new_unnamed(body: T) -> Self {
+        Self {
+            body,
+            structured_headers: NoHeaders {},
+            other_headers: HeaderMap::default(),
+        }
+    }
+}
+impl<
+        T: HttpTypedResponse,
+        H: JsonSchema + Serialize + Send + Sync + 'static,
+    > HttpResponseHeaders<T, H>
+{
+    pub fn new(body: T, headers: H) -> Self {
+        Self {
+            body,
+            structured_headers: headers,
+            other_headers: HeaderMap::default(),
+        }
+    }
+
+    pub fn headers_mut(&mut self) -> &mut HeaderMap {
+        &mut self.other_headers
+    }
+}
 impl<
         T: HttpTypedResponse,
         H: JsonSchema + Serialize + Send + Sync + 'static,
     > HttpResponse for HttpResponseHeaders<T, H>
 {
     fn to_result(self) -> HttpHandlerResult {
-        let HttpResponseHeaders(body, headers) = self;
-        let result = body.into()?;
-        // add in headers
+        let HttpResponseHeaders { body, structured_headers, other_headers } =
+            self;
+        // Compute the body.
+        let mut result = body.into()?;
+        // Add in both the structured and other headers.
+        let headers = result.headers_mut();
+        let header_map = to_map(&structured_headers).map_err(|e| {
+            HttpError::for_internal_error(format!(
+                "error processing headers: {}",
+                e.0
+            ))
+        })?;
+
+        for (key, value) in header_map {
+            let key = http::header::HeaderName::try_from(key)
+                .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+            let value = http::header::HeaderValue::try_from(value)
+                .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+            headers.insert(key, value);
+        }
+
+        headers.extend(other_headers);
+
         Ok(result)
     }
 
     fn metadata() -> ApiEndpointResponse {
         let mut metadata = T::metadata();
 
-        // TODO this is wrong. Need to defer schema generation...
         let mut generator = schemars::gen::SchemaGenerator::new(
             schemars::gen::SchemaSettings::openapi3(),
         );
-        let schema = H::json_schema(&mut generator);
-        metadata.headers = schema2headers(&schema, &generator);
+        let schema = generator.root_schema_for::<H>().schema.into();
+
+        let headers = schema2struct(&schema, &generator, true)
+            .into_iter()
+            .map(|struct_member| {
+                let mut s = struct_member.schema;
+                let mut visitor = ReferenceVisitor::new(&generator);
+                schemars::visit::visit_schema(&mut visitor, &mut s);
+                ApiEndpointHeader {
+                    name: struct_member.name,
+                    description: struct_member.description,
+                    schema: ApiSchemaGenerator::Static {
+                        schema: Box::new(s),
+                        dependencies: visitor.dependencies(),
+                    },
+                    required: struct_member.required,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        metadata.headers = headers;
         metadata
     }
 }
 
-fn schema2headers(
+fn schema_extract_description(
     schema: &schemars::schema::Schema,
-    generator: &schemars::gen::SchemaGenerator,
-) -> Vec<String> {
+) -> (Option<String>, schemars::schema::Schema) {
     match schema {
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            metadata: _,
-            instance_type: None,
-            format: None,
-            enum_values: None,
-            const_value: None,
-            subschemas: None,
-            number: None,
-            string: None,
-            array: None,
-            object: None,
-            reference: Some(_),
-            extensions: _,
-        }) => schema2headers(
-            generator.dereference(schema).expect("invalid reference"),
-            generator,
-        ),
-
-        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-            metadata: _,
-            instance_type: Some(schemars::schema::SingleOrVec::Single(_)),
-            format: None,
-            enum_values: None,
-            const_value: None,
-            subschemas: None,
-            number: None,
-            string: None,
-            array: None,
-            object: Some(object),
-            reference: None,
-            extensions: _,
-        }) => object.properties.keys().cloned().collect(),
-
-        _ => todo!(),
+        schemars::schema::Schema::Bool(_) => (None, schema.clone()),
+        schemars::schema::Schema::Object(object) => {
+            let description = object
+                .metadata
+                .as_ref()
+                .and_then(|m| m.as_ref().description.clone());
+            (
+                description,
+                schemars::schema::SchemaObject {
+                    metadata: None,
+                    ..object.clone()
+                }
+                .into(),
+            )
+        }
     }
 }
 

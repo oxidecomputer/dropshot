@@ -19,10 +19,14 @@ use dropshot::endpoint;
 use dropshot::test_util::object_delete;
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
+use dropshot::test_util::TEST_HEADER_1;
+use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
+use dropshot::HttpResponseHeaders;
 use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Path;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -54,6 +58,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_u32).unwrap();
     api.register(demo_handler_untyped_body).unwrap();
     api.register(demo_handler_delete).unwrap();
+    api.register(demo_handler_headers).unwrap();
 
     /*
      * We don't need to exhaustively test these cases, as they're tested by unit
@@ -607,6 +612,41 @@ async fn test_delete_request() {
 }
 
 /*
+ * Test response headers
+ */
+#[tokio::test]
+async fn test_header_request() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_header_request", api);
+    let response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/headers",
+            None as Option<()>,
+            StatusCode::NO_CONTENT,
+        )
+        .await
+        .expect("expected success");
+
+    let headers = response
+        .headers()
+        .get_all(TEST_HEADER_1)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["howdy"]);
+
+    let headers = response
+        .headers()
+        .get_all(TEST_HEADER_2)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["hi", "howdy"]);
+}
+
+/*
  * Demo handler functions
  */
 
@@ -772,6 +812,25 @@ async fn demo_handler_delete(
     _rqctx: RequestCtx,
 ) -> Result<HttpResponseDeleted, HttpError> {
     Ok(HttpResponseDeleted())
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/headers",
+}]
+async fn demo_handler_headers(
+    _rqctx: RequestCtx,
+) -> Result<HttpResponseHeaders<HttpResponseUpdatedNoContent>, HttpError> {
+    let mut response =
+        HttpResponseHeaders::new_unnamed(HttpResponseUpdatedNoContent());
+    let headers = response.headers_mut();
+    headers.insert(TEST_HEADER_1, http::header::HeaderValue::from_static("hi"));
+    headers
+        .insert(TEST_HEADER_1, http::header::HeaderValue::from_static("howdy"));
+    headers.append(TEST_HEADER_2, http::header::HeaderValue::from_static("hi"));
+    headers
+        .append(TEST_HEADER_2, http::header::HeaderValue::from_static("howdy"));
+    Ok(response)
 }
 
 fn http_echo<T: Serialize>(t: &T) -> Result<Response<Body>, HttpError> {

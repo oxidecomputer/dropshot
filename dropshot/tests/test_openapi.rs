@@ -2,9 +2,9 @@
 
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseOk,
-    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
-    RequestContext, ResultsPage, TypedBody, UntypedBody,
+    HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
+    HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
+    Query, RequestContext, ResultsPage, TypedBody, UntypedBody,
 };
 use hyper::Body;
 use schemars::JsonSchema;
@@ -28,7 +28,9 @@ async fn handler1(
 #[derive(Deserialize, JsonSchema)]
 #[allow(dead_code)]
 struct QueryArgs {
+    /// One brother connected by the pain
     tomax: String,
+    /// Spoiler: there's a reason this is not required...
     xamot: Option<String>,
 }
 
@@ -145,13 +147,17 @@ async fn handler7(
  * returned by two different handler functions.
  */
 
+/// Best non-duplicated type
 #[derive(JsonSchema, Serialize)]
 struct NeverDuplicatedResponseTopLevel {
+    /// Bee
     b: NeverDuplicatedResponseNextLevel,
 }
 
+/// Veritably non-duplicated type
 #[derive(JsonSchema, Serialize)]
 struct NeverDuplicatedResponseNextLevel {
+    /// Vee
     v: bool,
 }
 
@@ -289,6 +295,32 @@ async fn handler16(
     unimplemented!();
 }
 
+#[derive(Serialize, JsonSchema)]
+struct SomeHeaders {
+    /// eee! a tag
+    #[serde(rename = "Etag")]
+    etag: String,
+    /// this is a foo
+    #[serde(rename = "x-foo-mobile")]
+    foo: Foo,
+}
+
+#[derive(Serialize, JsonSchema)]
+struct Foo(String);
+
+#[endpoint {
+    method = GET,
+    path = "/with/headers",
+}]
+async fn handler17(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<
+    HttpResponseHeaders<HttpResponseUpdatedNoContent, SomeHeaders>,
+    HttpError,
+> {
+    unimplemented!();
+}
+
 fn make_api() -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
     api.register(handler1)?;
@@ -305,8 +337,9 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler12)?;
     api.register(handler13)?;
     api.register(handler14)?;
-    api.register(handler16)?;
     api.register(handler15)?;
+    api.register(handler16)?;
+    api.register(handler17)?;
     Ok(api)
 }
 
