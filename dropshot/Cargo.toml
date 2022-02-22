@@ -23,7 +23,7 @@ openapiv3 = "=1.0.1"
 paste = "1.0.6"
 percent-encoding = "2.1.0"
 proc-macro2 = "1.0.36"
-rustls = "0.20.3"
+rustls = "0.20.4"
 rustls-pemfile = "0.3.0"
 serde_json = "1.0.79"
 serde_urlencoded = "0.7.1"
@@ -85,9 +85,9 @@ pem = "1.0"
 rcgen = "0.9.1"
 
 [dev-dependencies.rustls]
-version = "0.20.3"
+version = "0.20.4"
 # This is needed to use with_custom_certificate_verifier in tests
-# https://docs.rs/rustls/0.20.3/src/rustls/client/builder.rs.html#34-49
+# https://docs.rs/rustls/0.20.4/src/rustls/client/builder.rs.html#34-49
 features = [ "dangerous_configuration" ]
 
 [dev-dependencies.schemars]
