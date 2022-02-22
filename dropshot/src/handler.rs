@@ -681,8 +681,7 @@ where
     };
 
     /*
-     * Convert our collection of (&String, &Schema, bool [required]) into a
-     * list of parameters.
+     * Convert our collection of struct members list of parameters.
      */
     let parameters = schema2struct(&schema, &generator, true)
         .into_iter()
@@ -1318,6 +1317,17 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 
 #[derive(Serialize, JsonSchema)]
 pub struct NoHeaders {}
+
+/**
+ * `HttpResponseHeaders` is a wrapper for responses that include both
+ * structured and unstructured headers. The first type parameter is a
+ * `HttpTypedResponse` that provides the structure of the response body.
+ * The second type parameter is an optional struct that enumerates named
+ * headers that are included in the response. In addition to those (optional)
+ * named headers, consumers may add additional headers via the `headers_mut`
+ * interface. Unnamed headers override named headers in the case of naming
+ * conflicts.
+ */
 pub struct HttpResponseHeaders<
     T: HttpTypedResponse,
     H: JsonSchema + Serialize + Send + Sync + 'static = NoHeaders,
@@ -1360,9 +1370,9 @@ impl<
     fn to_result(self) -> HttpHandlerResult {
         let HttpResponseHeaders { body, structured_headers, other_headers } =
             self;
-        // Compute the body.
+        /* Compute the body. */
         let mut result = body.into()?;
-        // Add in both the structured and other headers.
+        /* Add in both the structured and other headers. */
         let headers = result.headers_mut();
         let header_map = to_map(&structured_headers).map_err(|e| {
             HttpError::for_internal_error(format!(
