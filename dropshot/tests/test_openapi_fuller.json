@@ -162,9 +162,9 @@
           {
             "in": "query",
             "name": "limit",
+            "description": "Maximum number of items returned by a single call",
             "schema": {
               "nullable": true,
-              "description": "Maximum number of items returned by a single call",
               "type": "integer",
               "format": "uint32",
               "minimum": 1
@@ -174,9 +174,9 @@
           {
             "in": "query",
             "name": "page_token",
+            "description": "Token returned by previous call to retreive the subsequent page",
             "schema": {
               "nullable": true,
-              "description": "Token returned by previous call to retreive the subsequent page",
               "type": "string"
             },
             "style": "form"
@@ -291,6 +291,7 @@
           {
             "in": "query",
             "name": "tomax",
+            "description": "One brother connected by the pain",
             "required": true,
             "schema": {
               "type": "string"
@@ -300,6 +301,7 @@
           {
             "in": "query",
             "name": "xamot",
+            "description": "Spoiler: there's a reason this is not required...",
             "schema": {
               "nullable": true,
               "type": "string"
@@ -344,6 +346,7 @@
           {
             "in": "query",
             "name": "tomax",
+            "description": "One brother connected by the pain",
             "required": true,
             "schema": {
               "type": "string"
@@ -353,6 +356,7 @@
           {
             "in": "query",
             "name": "xamot",
+            "description": "Spoiler: there's a reason this is not required...",
             "schema": {
               "nullable": true,
               "type": "string"
@@ -391,6 +395,34 @@
                   "enum": [
                     null
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/with/headers": {
+      "get": {
+        "operationId": "handler17",
+        "responses": {
+          "204": {
+            "description": "resource updated",
+            "headers": {
+              "Etag": {
+                "description": "eee! a tag",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-foo-mobile": {
+                "description": "this is a foo",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/Foo"
                 }
               }
             }
@@ -448,9 +480,11 @@
         ]
       },
       "NeverDuplicatedResponseNextLevel": {
+        "description": "Veritably non-duplicated type",
         "type": "object",
         "properties": {
           "v": {
+            "description": "Vee",
             "type": "boolean"
           }
         },
@@ -459,10 +493,16 @@
         ]
       },
       "NeverDuplicatedResponseTopLevel": {
+        "description": "Best non-duplicated type",
         "type": "object",
         "properties": {
           "b": {
-            "$ref": "#/components/schemas/NeverDuplicatedResponseNextLevel"
+            "description": "Bee",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NeverDuplicatedResponseNextLevel"
+              }
+            ]
           }
         },
         "required": [
@@ -514,6 +554,9 @@
         "required": [
           "items"
         ]
+      },
+      "Foo": {
+        "type": "string"
       }
     }
   }

@@ -161,7 +161,12 @@ fn type_resolve<'a>(
 #[cfg(test)]
 mod tests {
     use indexmap::IndexMap;
-    use schemars::schema::{Schema, SchemaObject};
+    use schemars::{
+        schema::{Schema, SchemaObject},
+        JsonSchema,
+    };
+
+    use crate::handler::schema2struct;
 
     use super::type_resolve;
 
@@ -199,5 +204,38 @@ mod tests {
         let schema_ref = &dependencies[0];
 
         type_resolve(schema_ref, &dependencies);
+    }
+
+    #[test]
+    fn test_commented_ref() {
+        #![allow(dead_code)]
+
+        #[derive(JsonSchema)]
+        enum Things {
+            Salami,
+            Tamale,
+            Lolly,
+        }
+
+        #[derive(JsonSchema)]
+        struct ThingHolder {
+            /** This is my thing */
+            thing: Things,
+        }
+
+        let mut generator = schemars::gen::SchemaGenerator::new(
+            schemars::gen::SchemaSettings::openapi3(),
+        );
+        let schema: schemars::schema::Schema =
+            generator.root_schema_for::<ThingHolder>().schema.into();
+
+        let struct_props = schema2struct(&schema, &generator, true);
+
+        assert_eq!(struct_props.len(), 1);
+
+        let only = struct_props.first().unwrap();
+        assert_eq!(only.name, "thing");
+        assert_eq!(only.description, Some("This is my thing".to_string()));
+        assert!(only.required);
     }
 }

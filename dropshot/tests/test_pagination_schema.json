@@ -28,9 +28,9 @@
           {
             "in": "query",
             "name": "limit",
+            "description": "Maximum number of items returned by a single call",
             "schema": {
               "nullable": true,
-              "description": "Maximum number of items returned by a single call",
               "type": "integer",
               "format": "uint32",
               "minimum": 1
@@ -40,9 +40,9 @@
           {
             "in": "query",
             "name": "page_token",
+            "description": "Token returned by previous call to retreive the subsequent page",
             "schema": {
               "nullable": true,
-              "description": "Token returned by previous call to retreive the subsequent page",
               "type": "string"
             },
             "style": "form"

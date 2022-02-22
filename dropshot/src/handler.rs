@@ -763,11 +763,12 @@ impl<'a> schemars::visit::Visitor for ReferenceVisitor<'a> {
     }
 }
 
-struct StructMember {
-    name: String,
-    description: Option<String>,
-    schema: schemars::schema::Schema,
-    required: bool,
+#[derive(Debug)]
+pub(crate) struct StructMember {
+    pub name: String,
+    pub description: Option<String>,
+    pub schema: schemars::schema::Schema,
+    pub required: bool,
 }
 
 /*
@@ -781,11 +782,12 @@ struct StructMember {
  *
  * This function is invoked recursively on subschemas.
  */
-fn schema2struct(
+pub(crate) fn schema2struct(
     schema: &schemars::schema::Schema,
     generator: &schemars::gen::SchemaGenerator,
     required: bool,
 ) -> Vec<StructMember> {
+    println!("schema2struct {:#?}", schema);
     /*
      * We ignore schema.metadata, which includes things like doc comments, and
      * schema.extensions. We call these out explicitly rather than eliding them
@@ -827,7 +829,7 @@ fn schema2struct(
             reference: None,
             extensions: _,
         }) => {
-            let mut results = vec![];
+            let mut results = Vec::new();
 
             /*
              * If there's a top-level object, add its members to the list of
@@ -865,7 +867,7 @@ fn schema2struct(
                         then_schema: None,
                         else_schema: None,
                     } => results.extend(schemas.iter().flat_map(|subschema| {
-                        /* Note that all will be tagged as optional. */
+                        /* Note that these will be tagged as optional. */
                         schema2struct(subschema, generator, false)
                     })),
 
@@ -876,18 +878,18 @@ fn schema2struct(
                      * a description field directly on schemas.
                      */
                     schemars::schema::SubschemaValidation {
-                        all_of: Some(schemas),
+                        all_of: Some(subschemas),
                         any_of: None,
                         one_of: None,
                         not: None,
                         if_schema: None,
                         then_schema: None,
                         else_schema: None,
-                    } if schemas.len() == 1 => {
-                        results.extend(schemas.iter().flat_map(|subschema| {
+                    } if subschemas.len() == 1 => results.extend(
+                        subschemas.iter().flat_map(|subschema| {
                             schema2struct(subschema, generator, required)
-                        }))
-                    }
+                        }),
+                    ),
 
                     /* We don't expect any other types of subschemas. */
                     invalid => panic!("invalid subschema {:#?}", invalid),
@@ -1416,8 +1418,51 @@ impl<
 fn schema_extract_description(
     schema: &schemars::schema::Schema,
 ) -> (Option<String>, schemars::schema::Schema) {
+    /*
+     * Because the OpenAPI v3.0.x Schema cannot include a description with
+     * a reference, we may see a schema with a description and an `all_of`
+     * with a single subschema. In this case, we flatten the trivial subschema.
+     */
+    if let schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+        metadata,
+        instance_type: None,
+        format: None,
+        enum_values: None,
+        const_value: None,
+        subschemas: Some(subschemas),
+        number: None,
+        string: None,
+        array: None,
+        object: None,
+        reference: None,
+        extensions: _,
+    }) = schema
+    {
+        if let schemars::schema::SubschemaValidation {
+            all_of: Some(subschemas),
+            any_of: None,
+            one_of: None,
+            not: None,
+            if_schema: None,
+            then_schema: None,
+            else_schema: None,
+        } = subschemas.as_ref()
+        {
+            match (subschemas.first(), subschemas.len()) {
+                (Some(subschema), 1) => {
+                    let description = metadata
+                        .as_ref()
+                        .and_then(|m| m.as_ref().description.clone());
+                    return (description, subschema.clone());
+                }
+                _ => (),
+            }
+        }
+    }
+
     match schema {
         schemars::schema::Schema::Bool(_) => (None, schema.clone()),
+
         schemars::schema::Schema::Object(object) => {
             let description = object
                 .metadata
