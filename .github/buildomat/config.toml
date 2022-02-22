@@ -1,0 +1,5 @@
+#
+# This file, with this flag, must be present in the default branch in order for
+# the buildomat integration to create check suites.
+#
+enable = true
