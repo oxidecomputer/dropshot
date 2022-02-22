@@ -771,7 +771,7 @@ pub(crate) struct StructMember {
     pub required: bool,
 }
 
-/*
+/**
  * This helper function produces a list of the structure members for the
  * given schema. For each it returns:
  *   (name: &String, schema: &Schema, required: bool)
