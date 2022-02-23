@@ -15,7 +15,6 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::sync::Once;
 
 /**
  * `HttpRouter` is a simple data structure for routing incoming HTTP requests to
@@ -146,11 +145,15 @@ impl PathSegment {
                 (var, None)
             };
 
+            /*
+             * Note that the only constraint on the variable name is that it is
+             * not empty. Consumers may choose odd names like '_' or 'type'
+             * that are not valid Rust identifiers and rename them with
+             * serde attributes during deserialization.
+             */
             assert!(
-                valid_identifier(var),
-                "HTTP URI path segment variable name must be a valid \
-                 identifier: '{}'",
-                var
+                !var.is_empty(),
+                "HTTP URI path segment variable name must not be empty",
             );
 
             if let Some(pat) = pat {
@@ -179,41 +182,6 @@ impl<'a> From<&'a str> for InputPath<'a> {
     fn from(s: &'a str) -> Self {
         Self(s)
     }
-}
-
-static INFORM_PROC_MACRO2_WE_ARE_NOT_A_PROC_MACRO: Once = Once::new();
-
-/*
- * Validate that the string is a valid Rust identifier.
- */
-fn valid_identifier(var: &str) -> bool {
-    // TODO: Remove this "Once" callback when the following issue
-    // is resolved.
-    // - https://github.com/alexcrichton/proc-macro2/issues/218
-    //
-    // proc_macro2 tries checking if the calling code exists within a proc_macro
-    // (as opposed to, e.g., a library/binary) by installing a custom panic
-    // handler (!), invoking it, and checking the result to see if the
-    // compiler's implementation of some proc macro functionality is available.
-    // - If it is available: proc_macro2 uses the compiler's codebase.
-    // - If it isn't: proc_macro uses a fallback implementation.
-    //
-    // For a program compiled with "panic = unwind", this admittedly works
-    // (... although it's arguably questionable to overwrite the panic hook),
-    // but it causes a program compiled with "panic = abort" to die.
-    //
-    // To workaround this, we force proc_macro2 to use the fallback
-    // implementation and avoid doing this panic-hook-based checking.
-    //
-    // As documented in the aforementioned issue, dtolnay plans on removing
-    // the panic-hook-based check once a compiler feature stabilizes
-    // to provide a better way of doing the check: proc_macro::is_available.
-    //
-    // Once that's done, we can remove this hack on our side.
-    INFORM_PROC_MACRO2_WE_ARE_NOT_A_PROC_MACRO.call_once(|| {
-        proc_macro2::fallback::force();
-    });
-    syn::parse_str::<syn::Ident>(var).is_ok()
 }
 
 /**
@@ -854,8 +822,9 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "HTTP URI path segment variable name must be a \
-                               valid identifier: ''")]
+    #[should_panic(
+        expected = "HTTP URI path segment variable name must not be empty"
+    )]
     fn test_variable_name_empty() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/{}"));
@@ -1349,6 +1318,38 @@ mod test {
     }
 
     #[test]
+    fn test_variable_rename() {
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct MyPath {
+            #[serde(rename = "type")]
+            t: String,
+            #[serde(rename = "ref")]
+            r: String,
+            #[serde(rename = "@")]
+            at: String,
+        }
+
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint(
+            new_handler_named("h8"),
+            Method::OPTIONS,
+            "/{type}/{ref}/{@}",
+        ));
+
+        let result = router
+            .lookup_route(&Method::OPTIONS, "/console/missiles/launch".into())
+            .unwrap();
+
+        let path =
+            from_map::<MyPath, VariableValue>(&result.variables).unwrap();
+
+        assert_eq!(path.t, "console");
+        assert_eq!(path.r, "missiles");
+        assert_eq!(path.at, "launch");
+    }
+
+    #[test]
     fn test_iter_null() {
         let router = HttpRouter::<()>::new();
         let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
@@ -1438,36 +1439,12 @@ mod test {
     #[test]
     #[should_panic]
     fn test_bad_path_segment3() {
-        let _ = PathSegment::from("{867_5309}");
+        let _ = PathSegment::from("{}");
     }
 
     #[test]
     #[should_panic]
     fn test_bad_path_segment4() {
-        let _ = PathSegment::from("{_}");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bad_path_segment5() {
-        let _ = PathSegment::from("{...}");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bad_path_segment6() {
-        let _ = PathSegment::from("{}");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bad_path_segment7() {
-        let _ = PathSegment::from("{}");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bad_path_segment8() {
         let _ = PathSegment::from("{varname:abc+}");
     }
 
