@@ -10,20 +10,20 @@ use serde::{
     Serialize, Serializer,
 };
 
-pub(crate) fn to_map<T: Serialize>(
-    input: &T,
-) -> Result<BTreeMap<String, String>, MapError>
+/**
+ * Serialize an instance of T into a `BTreeMap<String, String>`.
+ */
+pub(crate) fn to_map<T>(input: &T) -> Result<BTreeMap<String, String>, MapError>
 where
     T: Serialize,
 {
     let mut serializer = MapSerializer(input);
-
     input.serialize(&mut serializer)
 }
 
 struct MapSerializer<'de, T>(&'de T);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MapError(pub String);
 
 impl Display for MapError {
@@ -123,14 +123,14 @@ impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
         self,
         _len: Option<usize>,
     ) -> Result<Self::SerializeSeq, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a sequence".to_string()))
     }
 
     fn serialize_tuple(
         self,
         _len: usize,
     ) -> Result<Self::SerializeTuple, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a tuple".to_string()))
     }
 
     fn serialize_tuple_struct(
@@ -138,7 +138,7 @@ impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a tuple struct".to_string()))
     }
 
     fn serialize_tuple_variant(
@@ -148,14 +148,14 @@ impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a tuple variant".to_string()))
     }
 
     fn serialize_map(
         self,
         _len: Option<usize>,
     ) -> Result<Self::SerializeMap, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a map".to_string()))
     }
 
     fn serialize_struct(
@@ -173,172 +173,19 @@ impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a struct variant".to_string()))
     }
 }
 
-struct UnreachableSerializer<T>(PhantomData<T>);
-
-impl<'a, T> SerializeSeq for &'a mut UnreachableSerializer<T> {
-    type Ok = T;
-
-    type Error = MapError;
-
-    fn serialize_element<E: ?Sized>(
-        &mut self,
-        _value: &E,
-    ) -> Result<(), Self::Error>
-    where
-        E: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeTuple for &'a mut UnreachableSerializer<Output> {
-    type Ok = Output;
-
-    type Error = MapError;
-
-    fn serialize_element<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeTupleStruct
-    for &'a mut UnreachableSerializer<Output>
-{
-    type Ok = Output;
-
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeTupleVariant
-    for &'a mut UnreachableSerializer<Output>
-{
-    type Ok = Output;
-
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeMap for &'a mut UnreachableSerializer<Output> {
-    type Ok = Output;
-
-    type Error = MapError;
-
-    fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn serialize_value<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
-    }
-}
-impl<'a, Output> SerializeStruct for &'a mut UnreachableSerializer<Output> {
-    type Ok = Output;
-
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-impl<'a, Output> SerializeStructVariant
-    for &'a mut UnreachableSerializer<Output>
-{
-    type Ok = Output;
-
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        todo!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
-    }
-}
-
+/**
+ * Used to serialize structs for `MapSerializer`.
+ */
 struct MapSerializeStruct {
     output: BTreeMap<String, String>,
 }
 
 impl SerializeStruct for MapSerializeStruct {
     type Ok = BTreeMap<String, String>;
-
     type Error = MapError;
 
     fn serialize_field<T: ?Sized>(
@@ -350,7 +197,6 @@ impl SerializeStruct for MapSerializeStruct {
         T: Serialize,
     {
         let mut serializer = StringSerializer;
-
         let value = value.serialize(&mut serializer)?;
         self.output.insert(key.to_string(), value);
         Ok(())
@@ -361,6 +207,11 @@ impl SerializeStruct for MapSerializeStruct {
     }
 }
 
+/**
+ * A trivial `Serializer` used to extract a `String`. One could imagine
+ * extending this to convert other scalars into strings, but for now we'll just
+ * work with strings.
+ */
 struct StringSerializer;
 impl<'a> Serializer for &'a mut StringSerializer {
     type Ok = String;
@@ -414,14 +265,14 @@ impl<'a> Serializer for &'a mut StringSerializer {
         self,
         _len: Option<usize>,
     ) -> Result<Self::SerializeSeq, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a sequence".to_string()))
     }
 
     fn serialize_tuple(
         self,
         _len: usize,
     ) -> Result<Self::SerializeTuple, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a tuple".to_string()))
     }
 
     fn serialize_tuple_struct(
@@ -429,7 +280,7 @@ impl<'a> Serializer for &'a mut StringSerializer {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a tuple struct".to_string()))
     }
 
     fn serialize_tuple_variant(
@@ -439,14 +290,14 @@ impl<'a> Serializer for &'a mut StringSerializer {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a tuple variant".to_string()))
     }
 
     fn serialize_map(
         self,
         _len: Option<usize>,
     ) -> Result<Self::SerializeMap, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a map".to_string()))
     }
 
     fn serialize_struct(
@@ -454,7 +305,7 @@ impl<'a> Serializer for &'a mut StringSerializer {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a struct".to_string()))
     }
 
     fn serialize_struct_variant(
@@ -464,7 +315,160 @@ impl<'a> Serializer for &'a mut StringSerializer {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        todo!()
+        Err(MapError("cannot serialize a struct variant".to_string()))
+    }
+}
+
+/**
+ * `UnreachableSerializer` is a generic stand-in for many of the required
+ * Serialize* associated types that are unreachable by construction.
+ */
+struct UnreachableSerializer<T>(PhantomData<T>);
+
+impl<'a, T> SerializeSeq for &'a mut UnreachableSerializer<T> {
+    type Ok = T;
+
+    type Error = MapError;
+
+    fn serialize_element<E: ?Sized>(
+        &mut self,
+        _value: &E,
+    ) -> Result<(), Self::Error>
+    where
+        E: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
+    }
+}
+
+impl<'a, Output> SerializeTuple for &'a mut UnreachableSerializer<Output> {
+    type Ok = Output;
+    type Error = MapError;
+
+    fn serialize_element<T: ?Sized>(
+        &mut self,
+        _value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
+    }
+}
+
+impl<'a, Output> SerializeTupleStruct
+    for &'a mut UnreachableSerializer<Output>
+{
+    type Ok = Output;
+    type Error = MapError;
+
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        _value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
+    }
+}
+
+impl<'a, Output> SerializeTupleVariant
+    for &'a mut UnreachableSerializer<Output>
+{
+    type Ok = Output;
+    type Error = MapError;
+
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        _value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
+    }
+}
+
+impl<'a, Output> SerializeMap for &'a mut UnreachableSerializer<Output> {
+    type Ok = Output;
+    type Error = MapError;
+
+    fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn serialize_value<T: ?Sized>(
+        &mut self,
+        _value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
+    }
+}
+impl<'a, Output> SerializeStruct for &'a mut UnreachableSerializer<Output> {
+    type Ok = Output;
+    type Error = MapError;
+
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        _key: &'static str,
+        _value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
+    }
+}
+impl<'a, Output> SerializeStructVariant
+    for &'a mut UnreachableSerializer<Output>
+{
+    type Ok = Output;
+    type Error = MapError;
+
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        _key: &'static str,
+        _value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        unreachable!()
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        unreachable!()
     }
 }
 
@@ -472,10 +476,10 @@ impl<'a> Serializer for &'a mut StringSerializer {
 mod test {
     use serde::Serialize;
 
-    use crate::to_map::to_map;
+    use crate::to_map::{to_map, MapError};
 
     #[test]
-    fn test_to_map() {
+    fn test_to_map_valid() {
         #[derive(Serialize)]
         struct Valid {
             a: String,
@@ -488,5 +492,62 @@ mod test {
 
         assert_eq!(map.get("a"), Some(&"a".to_string()));
         assert_eq!(map.get("b"), Some(&"b".to_string()));
+    }
+
+    #[test]
+    fn test_to_map_seq() {
+        #[derive(Serialize)]
+        struct Bad {
+            a: Vec<String>,
+            b: String,
+        }
+
+        let bad = Bad { a: vec!["a".to_string()], b: "b".to_string() };
+
+        assert_eq!(
+            to_map(&bad),
+            Err(MapError("cannot serialize a sequence".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_to_map_num() {
+        #[derive(Serialize)]
+        struct Bad {
+            a: String,
+            b: u32,
+        }
+
+        let bad = Bad { a: "a".to_string(), b: 0xb };
+
+        assert_eq!(
+            to_map(&bad),
+            Err(MapError("invalid type: u32".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_to_map_enum() {
+        #[derive(Serialize)]
+        enum Bad {
+            A { a: String },
+        }
+
+        let bad = Bad::A { a: "a".to_string() };
+
+        assert_eq!(
+            to_map(&bad),
+            Err(MapError("cannot serialize a struct variant".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_to_map_vec() {
+        let bad = vec!["a", "b"];
+
+        assert_eq!(
+            to_map(&bad),
+            Err(MapError("cannot serialize a sequence".to_string()))
+        );
     }
 }
