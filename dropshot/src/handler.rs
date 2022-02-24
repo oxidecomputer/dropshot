@@ -87,6 +87,7 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
  * overkill since it will only really be used by one thread at a time (at all,
  * let alone mutably) and there will never be contention on the Mutex.
  */
+#[derive(Debug)]
 pub struct RequestContext<Context: ServerContext> {
     /** shared server state */
     pub server: Arc<DropshotState<Context>>,
@@ -544,6 +545,7 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
+#[derive(Debug)]
 pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
     inner: QueryType,
 }
@@ -615,6 +617,7 @@ where
  * structure of yours that implements `serde::Deserialize`.  See this module's
  * documentation for more information.
  */
+#[derive(Debug)]
 pub struct Path<PathType: JsonSchema + Send + Sync> {
     inner: PathType,
 }
@@ -883,6 +886,7 @@ fn schema2parameters(
  * that implements `serde::Deserialize`.  See this module's documentation for
  * more information.
  */
+#[derive(Debug)]
 pub struct TypedBody<BodyType: JsonSchema + DeserializeOwned + Send + Sync> {
     inner: BodyType,
 }
@@ -968,6 +972,7 @@ where
  * `UntypedBody` is an extractor for reading in the contents of the HTTP request
  * body and making the raw bytes directly available to the consumer.
  */
+#[derive(Debug)]
 pub struct UntypedBody {
     content: Bytes,
 }
