@@ -1,12 +1,9 @@
 // Copyright 2022 Oxide Computer Company
 
-use std::{collections::BTreeMap, fmt::Display, marker::PhantomData};
+use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{
-    ser::{
-        SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
-        SerializeTuple, SerializeTupleStruct, SerializeTupleVariant,
-    },
+    ser::{Impossible, SerializeStruct},
     Serialize, Serializer,
 };
 
@@ -79,12 +76,12 @@ impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
 
     type SerializeStruct = MapSerializeStruct;
 
-    type SerializeSeq = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeTuple = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeTupleStruct = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeTupleVariant = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeMap = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeStructVariant = &'a mut UnreachableSerializer<Self::Ok>;
+    type SerializeSeq = Impossible<Self::Ok, Self::Error>;
+    type SerializeTuple = Impossible<Self::Ok, Self::Error>;
+    type SerializeTupleStruct = Impossible<Self::Ok, Self::Error>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
+    type SerializeMap = Impossible<Self::Ok, Self::Error>;
+    type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
     ser_err!(serialize_bool, _v: bool);
     ser_err!(serialize_i8, _v: i8);
@@ -217,13 +214,13 @@ impl<'a> Serializer for &'a mut StringSerializer {
     type Ok = String;
     type Error = MapError;
 
-    type SerializeSeq = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeTuple = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeTupleStruct = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeTupleVariant = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeMap = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeStruct = &'a mut UnreachableSerializer<Self::Ok>;
-    type SerializeStructVariant = &'a mut UnreachableSerializer<Self::Ok>;
+    type SerializeSeq = Impossible<Self::Ok, Self::Error>;
+    type SerializeTuple = Impossible<Self::Ok, Self::Error>;
+    type SerializeTupleStruct = Impossible<Self::Ok, Self::Error>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
+    type SerializeMap = Impossible<Self::Ok, Self::Error>;
+    type SerializeStruct = Impossible<Self::Ok, Self::Error>;
+    type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
         Ok(v.to_string())
@@ -316,159 +313,6 @@ impl<'a> Serializer for &'a mut StringSerializer {
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(MapError("cannot serialize a struct variant".to_string()))
-    }
-}
-
-/**
- * `UnreachableSerializer` is a generic stand-in for many of the required
- * Serialize* associated types that are unreachable by construction.
- */
-struct UnreachableSerializer<T>(PhantomData<T>);
-
-impl<'a, T> SerializeSeq for &'a mut UnreachableSerializer<T> {
-    type Ok = T;
-
-    type Error = MapError;
-
-    fn serialize_element<E: ?Sized>(
-        &mut self,
-        _value: &E,
-    ) -> Result<(), Self::Error>
-    where
-        E: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeTuple for &'a mut UnreachableSerializer<Output> {
-    type Ok = Output;
-    type Error = MapError;
-
-    fn serialize_element<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeTupleStruct
-    for &'a mut UnreachableSerializer<Output>
-{
-    type Ok = Output;
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeTupleVariant
-    for &'a mut UnreachableSerializer<Output>
-{
-    type Ok = Output;
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-
-impl<'a, Output> SerializeMap for &'a mut UnreachableSerializer<Output> {
-    type Ok = Output;
-    type Error = MapError;
-
-    fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn serialize_value<T: ?Sized>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-impl<'a, Output> SerializeStruct for &'a mut UnreachableSerializer<Output> {
-    type Ok = Output;
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
-    }
-}
-impl<'a, Output> SerializeStructVariant
-    for &'a mut UnreachableSerializer<Output>
-{
-    type Ok = Output;
-    type Error = MapError;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        _value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: Serialize,
-    {
-        unreachable!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
     }
 }
 

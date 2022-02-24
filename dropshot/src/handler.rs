@@ -786,7 +786,6 @@ pub(crate) fn schema2struct(
     generator: &schemars::gen::SchemaGenerator,
     required: bool,
 ) -> Vec<StructMember> {
-    println!("schema2struct {:#?}", schema);
     /*
      * We ignore schema.metadata, which includes things like doc comments, and
      * schema.extensions. We call these out explicitly rather than eliding them
