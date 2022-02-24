@@ -114,6 +114,7 @@ pub struct HttpError {
  */
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[schemars(rename = "Error")]
+#[schemars(description = "Error information from a response.")]
 pub struct HttpErrorResponseBody {
     pub request_id: String,
     // The combination of default and required removes "nullable" from the
