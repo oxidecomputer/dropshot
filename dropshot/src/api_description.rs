@@ -134,17 +134,16 @@ impl ApiEndpointParameter {
 
     pub fn new_body(
         content_type: ApiEndpointBodyContentType,
-        description: Option<String>,
         required: bool,
         schema: ApiSchemaGenerator,
         examples: Vec<String>,
     ) -> Self {
         Self {
             metadata: ApiEndpointParameterMetadata::Body(content_type),
-            description,
             required,
             schema,
             examples,
+            description: None,
         }
     }
 }
@@ -179,12 +178,21 @@ impl ApiEndpointBodyContentType {
     }
 }
 
+#[derive(Debug)]
+pub struct ApiEndpointHeader {
+    pub name: String,
+    pub description: Option<String>,
+    pub schema: ApiSchemaGenerator,
+    pub required: bool,
+}
+
 /**
  * Metadata for an API endpoint response: type information and status code.
  */
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
+    pub headers: Vec<ApiEndpointHeader>,
     pub success: Option<StatusCode>,
     pub description: Option<String>,
 }
@@ -603,6 +611,45 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     );
                 }
 
+                let headers = endpoint
+                    .response
+                    .headers
+                    .iter()
+                    .map(|header| {
+                        let schema = match &header.schema {
+                            ApiSchemaGenerator::Static {
+                                schema,
+                                dependencies,
+                            } => {
+                                definitions.extend(dependencies.clone());
+                                j2oas_schema(None, schema)
+                            }
+                            _ => {
+                                unimplemented!(
+                                    "this may happen for complex types"
+                                )
+                            }
+                        };
+
+                        (
+                            header.name.clone(),
+                            openapiv3::ReferenceOr::Item(openapiv3::Header {
+                                description: header.description.clone(),
+                                style: openapiv3::HeaderStyle::Simple,
+                                required: header.required,
+                                deprecated: None,
+                                format:
+                                    openapiv3::ParameterSchemaOrContent::Schema(
+                                        schema,
+                                    ),
+                                example: None,
+                                examples: indexmap::IndexMap::new(),
+                                extensions: indexmap::IndexMap::new(),
+                            }),
+                        )
+                    })
+                    .collect();
+
                 let response = openapiv3::Response {
                     description: if let Some(description) =
                         &endpoint.response.description
@@ -614,7 +661,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         // by OpenAPI.
                         "".to_string()
                     },
-                    content: content,
+                    content,
+                    headers,
                     ..Default::default()
                 };
 

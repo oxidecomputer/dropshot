@@ -602,6 +602,7 @@ mod logging;
 mod pagination;
 mod router;
 mod server;
+mod to_map;
 mod type_util;
 
 pub mod test_util;
@@ -625,8 +626,10 @@ pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
+pub use handler::HttpResponseHeaders;
 pub use handler::HttpResponseOk;
 pub use handler::HttpResponseUpdatedNoContent;
+pub use handler::NoHeaders;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;

@@ -250,7 +250,7 @@ where
     PageSelector: DeserializeOwned + Serialize,
 {
     fn schema_name() -> String {
-        unimplemented!()
+        "PaginationParams".to_string()
     }
 
     fn json_schema(

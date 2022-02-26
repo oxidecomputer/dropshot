@@ -812,11 +812,7 @@ mod test {
             method,
             path: path.to_string(),
             parameters: vec![],
-            response: ApiEndpointResponse {
-                schema: None,
-                success: None,
-                description: None,
-            },
+            response: ApiEndpointResponse::default(),
             summary: None,
             description: None,
             tags: vec![],
