@@ -1297,26 +1297,26 @@ dependencies = [
 
 [[package]]
 name = "slog-bunyan"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "924f5e8b5a1069e484f6ad80024322990e21ee8399f12ba289e48cd30bc0dda0"
+checksum = "440fd32d0423c31e4f98d76c0b62ebdb847f905aa07357197e9b41ac620af97d"
 dependencies = [
- "chrono",
  "hostname",
  "slog",
  "slog-json",
+ "time 0.3.7",
 ]
 
 [[package]]
 name = "slog-json"
-version = "2.5.0"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f7f7a952ce80fca9da17bf0a53895d11f8aa1ba063668ca53fc72e7869329e9"
+checksum = "70f825ce7346f40aa318111df5d3a94945a7fdca9081584cb9b05692fb3dfcb4"
 dependencies = [
- "chrono",
  "serde",
  "serde_json",
  "slog",
+ "time 0.3.7",
 ]
 
 [[package]]
