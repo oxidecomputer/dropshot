@@ -82,7 +82,7 @@ tempfile = "3.3"
 trybuild = "1.0.53"
 # Used by the https examples and tests
 pem = "1.0"
-rcgen = "0.9.1"
+rcgen = "0.9.2"
 
 [dev-dependencies.rustls]
 version = "0.20.4"
