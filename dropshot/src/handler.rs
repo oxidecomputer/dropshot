@@ -916,7 +916,7 @@ pub(crate) fn schema2struct(
  * that implements `serde::Deserialize`.  See this module's documentation for
  * more information.
  */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypedBody<BodyType: JsonSchema + DeserializeOwned + Send + Sync> {
     inner: BodyType,
 }
@@ -1001,7 +1001,7 @@ where
  * `UntypedBody` is an extractor for reading in the contents of the HTTP request
  * body and making the raw bytes directly available to the consumer.
  */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UntypedBody {
     content: Bytes,
 }
