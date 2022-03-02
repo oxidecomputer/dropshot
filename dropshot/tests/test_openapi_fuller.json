@@ -454,7 +454,12 @@
         "operationId": "handler16",
         "responses": {
           "default": {
-            "description": ""
+            "description": "",
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
           }
         }
       }
