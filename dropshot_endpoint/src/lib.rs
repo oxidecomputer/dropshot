@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 
 //! This package defines macro attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
@@ -294,7 +294,9 @@ fn do_endpoint(
     // we can check the future it returns for bounds that otherwise produce
     // inscrutable error messages (like returning a non-`Send` future). We
     // produce a wrapper function that takes all the same argument types,
-    // which requires building up a list of argument names.
+    // which requires building up a list of argument names: we can't use the
+    // original definitions argument names since they could have multiple args
+    // named `_`, so we use "arg0", "arg1", etc.
     let arg_names = (0..arg_types.len())
         .map(|i| {
             let argname = format_ident!("arg{}", i);
