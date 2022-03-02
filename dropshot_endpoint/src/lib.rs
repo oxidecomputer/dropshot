@@ -245,6 +245,8 @@ fn do_endpoint(
     // make failures easier to understand, we inject code that asserts the types
     // of the various parameters. We do this by calling a dummy function that
     // requires a type that satisfies the trait Extractor.
+    let mut arg_types = Vec::new();
+    let mut arg_is_receiver = false;
     let param_checks = ast
         .sig
         .inputs
@@ -254,11 +256,13 @@ fn do_endpoint(
             match arg {
                 syn::FnArg::Receiver(_) => {
                     // The compiler failure here is already comprehensible.
+                    arg_is_receiver = true;
                     quote! {}
                 }
                 syn::FnArg::Typed(pat) => {
                     let span = pat.ty.span();
                     let ty = pat.ty.as_ref().into_token_stream();
+                    arg_types.push(ty.clone());
                     if index == 0 {
                         // The first parameter must be an Arc<RequestContext<T>>
                         // and fortunately we already have a trait that we can
@@ -285,6 +289,33 @@ fn do_endpoint(
             }
         })
         .collect::<Vec<_>>();
+
+    // We want to construct a function that will call the user's endpoint, so
+    // we can check the future it returns for bounds that otherwise produce
+    // inscrutable error messages (like returning a non-`Send` future). We
+    // produce a wrapper function that takes all the same argument types,
+    // which requires building up a list of argument names.
+    let arg_names = (0..arg_types.len())
+        .map(|i| {
+            let argname = format_ident!("arg{}", i);
+            quote! { #argname }
+        })
+        .collect::<Vec<_>>();
+    let impl_checks = if !arg_is_receiver {
+        quote! {
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
+                    #item
+                    future_endpoint_must_be_send(#name(#(#arg_names),*));
+                }
+            };
+        }
+    } else {
+        // If we have a `self` arg, our `future_is_send` check will introduce
+        // even more confusing error messages, so omit it entirely.
+        quote! {}
+    };
 
     let ret_check = match &ast.sig.output {
         syn::ReturnType::Default => {
@@ -380,6 +411,9 @@ fn do_endpoint(
         // ... type validation for parameter and return types
         #(#param_checks)*
         #ret_check
+
+        // ... trait bound checks for the implementation
+        #impl_checks
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -571,6 +605,18 @@ mod tests {
                 >();
             };
 
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                    pub async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
+                    future_endpoint_must_be_send(handler_xyz(arg0));
+                }
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub struct handler_xyz {}
@@ -652,6 +698,18 @@ mod tests {
                 validate_result_error_type::<
                     <std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError> as ResultTrait>::E,
                 >();
+            };
+
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(arg0: std::sync::Arc< dropshot::RequestContext<()> >) {
+                    pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) ->
+                        std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
+                    {
+                        Ok(())
+                    }
+                    future_endpoint_must_be_send(handler_xyz(arg0));
+                }
             };
 
             #[allow(non_camel_case_types, missing_docs)]
@@ -742,6 +800,19 @@ mod tests {
                 validate_result_error_type::<
                     <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
                 >();
+            };
+
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(arg0: Arc< RequestContext<std::i32> >, arg1: Query<Q>) {
+                    async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<std::i32>>,
+                        q: Query<Q>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
+                    future_endpoint_must_be_send(handler_xyz(arg0, arg1));
+                }
             };
 
             #[allow(non_camel_case_types, missing_docs)]
@@ -841,6 +912,21 @@ mod tests {
                 >();
             };
 
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(arg0: Arc< RequestContext<()> >, arg1: Query<Q>) {
+                    pub(crate) async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                        q: Query<Q>,
+                    ) ->
+                        Result<HttpResponseOk<()>, HttpError>
+                    {
+                        Ok(())
+                    }
+                    future_endpoint_must_be_send(handler_xyz(arg0, arg1));
+                }
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             pub(crate) struct handler_xyz {}
@@ -929,6 +1015,18 @@ mod tests {
                 >();
             };
 
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                    async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
+                    future_endpoint_must_be_send(handler_xyz(arg0));
+                }
+            };
+
             #[allow(non_camel_case_types, missing_docs)]
             #[doc = "API Endpoint: handler_xyz"]
             struct handler_xyz {}
@@ -1014,6 +1112,19 @@ mod tests {
                 validate_result_error_type::<
                     <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
                 >();
+            };
+
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                    #[doc = r#" handle "xyz" requests "#]
+                    async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
+                    future_endpoint_must_be_send(handler_xyz(arg0));
+                }
             };
 
             #[allow(non_camel_case_types, missing_docs)]
