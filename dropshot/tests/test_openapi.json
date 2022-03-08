@@ -720,22 +720,22 @@
   },
   "tags": [
     {
-      "name": "man"
-    },
-    {
-      "name": "camera"
-    },
-    {
       "name": "tv"
     },
     {
       "name": "woman"
     },
     {
+      "name": "it"
+    },
+    {
+      "name": "man"
+    },
+    {
       "name": "person"
     },
     {
-      "name": "it"
+      "name": "camera"
     }
   ]
 }
