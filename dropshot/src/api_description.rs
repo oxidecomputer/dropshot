@@ -524,6 +524,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .chain(endpoint_tags)
             .collect();
 
+        /* Sort the tags for stability */
+        openapi.tags.sort_by(|a, b| a.name.cmp(&b.name));
+
         let settings = schemars::gen::SchemaSettings::openapi3();
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
         let mut definitions =

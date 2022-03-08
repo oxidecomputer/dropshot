@@ -728,14 +728,14 @@
   },
   "tags": [
     {
+      "name": "camera"
+    },
+    {
       "name": "it",
       "description": "Now you are the one who is it."
     },
     {
       "name": "man"
-    },
-    {
-      "name": "woman"
     },
     {
       "name": "person"
@@ -744,7 +744,7 @@
       "name": "tv"
     },
     {
-      "name": "camera"
+      "name": "woman"
     }
   ]
 }
