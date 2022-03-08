@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 /*!
  * Describes the endpoints and handler functions in your API
  */
@@ -21,6 +21,7 @@ use crate::CONTENT_TYPE_OCTET_STREAM;
 use http::Method;
 use http::StatusCode;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 /**
@@ -232,11 +233,20 @@ impl std::fmt::Debug for ApiSchemaGenerator {
 pub struct ApiDescription<Context: ServerContext> {
     /** In practice, all the information we need is encoded in the router. */
     router: HttpRouter<Context>,
+    tag_config: TagConfig,
 }
 
 impl<Context: ServerContext> ApiDescription<Context> {
     pub fn new() -> Self {
-        ApiDescription { router: HttpRouter::new() }
+        ApiDescription {
+            router: HttpRouter::new(),
+            tag_config: TagConfig::default(),
+        }
+    }
+
+    pub fn tag_config(mut self, tag_config: TagConfig) -> Self {
+        self.tag_config = tag_config;
+        self
     }
 
     /**
@@ -248,11 +258,42 @@ impl<Context: ServerContext> ApiDescription<Context> {
     {
         let e = endpoint.into();
 
+        self.validate_tags(&e)?;
         self.validate_path_parameters(&e)?;
         self.validate_body_parameters(&e)?;
         self.validate_named_parameters(&e)?;
 
         self.router.insert(e);
+
+        Ok(())
+    }
+
+    /**
+     * Validate that the tags conform to the tags policy.
+     */
+    fn validate_tags(&self, e: &ApiEndpoint<Context>) -> Result<(), String> {
+        /* Don't care about endpoints that don't appear in the OpenAPI */
+        if !e.visible {
+            return Ok(());
+        }
+
+        match (&self.tag_config.endpoint_tag_policy, e.tags.len()) {
+            (EndpointTagPolicy::AtLeastOne, 0) => {
+                return Err("At least one tag is required".to_string())
+            }
+            (EndpointTagPolicy::ExactlyOne, n) if n != 1 => {
+                return Err("Exactly one tag is required".to_string())
+            }
+            _ => (),
+        }
+
+        if !self.tag_config.allow_other_tags {
+            for tag in &e.tags {
+                if !self.tag_config.tag_definitions.contains_key(tag) {
+                    return Err(format!("Invalid tag: {}", tag));
+                }
+            }
+        }
 
         Ok(())
     }
@@ -449,6 +490,39 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
+
+        /* Gather up the ad hoc tags from endpoints */
+        let endpoint_tags = (&self.router)
+            .into_iter()
+            .flat_map(|(_, _, endpoint)| {
+                endpoint.tags.iter().filter(|tag| {
+                    !self.tag_config.tag_definitions.contains_key(*tag)
+                })
+            })
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .map(|tag| openapiv3::Tag { name: tag, ..Default::default() });
+
+        /* Bundle those with the explicit tags provided by the consumer */
+        openapi.tags = self
+            .tag_config
+            .tag_definitions
+            .iter()
+            .map(|(name, details)| openapiv3::Tag {
+                name: name.clone(),
+                description: details.description.clone(),
+                external_docs: details.external_docs.as_ref().map(|e| {
+                    openapiv3::ExternalDocumentation {
+                        description: e.description.clone(),
+                        url: e.url.clone(),
+                        ..Default::default()
+                    }
+                }),
+                ..Default::default()
+            })
+            .chain(endpoint_tags)
+            .collect();
 
         let settings = schemars::gen::SchemaSettings::openapi3();
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
@@ -1404,6 +1478,40 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
             &self.api.gen_openapi(self.info.clone()),
         )
     }
+}
+
+pub struct TagConfig {
+    /** Are endpoints allowed to use tags not specified in this config */
+    pub allow_other_tags: bool,
+    pub endpoint_tag_policy: EndpointTagPolicy,
+    pub tag_definitions: HashMap<String, TagDetails>,
+}
+
+impl Default for TagConfig {
+    fn default() -> Self {
+        Self {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::Any,
+            tag_definitions: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointTagPolicy {
+    Any,
+    AtLeastOne,
+    ExactlyOne,
+}
+
+pub struct TagDetails {
+    pub description: Option<String>,
+    pub external_docs: Option<TagExternalDocs>,
+}
+
+pub struct TagExternalDocs {
+    pub description: Option<String>,
+    pub url: String,
 }
 
 #[cfg(test)]
