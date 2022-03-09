@@ -20,6 +20,8 @@ use crate::CONTENT_TYPE_OCTET_STREAM;
 
 use http::Method;
 use http::StatusCode;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -1483,8 +1485,14 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     }
 }
 
+/**
+ * Configuration used describe OpenAPI tags and to validate per-endpoint tags.
+ * Consumers may use this ensure that--for example--endpoints pick a tag from a
+ * known set, or that each endpoint has at least one tag.
+ */
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TagConfig {
-    /** Are endpoints allowed to use tags not specified in this config */
+    /** Are endpoints allowed to use tags not specified in this config? */
     pub allow_other_tags: bool,
     pub endpoint_tag_policy: EndpointTagPolicy,
     pub tag_definitions: HashMap<String, TagDetails>,
@@ -1500,18 +1508,26 @@ impl Default for TagConfig {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+/** Endpoint tagging policy */
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EndpointTagPolicy {
+    /** Any number of tags is permitted */
     Any,
+    /** At least one tag is required and more are allowed */
     AtLeastOne,
+    /** There must be exactly one tag */
     ExactlyOne,
 }
 
+/** Details for a named tag */
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TagDetails {
     pub description: Option<String>,
     pub external_docs: Option<TagExternalDocs>,
 }
 
+/** External docs description */
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TagExternalDocs {
     pub description: Option<String>,
     pub url: String,
@@ -1519,24 +1535,31 @@ pub struct TagExternalDocs {
 
 #[cfg(test)]
 mod test {
-    use super::super::error::HttpError;
-    use super::super::handler::RequestContext;
-    use super::super::Path;
     use super::j2oas_schema;
-    use super::ApiDescription;
-    use super::ApiEndpoint;
-    use crate as dropshot; /* for "endpoint" macro */
     use crate::api_description::j2oas_schema_object;
     use crate::endpoint;
+    use crate::error::HttpError;
+    use crate::handler::RequestContext;
+    use crate::ApiDescription;
+    use crate::ApiEndpoint;
+    use crate::EndpointTagPolicy;
+    use crate::Path;
     use crate::Query;
+    use crate::TagConfig;
+    use crate::TagDetails;
     use crate::TypedBody;
     use crate::UntypedBody;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
+    use openapiv3::OpenAPI;
     use schemars::JsonSchema;
     use serde::Deserialize;
+    use std::collections::HashSet;
+    use std::str::from_utf8;
     use std::sync::Arc;
+
+    use crate as dropshot; /* for "endpoint" macro */
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1773,5 +1796,121 @@ mod test {
                 },
             })
         );
+    }
+
+    #[test]
+    fn test_tags_need_one() {
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
+            ..Default::default()
+        });
+        let ret = api.register(ApiEndpoint::new(
+            "test_badpath_handler".to_string(),
+            test_badpath_handler,
+            Method::GET,
+            "/{a}/{b}",
+        ));
+        assert_eq!(ret, Err("At least one tag is required".to_string()));
+    }
+
+    #[test]
+    fn test_tags_too_many() {
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            ..Default::default()
+        });
+        let ret = api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/{a}/{b}",
+            )
+            .tag("howdy")
+            .tag("pardner"),
+        );
+
+        assert_eq!(ret, Err("Exactly one tag is required".to_string()));
+    }
+
+    #[test]
+    fn test_tags_just_right() {
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            ..Default::default()
+        });
+        let ret = api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/{a}/{b}",
+            )
+            .tag("a-tag"),
+        );
+
+        assert_eq!(ret, Ok(()));
+    }
+
+    #[test]
+    fn test_tags_set() {
+        /*
+         * Validate that pre-defined tags and ad-hoc tags are all accounted
+         * for and aren't duplicated.
+         */
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
+            tag_definitions: vec![
+                ("a-tag".to_string(), TagDetails::default()),
+                ("b-tag".to_string(), TagDetails::default()),
+                ("c-tag".to_string(), TagDetails::default()),
+            ]
+            .into_iter()
+            .collect(),
+        });
+        api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/xx/{a}/{b}",
+            )
+            .tag("a-tag")
+            .tag("z-tag"),
+        )
+        .unwrap();
+        api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/yy/{a}/{b}",
+            )
+            .tag("b-tag")
+            .tag("y-tag"),
+        )
+        .unwrap();
+
+        let mut out = Vec::new();
+        api.openapi("", "").write(&mut out).unwrap();
+        let out = from_utf8(&out).unwrap();
+        let spec = serde_json::from_str::<OpenAPI>(out).unwrap();
+
+        let tags = spec
+            .tags
+            .iter()
+            .map(|tag| tag.name.as_str())
+            .collect::<HashSet<_>>();
+
+        assert_eq!(
+            tags,
+            vec!["a-tag", "b-tag", "c-tag", "y-tag", "z-tag",]
+                .into_iter()
+                .collect::<HashSet<_>>()
+        )
     }
 }

@@ -27,6 +27,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of co
 * https://github.com/oxidecomputer/dropshot/pull/260[#260] Pulls in a newer serde that changes error messages around parsing NonZeroU32.
 * https://github.com/oxidecomputer/dropshot/pull/283[#283] Add support for response headers with the `HttpResponseHeaders` type. Headers may either be defined by a struct type parameter (in which case they appear in the OpenAPI output) or *ad-hoc* added via `HttpResponseHeaders::headers_mut()`.
 * https://github.com/oxidecomputer/dropshot/pull/286[#286] OpenAPI output includes descriptions of 4xx and 5xx error responses.
+* https://github.com/oxidecomputer/dropshot/pull/296[#296] `ApiDescription` includes a `tag_config` method to specify both predefined tags with descriptions and links as well as a tag policy to ensure that endpoints, for example, only use predefined tags or have at least one tag.
 
 == 0.6.0 (released 2021-11-18)
 
