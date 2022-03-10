@@ -15,6 +15,9 @@
   "paths": {
     "/datagoeshere": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler7",
         "requestBody": {
           "content": {
@@ -42,6 +45,9 @@
     },
     "/dup1": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler8",
         "responses": {
           "200": {
@@ -65,6 +71,9 @@
     },
     "/dup2": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler9",
         "responses": {
           "200": {
@@ -88,6 +97,9 @@
     },
     "/dup5": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler10",
         "requestBody": {
           "content": {
@@ -114,6 +126,9 @@
     },
     "/dup6": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler11",
         "requestBody": {
           "content": {
@@ -140,6 +155,9 @@
     },
     "/dup7": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler12",
         "requestBody": {
           "content": {
@@ -166,6 +184,9 @@
     },
     "/dup8": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler13",
         "responses": {
           "200": {
@@ -189,6 +210,9 @@
     },
     "/impairment": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler6",
         "parameters": [
           {
@@ -247,6 +271,9 @@
     },
     "/test/camera": {
       "post": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler4",
         "requestBody": {
           "content": {
@@ -280,6 +307,9 @@
     },
     "/test/man/{x}": {
       "delete": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler3",
         "parameters": [
           {
@@ -307,6 +337,9 @@
     },
     "/test/person": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "summary": "Rust style comment",
         "description": "This is a multi-line comment.",
         "operationId": "handler1",
@@ -411,6 +444,9 @@
     },
     "/test/woman": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "summary": "C-style comment",
         "description": "This is a multi-line comment.",
         "operationId": "handler2",
@@ -451,6 +487,9 @@
     },
     "/too/smart/for/my/own/good": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler16",
         "responses": {
           "default": {
@@ -461,6 +500,9 @@
     },
     "/unit_please": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler15",
         "responses": {
           "200": {
@@ -488,6 +530,9 @@
     },
     "/with/headers": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler17",
         "responses": {
           "204": {
@@ -680,5 +725,26 @@
         "type": "string"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "camera"
+    },
+    {
+      "name": "it",
+      "description": "Now you are the one who is it."
+    },
+    {
+      "name": "man"
+    },
+    {
+      "name": "person"
+    },
+    {
+      "name": "tv"
+    },
+    {
+      "name": "woman"
+    }
+  ]
 }
