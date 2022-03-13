@@ -1,19 +1,21 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
     HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
-    Query, RequestContext, ResultsPage, TypedBody, UntypedBody,
+    Query, RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody,
+    UntypedBody,
 };
 use hyper::Body;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{io::Cursor, str::from_utf8, sync::Arc};
+use std::{collections::HashMap, io::Cursor, str::from_utf8, sync::Arc};
 
 #[endpoint {
     method = GET,
     path = "/test/person",
+    tags = ["it"],
 }]
 /// Rust style comment
 ///
@@ -37,6 +39,7 @@ struct QueryArgs {
 #[endpoint {
     method = PUT,
     path = "/test/woman",
+    tags = ["it"],
 }]
 /**
  * C-style comment
@@ -60,6 +63,7 @@ struct PathArgs {
 #[endpoint {
     method = DELETE,
     path = "/test/man/{x}",
+    tags = ["it"],
 }]
 async fn handler3(
     _rqctx: Arc<RequestContext<()>>,
@@ -81,6 +85,7 @@ struct Response {}
 #[endpoint {
     method = POST,
     path = "/test/camera",
+    tags = ["it"],
 }]
 async fn handler4(
     _rqctx: Arc<RequestContext<()>>,
@@ -123,6 +128,7 @@ struct ExamplePageSelector {
 #[endpoint {
     method = GET,
     path = "/impairment",
+    tags = ["it"],
 }]
 async fn handler6(
     _rqctx: Arc<RequestContext<()>>,
@@ -134,6 +140,7 @@ async fn handler6(
 #[endpoint {
     method = PUT,
     path = "/datagoeshere",
+    tags = ["it"],
 }]
 async fn handler7(
     _rqctx: Arc<RequestContext<()>>,
@@ -164,6 +171,7 @@ struct NeverDuplicatedResponseNextLevel {
 #[endpoint {
     method = GET,
     path = "/dup1",
+    tags = ["it"],
 }]
 async fn handler8(
     _rqctx: Arc<RequestContext<()>>,
@@ -174,6 +182,7 @@ async fn handler8(
 #[endpoint {
     method = GET,
     path = "/dup2",
+    tags = ["it"],
 }]
 async fn handler9(
     _rqctx: Arc<RequestContext<()>>,
@@ -200,6 +209,7 @@ struct NeverDuplicatedBodyNextLevel {
 #[endpoint {
     method = PUT,
     path = "/dup5",
+    tags = ["it"],
 }]
 async fn handler10(
     _rqctx: Arc<RequestContext<()>>,
@@ -211,6 +221,7 @@ async fn handler10(
 #[endpoint {
     method = PUT,
     path = "/dup6",
+    tags = ["it"],
 }]
 async fn handler11(
     _rqctx: Arc<RequestContext<()>>,
@@ -239,6 +250,7 @@ struct NeverDuplicatedNext {
 #[endpoint {
     method = PUT,
     path = "/dup7",
+    tags = ["it"],
 }]
 async fn handler12(
     _rqctx: Arc<RequestContext<()>>,
@@ -250,6 +262,7 @@ async fn handler12(
 #[endpoint {
     method = GET,
     path = "/dup8",
+    tags = ["it"],
 }]
 async fn handler13(
     _rqctx: Arc<RequestContext<()>>,
@@ -278,6 +291,7 @@ async fn handler14(
 #[endpoint {
     method = GET,
     path = "/unit_please",
+    tags = ["it"],
 }]
 async fn handler15(
     _rqctx: Arc<RequestContext<()>>,
@@ -288,6 +302,7 @@ async fn handler15(
 #[endpoint {
     method = GET,
     path = "/too/smart/for/my/own/good",
+    tags = ["it"],
 }]
 async fn handler16(
     _rqctx: Arc<RequestContext<()>>,
@@ -311,6 +326,7 @@ struct Foo(String);
 #[endpoint {
     method = GET,
     path = "/with/headers",
+    tags = ["it"],
 }]
 async fn handler17(
     _rqctx: Arc<RequestContext<()>>,
@@ -321,8 +337,15 @@ async fn handler17(
     unimplemented!();
 }
 
-fn make_api() -> Result<ApiDescription<()>, String> {
+fn make_api(
+    maybe_tag_config: Option<TagConfig>,
+) -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
+
+    if let Some(tag_config) = maybe_tag_config {
+        api = api.tag_config(tag_config);
+    }
+
     api.register(handler1)?;
     api.register(handler2)?;
     api.register(handler3)?;
@@ -345,7 +368,7 @@ fn make_api() -> Result<ApiDescription<()>, String> {
 
 #[test]
 fn test_openapi() -> Result<(), String> {
-    let api = make_api()?;
+    let api = make_api(None)?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api.openapi("test", "threeve").write(&mut output);
@@ -357,7 +380,20 @@ fn test_openapi() -> Result<(), String> {
 
 #[test]
 fn test_openapi_fuller() -> Result<(), String> {
-    let api = make_api()?;
+    let mut tag_definitions = HashMap::new();
+    tag_definitions.insert(
+        "it".to_string(),
+        TagDetails {
+            description: Some("Now you are the one who is it.".to_string()),
+            external_docs: None,
+        },
+    );
+    let tag_config = TagConfig {
+        allow_other_tags: true,
+        endpoint_tag_policy: dropshot::EndpointTagPolicy::AtLeastOne,
+        tag_definitions,
+    };
+    let api = make_api(Some(tag_config))?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api
