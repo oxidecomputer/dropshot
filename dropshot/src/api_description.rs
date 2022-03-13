@@ -778,15 +778,32 @@ impl<Context: ServerContext> ApiDescription<Context> {
             } else {
                 // If no schema was specified, the response is hand-rolled. In
                 // this case we'll fall back to the default response type which
-                // we assume to be inclusive of errors.
+                // we assume to be inclusive of errors. The media type and
+                // and schema will similarly be maximally permissive.
+                let mut content = indexmap::IndexMap::new();
+                content.insert(
+                    "*/*".to_string(),
+                    openapiv3::MediaType {
+                        schema: Some(openapiv3::ReferenceOr::Item(
+                            openapiv3::Schema {
+                                schema_data: openapiv3::SchemaData::default(),
+                                schema_kind: openapiv3::SchemaKind::Any(
+                                    openapiv3::AnySchema::default(),
+                                ),
+                            },
+                        )),
+                        ..Default::default()
+                    },
+                );
                 operation.responses.default =
                     Some(openapiv3::ReferenceOr::Item(openapiv3::Response {
                         // TODO: perhaps we should require even free-form
                         // responses to have a description since it's required
                         // by OpenAPI.
                         description: "".to_string(),
+                        content,
                         ..Default::default()
-                    }))
+                    }));
             }
 
             // Drop in the operation.
