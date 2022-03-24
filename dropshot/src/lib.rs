@@ -630,6 +630,7 @@ pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
+pub use handler::BodyWrapper;
 pub use handler::Extractor;
 pub use handler::ExtractorMetadata;
 pub use handler::HttpResponse;

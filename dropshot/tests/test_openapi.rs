@@ -1,7 +1,7 @@
 // Copyright 2022 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseAccepted,
+    endpoint, ApiDescription, BodyWrapper, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
     HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
     Query, RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody,
@@ -337,6 +337,17 @@ async fn handler17(
     unimplemented!();
 }
 
+#[endpoint {
+    method = GET,
+    path = "/playing/a/bit/nicer",
+    tags = ["it"],
+}]
+async fn handler18(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<BodyWrapper>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -363,6 +374,7 @@ fn make_api(
     api.register(handler15)?;
     api.register(handler16)?;
     api.register(handler17)?;
+    api.register(handler18)?;
     Ok(api)
 }
 
