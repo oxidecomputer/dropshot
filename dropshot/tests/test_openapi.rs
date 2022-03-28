@@ -345,7 +345,8 @@ async fn handler17(
 async fn handler18(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<BodyWrapper>, HttpError> {
-    unimplemented!();
+    let (_, body) = Body::channel();
+    Ok(HttpResponseOk(body.into()))
 }
 
 fn make_api(

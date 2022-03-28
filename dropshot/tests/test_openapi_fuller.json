@@ -269,6 +269,30 @@
         "x-dropshot-pagination": true
       }
     },
+    "/playing/a/bit/nicer": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler18",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/test/camera": {
       "post": {
         "tags": [

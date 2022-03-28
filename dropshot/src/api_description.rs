@@ -60,7 +60,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         let func_parameters = FuncParams::metadata();
-        let response = ResponseType::metadata();
+        let response = ResponseType::response_metadata();
         ApiEndpoint {
             operation_id,
             handler: HttpRouteHandler::new(handler),
@@ -670,7 +670,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 );
             }
 
-            if let Some(schema) = &endpoint.response.schema {
+            let response = if let Some(schema) = &endpoint.response.schema {
                 let (name, js) = match schema {
                     ApiSchemaGenerator::Gen { name, schema } => {
                         (Some(name()), schema(&mut generator))
@@ -745,36 +745,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     headers,
                     ..Default::default()
                 };
-
-                match &endpoint.response.success {
-                    None => {
-                        // Without knowing the specific status code we use the
-                        // 2xx range.
-                        operation.responses.responses.insert(
-                            openapiv3::StatusCode::Range(2),
-                            openapiv3::ReferenceOr::Item(response),
-                        );
-                    }
-                    Some(code) => {
-                        operation.responses.responses.insert(
-                            openapiv3::StatusCode::Code(code.as_u16()),
-                            openapiv3::ReferenceOr::Item(response),
-                        );
-                    }
-                }
-
-                // 4xx and 5xx responses all use the same error information
-                let err_ref = openapiv3::ReferenceOr::ref_(
-                    "#/components/responses/Error",
-                );
-                operation
-                    .responses
-                    .responses
-                    .insert(openapiv3::StatusCode::Range(4), err_ref.clone());
-                operation
-                    .responses
-                    .responses
-                    .insert(openapiv3::StatusCode::Range(5), err_ref);
+                response
             } else {
                 // If no schema was specified, the response is hand-rolled. In
                 // this case we'll fall back to the default response type which
@@ -795,15 +766,37 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         ..Default::default()
                     },
                 );
+                openapiv3::Response {
+                    // TODO: perhaps we should require even free-form
+                    // responses to have a description since it's required
+                    // by OpenAPI.
+                    description: "".to_string(),
+                    content,
+                    ..Default::default()
+                }
+            };
+
+            if let Some(code) = &endpoint.response.success {
+                operation.responses.responses.insert(
+                    openapiv3::StatusCode::Code(code.as_u16()),
+                    openapiv3::ReferenceOr::Item(response),
+                );
+
+                // 4xx and 5xx responses all use the same error information
+                let err_ref = openapiv3::ReferenceOr::ref_(
+                    "#/components/responses/Error",
+                );
+                operation
+                    .responses
+                    .responses
+                    .insert(openapiv3::StatusCode::Range(4), err_ref.clone());
+                operation
+                    .responses
+                    .responses
+                    .insert(openapiv3::StatusCode::Range(5), err_ref);
+            } else {
                 operation.responses.default =
-                    Some(openapiv3::ReferenceOr::Item(openapiv3::Response {
-                        // TODO: perhaps we should require even free-form
-                        // responses to have a description since it's required
-                        // by OpenAPI.
-                        description: "".to_string(),
-                        content,
-                        ..Default::default()
-                    }));
+                    Some(openapiv3::ReferenceOr::Item(response))
             }
 
             // Drop in the operation.
