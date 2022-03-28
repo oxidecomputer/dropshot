@@ -1150,10 +1150,20 @@ impl JsonSchema for Empty {
  * kind of HTTP response body they produce.
  */
 
+// TODO this is a terrible name
+/// Adapter trait that allows both concrete types that implement [JsonSchema]
+/// and our [BodyWrapper] type to add their content to a response builder
+/// object.
 pub trait HttpForContent {
     fn to_response(self, builder: http::response::Builder)
         -> HttpHandlerResult;
 
+    // TODO the return type here could be something more elegant that is able
+    // to produce the map of mime type -> openapiv3::MediaType that's needed in
+    // in api_description. One could imagine, for example, that this could
+    // allow dropshot consumers in the future to have endpoints that respond
+    // with multiple, explicitly enumerated mime types.
+    // TODO the ApiSchemaGenerator type is particularly inelegant.
     fn content_metadata() -> Option<ApiSchemaGenerator>;
 }
 
@@ -1219,6 +1229,8 @@ where
 pub trait HttpTypedResponse:
     Into<HttpHandlerResult> + Send + Sync + 'static
 {
+    // TODO with this change, the this isn't particularly "Typed" but rather
+    // we merely know that there's a single associated [StatusCode]
     type Body: HttpForContent;
     const STATUS_CODE: StatusCode;
     const DESCRIPTION: &'static str;
