@@ -1,8 +1,8 @@
-error[E0277]: the trait bound `String: dropshot::handler::HttpTypedResponse` is not satisfied
+error[E0277]: the trait bound `String: HttpTypedResponse` is not satisfied
   --> tests/fail/bad_endpoint12.rs:16:6
    |
 16 | ) -> Result<String, HttpError> {
-   |      ^^^^^^ the trait `dropshot::handler::HttpTypedResponse` is not implemented for `String`
+   |      ^^^^^^ the trait `HttpTypedResponse` is not implemented for `String`
    |
    = note: required because of the requirements on the impl of `HttpResponse` for `String`
 note: required because of the requirements on the impl of `ResultTrait` for `Result<String, HttpError>`
