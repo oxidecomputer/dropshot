@@ -633,6 +633,7 @@ pub use handler::HttpResponseDeleted;
 pub use handler::HttpResponseHeaders;
 pub use handler::HttpResponseOk;
 pub use handler::HttpResponseUpdatedNoContent;
+pub use handler::HttpTypedResponse;
 pub use handler::NoHeaders;
 pub use handler::Path;
 pub use handler::Query;
