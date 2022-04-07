@@ -507,9 +507,11 @@
  * See the [`RequestInfo`] and [`ResponseInfo`] types for a complete listing
  * of what's available.
  *
- * These probes are implemented via the [`usdt`] crate, and require a nightly
- * toolchain. As such, they're behind the feature flag `"usdt-probes"`. You
- * can build Dropshot with these probes via `cargo +nightly build --features usdt-probes`.
+ * These probes are implemented via the [`usdt`] crate. They require a nightly
+ * toolchain if built on MacOS (which requires the unstable `asm_sym` feature).
+ * Otherwise a stable compiler >= v1.59 is required in order to present the
+ * necessary features.  Given these constraints, usdt functionality is behind
+ * the feature flag `"usdt-probes"`.
  *
  * > *Important:* The probes are internally registered with the DTrace kernel
  * module, making them visible via `dtrace(1M)`. This is done when an `HttpServer`
@@ -547,9 +549,13 @@
  * The `usdt` crate requires nightly, enabled if our consumer is enabling
  * DTrace probes.
  */
-#![cfg_attr(feature = "usdt-probes", feature(asm))]
+#![cfg_attr(all(feature = "usdt-probes", not(usdt_stable_asm)), feature(asm))]
 #![cfg_attr(
-    all(feature = "usdt-probes", target_os = "macos"),
+    all(
+        feature = "usdt-probes",
+        target_os = "macos",
+        not(usdt_stable_asm_sym)
+    ),
     feature(asm_sym)
 )]
 

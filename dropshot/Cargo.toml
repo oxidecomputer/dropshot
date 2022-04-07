@@ -94,5 +94,10 @@ features = [ "dangerous_configuration" ]
 version = "0.8.8"
 features = [ "chrono", "uuid" ]
 
+# This is required for the build.rs script to check for an appropriate compiler
+# version so that `usdt` can be built on stable rust.
+[build-dependencies]
+version_check = "0.9.4"
+
 [features]
 usdt-probes = ["usdt/asm"]
