@@ -1,7 +1,7 @@
 // Copyright 2022 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, BodyWrapper, HttpError, HttpResponseAccepted,
+    endpoint, ApiDescription, FreeformBody, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
     HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
     Query, RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody,
@@ -344,7 +344,7 @@ async fn handler17(
 }]
 async fn handler18(
     _rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseOk<BodyWrapper>, HttpError> {
+) -> Result<HttpResponseOk<FreeformBody>, HttpError> {
     let (_, body) = Body::channel();
     Ok(HttpResponseOk(body.into()))
 }
