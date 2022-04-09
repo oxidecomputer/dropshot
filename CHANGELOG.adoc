@@ -23,12 +23,13 @@ https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of co
 === Other notable changes
 
 * https://github.com/oxidecomputer/dropshot/pull/198[#198] Responses that used `()` (the unit type) as their `Body` type parameter previously (and inaccurately) were represented in OpenAPI as an empty `responseBody`. They are now more accurately represented as a body whose value is `null` (4 bytes). We encourage those use cases to instead use either `HttpResponseUpdatedNoContent` or `HttpResponseDeleted` both of which have empty response bodies. If there are other situations where you would like a response type with no body, please file an issue.
-* https://github.com/oxidecomputer/dropshot/pull/252[#252] Endpoints specified with the `#[endpoint ..]` attribute macro now use the first line of a doc comment as the OpenAPI `summary` and subsequent lines as the `description`. Previously all lines were used as the `description`.
+* https://github.com/oxidecomputer/dropshot/pull/252[#252] Endpoints specified with the `##[endpoint ..]` attribute macro now use the first line of a doc comment as the OpenAPI `summary` and subsequent lines as the `description`. Previously all lines were used as the `description`.
 * https://github.com/oxidecomputer/dropshot/pull/260[#260] Pulls in a newer serde that changes error messages around parsing NonZeroU32.
 * https://github.com/oxidecomputer/dropshot/pull/283[#283] Add support for response headers with the `HttpResponseHeaders` type. Headers may either be defined by a struct type parameter (in which case they appear in the OpenAPI output) or *ad-hoc* added via `HttpResponseHeaders::headers_mut()`.
 * https://github.com/oxidecomputer/dropshot/pull/286[#286] OpenAPI output includes descriptions of 4xx and 5xx error responses.
 * https://github.com/oxidecomputer/dropshot/pull/296[#296] `ApiDescription` includes a `tag_config` method to specify both predefined tags with descriptions and links as well as a tag policy to ensure that endpoints, for example, only use predefined tags or have at least one tag.
 * https://github.com/oxidecomputer/dropshot/pull/317[#317] Allow use of usdt probes with stable Rust. Dropshot consumers can build with USDT probes enabled on stable compilers >= 1.59 (except on MacOS).
+* https://github.com/oxidecomputer/dropshot/pull/310[#310] Freeform (and streaming) response bodies may be specified with specific HTTP response codes e.g. by having an endpoint return `Result<HttpResponseOk<FreeformBody>, HttpError>`.
 
 == 0.6.0 (released 2021-11-18)
 
