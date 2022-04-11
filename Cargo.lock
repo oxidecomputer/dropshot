@@ -1683,9 +1683,9 @@ dependencies = [
 
 [[package]]
 name = "usdt"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3877c300bc107d8d05455e8e2bec271ca9e1d24fbc17e3ef27d18b9b53c684e2"
+checksum = "5409e16f35fdba646ff4290e6f96f0bb958b43e0bd09d790c3714456a76c11ac"
 dependencies = [
  "dof",
  "dtrace-parser",
@@ -1697,9 +1697,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-attr-macro"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dedf62a6eab9c6da23fa64353382ef2b73dce8891eadda8755bfed179cb2103d"
+checksum = "d203cad87b8424e1fbd0fef29b6df2113e68be5dd75f4043427eb0ce6601041f"
 dependencies = [
  "dtrace-parser",
  "proc-macro2",
@@ -1711,9 +1711,9 @@ dependencies = [
 
 [[package]]
 name = "usdt-impl"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dda9311a9f1452ebc752d264e9d1e3c2dac9807219e19471bcef3bd1b7f90cb"
+checksum = "3c146394183fcea90d93e2d4602e1a7eb6cab8e807b58f99d4f343720d4e9d69"
 dependencies = [
  "byteorder",
  "dof",
@@ -1726,13 +1726,14 @@ dependencies = [
  "syn",
  "thiserror",
  "thread-id",
+ "version_check",
 ]
 
 [[package]]
 name = "usdt-macro"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e64160eb8f7ee61fcaef542b2f75fa807e8c3ed4b4f075e6ca0b17ea6fcea6f8"
+checksum = "8dddab3586eaf539e2daddc425261daef6a6d2f85131bac7345caa8e6a423b27"
 dependencies = [
  "dtrace-parser",
  "proc-macro2",
