@@ -160,6 +160,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 https.start(rx, log_close)
             }
         };
+        info!(self.app_state.log, "listening");
 
         let probe_registration = if cfg!(feature = "usdt-probes") {
             match usdt::register_probes() {
