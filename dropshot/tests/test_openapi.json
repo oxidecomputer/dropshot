@@ -549,6 +549,32 @@
         }
       }
     },
+    "/with/example": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler19",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObjectWithExample"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/with/headers": {
       "get": {
         "tags": [
@@ -633,6 +659,20 @@
           "request_id"
         ]
       },
+      "NestedObjectWithExample": {
+        "example": {
+          "nick_name": "baz"
+        },
+        "type": "object",
+        "properties": {
+          "nick_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nick_name"
+        ]
+      },
       "NeverDuplicatedBodyNextLevel": {
         "type": "object",
         "properties": {
@@ -705,6 +745,34 @@
         },
         "required": [
           "b"
+        ]
+      },
+      "ObjectWithExample": {
+        "example": {
+          "id": 456,
+          "name": "foo bar",
+          "nested": {
+            "nick_name": "baz"
+          }
+        },
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "nested": {
+            "$ref": "#/components/schemas/NestedObjectWithExample"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "nested"
         ]
       },
       "Response": {

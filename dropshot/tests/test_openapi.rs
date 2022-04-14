@@ -349,6 +349,43 @@ async fn handler18(
     Ok(HttpResponseOk(body.into()))
 }
 
+#[derive(Serialize, JsonSchema)]
+#[schemars(example = "example_object_with_example")]
+struct ObjectWithExample {
+    id: u32,
+    name: String,
+    nested: NestedObjectWithExample,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[schemars(example = "example_nested_object_with_example")]
+struct NestedObjectWithExample {
+    nick_name: String,
+}
+
+fn example_object_with_example() -> ObjectWithExample {
+    ObjectWithExample {
+        id: 456,
+        name: "foo bar".into(),
+        nested: example_nested_object_with_example(),
+    }
+}
+
+fn example_nested_object_with_example() -> NestedObjectWithExample {
+    NestedObjectWithExample { nick_name: "baz".into() }
+}
+
+#[endpoint {
+    method = GET,
+    path = "/with/example",
+    tags = ["it"],
+}]
+async fn handler19(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<ObjectWithExample>, HttpError> {
+    Ok(HttpResponseOk(example_object_with_example()))
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -376,6 +413,7 @@ fn make_api(
     api.register(handler16)?;
     api.register(handler17)?;
     api.register(handler18)?;
+    api.register(handler19)?;
     Ok(api)
 }
 

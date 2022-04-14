@@ -1024,6 +1024,9 @@ fn j2oas_schema_object(
     if let Some(name) = name {
         data.title = Some(name.clone());
     }
+    if let Some(example) = obj.extensions.get("example") {
+        data.example = Some(example.clone());
+    }
 
     openapiv3::ReferenceOr::Item(openapiv3::Schema {
         schema_data: data,
