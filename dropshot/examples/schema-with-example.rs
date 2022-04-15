@@ -1,9 +1,27 @@
+/*!
+* Example use of dropshot to output OpenAPI compatible JSON.  This program
+* specifically illustrates how to add examples to each schema using schemars,
+* and how that will be reflected in the resultant JSON generated when ran.
+*/
+
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseOk, RequestContext,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+/*
+ * Define 2 structs here - Bar is nested inside Foo and should result in an
+ * example that looks like:
+ *
+ * {
+ *    "id": 1,
+ *    "bar": {
+ *      "id: 2
+ *    }
+ * }
+ */
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[schemars(example = "foo_example")]
@@ -24,10 +42,12 @@ struct Bar {
     id: u32,
 }
 
+/// Used by schemars to generate the `Foo` example.
 fn foo_example() -> Foo {
     Foo { id: 1, bar: bar_example() }
 }
 
+/// Used by schemars to generate the `Bar` example.
 fn bar_example() -> Bar {
     Bar { id: 2 }
 }
