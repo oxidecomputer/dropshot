@@ -30,6 +30,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.6.0\...HEAD[Full list of co
 * https://github.com/oxidecomputer/dropshot/pull/296[#296] `ApiDescription` includes a `tag_config` method to specify both predefined tags with descriptions and links as well as a tag policy to ensure that endpoints, for example, only use predefined tags or have at least one tag.
 * https://github.com/oxidecomputer/dropshot/pull/317[#317] Allow use of usdt probes with stable Rust. Dropshot consumers can build with USDT probes enabled on stable compilers >= 1.59 (except on MacOS).
 * https://github.com/oxidecomputer/dropshot/pull/310[#310] Freeform (and streaming) response bodies may be specified with specific HTTP response codes e.g. by having an endpoint return `Result<HttpResponseOk<FreeformBody>, HttpError>`.
+- https://github.com/oxidecomputer/dropshot/pull/325[#325] The example field (if present) for `JsonSchema` objects in the API will be present in the OpenAPI output (and note that no validation of the example is performed)
 
 == 0.6.0 (released 2021-11-18)
 
