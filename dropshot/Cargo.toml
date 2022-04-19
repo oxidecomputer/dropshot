@@ -71,7 +71,7 @@ version = "0.8.8"
 features = [ "uuid" ]
 
 [dev-dependencies]
-expectorate = "1.0.4"
+expectorate = "1.0.5"
 hyper-rustls = "0.23.0"
 hyper-staticfile = "0.8"
 lazy_static = "1.4.0"
