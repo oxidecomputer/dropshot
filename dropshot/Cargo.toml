@@ -47,7 +47,7 @@ version = "0.14"
 features = [ "full" ]
 
 [dependencies.serde]
-version = "1.0.136"
+version = "1.0.137"
 features = [ "derive" ]
 
 [dependencies.slog]
