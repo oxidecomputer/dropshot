@@ -77,6 +77,27 @@ async fn handler3(
 struct BodyParam {
     x: String,
     any: serde_json::Value,
+    #[serde(default)]
+    things: Vec<u32>,
+    #[serde(default)]
+    maybe: bool,
+    #[serde(default = "forty_two")]
+    answer: i32,
+    #[serde(default = "nested_default")]
+    nested: BodyParamNested,
+}
+
+fn forty_two() -> i32 {
+    42
+}
+
+#[derive(JsonSchema, Deserialize, Serialize)]
+struct BodyParamNested {
+    maybe: Option<bool>,
+}
+
+fn nested_default() -> BodyParamNested {
+    BodyParamNested { maybe: Some(false) }
 }
 
 #[derive(Serialize, JsonSchema)]
