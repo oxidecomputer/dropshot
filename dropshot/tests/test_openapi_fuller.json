@@ -638,7 +638,35 @@
       "BodyParam": {
         "type": "object",
         "properties": {
+          "answer": {
+            "default": 42,
+            "type": "integer",
+            "format": "int32"
+          },
           "any": {},
+          "maybe": {
+            "default": false,
+            "type": "boolean"
+          },
+          "nested": {
+            "default": {
+              "maybe": false
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BodyParamNested"
+              }
+            ]
+          },
+          "things": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
           "x": {
             "type": "string"
           }
@@ -647,6 +675,15 @@
           "any",
           "x"
         ]
+      },
+      "BodyParamNested": {
+        "type": "object",
+        "properties": {
+          "maybe": {
+            "nullable": true,
+            "type": "boolean"
+          }
+        }
       },
       "Error": {
         "description": "Error information from a response.",
