@@ -63,12 +63,12 @@ version = "0.3.2"
 default-features = false
 
 [dependencies.uuid]
-version = "0.8.0"
+version = "1.0.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
 version = "0.8.10"
-features = [ "uuid" ]
+features = [ "uuid1" ]
 
 [dev-dependencies]
 expectorate = "1.0.5"
@@ -92,7 +92,7 @@ features = [ "dangerous_configuration" ]
 
 [dev-dependencies.schemars]
 version = "0.8.10"
-features = [ "chrono", "uuid" ]
+features = [ "chrono", "uuid1" ]
 
 # This is required for the build.rs script to check for an appropriate compiler
 # version so that `usdt` can be built on stable rust.
