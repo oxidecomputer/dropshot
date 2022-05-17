@@ -67,7 +67,7 @@ version = "0.8.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.8"
+version = "0.8.10"
 features = [ "uuid" ]
 
 [dev-dependencies]
@@ -91,7 +91,7 @@ version = "0.20.4"
 features = [ "dangerous_configuration" ]
 
 [dev-dependencies.schemars]
-version = "0.8.8"
+version = "0.8.10"
 features = [ "chrono", "uuid" ]
 
 # This is required for the build.rs script to check for an appropriate compiler
