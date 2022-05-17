@@ -63,7 +63,7 @@ version = "0.3.2"
 default-features = false
 
 [dependencies.uuid]
-version = "0.8.0"
+version = "1.0.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
