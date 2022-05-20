@@ -240,7 +240,7 @@
           {
             "in": "query",
             "name": "page_token",
-            "description": "Token returned by previous call to retreive the subsequent page",
+            "description": "Token returned by previous call to retrieve the subsequent page",
             "schema": {
               "nullable": true,
               "type": "string"
