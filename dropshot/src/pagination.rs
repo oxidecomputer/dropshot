@@ -275,7 +275,7 @@ where
 
 /*
  * This is the API consumer-visible interface for paginated endpoints. We use
- * this solely to generate the schema. User-specified paratemers appear before
+ * this solely to generate the schema. User-specified parameters appear before
  * pagination boilerplate.
  */
 #[derive(JsonSchema)]
@@ -285,7 +285,7 @@ struct SchemaPaginationParams<ScanParams> {
     params: Option<ScanParams>,
     /** Maximum number of items returned by a single call */
     limit: Option<NonZeroU32>,
-    /** Token returned by previous call to retreive the subsequent page */
+    /** Token returned by previous call to retrieve the subsequent page */
     page_token: Option<String>,
 }
 
