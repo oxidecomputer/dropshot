@@ -578,6 +578,7 @@ pub(crate) struct ResponseInfo {
     message: String,
 }
 
+#[cfg(feature = "usdt-probes")]
 #[usdt::provider(provider = "dropshot")]
 mod probes {
     use crate::{RequestInfo, ResponseInfo};

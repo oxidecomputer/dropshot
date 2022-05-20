@@ -60,6 +60,7 @@ features = [ "full" ]
 
 [dependencies.usdt]
 version = "0.3.2"
+optional = true
 default-features = false
 
 [dependencies.uuid]
