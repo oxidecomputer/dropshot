@@ -507,9 +507,11 @@
  * See the [`RequestInfo`] and [`ResponseInfo`] types for a complete listing
  * of what's available.
  *
- * These probes are implemented via the [`usdt`] crate, and require a nightly
- * toolchain. As such, they're behind the feature flag `"usdt-probes"`. You
- * can build Dropshot with these probes via `cargo +nightly build --features usdt-probes`.
+ * These probes are implemented via the [`usdt`] crate. They require a nightly
+ * toolchain if built on MacOS (which requires the unstable `asm_sym` feature).
+ * Otherwise a stable compiler >= v1.59 is required in order to present the
+ * necessary features.  Given these constraints, usdt functionality is behind
+ * the feature flag `"usdt-probes"`.
  *
  * > *Important:* The probes are internally registered with the DTrace kernel
  * module, making them visible via `dtrace(1M)`. This is done when an `HttpServer`
@@ -547,9 +549,13 @@
  * The `usdt` crate requires nightly, enabled if our consumer is enabling
  * DTrace probes.
  */
-#![cfg_attr(feature = "usdt-probes", feature(asm))]
+#![cfg_attr(all(feature = "usdt-probes", not(usdt_stable_asm)), feature(asm))]
 #![cfg_attr(
-    all(feature = "usdt-probes", target_os = "macos"),
+    all(
+        feature = "usdt-probes",
+        target_os = "macos",
+        not(usdt_stable_asm_sym)
+    ),
     feature(asm_sym)
 )]
 
@@ -572,6 +578,7 @@ pub(crate) struct ResponseInfo {
     message: String,
 }
 
+#[cfg(feature = "usdt-probes")]
 #[usdt::provider(provider = "dropshot")]
 mod probes {
     use crate::{RequestInfo, ResponseInfo};
@@ -602,6 +609,7 @@ mod logging;
 mod pagination;
 mod router;
 mod server;
+mod to_map;
 mod type_util;
 
 pub mod test_util;
@@ -614,19 +622,27 @@ pub use api_description::ApiEndpoint;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
+pub use api_description::EndpointTagPolicy;
 pub use api_description::OpenApiDefinition;
+pub use api_description::TagConfig;
+pub use api_description::TagDetails;
+pub use api_description::TagExternalDocs;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
 pub use handler::Extractor;
 pub use handler::ExtractorMetadata;
+pub use handler::FreeformBody;
+pub use handler::HttpCodedResponse;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
+pub use handler::HttpResponseHeaders;
 pub use handler::HttpResponseOk;
 pub use handler::HttpResponseUpdatedNoContent;
+pub use handler::NoHeaders;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;

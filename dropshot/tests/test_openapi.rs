@@ -1,19 +1,21 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseOk,
-    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
-    RequestContext, ResultsPage, TypedBody, UntypedBody,
+    endpoint, ApiDescription, FreeformBody, HttpError, HttpResponseAccepted,
+    HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
+    HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
+    Query, RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody,
+    UntypedBody,
 };
 use hyper::Body;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{io::Cursor, str::from_utf8, sync::Arc};
+use std::{collections::HashMap, io::Cursor, str::from_utf8, sync::Arc};
 
 #[endpoint {
     method = GET,
     path = "/test/person",
+    tags = ["it"],
 }]
 /// Rust style comment
 ///
@@ -28,13 +30,16 @@ async fn handler1(
 #[derive(Deserialize, JsonSchema)]
 #[allow(dead_code)]
 struct QueryArgs {
+    /// One brother connected by the pain
     tomax: String,
+    /// Spoiler: there's a reason this is not required...
     xamot: Option<String>,
 }
 
 #[endpoint {
     method = PUT,
     path = "/test/woman",
+    tags = ["it"],
 }]
 /**
  * C-style comment
@@ -58,6 +63,7 @@ struct PathArgs {
 #[endpoint {
     method = DELETE,
     path = "/test/man/{x}",
+    tags = ["it"],
 }]
 async fn handler3(
     _rqctx: Arc<RequestContext<()>>,
@@ -71,6 +77,27 @@ async fn handler3(
 struct BodyParam {
     x: String,
     any: serde_json::Value,
+    #[serde(default)]
+    things: Vec<u32>,
+    #[serde(default)]
+    maybe: bool,
+    #[serde(default = "forty_two")]
+    answer: i32,
+    #[serde(default = "nested_default")]
+    nested: BodyParamNested,
+}
+
+fn forty_two() -> i32 {
+    42
+}
+
+#[derive(JsonSchema, Deserialize, Serialize)]
+struct BodyParamNested {
+    maybe: Option<bool>,
+}
+
+fn nested_default() -> BodyParamNested {
+    BodyParamNested { maybe: Some(false) }
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -79,6 +106,7 @@ struct Response {}
 #[endpoint {
     method = POST,
     path = "/test/camera",
+    tags = ["it"],
 }]
 async fn handler4(
     _rqctx: Arc<RequestContext<()>>,
@@ -121,6 +149,7 @@ struct ExamplePageSelector {
 #[endpoint {
     method = GET,
     path = "/impairment",
+    tags = ["it"],
 }]
 async fn handler6(
     _rqctx: Arc<RequestContext<()>>,
@@ -132,6 +161,7 @@ async fn handler6(
 #[endpoint {
     method = PUT,
     path = "/datagoeshere",
+    tags = ["it"],
 }]
 async fn handler7(
     _rqctx: Arc<RequestContext<()>>,
@@ -145,19 +175,24 @@ async fn handler7(
  * returned by two different handler functions.
  */
 
+/// Best non-duplicated type
 #[derive(JsonSchema, Serialize)]
 struct NeverDuplicatedResponseTopLevel {
+    /// Bee
     b: NeverDuplicatedResponseNextLevel,
 }
 
+/// Veritably non-duplicated type
 #[derive(JsonSchema, Serialize)]
 struct NeverDuplicatedResponseNextLevel {
+    /// Vee
     v: bool,
 }
 
 #[endpoint {
     method = GET,
     path = "/dup1",
+    tags = ["it"],
 }]
 async fn handler8(
     _rqctx: Arc<RequestContext<()>>,
@@ -168,6 +203,7 @@ async fn handler8(
 #[endpoint {
     method = GET,
     path = "/dup2",
+    tags = ["it"],
 }]
 async fn handler9(
     _rqctx: Arc<RequestContext<()>>,
@@ -194,6 +230,7 @@ struct NeverDuplicatedBodyNextLevel {
 #[endpoint {
     method = PUT,
     path = "/dup5",
+    tags = ["it"],
 }]
 async fn handler10(
     _rqctx: Arc<RequestContext<()>>,
@@ -205,6 +242,7 @@ async fn handler10(
 #[endpoint {
     method = PUT,
     path = "/dup6",
+    tags = ["it"],
 }]
 async fn handler11(
     _rqctx: Arc<RequestContext<()>>,
@@ -233,6 +271,7 @@ struct NeverDuplicatedNext {
 #[endpoint {
     method = PUT,
     path = "/dup7",
+    tags = ["it"],
 }]
 async fn handler12(
     _rqctx: Arc<RequestContext<()>>,
@@ -244,6 +283,7 @@ async fn handler12(
 #[endpoint {
     method = GET,
     path = "/dup8",
+    tags = ["it"],
 }]
 async fn handler13(
     _rqctx: Arc<RequestContext<()>>,
@@ -272,6 +312,7 @@ async fn handler14(
 #[endpoint {
     method = GET,
     path = "/unit_please",
+    tags = ["it"],
 }]
 async fn handler15(
     _rqctx: Arc<RequestContext<()>>,
@@ -282,6 +323,7 @@ async fn handler15(
 #[endpoint {
     method = GET,
     path = "/too/smart/for/my/own/good",
+    tags = ["it"],
 }]
 async fn handler16(
     _rqctx: Arc<RequestContext<()>>,
@@ -289,8 +331,91 @@ async fn handler16(
     unimplemented!();
 }
 
-fn make_api() -> Result<ApiDescription<()>, String> {
+#[derive(Serialize, JsonSchema)]
+struct SomeHeaders {
+    /// eee! a tag
+    #[serde(rename = "Etag")]
+    etag: String,
+    /// this is a foo
+    #[serde(rename = "x-foo-mobile")]
+    foo: Foo,
+}
+
+#[derive(Serialize, JsonSchema)]
+struct Foo(String);
+
+#[endpoint {
+    method = GET,
+    path = "/with/headers",
+    tags = ["it"],
+}]
+async fn handler17(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<
+    HttpResponseHeaders<HttpResponseUpdatedNoContent, SomeHeaders>,
+    HttpError,
+> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/playing/a/bit/nicer",
+    tags = ["it"],
+}]
+async fn handler18(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<FreeformBody>, HttpError> {
+    let (_, body) = Body::channel();
+    Ok(HttpResponseOk(body.into()))
+}
+
+#[derive(Serialize, JsonSchema)]
+#[schemars(example = "example_object_with_example")]
+struct ObjectWithExample {
+    id: u32,
+    name: String,
+    nested: NestedObjectWithExample,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[schemars(example = "example_nested_object_with_example")]
+struct NestedObjectWithExample {
+    nick_name: String,
+}
+
+fn example_object_with_example() -> ObjectWithExample {
+    ObjectWithExample {
+        id: 456,
+        name: "foo bar".into(),
+        nested: example_nested_object_with_example(),
+    }
+}
+
+fn example_nested_object_with_example() -> NestedObjectWithExample {
+    NestedObjectWithExample { nick_name: "baz".into() }
+}
+
+#[endpoint {
+    method = GET,
+    path = "/with/example",
+    tags = ["it"],
+}]
+async fn handler19(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseOk<ObjectWithExample>, HttpError> {
+    Ok(HttpResponseOk(example_object_with_example()))
+}
+
+fn make_api(
+    maybe_tag_config: Option<TagConfig>,
+) -> Result<ApiDescription<()>, String> {
     let mut api = ApiDescription::new();
+
+    if let Some(tag_config) = maybe_tag_config {
+        api = api.tag_config(tag_config);
+    }
+
     api.register(handler1)?;
     api.register(handler2)?;
     api.register(handler3)?;
@@ -305,14 +430,17 @@ fn make_api() -> Result<ApiDescription<()>, String> {
     api.register(handler12)?;
     api.register(handler13)?;
     api.register(handler14)?;
-    api.register(handler16)?;
     api.register(handler15)?;
+    api.register(handler16)?;
+    api.register(handler17)?;
+    api.register(handler18)?;
+    api.register(handler19)?;
     Ok(api)
 }
 
 #[test]
 fn test_openapi() -> Result<(), String> {
-    let api = make_api()?;
+    let api = make_api(None)?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api.openapi("test", "threeve").write(&mut output);
@@ -324,7 +452,20 @@ fn test_openapi() -> Result<(), String> {
 
 #[test]
 fn test_openapi_fuller() -> Result<(), String> {
-    let api = make_api()?;
+    let mut tag_definitions = HashMap::new();
+    tag_definitions.insert(
+        "it".to_string(),
+        TagDetails {
+            description: Some("Now you are the one who is it.".to_string()),
+            external_docs: None,
+        },
+    );
+    let tag_config = TagConfig {
+        allow_other_tags: true,
+        endpoint_tag_policy: dropshot::EndpointTagPolicy::AtLeastOne,
+        tag_definitions,
+    };
+    let api = make_api(Some(tag_config))?;
     let mut output = Cursor::new(Vec::new());
 
     let _ = api

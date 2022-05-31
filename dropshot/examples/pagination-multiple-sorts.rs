@@ -186,7 +186,7 @@ enum ProjectSort {
  * selector back, you find the object having the next value after the one stored
  * in the token and start returning results from there.
  */
-#[derive(Deserialize, JsonSchema, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ProjectScanPageSelector {
     Name(PaginationOrder, String),

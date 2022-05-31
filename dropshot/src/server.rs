@@ -56,6 +56,7 @@ impl<T: 'static> ServerContext for T where T: Send + Sync {}
 /**
  * Stores shared state used by the Dropshot server.
  */
+#[derive(Debug)]
 pub struct DropshotState<C: ServerContext> {
     /** caller-specific state */
     pub private: C,
@@ -73,6 +74,7 @@ pub struct DropshotState<C: ServerContext> {
  * Stores static configuration associated with the server
  * TODO-cleanup merge with ConfigDropshot
  */
+#[derive(Debug)]
 pub struct ServerConfig {
     /** maximum allowed size of a request body */
     pub request_body_max_bytes: usize,
@@ -158,26 +160,28 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 https.start(rx, log_close)
             }
         };
+        info!(self.app_state.log, "listening");
 
-        let probe_registration = if cfg!(feature = "usdt-probes") {
-            match usdt::register_probes() {
-                Ok(_) => {
-                    debug!(
-                        self.app_state.log,
-                        "successfully registered DTrace USDT probes"
-                    );
-                    ProbeRegistration::Succeeded
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    error!(
-                        self.app_state.log,
-                        "failed to register DTrace USDT probes: {}", msg
-                    );
-                    ProbeRegistration::Failed(msg)
-                }
+        #[cfg(feature = "usdt-probes")]
+        let probe_registration = match usdt::register_probes() {
+            Ok(_) => {
+                debug!(
+                    self.app_state.log,
+                    "successfully registered DTrace USDT probes"
+                );
+                ProbeRegistration::Succeeded
             }
-        } else {
+            Err(e) => {
+                let msg = e.to_string();
+                error!(
+                    self.app_state.log,
+                    "failed to register DTrace USDT probes: {}", msg
+                );
+                ProbeRegistration::Failed(msg)
+            }
+        };
+        #[cfg(not(feature = "usdt-probes"))]
+        let probe_registration = {
             debug!(
                 self.app_state.log,
                 "DTrace USDT probes compiled out, not registering"

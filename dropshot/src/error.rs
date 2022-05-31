@@ -45,6 +45,7 @@
  */
 
 use hyper::Error as HyperError;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::error::Error;
@@ -107,9 +108,19 @@ pub struct HttpError {
  * deserialize an HTTP response corresponding to an error in order to access the
  * error code, message, etc.
  */
-#[derive(Debug, Deserialize, Serialize)]
+/*
+ * TODO: does this need to be pub if it's going to be expressed in the OpenAPI
+ * output?
+ */
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[schemars(rename = "Error")]
+#[schemars(description = "Error information from a response.")]
 pub struct HttpErrorResponseBody {
     pub request_id: String,
+    // The combination of default and required removes "nullable" from the
+    // OpenAPI-flavored JSON Schema output.
+    #[schemars(default, required)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
     pub message: String,
 }
@@ -296,5 +307,32 @@ impl fmt::Display for HttpError {
 impl Error for HttpError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::HttpErrorResponseBody;
+
+    #[test]
+    fn test_serialize_error_response_body() {
+        let err = HttpErrorResponseBody {
+            request_id: "123".to_string(),
+            error_code: None,
+            message: "oy!".to_string(),
+        };
+        let out = serde_json::to_string(&err).unwrap();
+        assert_eq!(out, r#"{"request_id":"123","message":"oy!"}"#);
+
+        let err = HttpErrorResponseBody {
+            request_id: "123".to_string(),
+            error_code: Some("err".to_string()),
+            message: "oy!".to_string(),
+        };
+        let out = serde_json::to_string(&err).unwrap();
+        assert_eq!(
+            out,
+            r#"{"request_id":"123","error_code":"err","message":"oy!"}"#
+        );
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 /*!
  * Describes the endpoints and handler functions in your API
  */
@@ -14,12 +14,16 @@ use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
 use crate::Extractor;
+use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
 
 use http::Method;
 use http::StatusCode;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 /**
@@ -56,7 +60,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         let func_parameters = FuncParams::metadata();
-        let response = ResponseType::metadata();
+        let response = ResponseType::response_metadata();
         ApiEndpoint {
             operation_id,
             handler: HttpRouteHandler::new(handler),
@@ -134,17 +138,16 @@ impl ApiEndpointParameter {
 
     pub fn new_body(
         content_type: ApiEndpointBodyContentType,
-        description: Option<String>,
         required: bool,
         schema: ApiSchemaGenerator,
         examples: Vec<String>,
     ) -> Self {
         Self {
             metadata: ApiEndpointParameterMetadata::Body(content_type),
-            description,
             required,
             schema,
             examples,
+            description: None,
         }
     }
 }
@@ -179,12 +182,21 @@ impl ApiEndpointBodyContentType {
     }
 }
 
+#[derive(Debug)]
+pub struct ApiEndpointHeader {
+    pub name: String,
+    pub description: Option<String>,
+    pub schema: ApiSchemaGenerator,
+    pub required: bool,
+}
+
 /**
  * Metadata for an API endpoint response: type information and status code.
  */
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
+    pub headers: Vec<ApiEndpointHeader>,
     pub success: Option<StatusCode>,
     pub description: Option<String>,
 }
@@ -223,11 +235,20 @@ impl std::fmt::Debug for ApiSchemaGenerator {
 pub struct ApiDescription<Context: ServerContext> {
     /** In practice, all the information we need is encoded in the router. */
     router: HttpRouter<Context>,
+    tag_config: TagConfig,
 }
 
 impl<Context: ServerContext> ApiDescription<Context> {
     pub fn new() -> Self {
-        ApiDescription { router: HttpRouter::new() }
+        ApiDescription {
+            router: HttpRouter::new(),
+            tag_config: TagConfig::default(),
+        }
+    }
+
+    pub fn tag_config(mut self, tag_config: TagConfig) -> Self {
+        self.tag_config = tag_config;
+        self
     }
 
     /**
@@ -239,11 +260,42 @@ impl<Context: ServerContext> ApiDescription<Context> {
     {
         let e = endpoint.into();
 
+        self.validate_tags(&e)?;
         self.validate_path_parameters(&e)?;
         self.validate_body_parameters(&e)?;
         self.validate_named_parameters(&e)?;
 
         self.router.insert(e);
+
+        Ok(())
+    }
+
+    /**
+     * Validate that the tags conform to the tags policy.
+     */
+    fn validate_tags(&self, e: &ApiEndpoint<Context>) -> Result<(), String> {
+        /* Don't care about endpoints that don't appear in the OpenAPI */
+        if !e.visible {
+            return Ok(());
+        }
+
+        match (&self.tag_config.endpoint_tag_policy, e.tags.len()) {
+            (EndpointTagPolicy::AtLeastOne, 0) => {
+                return Err("At least one tag is required".to_string())
+            }
+            (EndpointTagPolicy::ExactlyOne, n) if n != 1 => {
+                return Err("Exactly one tag is required".to_string())
+            }
+            _ => (),
+        }
+
+        if !self.tag_config.allow_other_tags {
+            for tag in &e.tags {
+                if !self.tag_config.tag_definitions.contains_key(tag) {
+                    return Err(format!("Invalid tag: {}", tag));
+                }
+            }
+        }
 
         Ok(())
     }
@@ -441,6 +493,42 @@ impl<Context: ServerContext> ApiDescription<Context> {
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
 
+        /* Gather up the ad hoc tags from endpoints */
+        let endpoint_tags = (&self.router)
+            .into_iter()
+            .flat_map(|(_, _, endpoint)| {
+                endpoint.tags.iter().filter(|tag| {
+                    !self.tag_config.tag_definitions.contains_key(*tag)
+                })
+            })
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .map(|tag| openapiv3::Tag { name: tag, ..Default::default() });
+
+        /* Bundle those with the explicit tags provided by the consumer */
+        openapi.tags = self
+            .tag_config
+            .tag_definitions
+            .iter()
+            .map(|(name, details)| openapiv3::Tag {
+                name: name.clone(),
+                description: details.description.clone(),
+                external_docs: details.external_docs.as_ref().map(|e| {
+                    openapiv3::ExternalDocumentation {
+                        description: e.description.clone(),
+                        url: e.url.clone(),
+                        ..Default::default()
+                    }
+                }),
+                ..Default::default()
+            })
+            .chain(endpoint_tags)
+            .collect();
+
+        /* Sort the tags for stability */
+        openapi.tags.sort_by(|a, b| a.name.cmp(&b.name));
+
         let settings = schemars::gen::SchemaSettings::openapi3();
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
         let mut definitions =
@@ -582,7 +670,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 );
             }
 
-            if let Some(schema) = &endpoint.response.schema {
+            let response = if let Some(schema) = &endpoint.response.schema {
                 let (name, js) = match schema {
                     ApiSchemaGenerator::Gen { name, schema } => {
                         (Some(name()), schema(&mut generator))
@@ -603,6 +691,45 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     );
                 }
 
+                let headers = endpoint
+                    .response
+                    .headers
+                    .iter()
+                    .map(|header| {
+                        let schema = match &header.schema {
+                            ApiSchemaGenerator::Static {
+                                schema,
+                                dependencies,
+                            } => {
+                                definitions.extend(dependencies.clone());
+                                j2oas_schema(None, schema)
+                            }
+                            _ => {
+                                unimplemented!(
+                                    "this may happen for complex types"
+                                )
+                            }
+                        };
+
+                        (
+                            header.name.clone(),
+                            openapiv3::ReferenceOr::Item(openapiv3::Header {
+                                description: header.description.clone(),
+                                style: openapiv3::HeaderStyle::Simple,
+                                required: header.required,
+                                deprecated: None,
+                                format:
+                                    openapiv3::ParameterSchemaOrContent::Schema(
+                                        schema,
+                                    ),
+                                example: None,
+                                examples: indexmap::IndexMap::new(),
+                                extensions: indexmap::IndexMap::new(),
+                            }),
+                        )
+                    })
+                    .collect();
+
                 let response = openapiv3::Response {
                     description: if let Some(description) =
                         &endpoint.response.description
@@ -614,44 +741,97 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         // by OpenAPI.
                         "".to_string()
                     },
-                    content: content,
+                    content,
+                    headers,
                     ..Default::default()
                 };
-
-                match &endpoint.response.success {
-                    None => {
-                        operation.responses.default =
-                            Some(openapiv3::ReferenceOr::Item(response))
-                    }
-                    Some(code) => {
-                        operation.responses.responses.insert(
-                            openapiv3::StatusCode::Code(code.as_u16()),
-                            openapiv3::ReferenceOr::Item(response),
-                        );
-                    }
-                }
+                response
             } else {
                 // If no schema was specified, the response is hand-rolled. In
-                // this case we'll fall back to the default response type.
-                operation.responses.default =
-                    Some(openapiv3::ReferenceOr::Item(openapiv3::Response {
-                        // TODO: perhaps we should require even free-form
-                        // responses to have a description since it's required
-                        // by OpenAPI.
-                        description: "".to_string(),
+                // this case we'll fall back to the default response type which
+                // we assume to be inclusive of errors. The media type and
+                // and schema will similarly be maximally permissive.
+                let mut content = indexmap::IndexMap::new();
+                content.insert(
+                    "*/*".to_string(),
+                    openapiv3::MediaType {
+                        schema: Some(openapiv3::ReferenceOr::Item(
+                            openapiv3::Schema {
+                                schema_data: openapiv3::SchemaData::default(),
+                                schema_kind: openapiv3::SchemaKind::Any(
+                                    openapiv3::AnySchema::default(),
+                                ),
+                            },
+                        )),
                         ..Default::default()
-                    }))
+                    },
+                );
+                openapiv3::Response {
+                    // TODO: perhaps we should require even free-form
+                    // responses to have a description since it's required
+                    // by OpenAPI.
+                    description: "".to_string(),
+                    content,
+                    ..Default::default()
+                }
+            };
+
+            if let Some(code) = &endpoint.response.success {
+                operation.responses.responses.insert(
+                    openapiv3::StatusCode::Code(code.as_u16()),
+                    openapiv3::ReferenceOr::Item(response),
+                );
+
+                // 4xx and 5xx responses all use the same error information
+                let err_ref = openapiv3::ReferenceOr::ref_(
+                    "#/components/responses/Error",
+                );
+                operation
+                    .responses
+                    .responses
+                    .insert(openapiv3::StatusCode::Range(4), err_ref.clone());
+                operation
+                    .responses
+                    .responses
+                    .insert(openapiv3::StatusCode::Range(5), err_ref);
+            } else {
+                operation.responses.default =
+                    Some(openapiv3::ReferenceOr::Item(response))
             }
 
             // Drop in the operation.
             method_ref.replace(operation);
         }
 
-        // Add the schemas for which we generated references.
-        let schemas = &mut openapi
+        let components = &mut openapi
             .components
-            .get_or_insert_with(openapiv3::Components::default)
-            .schemas;
+            .get_or_insert_with(openapiv3::Components::default);
+
+        // All endpoints share an error response
+        let responses = &mut components.responses;
+        let mut content = indexmap::IndexMap::new();
+        content.insert(
+            CONTENT_TYPE_JSON.to_string(),
+            openapiv3::MediaType {
+                schema: Some(j2oas_schema(
+                    None,
+                    &generator.subschema_for::<HttpErrorResponseBody>(),
+                )),
+                ..Default::default()
+            },
+        );
+
+        responses.insert(
+            "Error".to_string(),
+            openapiv3::ReferenceOr::Item(openapiv3::Response {
+                description: "Error".to_string(),
+                content: content,
+                ..Default::default()
+            }),
+        );
+
+        // Add the schemas for which we generated references.
+        let schemas = &mut components.schemas;
 
         let root_schema = generator.into_root_schema_for::<()>();
         root_schema.definitions.iter().for_each(|(key, schema)| {
@@ -835,7 +1015,7 @@ fn j2oas_schema_object(
     if let Some(metadata) = &obj.metadata {
         data.title = metadata.title.clone();
         data.description = metadata.description.clone();
-        // TODO skipping `default` since it's a little tricky to handle
+        data.default = metadata.default.clone();
         data.deprecated = metadata.deprecated;
         data.read_only = metadata.read_only;
         data.write_only = metadata.write_only;
@@ -843,6 +1023,9 @@ fn j2oas_schema_object(
 
     if let Some(name) = name {
         data.title = Some(name.clone());
+    }
+    if let Some(example) = obj.extensions.get("example") {
+        data.example = Some(example.clone());
     }
 
     openapiv3::ReferenceOr::Item(openapiv3::Schema {
@@ -1315,26 +1498,81 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     }
 }
 
+/**
+ * Configuration used describe OpenAPI tags and to validate per-endpoint tags.
+ * Consumers may use this ensure that--for example--endpoints pick a tag from a
+ * known set, or that each endpoint has at least one tag.
+ */
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TagConfig {
+    /** Are endpoints allowed to use tags not specified in this config? */
+    pub allow_other_tags: bool,
+    pub endpoint_tag_policy: EndpointTagPolicy,
+    pub tag_definitions: HashMap<String, TagDetails>,
+}
+
+impl Default for TagConfig {
+    fn default() -> Self {
+        Self {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::Any,
+            tag_definitions: HashMap::new(),
+        }
+    }
+}
+
+/** Endpoint tagging policy */
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EndpointTagPolicy {
+    /** Any number of tags is permitted */
+    Any,
+    /** At least one tag is required and more are allowed */
+    AtLeastOne,
+    /** There must be exactly one tag */
+    ExactlyOne,
+}
+
+/** Details for a named tag */
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TagDetails {
+    pub description: Option<String>,
+    pub external_docs: Option<TagExternalDocs>,
+}
+
+/** External docs description */
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TagExternalDocs {
+    pub description: Option<String>,
+    pub url: String,
+}
+
 #[cfg(test)]
 mod test {
-    use super::super::error::HttpError;
-    use super::super::handler::RequestContext;
-    use super::super::Path;
     use super::j2oas_schema;
-    use super::ApiDescription;
-    use super::ApiEndpoint;
-    use crate as dropshot; /* for "endpoint" macro */
     use crate::api_description::j2oas_schema_object;
     use crate::endpoint;
+    use crate::error::HttpError;
+    use crate::handler::RequestContext;
+    use crate::ApiDescription;
+    use crate::ApiEndpoint;
+    use crate::EndpointTagPolicy;
+    use crate::Path;
     use crate::Query;
+    use crate::TagConfig;
+    use crate::TagDetails;
     use crate::TypedBody;
     use crate::UntypedBody;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
+    use openapiv3::OpenAPI;
     use schemars::JsonSchema;
     use serde::Deserialize;
+    use std::collections::HashSet;
+    use std::str::from_utf8;
     use std::sync::Arc;
+
+    use crate as dropshot; /* for "endpoint" macro */
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1571,5 +1809,121 @@ mod test {
                 },
             })
         );
+    }
+
+    #[test]
+    fn test_tags_need_one() {
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
+            ..Default::default()
+        });
+        let ret = api.register(ApiEndpoint::new(
+            "test_badpath_handler".to_string(),
+            test_badpath_handler,
+            Method::GET,
+            "/{a}/{b}",
+        ));
+        assert_eq!(ret, Err("At least one tag is required".to_string()));
+    }
+
+    #[test]
+    fn test_tags_too_many() {
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            ..Default::default()
+        });
+        let ret = api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/{a}/{b}",
+            )
+            .tag("howdy")
+            .tag("pardner"),
+        );
+
+        assert_eq!(ret, Err("Exactly one tag is required".to_string()));
+    }
+
+    #[test]
+    fn test_tags_just_right() {
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            ..Default::default()
+        });
+        let ret = api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/{a}/{b}",
+            )
+            .tag("a-tag"),
+        );
+
+        assert_eq!(ret, Ok(()));
+    }
+
+    #[test]
+    fn test_tags_set() {
+        /*
+         * Validate that pre-defined tags and ad-hoc tags are all accounted
+         * for and aren't duplicated.
+         */
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            allow_other_tags: true,
+            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
+            tag_definitions: vec![
+                ("a-tag".to_string(), TagDetails::default()),
+                ("b-tag".to_string(), TagDetails::default()),
+                ("c-tag".to_string(), TagDetails::default()),
+            ]
+            .into_iter()
+            .collect(),
+        });
+        api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/xx/{a}/{b}",
+            )
+            .tag("a-tag")
+            .tag("z-tag"),
+        )
+        .unwrap();
+        api.register(
+            ApiEndpoint::new(
+                "test_badpath_handler".to_string(),
+                test_badpath_handler,
+                Method::GET,
+                "/yy/{a}/{b}",
+            )
+            .tag("b-tag")
+            .tag("y-tag"),
+        )
+        .unwrap();
+
+        let mut out = Vec::new();
+        api.openapi("", "").write(&mut out).unwrap();
+        let out = from_utf8(&out).unwrap();
+        let spec = serde_json::from_str::<OpenAPI>(out).unwrap();
+
+        let tags = spec
+            .tags
+            .iter()
+            .map(|tag| tag.name.as_str())
+            .collect::<HashSet<_>>();
+
+        assert_eq!(
+            tags,
+            vec!["a-tag", "b-tag", "c-tag", "y-tag", "z-tag",]
+                .into_iter()
+                .collect::<HashSet<_>>()
+        )
     }
 }

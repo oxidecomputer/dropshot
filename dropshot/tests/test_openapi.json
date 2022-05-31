@@ -7,6 +7,9 @@
   "paths": {
     "/datagoeshere": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler7",
         "requestBody": {
           "content": {
@@ -22,12 +25,21 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/dup1": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler8",
         "responses": {
           "200": {
@@ -39,12 +51,21 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/dup2": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler9",
         "responses": {
           "200": {
@@ -56,12 +77,21 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/dup5": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler10",
         "requestBody": {
           "content": {
@@ -76,12 +106,21 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/dup6": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler11",
         "requestBody": {
           "content": {
@@ -96,12 +135,21 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/dup7": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler12",
         "requestBody": {
           "content": {
@@ -116,12 +164,21 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/dup8": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler13",
         "responses": {
           "200": {
@@ -133,12 +190,21 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/impairment": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler6",
         "parameters": [
           {
@@ -154,9 +220,9 @@
           {
             "in": "query",
             "name": "limit",
+            "description": "Maximum number of items returned by a single call",
             "schema": {
               "nullable": true,
-              "description": "Maximum number of items returned by a single call",
               "type": "integer",
               "format": "uint32",
               "minimum": 1
@@ -166,9 +232,9 @@
           {
             "in": "query",
             "name": "page_token",
+            "description": "Token returned by previous call to retrieve the subsequent page",
             "schema": {
               "nullable": true,
-              "description": "Token returned by previous call to retreive the subsequent page",
               "type": "string"
             },
             "style": "form"
@@ -184,13 +250,46 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "x-dropshot-pagination": true
       }
     },
+    "/playing/a/bit/nicer": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler18",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/test/camera": {
       "post": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler4",
         "requestBody": {
           "content": {
@@ -212,12 +311,21 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/test/man/{x}": {
       "delete": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler3",
         "parameters": [
           {
@@ -233,12 +341,21 @@
         "responses": {
           "204": {
             "description": "successful deletion"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/test/person": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "summary": "Rust style comment",
         "description": "This is a multi-line comment.",
         "operationId": "handler1",
@@ -256,6 +373,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -283,6 +406,7 @@
           {
             "in": "query",
             "name": "tomax",
+            "description": "One brother connected by the pain",
             "required": true,
             "schema": {
               "type": "string"
@@ -292,6 +416,7 @@
           {
             "in": "query",
             "name": "xamot",
+            "description": "Spoiler: there's a reason this is not required...",
             "schema": {
               "nullable": true,
               "type": "string"
@@ -323,12 +448,21 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/test/woman": {
       "put": {
+        "tags": [
+          "it"
+        ],
         "summary": "C-style comment",
         "description": "This is a multi-line comment.",
         "operationId": "handler2",
@@ -336,6 +470,7 @@
           {
             "in": "query",
             "name": "tomax",
+            "description": "One brother connected by the pain",
             "required": true,
             "schema": {
               "type": "string"
@@ -345,6 +480,7 @@
           {
             "in": "query",
             "name": "xamot",
+            "description": "Spoiler: there's a reason this is not required...",
             "schema": {
               "nullable": true,
               "type": "string"
@@ -355,22 +491,39 @@
         "responses": {
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     },
     "/too/smart/for/my/own/good": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler16",
         "responses": {
           "default": {
-            "description": ""
+            "description": "",
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
           }
         }
       }
     },
     "/unit_please": {
       "get": {
+        "tags": [
+          "it"
+        ],
         "operationId": "handler15",
         "responses": {
           "200": {
@@ -386,17 +539,126 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/with/example": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler19",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObjectWithExample"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/with/headers": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler17",
+        "responses": {
+          "204": {
+            "description": "resource updated",
+            "headers": {
+              "Etag": {
+                "description": "eee! a tag",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-foo-mobile": {
+                "description": "this is a foo",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/Foo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
     }
   },
   "components": {
+    "responses": {
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
     "schemas": {
       "BodyParam": {
         "type": "object",
         "properties": {
+          "answer": {
+            "default": 42,
+            "type": "integer",
+            "format": "int32"
+          },
           "any": {},
+          "maybe": {
+            "default": false,
+            "type": "boolean"
+          },
+          "nested": {
+            "default": {
+              "maybe": false
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BodyParamNested"
+              }
+            ]
+          },
+          "things": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
           "x": {
             "type": "string"
           }
@@ -404,6 +666,48 @@
         "required": [
           "any",
           "x"
+        ]
+      },
+      "BodyParamNested": {
+        "type": "object",
+        "properties": {
+          "maybe": {
+            "nullable": true,
+            "type": "boolean"
+          }
+        }
+      },
+      "Error": {
+        "description": "Error information from a response.",
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "request_id"
+        ]
+      },
+      "NestedObjectWithExample": {
+        "example": {
+          "nick_name": "baz"
+        },
+        "type": "object",
+        "properties": {
+          "nick_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nick_name"
         ]
       },
       "NeverDuplicatedBodyNextLevel": {
@@ -440,9 +744,11 @@
         ]
       },
       "NeverDuplicatedResponseNextLevel": {
+        "description": "Veritably non-duplicated type",
         "type": "object",
         "properties": {
           "v": {
+            "description": "Vee",
             "type": "boolean"
           }
         },
@@ -451,10 +757,16 @@
         ]
       },
       "NeverDuplicatedResponseTopLevel": {
+        "description": "Best non-duplicated type",
         "type": "object",
         "properties": {
           "b": {
-            "$ref": "#/components/schemas/NeverDuplicatedResponseNextLevel"
+            "description": "Bee",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NeverDuplicatedResponseNextLevel"
+              }
+            ]
           }
         },
         "required": [
@@ -470,6 +782,34 @@
         },
         "required": [
           "b"
+        ]
+      },
+      "ObjectWithExample": {
+        "example": {
+          "id": 456,
+          "name": "foo bar",
+          "nested": {
+            "nick_name": "baz"
+          }
+        },
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "nested": {
+            "$ref": "#/components/schemas/NestedObjectWithExample"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "nested"
         ]
       },
       "Response": {
@@ -506,7 +846,30 @@
         "required": [
           "items"
         ]
+      },
+      "Foo": {
+        "type": "string"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "camera"
+    },
+    {
+      "name": "it"
+    },
+    {
+      "name": "man"
+    },
+    {
+      "name": "person"
+    },
+    {
+      "name": "tv"
+    },
+    {
+      "name": "woman"
+    }
+  ]
 }
