@@ -38,6 +38,7 @@ use super::http_util::http_extract_path_params;
 use super::http_util::http_read_body;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
+use super::http_util::CONTENT_TYPE_URL_ENCODED;
 use super::server::DropshotState;
 use super::server::ServerContext;
 use crate::api_description::ApiEndpointBodyContentType;
@@ -934,10 +935,11 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
 }
 
 /**
- * Given an HTTP request, attempt to read the body, parse it as JSON, and
- * deserialize an instance of `BodyType` from it.
+ * Given an HTTP request, attempt to read the body, parse it according to
+ * the content type (which we assume to be JSON if the header is missing),
+ * and deserialize an instance of `BodyType` from it.
  */
-async fn http_request_load_json_body<Context: ServerContext, BodyType>(
+async fn http_request_load_body<Context: ServerContext, BodyType>(
     rqctx: Arc<RequestContext<Context>>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
@@ -945,20 +947,53 @@ where
 {
     let server = &rqctx.server;
     let mut request = rqctx.request.lock().await;
-    let body_bytes = http_read_body(
+    let body = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
     )
     .await?;
-    let value: Result<BodyType, serde_json::Error> =
-        serde_json::from_slice(&body_bytes);
-    match value {
-        Ok(j) => Ok(TypedBody { inner: j }),
-        Err(e) => Err(HttpError::for_bad_request(
-            None,
-            format!("unable to parse body: {}", e),
-        )),
-    }
+
+    // RFC 7231 §3.1.1.1: media types are case insensitive and may
+    // be followed by whitespace and/or a parameter (e.g., charset).
+    let content_type = request
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .map(|hv| {
+            hv.to_str().map_err(|e| {
+                HttpError::for_bad_request(
+                    None,
+                    format!("invalid content-type: {}", e),
+                )
+            })
+        })
+        .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
+    let end = content_type.find(';').unwrap_or_else(|| content_type.len());
+    let content: BodyType = match content_type[..end]
+        .trim_end_matches(char::is_whitespace)
+        .to_lowercase()
+        .as_str()
+    {
+        CONTENT_TYPE_JSON => serde_json::from_slice(&body).map_err(|e| {
+            HttpError::for_bad_request(
+                None,
+                format!("unable to parse JSON body: {}", e),
+            )
+        })?,
+        CONTENT_TYPE_URL_ENCODED => serde_urlencoded::from_bytes(&body)
+            .map_err(|e| {
+                HttpError::for_bad_request(
+                    None,
+                    format!("unable to parse URL-encoded body: {}", e),
+                )
+            })?,
+        _ => {
+            return Err(HttpError::for_bad_request(
+                None,
+                format!("unhandled content-type: {}", content_type),
+            ))
+        }
+    };
+    Ok(TypedBody { inner: content })
 }
 
 /*
@@ -977,7 +1012,7 @@ where
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
-        http_request_load_json_body(rqctx).await
+        http_request_load_body(rqctx).await
     }
 
     fn metadata() -> ExtractorMetadata {

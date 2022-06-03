@@ -247,7 +247,7 @@ async fn test_demo2json() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse body"));
+    assert!(error.message.starts_with("unable to parse JSON body"));
 
     /* Test case: invalid JSON */
     let error = testctx
@@ -260,7 +260,7 @@ async fn test_demo2json() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse body"));
+    assert!(error.message.starts_with("unable to parse JSON body"));
 
     /* Test case: bad type */
     let json_bad_type = "{ \"test1\": \"oops\", \"test2\": \"oops\" }";
@@ -275,7 +275,7 @@ async fn test_demo2json() {
         .await
         .expect_err("expected failure");
     assert!(error.message.starts_with(
-        "unable to parse body: invalid type: string \"oops\", expected u32"
+        "unable to parse JSON body: invalid type: string \"oops\", expected u32"
     ));
 
     testctx.teardown().await;
@@ -339,7 +339,7 @@ async fn test_demo3json() {
         )
         .await
         .expect_err("expected error");
-    assert!(error.message.starts_with("unable to parse body"));
+    assert!(error.message.starts_with("unable to parse JSON body"));
 
     testctx.teardown().await;
 }

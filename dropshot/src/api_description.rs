@@ -17,6 +17,7 @@ use crate::Extractor;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
+use crate::CONTENT_TYPE_URL_ENCODED;
 
 use http::Method;
 use http::StatusCode;
@@ -171,6 +172,8 @@ pub enum ApiEndpointBodyContentType {
     Bytes,
     /** application/json */
     Json,
+    /** application/x-www-form-urlencoded */
+    UrlEncoded,
 }
 
 impl ApiEndpointBodyContentType {
@@ -178,6 +181,7 @@ impl ApiEndpointBodyContentType {
         match self {
             ApiEndpointBodyContentType::Bytes => CONTENT_TYPE_OCTET_STREAM,
             ApiEndpointBodyContentType::Json => CONTENT_TYPE_JSON,
+            ApiEndpointBodyContentType::UrlEncoded => CONTENT_TYPE_URL_ENCODED,
         }
     }
 }
