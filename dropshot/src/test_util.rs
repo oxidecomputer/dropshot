@@ -140,7 +140,9 @@ impl ClientTestContext {
      * validation of the result like [`make_request`], but with the body
      * form/url-encoded.
      */
-    pub async fn make_request_url_encoded<RequestBodyType: Serialize + Debug>(
+    pub async fn make_request_url_encoded<
+        RequestBodyType: Serialize + Debug,
+    >(
         &self,
         method: Method,
         path: &str,
@@ -152,7 +154,13 @@ impl ClientTestContext {
             Some(input) => serde_urlencoded::to_string(&input).unwrap().into(),
         };
 
-        self.make_request_with_body_url_encoded(method, path, body, expected_status).await
+        self.make_request_with_body_url_encoded(
+            method,
+            path,
+            body,
+            expected_status,
+        )
+        .await
     }
 
     pub async fn make_request_no_body(
