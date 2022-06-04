@@ -282,6 +282,76 @@ async fn test_demo2json() {
 }
 
 /*
+ * Handlers also accept form/URL-encoded bodies. Here we test such
+ * bodies with both valid and invalid encodings.
+ */
+#[tokio::test]
+async fn test_demo2urlencoded() {
+    let api = demo_api();
+    let testctx = common::test_setup("demo2urlencoded", api);
+
+    /* Test case: optional field */
+    let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
+    let mut response = testctx
+        .client_testctx
+        .make_request_url_encoded(
+            Method::GET,
+            "/testing/demo2json",
+            Some(input),
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: DemoJsonBody = read_json(&mut response).await;
+    assert_eq!(json.test1, "bar");
+    assert_eq!(json.test2, None);
+
+    /* Test case: both fields populated */
+    let input = DemoJsonBody { test1: "baz".to_string(), test2: Some(20) };
+    let mut response = testctx
+        .client_testctx
+        .make_request_url_encoded(
+            Method::GET,
+            "/testing/demo2json",
+            Some(input),
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: DemoJsonBody = read_json(&mut response).await;
+    assert_eq!(json.test1, "baz");
+    assert_eq!(json.test2, Some(20));
+
+    /* Error case: invalid encoding */
+    let error = testctx
+        .client_testctx
+        .make_request_with_body_url_encoded(
+            Method::GET,
+            "/testing/demo2json",
+            "test1=oops&test2".into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
+    assert!(error.message.starts_with("unable to parse URL-encoded body"));
+
+    /* Error case: bad type */
+    let error = testctx
+        .client_testctx
+        .make_request_with_body_url_encoded(
+            Method::GET,
+            "/testing/demo2json",
+            "test1=oops&test2=oops".into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
+    assert!(error.message.starts_with(
+        "unable to parse URL-encoded body: invalid digit found in string"
+    ));
+}
+
+/*
  * The "demo3" handler takes both query arguments and a JSON body.  This test
  * makes sure that both sets of parameters are received by the handler function
  * and at least one error case from each of those sources is exercised.  We
