@@ -407,6 +407,30 @@ async fn handler19(
     Ok(HttpResponseOk(example_object_with_example()))
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[allow(dead_code)]
+enum ByteOffset {
+    FromHere { bytes: u64 },
+    FromThere { bytes: u64 },
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[allow(dead_code)]
+struct ByteRequest {
+    offset: ByteOffset,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/readme",
+}]
+async fn handler20(
+    _rqctx: Arc<RequestContext<()>>,
+    _query: Query<ByteRequest>,
+) -> Result<HttpResponseOk<ObjectWithExample>, HttpError> {
+    Ok(HttpResponseOk(example_object_with_example()))
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -435,6 +459,7 @@ fn make_api(
     api.register(handler17)?;
     api.register(handler18)?;
     api.register(handler19)?;
+    api.register(handler20)?;
     Ok(api)
 }
 
