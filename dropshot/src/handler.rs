@@ -969,7 +969,7 @@ where
         .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
     let end = content_type.find(';').unwrap_or_else(|| content_type.len());
     let content: BodyType = match content_type[..end]
-        .trim_end_matches(char::is_whitespace)
+        .trim_end()
         .to_lowercase()
         .as_str()
     {
