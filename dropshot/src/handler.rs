@@ -968,31 +968,30 @@ where
         })
         .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
     let end = content_type.find(';').unwrap_or_else(|| content_type.len());
-    let content: BodyType = match content_type[..end]
-        .trim_end()
-        .to_lowercase()
-        .as_str()
-    {
-        CONTENT_TYPE_JSON => serde_json::from_slice(&body).map_err(|e| {
-            HttpError::for_bad_request(
-                None,
-                format!("unable to parse JSON body: {}", e),
-            )
-        })?,
-        CONTENT_TYPE_URL_ENCODED => serde_urlencoded::from_bytes(&body)
-            .map_err(|e| {
-                HttpError::for_bad_request(
+    let content: BodyType =
+        match content_type[..end].trim_end().to_lowercase().as_str() {
+            CONTENT_TYPE_JSON => {
+                serde_json::from_slice(&body).map_err(|e| {
+                    HttpError::for_bad_request(
+                        None,
+                        format!("unable to parse JSON body: {}", e),
+                    )
+                })?
+            }
+            CONTENT_TYPE_URL_ENCODED => serde_urlencoded::from_bytes(&body)
+                .map_err(|e| {
+                    HttpError::for_bad_request(
+                        None,
+                        format!("unable to parse URL-encoded body: {}", e),
+                    )
+                })?,
+            _ => {
+                return Err(HttpError::for_bad_request(
                     None,
-                    format!("unable to parse URL-encoded body: {}", e),
-                )
-            })?,
-        _ => {
-            return Err(HttpError::for_bad_request(
-                None,
-                format!("unhandled content-type: {}", content_type),
-            ))
-        }
-    };
+                    format!("unhandled content-type: {}", content_type),
+                ))
+            }
+        };
     Ok(TypedBody { inner: content })
 }
 
