@@ -31,6 +31,7 @@ enum MethodType {
     PATCH,
     POST,
     PUT,
+    OPTIONS,
 }
 
 impl MethodType {
@@ -41,6 +42,7 @@ impl MethodType {
             MethodType::PATCH => "PATCH",
             MethodType::POST => "POST",
             MethodType::PUT => "PUT",
+            MethodType::OPTIONS => "OPTIONS",
         }
     }
 }
@@ -73,7 +75,7 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 /// ```ignore
 /// #[endpoint {
 ///     // Required fields
-///     method = { DELETE | GET | PATCH | POST | PUT },
+///     method = { DELETE | GET | OPTIONS | PATCH | POST | PUT },
 ///     path = "/path/name/with/{named}/{variables}",
 ///
 ///     // Optional tags for the API description
