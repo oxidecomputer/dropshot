@@ -1,6 +1,6 @@
 // Copyright 2022 Oxide Computer Company
 
-//! Example use of Dropshot with request headerso
+//! Example use of Dropshot with request headers
 //!
 //! The headers accessed here will not be recorded as inputs in the OpenAPI
 //! spec.  This is not currently supported out-of-the-box with Dropshot, but it
