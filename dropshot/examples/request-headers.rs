@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 
 //! Example use of Dropshot with request headerso
 //!
