@@ -533,10 +533,6 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
 
 /**
  * A running Dropshot HTTP server.
- *
- * # Panics
- *
- * Panics if dropped without invoking `close`.
  */
 pub struct HttpServer<C: ServerContext> {
     probe_registration: ProbeRegistration,
