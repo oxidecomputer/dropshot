@@ -38,7 +38,6 @@ use super::http_util::http_extract_path_params;
 use super::http_util::http_read_body;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
-use super::http_util::CONTENT_TYPE_URL_ENCODED;
 use super::server::DropshotState;
 use super::server::ServerContext;
 use crate::api_description::ApiEndpointBodyContentType;
@@ -101,6 +100,8 @@ pub struct RequestContext<Context: ServerContext> {
     pub request: Arc<Mutex<Request<Body>>>,
     /** HTTP request routing variables */
     pub path_variables: VariableSet,
+    /** expected request body mime type */
+    pub body_content_type: ApiEndpointBodyContentType,
     /** unique id assigned to this request */
     pub request_id: String,
     /** logger for this specific request */
@@ -191,7 +192,9 @@ pub trait Extractor: Send + Sync + Sized {
         rqctx: Arc<RequestContext<Context>>,
     ) -> Result<Self, HttpError>;
 
-    fn metadata() -> ExtractorMetadata;
+    fn metadata(
+        body_content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata;
 }
 
 /**
@@ -218,13 +221,13 @@ macro_rules! impl_extractor_for_tuple {
             futures::try_join!($($T::from_request(Arc::clone(&_rqctx)),)*)
         }
 
-        fn metadata() -> ExtractorMetadata {
+        fn metadata(_body_content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
             #[allow(unused_mut)]
             let mut paginated = false;
             #[allow(unused_mut)]
             let mut parameters = vec![];
             $(
-                let mut metadata = $T::metadata();
+                let mut metadata = $T::metadata(_body_content_type.clone());
                 paginated = paginated | metadata.paginated;
                 parameters.append(&mut metadata.parameters);
             )*
@@ -608,7 +611,9 @@ where
         http_request_load_query(&request)
     }
 
-    fn metadata() -> ExtractorMetadata {
+    fn metadata(
+        _body_content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
         get_metadata::<QueryType>(&ApiEndpointParameterLocation::Query)
     }
 }
@@ -654,7 +659,9 @@ where
         Ok(Path { inner: params })
     }
 
-    fn metadata() -> ExtractorMetadata {
+    fn metadata(
+        _body_content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
         get_metadata::<PathType>(&ApiEndpointParameterLocation::Path)
     }
 }
@@ -935,9 +942,8 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
 }
 
 /**
- * Given an HTTP request, attempt to read the body, parse it according to
- * the content type (which we assume to be JSON if the header is missing),
- * and deserialize an instance of `BodyType` from it.
+ * Given an HTTP request, attempt to read the body, parse it according
+ * to the content type, and deserialize it to an instance of `BodyType`.
  */
 async fn http_request_load_body<Context: ServerContext, BodyType>(
     rqctx: Arc<RequestContext<Context>>,
@@ -954,7 +960,8 @@ where
     .await?;
 
     // RFC 7231 §3.1.1.1: media types are case insensitive and may
-    // be followed by whitespace and/or a parameter (e.g., charset).
+    // be followed by whitespace and/or a parameter (e.g., charset),
+    // which we currently ignore.
     let content_type = request
         .headers()
         .get(http::header::CONTENT_TYPE)
@@ -962,36 +969,44 @@ where
             hv.to_str().map_err(|e| {
                 HttpError::for_bad_request(
                     None,
-                    format!("invalid content-type: {}", e),
+                    format!("invalid content type: {}", e),
                 )
             })
         })
         .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
     let end = content_type.find(';').unwrap_or_else(|| content_type.len());
-    let content: BodyType =
-        match content_type[..end].trim_end().to_lowercase().as_str() {
-            CONTENT_TYPE_JSON => {
-                serde_json::from_slice(&body).map_err(|e| {
-                    HttpError::for_bad_request(
-                        None,
-                        format!("unable to parse JSON body: {}", e),
-                    )
-                })?
-            }
-            CONTENT_TYPE_URL_ENCODED => serde_urlencoded::from_bytes(&body)
-                .map_err(|e| {
-                    HttpError::for_bad_request(
-                        None,
-                        format!("unable to parse URL-encoded body: {}", e),
-                    )
-                })?,
-            _ => {
-                return Err(HttpError::for_bad_request(
+    let mime_type = content_type[..end].trim_end().to_lowercase();
+    let body_content_type =
+        ApiEndpointBodyContentType::from_mime_type(&mime_type)
+            .map_err(|e| HttpError::for_bad_request(None, e))?;
+    let expected_content_type = rqctx.body_content_type.clone();
+
+    use ApiEndpointBodyContentType::*;
+    let content: BodyType = match (expected_content_type, body_content_type) {
+        (Json, Json) => serde_json::from_slice(&body).map_err(|e| {
+            HttpError::for_bad_request(
+                None,
+                format!("unable to parse JSON body: {}", e),
+            )
+        })?,
+        (UrlEncoded, UrlEncoded) => serde_urlencoded::from_bytes(&body)
+            .map_err(|e| {
+                HttpError::for_bad_request(
                     None,
-                    format!("unhandled content-type: {}", content_type),
-                ))
-            }
-        };
+                    format!("unable to parse URL-encoded body: {}", e),
+                )
+            })?,
+        (expected, requested) => {
+            return Err(HttpError::for_bad_request(
+                None,
+                format!(
+                    "expected content type \"{}\", got \"{}\"",
+                    expected.mime_type(),
+                    requested.mime_type()
+                ),
+            ))
+        }
+    };
     Ok(TypedBody { inner: content })
 }
 
@@ -1014,9 +1029,9 @@ where
         http_request_load_body(rqctx).await
     }
 
-    fn metadata() -> ExtractorMetadata {
+    fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
         let body = ApiEndpointParameter::new_body(
-            ApiEndpointBodyContentType::Json,
+            content_type,
             true,
             ApiSchemaGenerator::Gen {
                 name: BodyType::schema_name,
@@ -1081,7 +1096,9 @@ impl Extractor for UntypedBody {
         Ok(UntypedBody { content: body_bytes })
     }
 
-    fn metadata() -> ExtractorMetadata {
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
         ExtractorMetadata {
             parameters: vec![ApiEndpointParameter::new_body(
                 ApiEndpointBodyContentType::Bytes,

@@ -764,6 +764,7 @@ async fn http_request_handle<C: ServerContext>(
         server: Arc::clone(&server),
         request: Arc::new(Mutex::new(request)),
         path_variables: lookup_result.variables,
+        body_content_type: lookup_result.body_content_type,
         request_id: request_id.to_string(),
         log: request_log,
     };

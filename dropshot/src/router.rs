@@ -10,6 +10,7 @@ use crate::from_map::MapError;
 use crate::from_map::MapValue;
 use crate::server::ServerContext;
 use crate::ApiEndpoint;
+use crate::ApiEndpointBodyContentType;
 use http::Method;
 use http::StatusCode;
 use percent_encoding::percent_decode_str;
@@ -218,14 +219,16 @@ impl MapValue for VariableValue {
 
 /**
  * `RouterLookupResult` represents the result of invoking
- * `HttpRouter::lookup_route()`.  A successful route lookup includes both the
- * handler and a mapping of variables in the configured path to the
- * corresponding values in the actual path.
+ * `HttpRouter::lookup_route()`.  A successful route lookup includes
+ * the handler, a mapping of variables in the configured path to the
+ * corresponding values in the actual path, and the expected body
+ * content type.
  */
 #[derive(Debug)]
 pub struct RouterLookupResult<'a, Context: ServerContext> {
     pub handler: &'a dyn RouteHandler<Context>,
     pub variables: VariableSet,
+    pub body_content_type: ApiEndpointBodyContentType,
 }
 
 impl<Context: ServerContext> HttpRouterNode<Context> {
@@ -515,6 +518,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
             .map(|handler| RouterLookupResult {
                 handler: &*handler.handler,
                 variables,
+                body_content_type: handler.body_content_type.clone(),
             })
             .ok_or_else(|| {
                 HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
@@ -775,6 +779,7 @@ mod test {
     use super::input_path_to_segments;
     use super::HttpRouter;
     use super::PathSegment;
+    use crate::api_description::ApiEndpointBodyContentType;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
     use crate::ApiEndpoint;
@@ -812,6 +817,7 @@ mod test {
             method,
             path: path.to_string(),
             parameters: vec![],
+            body_content_type: ApiEndpointBodyContentType::default(),
             response: ApiEndpointResponse::default(),
             summary: None,
             description: None,

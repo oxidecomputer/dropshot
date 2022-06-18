@@ -119,6 +119,8 @@ impl ClientTestContext {
      * - for error responses: the expected body content
      * - header names are in allowed list
      * - any other semantics that can be verified in general
+     *
+     * The body will be JSON encoded.
      */
     pub async fn make_request<RequestBodyType: Serialize + Debug>(
         &self,
@@ -137,8 +139,8 @@ impl ClientTestContext {
 
     /**
      * Execute an HTTP request against the test server and perform basic
-     * validation of the result like [`make_request`], but with the body
-     * form/url-encoded.
+     * validation of the result like [`make_request`], but with a content
+     * type of "application/x-www-form-urlencoded".
      */
     pub async fn make_request_url_encoded<
         RequestBodyType: Serialize + Debug,

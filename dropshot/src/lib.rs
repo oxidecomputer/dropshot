@@ -619,6 +619,7 @@ extern crate slog;
 
 pub use api_description::ApiDescription;
 pub use api_description::ApiEndpoint;
+pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
