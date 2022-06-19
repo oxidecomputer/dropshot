@@ -417,7 +417,7 @@ async fn handler20(
     _rqctx: Arc<RequestContext<()>>,
     _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
-     Ok(HttpResponseCreated(Response {}))
+    Ok(HttpResponseCreated(Response {}))
 }
 
 fn make_api(
