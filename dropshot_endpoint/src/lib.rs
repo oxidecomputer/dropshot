@@ -122,7 +122,7 @@ fn do_endpoint(
     let method = metadata.method.as_str();
     let path = metadata.path;
     let content_type =
-        metadata.content_type.unwrap_or("application/json".to_string());
+        metadata.content_type.unwrap_or_else(|| "application/json".to_string());
 
     let ast: ItemFnForSignature = syn::parse2(item.clone())?;
 
