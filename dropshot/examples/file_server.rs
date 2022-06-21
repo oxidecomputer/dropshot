@@ -1,5 +1,7 @@
 // Copyright 2021 Oxide Computer Company
 
+//! Example using Dropshot to serve files
+
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -102,7 +104,7 @@ async fn static_content(
         if !entry.is_dir() {
             return Err(HttpError::for_bad_request(
                 None,
-                "ENOTDIR".to_string(),
+                format!("expected directory: {:?}", entry),
             ));
         }
         /* Dropshot won't ever give us dot-components. */
@@ -113,12 +115,21 @@ async fn static_content(
         /*
          * We explicitly prohibit consumers from following symlinks to prevent
          * showing data outside of the intended directory.
+         * TODO-security There's a time-of-check to time-of-use race here!
+         * Someone could replace "entry" with a symlink immediately after we
+         * check.
          */
-        let m = entry.symlink_metadata().map_err(|_| {
-            HttpError::for_bad_request(None, "ENOENT".to_string())
+        let m = entry.symlink_metadata().map_err(|e| {
+            HttpError::for_bad_request(
+                None,
+                format!("failed to access {:?}: {:#}", entry, e),
+            )
         })?;
         if m.file_type().is_symlink() {
-            return Err(HttpError::for_bad_request(None, "EMLINK".to_string()));
+            return Err(HttpError::for_bad_request(
+                None,
+                format!("attempted to follow symlink {:?}", entry),
+            ));
         }
     }
 
@@ -127,8 +138,11 @@ async fn static_content(
      * regular file we serve the file.
      */
     if entry.is_dir() {
-        let body = dir_body(entry).await.map_err(|_| {
-            HttpError::for_bad_request(None, "EBADF".to_string())
+        let body = dir_body(&entry).await.map_err(|e| {
+            HttpError::for_bad_request(
+                None,
+                format!("failed to read dir {:?}: {:#}", entry, e),
+            )
         })?;
 
         Ok(Response::builder()
@@ -136,8 +150,11 @@ async fn static_content(
             .header(http::header::CONTENT_TYPE, "text/html")
             .body(body.into())?)
     } else {
-        let file = tokio::fs::File::open(&entry).await.map_err(|_| {
-            HttpError::for_bad_request(None, "EBADF".to_string())
+        let file = tokio::fs::File::open(&entry).await.map_err(|e| {
+            HttpError::for_bad_request(
+                None,
+                format!("failed to read file {:?}: {:#}", entry, e),
+            )
         })?;
         let file_stream = hyper_staticfile::FileBytesStream::new(file);
 
@@ -157,7 +174,7 @@ async fn static_content(
  * Generate a simple HTML listing of files within the directory.
  * See the note below regarding the handling of trailing slashes.
  */
-async fn dir_body(dir_path: PathBuf) -> Result<String, std::io::Error> {
+async fn dir_body(dir_path: &PathBuf) -> Result<String, std::io::Error> {
     let dir_link = dir_path.to_string_lossy();
     let mut dir = tokio::fs::read_dir(&dir_path).await?;
 

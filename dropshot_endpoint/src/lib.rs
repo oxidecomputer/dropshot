@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 
 //! This package defines macro attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
@@ -31,6 +31,7 @@ enum MethodType {
     PATCH,
     POST,
     PUT,
+    OPTIONS,
 }
 
 impl MethodType {
@@ -41,6 +42,7 @@ impl MethodType {
             MethodType::PATCH => "PATCH",
             MethodType::POST => "POST",
             MethodType::PUT => "PUT",
+            MethodType::OPTIONS => "OPTIONS",
         }
     }
 }
@@ -73,7 +75,7 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 /// ```ignore
 /// #[endpoint {
 ///     // Required fields
-///     method = { DELETE | GET | PATCH | POST | PUT },
+///     method = { DELETE | GET | OPTIONS | PATCH | POST | PUT },
 ///     path = "/path/name/with/{named}/{variables}",
 ///
 ///     // Optional tags for the API description
@@ -245,6 +247,8 @@ fn do_endpoint(
     // make failures easier to understand, we inject code that asserts the types
     // of the various parameters. We do this by calling a dummy function that
     // requires a type that satisfies the trait Extractor.
+    let mut arg_types = Vec::new();
+    let mut arg_is_receiver = false;
     let param_checks = ast
         .sig
         .inputs
@@ -254,11 +258,13 @@ fn do_endpoint(
             match arg {
                 syn::FnArg::Receiver(_) => {
                     // The compiler failure here is already comprehensible.
+                    arg_is_receiver = true;
                     quote! {}
                 }
                 syn::FnArg::Typed(pat) => {
                     let span = pat.ty.span();
                     let ty = pat.ty.as_ref().into_token_stream();
+                    arg_types.push(ty.clone());
                     if index == 0 {
                         // The first parameter must be an Arc<RequestContext<T>>
                         // and fortunately we already have a trait that we can
@@ -285,6 +291,34 @@ fn do_endpoint(
             }
         })
         .collect::<Vec<_>>();
+
+    // We want to construct a function that will call the user's endpoint, so
+    // we can check the future it returns for bounds that otherwise produce
+    // inscrutable error messages (like returning a non-`Send` future). We
+    // produce a wrapper function that takes all the same argument types,
+    // which requires building up a list of argument names: we can't use the
+    // original definitions argument names since they could have multiple args
+    // named `_`, so we use "arg0", "arg1", etc.
+    let arg_names = (0..arg_types.len())
+        .map(|i| {
+            let argname = format_ident!("arg{}", i);
+            quote! { #argname }
+        })
+        .collect::<Vec<_>>();
+    let impl_checks = if !arg_is_receiver {
+        quote! {
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
+                    future_endpoint_must_be_send(#name(#(#arg_names),*));
+                }
+            };
+        }
+    } else {
+        // If we have a `self` arg, our `future_is_send` check will introduce
+        // even more confusing error messages, so omit it entirely.
+        quote! {}
+    };
 
     let ret_check = match &ast.sig.output {
         syn::ReturnType::Default => {
@@ -397,6 +431,11 @@ fn do_endpoint(
         {
             fn from(_: #name) -> Self {
                 #item
+
+                // The checks on the implementation require #name to be in
+                // scope, which is provided by #item, hence we place these
+                // checks here instead of above with the others.
+                #impl_checks
 
                 #construct
             }
@@ -590,6 +629,14 @@ mod tests {
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                            future_endpoint_must_be_send(handler_xyz(arg0));
+                        }
+                    };
+
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -669,6 +716,14 @@ mod tests {
                     {
                         Ok(())
                     }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: std::sync::Arc< dropshot::RequestContext<()> >) {
+                            future_endpoint_must_be_send(handler_xyz(arg0));
+                        }
+                    };
+
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -766,6 +821,14 @@ mod tests {
                     {
                         Ok(())
                     }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: Arc< RequestContext<std::i32> >, arg1: Query<Q>) {
+                            future_endpoint_must_be_send(handler_xyz(arg0, arg1));
+                        }
+                    };
+
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -863,6 +926,14 @@ mod tests {
                     {
                         Ok(())
                     }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: Arc< RequestContext<()> >, arg1: Query<Q>) {
+                            future_endpoint_must_be_send(handler_xyz(arg0, arg1));
+                        }
+                    };
+
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -948,6 +1019,14 @@ mod tests {
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                            future_endpoint_must_be_send(handler_xyz(arg0));
+                        }
+                    };
+
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,
@@ -1036,6 +1115,14 @@ mod tests {
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                            future_endpoint_must_be_send(handler_xyz(arg0));
+                        }
+                    };
+
                     dropshot::ApiEndpoint::new(
                         "handler_xyz".to_string(),
                         handler_xyz,

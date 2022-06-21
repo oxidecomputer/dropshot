@@ -37,6 +37,7 @@ use super::error::HttpError;
 use super::http_util::http_extract_path_params;
 use super::http_util::http_read_body;
 use super::http_util::CONTENT_TYPE_JSON;
+use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
 use super::server::ServerContext;
 use crate::api_description::ApiEndpointBodyContentType;
@@ -1091,7 +1092,7 @@ pub trait HttpResponse {
      * Extract status code and structure metadata for the non-error response.
      * Type information for errors is handled generically across all endpoints.
      */
-    fn metadata() -> ApiEndpointResponse;
+    fn response_metadata() -> ApiEndpointResponse;
 }
 
 /**
@@ -1102,10 +1103,28 @@ impl HttpResponse for Response<Body> {
     fn to_result(self) -> HttpHandlerResult {
         Ok(self)
     }
-    fn metadata() -> ApiEndpointResponse {
+    fn response_metadata() -> ApiEndpointResponse {
         ApiEndpointResponse::default()
     }
 }
+
+/// Wraps a [hyper::Body] so that it can be used with coded response types such
+/// as [HttpResponseOk].
+pub struct FreeformBody(pub Body);
+
+impl From<Body> for FreeformBody {
+    fn from(body: Body) -> Self {
+        Self(body)
+    }
+}
+
+/**
+ * An "empty" type used to represent responses that have no associated data
+ * payload. This isn't intended for general use, but must be pub since it's
+ * used as the Body type for certain responses.
+ */
+#[doc(hidden)]
+pub struct Empty;
 
 /*
  * Specific Response Types
@@ -1115,15 +1134,85 @@ impl HttpResponse for Response<Body> {
  * kind of HTTP response body they produce.
  */
 
+/// Adapter trait that allows both concrete types that implement [JsonSchema]
+/// and the [FreeformBody] type to add their content to a response builder
+/// object.
+pub trait HttpResponseContent {
+    fn to_response(self, builder: http::response::Builder)
+        -> HttpHandlerResult;
+
+    // TODO the return type here could be something more elegant that is able
+    // to produce the map of mime type -> openapiv3::MediaType that's needed in
+    // in api_description. One could imagine, for example, that this could
+    // allow dropshot consumers in the future to have endpoints that respond
+    // with multiple, explicitly enumerated mime types.
+    // TODO the ApiSchemaGenerator type is particularly inelegant.
+    fn content_metadata() -> Option<ApiSchemaGenerator>;
+}
+
+impl HttpResponseContent for FreeformBody {
+    fn to_response(
+        self,
+        builder: http::response::Builder,
+    ) -> HttpHandlerResult {
+        Ok(builder
+            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_OCTET_STREAM)
+            .body(self.0)?)
+    }
+
+    fn content_metadata() -> Option<ApiSchemaGenerator> {
+        None
+    }
+}
+
+impl HttpResponseContent for Empty {
+    fn to_response(
+        self,
+        builder: http::response::Builder,
+    ) -> HttpHandlerResult {
+        Ok(builder.body(Body::empty())?)
+    }
+
+    fn content_metadata() -> Option<ApiSchemaGenerator> {
+        Some(ApiSchemaGenerator::Static {
+            schema: Box::new(schemars::schema::Schema::Bool(false)),
+            dependencies: indexmap::IndexMap::default(),
+        })
+    }
+}
+
+impl<T> HttpResponseContent for T
+where
+    T: JsonSchema + Serialize + Send + Sync + 'static,
+{
+    fn to_response(
+        self,
+        builder: http::response::Builder,
+    ) -> HttpHandlerResult {
+        let serialized = serde_json::to_string(&self)
+            .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+        Ok(builder
+            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+            .body(serialized.into())?)
+    }
+
+    fn content_metadata() -> Option<ApiSchemaGenerator> {
+        Some(ApiSchemaGenerator::Gen {
+            name: Self::schema_name,
+            schema: make_subschema_for::<Self>,
+        })
+    }
+}
+
 /**
- * The `HttpTypedResponse` trait is used for all of the specific response types
+ * The `HttpCodedResponse` trait is used for all of the specific response types
  * that we provide. We use it in particular to encode the success status code
  * and the type information of the return value.
  */
-pub trait HttpTypedResponse:
+pub trait HttpCodedResponse:
     Into<HttpHandlerResult> + Send + Sync + 'static
 {
-    type Body: JsonSchema + Serialize;
+    type Body: HttpResponseContent;
     const STATUS_CODE: StatusCode;
     const DESCRIPTION: &'static str;
 
@@ -1133,13 +1222,8 @@ pub trait HttpTypedResponse:
      * and the STATUS_CODE specified by the implementing type. This is a default
      * trait method to allow callers to avoid redundant type specification.
      */
-    fn for_object(body_object: &Self::Body) -> HttpHandlerResult {
-        let serialized = serde_json::to_string(&body_object)
-            .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
-        Ok(Response::builder()
-            .status(Self::STATUS_CODE)
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-            .body(serialized.into())?)
+    fn for_object(body: Self::Body) -> HttpHandlerResult {
+        body.to_response(Response::builder().status(Self::STATUS_CODE))
     }
 }
 
@@ -1148,17 +1232,14 @@ pub trait HttpTypedResponse:
  */
 impl<T> HttpResponse for T
 where
-    T: HttpTypedResponse,
+    T: HttpCodedResponse,
 {
     fn to_result(self) -> HttpHandlerResult {
         self.into()
     }
-    fn metadata() -> ApiEndpointResponse {
+    fn response_metadata() -> ApiEndpointResponse {
         ApiEndpointResponse {
-            schema: Some(ApiSchemaGenerator::Gen {
-                name: T::Body::schema_name,
-                schema: make_subschema_for::<T::Body>,
-            }),
+            schema: T::Body::content_metadata(),
             success: Some(T::STATUS_CODE),
             description: Some(T::DESCRIPTION.to_string()),
             ..Default::default()
@@ -1182,22 +1263,22 @@ fn make_subschema_for<T: JsonSchema>(
  * could restrict this to an ApiObject::View (by having T: ApiObject and the
  * field having type T::View).
  */
-pub struct HttpResponseCreated<
-    T: JsonSchema + Serialize + Send + Sync + 'static,
->(pub T);
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
+pub struct HttpResponseCreated<T: HttpResponseContent + Send + Sync + 'static>(
+    pub T,
+);
+impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     for HttpResponseCreated<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::CREATED;
     const DESCRIPTION: &'static str = "successful creation";
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static>
+impl<T: HttpResponseContent + Send + Sync + 'static>
     From<HttpResponseCreated<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseCreated<T>) -> HttpHandlerResult {
         /* TODO-correctness (or polish?): add Location header */
-        HttpResponseCreated::for_object(&response.0)
+        HttpResponseCreated::for_object(response.0)
     }
 }
 
@@ -1206,21 +1287,21 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * serializable type.  It denotes an HTTP 202 "Accepted" response whose body is
  * generated by serializing the object.
  */
-pub struct HttpResponseAccepted<
-    T: JsonSchema + Serialize + Send + Sync + 'static,
->(pub T);
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
+pub struct HttpResponseAccepted<T: HttpResponseContent + Send + Sync + 'static>(
+    pub T,
+);
+impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     for HttpResponseAccepted<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::ACCEPTED;
     const DESCRIPTION: &'static str = "successfully enqueued operation";
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static>
+impl<T: HttpResponseContent + Send + Sync + 'static>
     From<HttpResponseAccepted<T>> for HttpHandlerResult
 {
     fn from(response: HttpResponseAccepted<T>) -> HttpHandlerResult {
-        HttpResponseAccepted::for_object(&response.0)
+        HttpResponseAccepted::for_object(response.0)
     }
 }
 
@@ -1229,54 +1310,21 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static>
  * denotes an HTTP 200 "OK" response whose body is generated by serializing the
  * object.
  */
-pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(
+pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
     pub T,
 );
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpTypedResponse
+impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     for HttpResponseOk<T>
 {
     type Body = T;
     const STATUS_CODE: StatusCode = StatusCode::OK;
     const DESCRIPTION: &'static str = "successful operation";
 }
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> From<HttpResponseOk<T>>
+impl<T: HttpResponseContent + Send + Sync + 'static> From<HttpResponseOk<T>>
     for HttpHandlerResult
 {
     fn from(response: HttpResponseOk<T>) -> HttpHandlerResult {
-        HttpResponseOk::for_object(&response.0)
-    }
-}
-
-/**
- * An "empty" type used to represent responses that have no associated data
- * payload. This isn't intended for general use, but must be pub since it's
- * used as the Body type for certain responses.
- */
-#[doc(hidden)]
-pub struct Empty;
-
-impl JsonSchema for Empty {
-    fn schema_name() -> String {
-        "Empty".to_string()
-    }
-
-    fn json_schema(
-        _: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        schemars::schema::Schema::Bool(false)
-    }
-
-    fn is_referenceable() -> bool {
-        false
-    }
-}
-
-impl Serialize for Empty {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        panic!("Empty::serialize() should never be called");
+        HttpResponseOk::for_object(response.0)
     }
 }
 
@@ -1286,16 +1334,14 @@ impl Serialize for Empty {
  */
 pub struct HttpResponseDeleted();
 
-impl HttpTypedResponse for HttpResponseDeleted {
+impl HttpCodedResponse for HttpResponseDeleted {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "successful deletion";
 }
 impl From<HttpResponseDeleted> for HttpHandlerResult {
     fn from(_: HttpResponseDeleted) -> HttpHandlerResult {
-        Ok(Response::builder()
-            .status(HttpResponseDeleted::STATUS_CODE)
-            .body(Body::empty())?)
+        HttpResponseDeleted::for_object(Empty)
     }
 }
 
@@ -1306,16 +1352,14 @@ impl From<HttpResponseDeleted> for HttpHandlerResult {
  */
 pub struct HttpResponseUpdatedNoContent();
 
-impl HttpTypedResponse for HttpResponseUpdatedNoContent {
+impl HttpCodedResponse for HttpResponseUpdatedNoContent {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "resource updated";
 }
 impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     fn from(_: HttpResponseUpdatedNoContent) -> HttpHandlerResult {
-        Ok(Response::builder()
-            .status(HttpResponseUpdatedNoContent::STATUS_CODE)
-            .body(Body::empty())?)
+        HttpResponseUpdatedNoContent::for_object(Empty)
     }
 }
 
@@ -1333,14 +1377,14 @@ pub struct NoHeaders {}
  * conflicts.
  */
 pub struct HttpResponseHeaders<
-    T: HttpTypedResponse,
+    T: HttpCodedResponse,
     H: JsonSchema + Serialize + Send + Sync + 'static = NoHeaders,
 > {
     body: T,
     structured_headers: H,
     other_headers: HeaderMap,
 }
-impl<T: HttpTypedResponse> HttpResponseHeaders<T, NoHeaders> {
+impl<T: HttpCodedResponse> HttpResponseHeaders<T, NoHeaders> {
     pub fn new_unnamed(body: T) -> Self {
         Self {
             body,
@@ -1350,7 +1394,7 @@ impl<T: HttpTypedResponse> HttpResponseHeaders<T, NoHeaders> {
     }
 }
 impl<
-        T: HttpTypedResponse,
+        T: HttpCodedResponse,
         H: JsonSchema + Serialize + Send + Sync + 'static,
     > HttpResponseHeaders<T, H>
 {
@@ -1367,7 +1411,7 @@ impl<
     }
 }
 impl<
-        T: HttpTypedResponse,
+        T: HttpCodedResponse,
         H: JsonSchema + Serialize + Send + Sync + 'static,
     > HttpResponse for HttpResponseHeaders<T, H>
 {
@@ -1398,8 +1442,8 @@ impl<
         Ok(result)
     }
 
-    fn metadata() -> ApiEndpointResponse {
-        let mut metadata = T::metadata();
+    fn response_metadata() -> ApiEndpointResponse {
+        let mut metadata = T::response_metadata();
 
         let mut generator = schemars::gen::SchemaGenerator::new(
             schemars::gen::SchemaSettings::openapi3(),
@@ -1496,8 +1540,6 @@ fn schema_extract_description(
 
 #[cfg(test)]
 mod test {
-    use crate::handler::HttpHandlerResult;
-    use crate::HttpResponseOk;
     use crate::{
         api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
@@ -1506,7 +1548,6 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use super::get_metadata;
-    use super::Empty;
     use super::ExtractorMetadata;
 
     #[derive(Deserialize, Serialize, JsonSchema)]
@@ -1612,12 +1653,5 @@ mod test {
         ];
 
         compare(params, true, expected);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_empty_serialized() {
-        let response = HttpResponseOk::<Empty>(Empty);
-        let _ = HttpHandlerResult::from(response);
     }
 }

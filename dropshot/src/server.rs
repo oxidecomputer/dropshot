@@ -160,26 +160,28 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 https.start(rx, log_close)
             }
         };
+        info!(self.app_state.log, "listening");
 
-        let probe_registration = if cfg!(feature = "usdt-probes") {
-            match usdt::register_probes() {
-                Ok(_) => {
-                    debug!(
-                        self.app_state.log,
-                        "successfully registered DTrace USDT probes"
-                    );
-                    ProbeRegistration::Succeeded
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    error!(
-                        self.app_state.log,
-                        "failed to register DTrace USDT probes: {}", msg
-                    );
-                    ProbeRegistration::Failed(msg)
-                }
+        #[cfg(feature = "usdt-probes")]
+        let probe_registration = match usdt::register_probes() {
+            Ok(_) => {
+                debug!(
+                    self.app_state.log,
+                    "successfully registered DTrace USDT probes"
+                );
+                ProbeRegistration::Succeeded
             }
-        } else {
+            Err(e) => {
+                let msg = e.to_string();
+                error!(
+                    self.app_state.log,
+                    "failed to register DTrace USDT probes: {}", msg
+                );
+                ProbeRegistration::Failed(msg)
+            }
+        };
+        #[cfg(not(feature = "usdt-probes"))]
+        let probe_registration = {
             debug!(
                 self.app_state.log,
                 "DTrace USDT probes compiled out, not registering"
@@ -531,10 +533,6 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
 
 /**
  * A running Dropshot HTTP server.
- *
- * # Panics
- *
- * Panics if dropped without invoking `close`.
  */
 pub struct HttpServer<C: ServerContext> {
     probe_registration: ProbeRegistration,
