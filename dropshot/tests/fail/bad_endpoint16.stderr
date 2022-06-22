@@ -1,0 +1,22 @@
+error: Endpoint handlers must have the following signature:
+           async fn(
+               rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody<J>,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_endpoint16.rs:16:1
+   |
+16 | / async fn bad_endpoint(
+17 | |     _rqctx: Arc<RequestContext<()>>,
+18 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^
+
+error: invalid content type for endpoint
+  --> tests/fail/bad_endpoint16.rs:12:5
+   |
+12 | /     method = GET,
+13 | |     path = "/test",
+14 | |     content_type = "foo/bar",
+   | |_____________________________^

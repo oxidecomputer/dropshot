@@ -117,16 +117,27 @@ fn do_endpoint(
     attr: TokenStream,
     item: TokenStream,
 ) -> Result<(TokenStream, Vec<Error>), Error> {
-    let metadata = from_tokenstream::<Metadata>(&attr)?;
+    let mut errors = Vec::new();
 
+    let metadata = from_tokenstream::<Metadata>(&attr)?;
     let method = metadata.method.as_str();
     let path = metadata.path;
     let content_type =
         metadata.content_type.unwrap_or_else(|| "application/json".to_string());
+    // Should match allowed types in `ApiEndpointBodyContentType::from_mime_type`
+    if !matches!(
+        content_type.as_str(),
+        "application/json"
+            | "application/octet-stream"
+            | "application/x-www-form-urlencoded"
+    ) {
+        errors.push(Error::new_spanned(
+            &attr,
+            "invalid content type for endpoint",
+        ));
+    }
 
     let ast: ItemFnForSignature = syn::parse2(item.clone())?;
-
-    let mut errors = Vec::new();
 
     if ast.sig.constness.is_some() {
         errors.push(Error::new_spanned(
