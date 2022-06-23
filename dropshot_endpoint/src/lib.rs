@@ -53,6 +53,7 @@ struct Metadata {
     path: String,
     tags: Option<Vec<String>>,
     unpublished: Option<bool>,
+    content_type: Option<String>,
     _dropshot_crate: Option<String>,
 }
 
@@ -82,6 +83,8 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
 ///     // A value of `true` causes the API to be omitted from the API description
 ///     unpublished = { true | false },
+///     // Specifies the media type used to encode the request body
+///     content_type = { "application/json" | "application/x-www-form-urlencoded" }
 /// }]
 /// ```
 ///
@@ -115,9 +118,19 @@ fn do_endpoint(
     item: TokenStream,
 ) -> Result<(TokenStream, Vec<Error>), Error> {
     let metadata = from_tokenstream::<Metadata>(&attr)?;
-
     let method = metadata.method.as_str();
     let path = metadata.path;
+    let content_type =
+        metadata.content_type.unwrap_or_else(|| "application/json".to_string());
+    if !matches!(
+        content_type.as_str(),
+        "application/json" | "application/x-www-form-urlencoded"
+    ) {
+        return Err(Error::new_spanned(
+            &attr,
+            "invalid content type for endpoint",
+        ));
+    }
 
     let ast: ItemFnForSignature = syn::parse2(item.clone())?;
 
@@ -395,6 +408,7 @@ fn do_endpoint(
                 #name_str.to_string(),
                 #name,
                 #dropshot::Method::#method_ident,
+                #content_type,
                 #path,
             )
             #summary
@@ -641,6 +655,7 @@ mod tests {
                         "handler_xyz".to_string(),
                         handler_xyz,
                         dropshot::Method::GET,
+                        "application/json",
                         "/a/b/c",
                     )
                 }
@@ -728,6 +743,7 @@ mod tests {
                         "handler_xyz".to_string(),
                         handler_xyz,
                         dropshot::Method::GET,
+                        "application/json",
                         "/a/b/c",
                     )
                 }
@@ -833,6 +849,7 @@ mod tests {
                         "handler_xyz".to_string(),
                         handler_xyz,
                         dropshot::Method::GET,
+                        "application/json",
                         "/a/b/c",
                     )
                 }
@@ -938,6 +955,7 @@ mod tests {
                         "handler_xyz".to_string(),
                         handler_xyz,
                         dropshot::Method::GET,
+                        "application/json",
                         "/a/b/c",
                     )
                 }
@@ -1031,6 +1049,7 @@ mod tests {
                         "handler_xyz".to_string(),
                         handler_xyz,
                         dropshot::Method::GET,
+                        "application/json",
                         "/a/b/c",
                     )
                     .tag("stuff")
@@ -1127,6 +1146,7 @@ mod tests {
                         "handler_xyz".to_string(),
                         handler_xyz,
                         dropshot::Method::GET,
+                        "application/json",
                         "/a/b/c",
                     )
                     .summary("handle \"xyz\" requests")
@@ -1244,6 +1264,101 @@ mod tests {
             errors.get(1).map(ToString::to_string),
             Some("Endpoint requires arguments".to_string())
         );
+    }
+
+    #[test]
+    fn test_endpoint_content_type() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = POST,
+                path = "/a/b/c",
+                content_type = "application/x-www-form-urlencoded"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: Arc<RequestContext<()>>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        )
+        .unwrap();
+
+        let expected = quote! {
+            const _: fn() = || {
+                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+                >();
+            };
+
+            #[allow(non_camel_case_types, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub struct handler_xyz {}
+
+            #[allow(non_upper_case_globals, missing_docs)]
+            #[doc = "API Endpoint: handler_xyz"]
+            pub const handler_xyz: handler_xyz = handler_xyz {};
+
+            impl From<handler_xyz>
+                for dropshot::ApiEndpoint<
+                    <Arc<RequestContext<()>
+                > as dropshot::RequestContextArgument>::Context>
+            {
+                fn from(_: handler_xyz) -> Self {
+                    pub async fn handler_xyz(
+                        _rqctx: Arc<RequestContext<()>>,
+                    ) -> Result<HttpResponseOk<()>, HttpError> {
+                        Ok(())
+                    }
+
+                    const _: fn() = || {
+                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                            future_endpoint_must_be_send(handler_xyz(arg0));
+                        }
+                    };
+
+                    dropshot::ApiEndpoint::new(
+                        "handler_xyz".to_string(),
+                        handler_xyz,
+                        dropshot::Method::POST,
+                        "application/x-www-form-urlencoded",
+                        "/a/b/c",
+                    )
+                }
+            }
+        };
+
+        assert!(errors.is_empty());
+        assert_eq!(expected.to_string(), item.to_string());
     }
 
     #[test]

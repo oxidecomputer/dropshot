@@ -52,6 +52,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_args_1).unwrap();
     api.register(demo_handler_args_2query).unwrap();
     api.register(demo_handler_args_2json).unwrap();
+    api.register(demo_handler_args_2urlencoded).unwrap();
     api.register(demo_handler_args_3).unwrap();
     api.register(demo_handler_path_param_string).unwrap();
     api.register(demo_handler_path_param_uuid).unwrap();
@@ -247,7 +248,7 @@ async fn test_demo2json() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse body"));
+    assert!(error.message.starts_with("unable to parse JSON body"));
 
     /* Test case: invalid JSON */
     let error = testctx
@@ -260,7 +261,7 @@ async fn test_demo2json() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse body"));
+    assert!(error.message.starts_with("unable to parse JSON body"));
 
     /* Test case: bad type */
     let json_bad_type = "{ \"test1\": \"oops\", \"test2\": \"oops\" }";
@@ -275,10 +276,97 @@ async fn test_demo2json() {
         .await
         .expect_err("expected failure");
     assert!(error.message.starts_with(
-        "unable to parse body: invalid type: string \"oops\", expected u32"
+        "unable to parse JSON body: invalid type: string \"oops\", expected u32"
     ));
 
     testctx.teardown().await;
+}
+
+/*
+ * Handlers may also accept form/URL-encoded bodies. Here we test such
+ * bodies with both valid and invalid encodings.
+ */
+#[tokio::test]
+async fn test_demo2urlencoded() {
+    let api = demo_api();
+    let testctx = common::test_setup("demo2urlencoded", api);
+
+    /* Test case: optional field */
+    let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
+    let mut response = testctx
+        .client_testctx
+        .make_request_url_encoded(
+            Method::GET,
+            "/testing/demo2urlencoded",
+            Some(input),
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: DemoJsonBody = read_json(&mut response).await;
+    assert_eq!(json.test1, "bar");
+    assert_eq!(json.test2, None);
+
+    /* Test case: both fields populated */
+    let input = DemoJsonBody { test1: "baz".to_string(), test2: Some(20) };
+    let mut response = testctx
+        .client_testctx
+        .make_request_url_encoded(
+            Method::GET,
+            "/testing/demo2urlencoded",
+            Some(input),
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: DemoJsonBody = read_json(&mut response).await;
+    assert_eq!(json.test1, "baz");
+    assert_eq!(json.test2, Some(20));
+
+    /* Error case: wrong content type for endpoint */
+    let input = DemoJsonBody { test1: "qux".to_string(), test2: Some(30) };
+    let error = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/demo2urlencoded",
+            Some(input),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
+    assert!(error.message.starts_with(
+        "expected content type \"application/x-www-form-urlencoded\", \
+         got \"application/json\""
+    ));
+
+    /* Error case: invalid encoding */
+    let error = testctx
+        .client_testctx
+        .make_request_with_body_url_encoded(
+            Method::GET,
+            "/testing/demo2urlencoded",
+            "test1=oops&test2".into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
+    assert!(error.message.starts_with("unable to parse URL-encoded body"));
+
+    /* Error case: bad type */
+    let error = testctx
+        .client_testctx
+        .make_request_with_body_url_encoded(
+            Method::GET,
+            "/testing/demo2urlencoded",
+            "test1=oops&test2=oops".into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
+    assert!(error.message.starts_with(
+        "unable to parse URL-encoded body: invalid digit found in string"
+    ));
 }
 
 /*
@@ -339,7 +427,7 @@ async fn test_demo3json() {
         )
         .await
         .expect_err("expected error");
-    assert!(error.message.starts_with("unable to parse body"));
+    assert!(error.message.starts_with("unable to parse JSON body"));
 
     testctx.teardown().await;
 }
@@ -692,6 +780,18 @@ async fn demo_handler_args_2json(
     json: TypedBody<DemoJsonBody>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&json.into_inner())
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/demo2urlencoded",
+    content_type = "application/x-www-form-urlencoded",
+}]
+async fn demo_handler_args_2urlencoded(
+    _rqctx: RequestCtx,
+    body: TypedBody<DemoJsonBody>,
+) -> Result<Response<Body>, HttpError> {
+    http_echo(&body.into_inner())
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

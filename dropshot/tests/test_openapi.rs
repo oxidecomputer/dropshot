@@ -407,6 +407,19 @@ async fn handler19(
     Ok(HttpResponseOk(example_object_with_example()))
 }
 
+#[endpoint {
+    method = POST,
+    path = "/test/urlencoded",
+    content_type = "application/x-www-form-urlencoded",
+    tags = ["it"]
+}]
+async fn handler20(
+    _rqctx: Arc<RequestContext<()>>,
+    _body: TypedBody<BodyParam>,
+) -> Result<HttpResponseCreated<Response>, HttpError> {
+    Ok(HttpResponseCreated(Response {}))
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -435,6 +448,7 @@ fn make_api(
     api.register(handler17)?;
     api.register(handler18)?;
     api.register(handler19)?;
+    api.register(handler20)?;
     Ok(api)
 }
 
