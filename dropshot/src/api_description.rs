@@ -964,7 +964,11 @@ fn j2oas_schema_object(
     let ty = match &obj.instance_type {
         Some(schemars::schema::SingleOrVec::Single(ty)) => Some(ty.as_ref()),
         Some(schemars::schema::SingleOrVec::Vec(_)) => {
-            panic!("unsupported by openapiv3")
+            panic!(
+                "a type array is unsupported by openapiv3:\n{}",
+                serde_json::to_string_pretty(obj)
+                    .unwrap_or_else(|_| "<can't serialize>".to_string())
+            )
         }
         None => None,
     };
@@ -1000,7 +1004,11 @@ fn j2oas_schema_object(
         (None, None) => {
             openapiv3::SchemaKind::Any(openapiv3::AnySchema::default())
         }
-        _ => panic!("invalid {:#?}", obj),
+        (Some(_), Some(_)) => panic!(
+            "a schema can't have both a type and subschemas:\n{}",
+            serde_json::to_string_pretty(&obj)
+                .unwrap_or_else(|_| "<can't serialize>".to_string())
+        ),
     };
 
     let mut data = openapiv3::SchemaData::default();
@@ -1925,5 +1933,49 @@ mod test {
                 .into_iter()
                 .collect::<HashSet<_>>()
         )
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_schema() {
+        #![allow(unused)]
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "which")]
+        enum Which {
+            This,
+            That,
+        }
+
+        #[derive(JsonSchema)]
+        struct BlackSheep {
+            #[schemars(flatten)]
+            you_can_get_with: Which,
+        }
+
+        let schema = schemars::schema_for!(BlackSheep).schema;
+
+        let _ = j2oas_schema_object(None, &schema);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_two_types() {
+        #![allow(unused)]
+
+        #[derive(JsonSchema)]
+        enum One {
+            One,
+        }
+
+        #[derive(JsonSchema)]
+        struct Uno {
+            #[schemars(flatten)]
+            one: One,
+        }
+
+        let schema = schemars::schema_for!(Uno).schema;
+
+        let _ = j2oas_schema_object(None, &schema);
     }
 }
