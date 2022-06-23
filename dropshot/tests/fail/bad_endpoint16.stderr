@@ -1,0 +1,7 @@
+error: invalid content type for endpoint
+  --> tests/fail/bad_endpoint16.rs:12:5
+   |
+12 | /     method = GET,
+13 | |     path = "/test",
+14 | |     content_type = "foo/bar",
+   | |_____________________________^

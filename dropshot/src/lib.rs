@@ -234,8 +234,8 @@
  *   an instance of type `P`. `P` must implement `serde::Deserialize` and
  *   `schemars::JsonSchema`.
  * * [`TypedBody`]`<J>` extracts content from the request body by parsing the
- *   body as JSON and deserializing it into an instance of type `J`. `J` must
- *   implement `serde::Deserialize` and `schemars::JsonSchema`.
+ *   body as JSON (or form/url-encoded) and deserializing it into an instance
+ *   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
  * * [`UntypedBody`] extracts the raw bytes of the request body.
  *
  * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
@@ -619,6 +619,7 @@ extern crate slog;
 
 pub use api_description::ApiDescription;
 pub use api_description::ApiEndpoint;
+pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
@@ -651,6 +652,7 @@ pub use handler::UntypedBody;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_NDJSON;
 pub use http_util::CONTENT_TYPE_OCTET_STREAM;
+pub use http_util::CONTENT_TYPE_URL_ENCODED;
 pub use http_util::HEADER_REQUEST_ID;
 pub use logging::ConfigLogging;
 pub use logging::ConfigLoggingIfExists;

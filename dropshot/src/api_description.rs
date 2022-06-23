@@ -17,6 +17,7 @@ use crate::Extractor;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
+use crate::CONTENT_TYPE_URL_ENCODED;
 
 use http::Method;
 use http::StatusCode;
@@ -39,6 +40,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub method: Method,
     pub path: String,
     pub parameters: Vec<ApiEndpointParameter>,
+    pub body_content_type: ApiEndpointBodyContentType,
     pub response: ApiEndpointResponse,
     pub summary: Option<String>,
     pub description: Option<String>,
@@ -52,6 +54,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         operation_id: String,
         handler: HandlerType,
         method: Method,
+        content_type: &'a str,
         path: &'a str,
     ) -> Self
     where
@@ -59,7 +62,10 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         FuncParams: Extractor + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
-        let func_parameters = FuncParams::metadata();
+        let body_content_type =
+            ApiEndpointBodyContentType::from_mime_type(content_type)
+                .expect("unsupported mime type");
+        let func_parameters = FuncParams::metadata(body_content_type.clone());
         let response = ResponseType::response_metadata();
         ApiEndpoint {
             operation_id,
@@ -67,6 +73,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             method,
             path: path.to_string(),
             parameters: func_parameters.parameters,
+            body_content_type,
             response,
             summary: None,
             description: None,
@@ -171,13 +178,31 @@ pub enum ApiEndpointBodyContentType {
     Bytes,
     /** application/json */
     Json,
+    /** application/x-www-form-urlencoded */
+    UrlEncoded,
+}
+
+impl Default for ApiEndpointBodyContentType {
+    fn default() -> Self {
+        Self::Json
+    }
 }
 
 impl ApiEndpointBodyContentType {
-    fn mime_type(&self) -> &str {
+    pub fn mime_type(&self) -> &str {
         match self {
-            ApiEndpointBodyContentType::Bytes => CONTENT_TYPE_OCTET_STREAM,
-            ApiEndpointBodyContentType::Json => CONTENT_TYPE_JSON,
+            Self::Bytes => CONTENT_TYPE_OCTET_STREAM,
+            Self::Json => CONTENT_TYPE_JSON,
+            Self::UrlEncoded => CONTENT_TYPE_URL_ENCODED,
+        }
+    }
+
+    pub fn from_mime_type(mime_type: &str) -> Result<Self, String> {
+        match mime_type {
+            CONTENT_TYPE_OCTET_STREAM => Ok(Self::Bytes),
+            CONTENT_TYPE_JSON => Ok(Self::Json),
+            CONTENT_TYPE_URL_ENCODED => Ok(Self::UrlEncoded),
+            _ => Err(mime_type.to_string()),
         }
     }
 }
@@ -1562,6 +1587,7 @@ mod test {
     use crate::TagDetails;
     use crate::TypedBody;
     use crate::UntypedBody;
+    use crate::CONTENT_TYPE_JSON;
     use http::Method;
     use hyper::Body;
     use hyper::Response;
@@ -1595,6 +1621,7 @@ mod test {
             "test_badpath_handler".to_string(),
             test_badpath_handler,
             Method::GET,
+            CONTENT_TYPE_JSON,
             "/",
         ));
         assert_eq!(
@@ -1611,6 +1638,7 @@ mod test {
             "test_badpath_handler".to_string(),
             test_badpath_handler,
             Method::GET,
+            CONTENT_TYPE_JSON,
             "/{a}/{aa}/{b}/{bb}",
         ));
         assert_eq!(
@@ -1626,6 +1654,7 @@ mod test {
             "test_badpath_handler".to_string(),
             test_badpath_handler,
             Method::GET,
+            CONTENT_TYPE_JSON,
             "/{c}/{d}",
         ));
         assert_eq!(
@@ -1822,6 +1851,7 @@ mod test {
             "test_badpath_handler".to_string(),
             test_badpath_handler,
             Method::GET,
+            CONTENT_TYPE_JSON,
             "/{a}/{b}",
         ));
         assert_eq!(ret, Err("At least one tag is required".to_string()));
@@ -1839,6 +1869,7 @@ mod test {
                 "test_badpath_handler".to_string(),
                 test_badpath_handler,
                 Method::GET,
+                CONTENT_TYPE_JSON,
                 "/{a}/{b}",
             )
             .tag("howdy")
@@ -1860,6 +1891,7 @@ mod test {
                 "test_badpath_handler".to_string(),
                 test_badpath_handler,
                 Method::GET,
+                CONTENT_TYPE_JSON,
                 "/{a}/{b}",
             )
             .tag("a-tag"),
@@ -1890,6 +1922,7 @@ mod test {
                 "test_badpath_handler".to_string(),
                 test_badpath_handler,
                 Method::GET,
+                CONTENT_TYPE_JSON,
                 "/xx/{a}/{b}",
             )
             .tag("a-tag")
@@ -1901,6 +1934,7 @@ mod test {
                 "test_badpath_handler".to_string(),
                 test_badpath_handler,
                 Method::GET,
+                CONTENT_TYPE_JSON,
                 "/yy/{a}/{b}",
             )
             .tag("b-tag")

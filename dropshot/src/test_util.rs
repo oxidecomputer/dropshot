@@ -31,6 +31,7 @@ use std::sync::atomic::Ordering;
 use crate::api_description::ApiDescription;
 use crate::config::ConfigDropshot;
 use crate::error::HttpErrorResponseBody;
+use crate::http_util::CONTENT_TYPE_URL_ENCODED;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
 use crate::server::{HttpServer, HttpServerStarter, ServerContext};
@@ -118,6 +119,8 @@ impl ClientTestContext {
      * - for error responses: the expected body content
      * - header names are in allowed list
      * - any other semantics that can be verified in general
+     *
+     * The body will be JSON encoded.
      */
     pub async fn make_request<RequestBodyType: Serialize + Debug>(
         &self,
@@ -132,6 +135,34 @@ impl ClientTestContext {
         };
 
         self.make_request_with_body(method, path, body, expected_status).await
+    }
+
+    /**
+     * Execute an HTTP request against the test server and perform basic
+     * validation of the result like [`make_request`], but with a content
+     * type of "application/x-www-form-urlencoded".
+     */
+    pub async fn make_request_url_encoded<
+        RequestBodyType: Serialize + Debug,
+    >(
+        &self,
+        method: Method,
+        path: &str,
+        request_body: Option<RequestBodyType>,
+        expected_status: StatusCode,
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
+        let body: Body = match request_body {
+            None => Body::empty(),
+            Some(input) => serde_urlencoded::to_string(&input).unwrap().into(),
+        };
+
+        self.make_request_with_body_url_encoded(
+            method,
+            path,
+            body,
+            expected_status,
+        )
+        .await
     }
 
     pub async fn make_request_no_body(
@@ -190,6 +221,23 @@ impl ClientTestContext {
         let uri = self.url(path);
         let request = Request::builder()
             .method(method)
+            .uri(uri)
+            .body(body)
+            .expect("attempted to construct invalid request");
+        self.make_request_with_request(request, expected_status).await
+    }
+
+    pub async fn make_request_with_body_url_encoded(
+        &self,
+        method: Method,
+        path: &str,
+        body: Body,
+        expected_status: StatusCode,
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
+        let uri = self.url(path);
+        let request = Request::builder()
+            .method(method)
+            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_URL_ENCODED)
             .uri(uri)
             .body(body)
             .expect("attempted to construct invalid request");

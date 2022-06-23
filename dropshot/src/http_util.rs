@@ -20,6 +20,8 @@ pub const CONTENT_TYPE_OCTET_STREAM: &str = "application/octet-stream";
 pub const CONTENT_TYPE_JSON: &str = "application/json";
 /** MIME type for newline-delimited JSON data */
 pub const CONTENT_TYPE_NDJSON: &str = "application/x-ndjson";
+/** MIME type for form/urlencoded data */
+pub const CONTENT_TYPE_URL_ENCODED: &str = "application/x-www-form-urlencoded";
 
 /**
  * Reads the rest of the body from the request up to the given number of bytes.
