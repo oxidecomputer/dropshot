@@ -3,8 +3,8 @@
 //! Test cases for websockets.
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseUpgraded, RequestContext,
-    WebSocketExt,
+    endpoint, ApiDescription, HttpError, HttpResponseUpgradedWebSocket,
+    RequestContext, WebSocketExt,
 };
 use futures::{FutureExt, SinkExt, StreamExt};
 use http::{Method, StatusCode};
@@ -28,7 +28,7 @@ fn api() -> ApiDescription<usize> {
 /// Echo a message back to the client.
 async fn websocket(
     rqctx: Arc<RequestContext<usize>>,
-) -> Result<HttpResponseUpgraded, HttpError> {
+) -> Result<HttpResponseUpgradedWebSocket, HttpError> {
     rqctx
         .upgrade(|ws| {
             // Just echo all messages back...

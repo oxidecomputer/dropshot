@@ -1,6 +1,6 @@
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseUpgraded, RequestContext,
-    WebSocketExt,
+    endpoint, ApiDescription, HttpError, HttpResponseUpgradedWebSocket,
+    RequestContext, WebSocketExt,
 };
 use futures::FutureExt;
 use futures::StreamExt;
@@ -28,7 +28,7 @@ fn main() -> Result<(), String> {
 /// Echo a message back to the client.
 async fn websocket(
     rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseUpgraded, HttpError> {
+) -> Result<HttpResponseUpgradedWebSocket, HttpError> {
     rqctx
         .upgrade(|ws| {
             // Just echo all messages back...

@@ -108,9 +108,6 @@ impl std::fmt::Debug for WebSocket {
 }
 
 /// A WebSocket message.
-///
-/// This will likely become a `non-exhaustive` enum in the future, once that
-/// language feature has stabilized.
 #[derive(Eq, PartialEq, Clone)]
 pub struct WebSocketMessage {
     inner: protocol::Message,
