@@ -74,14 +74,64 @@ async fn test_websocket_server_websocket_client() {
 }
 
 #[tokio::test]
-async fn test_websocket_server_no_upgrade_headers() {
+async fn test_websocket_server_no_upgrade_header() {
     let api = api();
-    let testctx =
-        common::test_setup("websocket_server_no_upgrade_headers", api);
+    let testctx = common::test_setup("websocket_server_no_upgrade_header", api);
     let client = &testctx.client_testctx;
 
-    client
+    if let Err(e) = client
         .make_request_no_body(Method::GET, "/echo", StatusCode::BAD_REQUEST)
         .await
-        .expect("request should succeed");
+    {
+        assert_eq!(e.message, "Connection header not sent");
+    } else {
+        unreachable!();
+    }
+}
+
+#[tokio::test]
+async fn test_websocket_server_upgrade_header_incorrect() {
+    let api = api();
+    let testctx =
+        common::test_setup("websocket_server_upgrade_header_incorrect", api);
+    let client = &testctx.client_testctx;
+
+    let uri = client.url("/echo");
+    let request = hyper::Request::builder()
+        .method(Method::GET)
+        .header("Connection", "BAD")
+        .uri(uri)
+        .body(hyper::Body::empty())
+        .expect("attempted to construct invalid request");
+
+    if let Err(e) =
+        client.make_request_with_request(request, StatusCode::BAD_REQUEST).await
+    {
+        assert_eq!(e.message, "Connection header did not include 'upgrade'");
+    } else {
+        unreachable!();
+    }
+}
+
+#[tokio::test]
+async fn test_websocket_server_no_websocket_key() {
+    let api = api();
+    let testctx = common::test_setup("websocket_server_no_websocket_key", api);
+    let client = &testctx.client_testctx;
+
+    let uri = client.url("/echo");
+    let request = hyper::Request::builder()
+        .method(Method::GET)
+        .header("Connection", "Upgrade")
+        .uri(uri)
+        .body(hyper::Body::empty())
+        .expect("attempted to construct invalid request");
+
+    if let Err(e) =
+        client.make_request_with_request(request, StatusCode::BAD_REQUEST).await
+    {
+        assert_eq!(e.message, "Websocket key not sent");
+    } else {
+        unreachable!();
+    }
 }
