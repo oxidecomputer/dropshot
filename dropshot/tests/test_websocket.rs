@@ -29,7 +29,7 @@ fn api() -> ApiDescription<usize> {
 async fn websocket(
     rqctx: Arc<RequestContext<usize>>,
 ) -> Result<HttpResponseUpgradedWebSocket, HttpError> {
-    rqctx
+    let (response, _) = rqctx
         .upgrade(|ws| {
             // Just echo all messages back...
             let (tx, rx) = ws.split();
@@ -39,7 +39,9 @@ async fn websocket(
                 }
             })
         })
-        .await
+        .await?;
+
+    Ok(response)
 }
 
 #[tokio::test]

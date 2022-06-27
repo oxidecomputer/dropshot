@@ -78,6 +78,7 @@ use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::ops::DerefMut;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 
 /**
  * Type alias for the result returned by HTTP handler functions.
@@ -214,7 +215,10 @@ pub trait WebSocketExt {
     async fn upgrade<F, U>(
         &self,
         func: F,
-    ) -> Result<HttpResponseUpgradedWebSocket, HttpError>
+    ) -> Result<
+        (HttpResponseUpgradedWebSocket, JoinHandle<Result<(), hyper::Error>>),
+        HttpError,
+    >
     where
         F: FnOnce(crate::websocket::WebSocket) -> U + Send + 'static,
         U: Future<Output = ()> + Send + 'static;
@@ -225,7 +229,10 @@ impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
     async fn upgrade<F, U>(
         &self,
         func: F,
-    ) -> Result<HttpResponseUpgradedWebSocket, HttpError>
+    ) -> Result<
+        (HttpResponseUpgradedWebSocket, JoinHandle<Result<(), hyper::Error>>),
+        HttpError,
+    >
     where
         F: FnOnce(crate::websocket::WebSocket) -> U + Send + 'static,
         U: Future<Output = ()> + Send + 'static,
@@ -275,14 +282,10 @@ impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
             .and_then(move |websocket| {
                 // Run the function that was passed to us.
                 func(websocket).map(Ok)
-            })
-            .map(move |_result| {
-                // TODO: we should probably handle this error.
-                // I just don't know what we should do since it's async.
             });
-        ::tokio::task::spawn(fut);
+        let h = tokio::task::spawn(fut);
 
-        Ok(HttpResponseUpgradedWebSocket(websocket_key))
+        Ok((HttpResponseUpgradedWebSocket(websocket_key), h))
     }
 }
 

@@ -29,7 +29,7 @@ fn main() -> Result<(), String> {
 async fn websocket(
     rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseUpgradedWebSocket, HttpError> {
-    rqctx
+    let (response, _) = rqctx
         .upgrade(|ws| {
             // Just echo all messages back...
             let (tx, rx) = ws.split();
@@ -39,5 +39,7 @@ async fn websocket(
                 }
             })
         })
-        .await
+        .await?;
+
+    Ok(response)
 }
