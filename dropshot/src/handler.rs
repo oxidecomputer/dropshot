@@ -77,7 +77,6 @@ use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
