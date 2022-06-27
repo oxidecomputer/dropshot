@@ -212,7 +212,7 @@ pub trait WebSocketExt {
      * Upgrade a request to a websocket connection.
      */
     async fn upgrade<F, U>(
-        &'static self,
+        &self,
         func: F,
     ) -> Result<HttpResponseUpgraded, HttpError>
     where
@@ -223,7 +223,7 @@ pub trait WebSocketExt {
 #[async_trait]
 impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
     async fn upgrade<F, U>(
-        &'static self,
+        &self,
         func: F,
     ) -> Result<HttpResponseUpgraded, HttpError>
     where
@@ -276,10 +276,9 @@ impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
                 // Run the function that was passed to us.
                 func(websocket).map(Ok)
             })
-            .map(move |result| {
-                if let Err(err) = result {
-                    slog::debug!(self.log, "ws upgrade error: {}", err);
-                }
+            .map(move |_result| {
+                // TODO: we should probably handle this error.
+                // I just don't know what we should do since it's async.
             });
         ::tokio::task::spawn(fut);
 
