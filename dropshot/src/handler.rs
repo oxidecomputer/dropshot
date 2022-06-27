@@ -152,82 +152,11 @@ impl<Context: ServerContext> RequestContext<Context> {
              */
             .unwrap_or(server_config.page_default_nitems))
     }
-}
 
-/**
- * Helper trait for extracting the underlying Context type from the
- * first argument to an endpoint. This trait exists to help the
- * endpoint macro parse this argument.
- *
- * The first argument to an endpoint handler must be of the form:
- * `Arc<RequestContext<T>>` where `T` is a caller-supplied
- * value that implements `ServerContext`.
- */
-pub trait RequestContextArgument {
-    type Context;
-}
-
-impl<T: 'static + ServerContext> RequestContextArgument
-    for Arc<RequestContext<T>>
-{
-    type Context = T;
-}
-
-/**
- * `Extractor` defines an interface allowing a type to be constructed from a
- * `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
- * constructor function, not instance functions.
- *
- * The extractors that we provide (`Query`, `Path`, `TypedBody`, and
- * `UntypedBody`) implement `Extractor` in order to construct themselves from
- * the request. For example, `Extractor` is implemented for `Query<Q>` with a
- * function that reads the query string from the request, parses it, and
- * constructs a `Query<Q>` with it.
- *
- * We also define implementations of `Extractor` for tuples of types that
- * themselves implement `Extractor`.  See the implementation of
- * `HttpRouteHandler` for more on why this needed.
- */
-#[async_trait]
-pub trait Extractor: Send + Sync + Sized {
-    /**
-     * Construct an instance of this type from a `RequestContext`.
-     */
-    async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
-    ) -> Result<Self, HttpError>;
-
-    fn metadata(
-        body_content_type: ApiEndpointBodyContentType,
-    ) -> ExtractorMetadata;
-}
-
-/**
- * `WebSocketExt` defines a function for upgrading a RequestContext to a websocket
- * connection. This automatically handles checking the original request's headers
- * to make sure it is a valid websocket connection.
- */
-#[async_trait]
-pub trait WebSocketExt {
-    /**
-     * Upgrade a request to a websocket connection.
-     */
-    async fn upgrade<F, U>(
-        &self,
-        config: Option<WebSocketConfig>,
-        func: F,
-    ) -> Result<
-        (HttpResponseUpgradedWebSocket, JoinHandle<Result<(), hyper::Error>>),
-        HttpError,
-    >
-    where
-        F: FnOnce(crate::websocket::WebSocket) -> U + Send + 'static,
-        U: Future<Output = ()> + Send + 'static;
-}
-
-#[async_trait]
-impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
-    async fn upgrade<F, U>(
+    /// Upgrade a connection to a websocket connection. This automatically handles making
+    /// sure the request has the correct headers and creating the response with the correct
+    /// headers.
+    pub async fn upgrade_websocket<F, U>(
         &self,
         config: Option<WebSocketConfig>,
         func: F,
@@ -289,6 +218,54 @@ impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
 
         Ok((HttpResponseUpgradedWebSocket(websocket_key), h))
     }
+}
+
+/**
+ * Helper trait for extracting the underlying Context type from the
+ * first argument to an endpoint. This trait exists to help the
+ * endpoint macro parse this argument.
+ *
+ * The first argument to an endpoint handler must be of the form:
+ * `Arc<RequestContext<T>>` where `T` is a caller-supplied
+ * value that implements `ServerContext`.
+ */
+pub trait RequestContextArgument {
+    type Context;
+}
+
+impl<T: 'static + ServerContext> RequestContextArgument
+    for Arc<RequestContext<T>>
+{
+    type Context = T;
+}
+
+/**
+ * `Extractor` defines an interface allowing a type to be constructed from a
+ * `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
+ * constructor function, not instance functions.
+ *
+ * The extractors that we provide (`Query`, `Path`, `TypedBody`, and
+ * `UntypedBody`) implement `Extractor` in order to construct themselves from
+ * the request. For example, `Extractor` is implemented for `Query<Q>` with a
+ * function that reads the query string from the request, parses it, and
+ * constructs a `Query<Q>` with it.
+ *
+ * We also define implementations of `Extractor` for tuples of types that
+ * themselves implement `Extractor`.  See the implementation of
+ * `HttpRouteHandler` for more on why this needed.
+ */
+#[async_trait]
+pub trait Extractor: Send + Sync + Sized {
+    /**
+     * Construct an instance of this type from a `RequestContext`.
+     */
+    async fn from_request<Context: ServerContext>(
+        rqctx: Arc<RequestContext<Context>>,
+    ) -> Result<Self, HttpError>;
+
+    fn metadata(
+        body_content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata;
 }
 
 /**

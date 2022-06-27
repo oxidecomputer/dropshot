@@ -651,7 +651,6 @@ pub use handler::Query;
 pub use handler::RequestContext;
 pub use handler::TypedBody;
 pub use handler::UntypedBody;
-pub use handler::WebSocketExt;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_NDJSON;
 pub use http_util::CONTENT_TYPE_OCTET_STREAM;

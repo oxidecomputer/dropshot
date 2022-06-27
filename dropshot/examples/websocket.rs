@@ -1,6 +1,6 @@
 use dropshot::{
     endpoint, ApiDescription, HttpError, HttpResponseUpgradedWebSocket,
-    RequestContext, WebSocketExt,
+    RequestContext,
 };
 use futures::FutureExt;
 use futures::StreamExt;
@@ -30,7 +30,7 @@ async fn websocket(
     rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseUpgradedWebSocket, HttpError> {
     let (response, _) = rqctx
-        .upgrade(None, |ws| {
+        .upgrade_websocket(None, |ws| {
             // Just echo all messages back...
             let (tx, rx) = ws.split();
             rx.forward(tx).map(|result| {
