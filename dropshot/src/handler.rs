@@ -262,7 +262,7 @@ impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
 
         // Spawn a task to handle the websocket connection.
         // Use the hyper feature of upgrading a connection.
-        let fut = hyper::upgrade::on(request.deref_mut())
+        let fut = hyper::upgrade::on(&mut *request)
             .and_then(move |upgraded| {
                 crate::websocket::WebSocket::from_raw_socket(
                     // Pass the upgraded object as the base layer stream of the Websocket.
