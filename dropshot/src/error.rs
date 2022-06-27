@@ -310,6 +310,12 @@ impl Error for HttpError {
     }
 }
 
+impl From<tokio_tungstenite::tungstenite::error::Error> for HttpError {
+    fn from(error: tokio_tungstenite::tungstenite::error::Error) -> Self {
+        HttpError::for_internal_error(format!("{}", error))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::HttpErrorResponseBody;

@@ -611,6 +611,7 @@ mod router;
 mod server;
 mod to_map;
 mod type_util;
+mod websocket;
 
 pub mod test_util;
 
@@ -643,12 +644,14 @@ pub use handler::HttpResponseDeleted;
 pub use handler::HttpResponseHeaders;
 pub use handler::HttpResponseOk;
 pub use handler::HttpResponseUpdatedNoContent;
+pub use handler::HttpResponseUpgraded;
 pub use handler::NoHeaders;
 pub use handler::Path;
 pub use handler::Query;
 pub use handler::RequestContext;
 pub use handler::TypedBody;
 pub use handler::UntypedBody;
+pub use handler::WebSocketExt;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_NDJSON;
 pub use http_util::CONTENT_TYPE_OCTET_STREAM;
@@ -664,6 +667,7 @@ pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
 pub use server::ServerContext;
 pub use server::{HttpServer, HttpServerStarter};
+pub use websocket::{WebSocket, WebSocketMessage};
 
 /*
  * Users of the `endpoint` macro need the following macros:

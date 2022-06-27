@@ -54,6 +54,9 @@ use crate::to_map::to_map;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::lock::Mutex;
+use futures::FutureExt;
+use futures::TryFutureExt;
+use headers::HeaderMapExt;
 use http::HeaderMap;
 use http::StatusCode;
 use hyper::Body;
@@ -73,6 +76,7 @@ use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
+use std::ops::DerefMut;
 use std::sync::Arc;
 
 /**
@@ -195,6 +199,92 @@ pub trait Extractor: Send + Sync + Sized {
     fn metadata(
         body_content_type: ApiEndpointBodyContentType,
     ) -> ExtractorMetadata;
+}
+
+/**
+ * `WebSocketExt` defines a function for upgrading a RequestContext to a websocket
+ * connection. This automatically handles checking the original request's headers
+ * to make sure it is a valid websocket connection.
+ */
+#[async_trait]
+pub trait WebSocketExt {
+    /**
+     * Upgrade a request to a websocket connection.
+     */
+    async fn upgrade<F, U>(
+        &'static self,
+        func: F,
+    ) -> Result<HttpResponseUpgraded, HttpError>
+    where
+        F: FnOnce(crate::websocket::WebSocket) -> U + Send + 'static,
+        U: Future<Output = ()> + Send + 'static;
+}
+
+#[async_trait]
+impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
+    async fn upgrade<F, U>(
+        &'static self,
+        func: F,
+    ) -> Result<HttpResponseUpgraded, HttpError>
+    where
+        F: FnOnce(crate::websocket::WebSocket) -> U + Send + 'static,
+        U: Future<Output = ()> + Send + 'static,
+    {
+        // We want to parse the headers from the request context.
+        let mut request = self.request.lock().await;
+
+        // We want to make sure we have the websocket upgrade header.
+        let h: Option<headers::Connection> = request.headers().typed_get();
+        if let Some(h) = h {
+            if !h.contains(&http::header::UPGRADE) {
+                return Err(HttpError::for_bad_request(
+                    None,
+                    "Connection header did not include 'upgrade'".to_string(),
+                ));
+            }
+        } else {
+            return Err(HttpError::for_bad_request(
+                None,
+                "Connection header not sent".to_string(),
+            ));
+        }
+
+        // Now get the secure websocket key.
+        let h: Option<headers::SecWebsocketKey> = request.headers().typed_get();
+        let websocket_key = if let Some(h) = h {
+            h
+        } else {
+            return Err(HttpError::for_bad_request(
+                None,
+                "Websocket key not sent".to_string(),
+            ));
+        };
+
+        // Spawn a task to handle the websocket connection.
+        // Use the hyper feature of upgrading a connection.
+        let fut = hyper::upgrade::on(request.deref_mut())
+            .and_then(move |upgraded| {
+                crate::websocket::WebSocket::from_raw_socket(
+                    // Pass the upgraded object as the base layer stream of the Websocket.
+                    upgraded,
+                    tokio_tungstenite::tungstenite::protocol::Role::Server,
+                    None,
+                )
+                .map(Ok)
+            })
+            .and_then(move |websocket| {
+                // Run the function that was passed to us.
+                func(websocket).map(Ok)
+            })
+            .map(move |result| {
+                if let Err(err) = result {
+                    slog::debug!(self.log, "ws upgrade error: {}", err);
+                }
+            });
+        ::tokio::task::spawn(fut);
+
+        Ok(HttpResponseUpgraded(websocket_key))
+    }
 }
 
 /**
@@ -1411,6 +1501,33 @@ impl HttpCodedResponse for HttpResponseUpdatedNoContent {
 impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     fn from(_: HttpResponseUpdatedNoContent) -> HttpHandlerResult {
         HttpResponseUpdatedNoContent::for_object(Empty)
+    }
+}
+
+/**
+ * `HttpResponseUpgraded<T: Serialize>` wraps an object of any serializable type.
+ * It denotes an HTTP 101 "Switching Protocols". This is used for the response from
+ * connections upgraded to a WebSocket.
+ */
+pub struct HttpResponseUpgraded(pub headers::SecWebsocketKey);
+impl HttpCodedResponse for HttpResponseUpgraded {
+    type Body = Empty;
+    const STATUS_CODE: StatusCode = StatusCode::SWITCHING_PROTOCOLS;
+    const DESCRIPTION: &'static str = "upgraded to WebSocket";
+}
+impl From<HttpResponseUpgraded> for HttpHandlerResult {
+    fn from(r: HttpResponseUpgraded) -> HttpHandlerResult {
+        /* Compute the body. */
+        let mut result: http::Response<hyper::body::Body> =
+            HttpResponseUpgraded::for_object(Empty)?;
+        /* Add in the headers we need for an upgraded connection. */
+        result.headers_mut().typed_insert(headers::Connection::upgrade());
+        result.headers_mut().typed_insert(headers::Upgrade::websocket());
+        result
+            .headers_mut()
+            .typed_insert(headers::SecWebsocketAccept::from(r.0));
+
+        Ok(result)
     }
 }
 
