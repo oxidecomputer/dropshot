@@ -11,6 +11,18 @@ use tokio_tungstenite::{tungstenite::protocol, WebSocketStream};
 
 use crate::HttpError;
 
+/// The configuration for the websocket.
+pub struct WebSocketConfig {
+    /// The size of the send queue. You can use it to turn on/off the backpressure features. `None` means here that the size of the queue is unlimited. The default value is the unlimited queue.
+    pub max_send_queue: Option<usize>,
+    /// The maximum size of a message. `None` means no size limit. The default value is 64 MiB which should be reasonably big for all normal use-cases but small enough to prevent memory eating by a malicious user.
+    pub max_message_size: Option<usize>,
+    /// The maximum size of a single message frame. `None` means no size limit. The limit is for frame payload NOT including the frame header. The default value is 16 MiB which should be reasonably big for all normal use-cases but small enough to prevent memory eating by a malicious user.
+    pub max_frame_size: Option<usize>,
+    /// When set to `true`, the server will accept and handle unmasked frames from the client. According to the RFC 6455, the server must close the connection to the client in such cases, however it seems like there are some popular libraries that are sending unmasked frames, ignoring the RFC. By default this option is set to `false`, i.e. according to RFC 6455.
+    pub accept_unmasked_frames: bool,
+}
+
 /// A websocket `Stream` and `Sink`.
 ///
 /// Ping messages sent from the client will be handled internally by replying with a Pong message.
@@ -27,11 +39,20 @@ impl WebSocket {
     pub async fn from_raw_socket(
         upgraded: hyper::upgrade::Upgraded,
         role: protocol::Role,
-        config: Option<protocol::WebSocketConfig>,
+        config: Option<WebSocketConfig>,
     ) -> Self {
-        WebSocketStream::from_raw_socket(upgraded, role, config)
-            .map(|inner| WebSocket { inner })
-            .await
+        WebSocketStream::from_raw_socket(
+            upgraded,
+            role,
+            config.map(|c| protocol::WebSocketConfig {
+                max_send_queue: c.max_send_queue,
+                max_message_size: c.max_message_size,
+                max_frame_size: c.max_frame_size,
+                accept_unmasked_frames: c.accept_unmasked_frames,
+            }),
+        )
+        .map(|inner| WebSocket { inner })
+        .await
     }
 
     /// Gracefully close this websocket.

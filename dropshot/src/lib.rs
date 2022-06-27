@@ -667,7 +667,7 @@ pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
 pub use server::ServerContext;
 pub use server::{HttpServer, HttpServerStarter};
-pub use websocket::{WebSocket, WebSocketMessage};
+pub use websocket::{WebSocket, WebSocketConfig, WebSocketMessage};
 
 /*
  * Users of the `endpoint` macro need the following macros:

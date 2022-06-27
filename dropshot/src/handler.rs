@@ -50,6 +50,7 @@ use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::router::VariableSet;
 use crate::to_map::to_map;
+use crate::WebSocketConfig;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -214,6 +215,7 @@ pub trait WebSocketExt {
      */
     async fn upgrade<F, U>(
         &self,
+        config: Option<WebSocketConfig>,
         func: F,
     ) -> Result<
         (HttpResponseUpgradedWebSocket, JoinHandle<Result<(), hyper::Error>>),
@@ -228,6 +230,7 @@ pub trait WebSocketExt {
 impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
     async fn upgrade<F, U>(
         &self,
+        config: Option<WebSocketConfig>,
         func: F,
     ) -> Result<
         (HttpResponseUpgradedWebSocket, JoinHandle<Result<(), hyper::Error>>),
@@ -275,7 +278,7 @@ impl<Context: ServerContext> WebSocketExt for RequestContext<Context> {
                     // Pass the upgraded object as the base layer stream of the Websocket.
                     upgraded,
                     tokio_tungstenite::tungstenite::protocol::Role::Server,
-                    None,
+                    config,
                 )
                 .map(Ok)
             })

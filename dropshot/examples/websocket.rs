@@ -30,7 +30,7 @@ async fn websocket(
     rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseUpgradedWebSocket, HttpError> {
     let (response, _) = rqctx
-        .upgrade(|ws| {
+        .upgrade(None, |ws| {
             // Just echo all messages back...
             let (tx, rx) = ws.split();
             rx.forward(tx).map(|result| {
