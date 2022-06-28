@@ -901,7 +901,7 @@ fn load_certs(filename: &Path) -> std::io::Result<Vec<rustls::Certificate>> {
 
     // Load and return certificate.
     rustls_pemfile::certs(&mut reader)
-        .map_err(|_| error("failed to load certificate".into()))
+        .map_err(|err| error(format!("failed to load certificate: {err}")))
         .map(|mut chain| chain.drain(..).map(rustls::Certificate).collect())
 }
 
@@ -915,7 +915,7 @@ fn load_private_key(filename: &Path) -> std::io::Result<rustls::PrivateKey> {
 
     // Load and return a single private key.
     let keys = rustls_pemfile::pkcs8_private_keys(&mut reader)
-        .map_err(|_| error("failed to load private key".into()))?;
+        .map_err(|err| error(format!("failed to load private key: {err}")))?;
     if keys.len() != 1 {
         return Err(error("expected a single private key".into()));
     }
