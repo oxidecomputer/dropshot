@@ -40,16 +40,17 @@ use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
 use super::server::ServerContext;
-use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
+use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::router::VariableSet;
 use crate::to_map::to_map;
+use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -173,8 +174,8 @@ impl<T: 'static + ServerContext> RequestContextArgument
  * `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
  * constructor function, not instance functions.
  *
- * The extractors that we provide (`Query`, `Path`, `TypedBody`, and
- * `UntypedBody`) implement `Extractor` in order to construct themselves from
+ * The extractors that we provide (`Query`, `Path`, `TypedBody`, `UntypedBody`, and
+ * `WebsocketUpgrade`) implement `Extractor` in order to construct themselves from
  * the request. For example, `Extractor` is implemented for `Query<Q>` with a
  * function that reads the query string from the request, parses it, and
  * constructs a `Query<Q>` with it.
@@ -202,7 +203,7 @@ pub trait Extractor: Send + Sync + Sized {
  * the associated endpoint is paginated.
  */
 pub struct ExtractorMetadata {
-    pub paginated: bool,
+    pub extension_mode: ExtensionMode,
     pub parameters: Vec<ApiEndpointParameter>,
 }
 
@@ -223,15 +224,21 @@ macro_rules! impl_extractor_for_tuple {
 
         fn metadata(_body_content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
             #[allow(unused_mut)]
-            let mut paginated = false;
+            let mut extension_mode = ExtensionMode::None;
             #[allow(unused_mut)]
             let mut parameters = vec![];
             $(
                 let mut metadata = $T::metadata(_body_content_type.clone());
-                paginated = paginated | metadata.paginated;
+                extension_mode = match (extension_mode, metadata.extension_mode) {
+                    (ExtensionMode::None, x) | (x, ExtensionMode::None) => x,
+                    (x, y) if x != y => {
+                        panic!("incompatible extension modes in tuple: {:?} != {:?}", x, y);
+                    }
+                    (_, x) => x,
+                };
                 parameters.append(&mut metadata.parameters);
             )*
-            ExtractorMetadata { paginated, parameters }
+            ExtractorMetadata { extension_mode, parameters }
         }
     }
 }}
@@ -685,11 +692,23 @@ where
     );
     let schema = generator.root_schema_for::<ParamType>().schema.into();
 
-    let paginated = match schema_extensions(&schema) {
+    let extension_mode = match schema_extensions(&schema) {
         Some(extensions) => {
-            extensions.get(&PAGINATION_PARAM_SENTINEL.to_string()).is_some()
+            let paginated = extensions
+                .get(&PAGINATION_PARAM_SENTINEL.to_string())
+                .is_some();
+            let websocket =
+                extensions.get(&WEBSOCKET_PARAM_SENTINEL.to_string()).is_some();
+            match (paginated, websocket) {
+                (false, false) => ExtensionMode::None,
+                (false, true) => ExtensionMode::Websocket,
+                (true, false) => ExtensionMode::Paginated,
+                (true, true) => panic!(
+                    "Cannot use websocket and pagination in the same endpoint!"
+                ),
+            }
         }
-        None => false,
+        None => ExtensionMode::None,
     };
 
     /*
@@ -716,7 +735,7 @@ where
         })
         .collect::<Vec<_>>();
 
-    ExtractorMetadata { paginated, parameters }
+    ExtractorMetadata { extension_mode, parameters }
 }
 
 fn schema_extensions(
@@ -1039,7 +1058,10 @@ where
             },
             vec![],
         );
-        ExtractorMetadata { paginated: false, parameters: vec![body] }
+        ExtractorMetadata {
+            extension_mode: ExtensionMode::None,
+            parameters: vec![body],
+        }
     }
 }
 
@@ -1116,7 +1138,7 @@ impl Extractor for UntypedBody {
                 },
                 vec![],
             )],
-            paginated: false,
+            extension_mode: ExtensionMode::None,
         }
     }
 }
@@ -1591,6 +1613,7 @@ fn schema_extract_description(
 
 #[cfg(test)]
 mod test {
+    use crate::api_description::ExtensionMode;
     use crate::{
         api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
         ApiEndpointParameterLocation, PaginationParams,
@@ -1628,10 +1651,10 @@ mod test {
 
     fn compare(
         actual: ExtractorMetadata,
-        paginated: bool,
+        extension_mode: ExtensionMode,
         parameters: Vec<(&str, bool)>,
     ) {
-        assert_eq!(actual.paginated, paginated);
+        assert_eq!(actual.extension_mode, extension_mode);
 
         /*
          * This is order-dependent. We might not really care if the order
@@ -1659,7 +1682,7 @@ mod test {
         let params = get_metadata::<A>(&ApiEndpointParameterLocation::Path);
         let expected = vec![("bar", true), ("baz", false), ("foo", true)];
 
-        compare(params, false, expected);
+        compare(params, ExtensionMode::None, expected);
     }
 
     #[test]
@@ -1672,7 +1695,7 @@ mod test {
             ("limit", false),
         ];
 
-        compare(params, false, expected);
+        compare(params, ExtensionMode::None, expected);
     }
 
     #[test]
@@ -1687,7 +1710,7 @@ mod test {
             ("page_token", false),
         ];
 
-        compare(params, false, expected);
+        compare(params, ExtensionMode::None, expected);
     }
 
     #[test]
@@ -1703,6 +1726,6 @@ mod test {
             ("page_token", false),
         ];
 
-        compare(params, true, expected);
+        compare(params, ExtensionMode::Paginated, expected);
     }
 }

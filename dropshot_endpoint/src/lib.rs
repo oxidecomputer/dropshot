@@ -10,13 +10,13 @@
  */
 #![allow(clippy::style)]
 
-use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
 use quote::{quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
+use std::ops::DerefMut;
 use syn::spanned::Spanned;
 
 use syn_parsing::ItemFnForSignature;
@@ -48,12 +48,27 @@ impl MethodType {
 }
 
 #[derive(Deserialize, Debug)]
-struct Metadata {
+struct EndpointMetadata {
     method: MethodType,
     path: String,
     tags: Option<Vec<String>>,
     unpublished: Option<bool>,
     content_type: Option<String>,
+    _dropshot_crate: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize, Debug)]
+enum ChannelProtocol {
+    WEBSOCKETS,
+}
+
+#[derive(Deserialize, Debug)]
+struct ChannelMetadata {
+    protocol: ChannelProtocol,
+    path: String,
+    tags: Option<Vec<String>>,
+    unpublished: Option<bool>,
     _dropshot_crate: Option<String>,
 }
 
@@ -97,7 +112,131 @@ pub fn endpoint(
     attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    match do_endpoint(attr.into(), item.into()) {
+    do_output(do_endpoint(attr.into(), item.into()))
+}
+
+fn do_endpoint(
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+    let metadata = from_tokenstream(&attr)?;
+    // factored this way for now so #[channel] can use it too
+    do_endpoint_inner(metadata, attr, item)
+}
+
+/// As with [`endpoint`], this attribute turns a handler function into a
+/// Dropshot endpoint, but first wraps the handler function in such a way
+/// that is spawned asynchronously and given the upgraded connection of
+/// the given `protocol` (i.e. `WEBSOCKETS`).
+///
+/// The first argument still must be an `Arc<RequestContext<_>>`.
+///
+/// The second argument passed to the handler function must be a
+/// [`dropshot::WebsocketConnection`].
+///
+/// The function must return a [`dropshot::WebsocketChannelResult`] (which is
+/// a general-purpose `Result<(), Box<dyn Error + Send + Sync + 'static>>`).
+/// Returned error values will be written to the RequestContext's log.
+///
+/// ```ignore
+/// #[dropshot::channel { protocol = WEBSOCKETS, path = "/my/ws/channel/{id}" }]
+/// ```
+#[proc_macro_attribute]
+pub fn channel(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    do_output(do_channel(attr.into(), item.into()))
+}
+
+fn do_channel(
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+    let ChannelMetadata { protocol, path, tags, unpublished, _dropshot_crate } =
+        from_tokenstream(&attr)?;
+    match protocol {
+        ChannelProtocol::WEBSOCKETS => {
+            // here we construct a wrapper function and mutate the arguments a bit
+            // for the outer layer: we replace WebsocketConnection, which is not
+            // an extractor, with WebsocketUpgrade, which is.
+            let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
+                syn::parse2(item)?;
+
+            let inner_args = sig.inputs.clone();
+            let inner_output = sig.output.clone();
+
+            let arg_names: Vec<_> = inner_args
+                .iter()
+                .map(|arg: &syn::FnArg| match arg {
+                    syn::FnArg::Receiver(r) => r.self_token.to_token_stream(),
+                    syn::FnArg::Typed(syn::PatType { pat, .. }) => {
+                        pat.to_token_stream()
+                    }
+                })
+                .collect();
+            let found = sig.inputs.iter_mut().nth(1).and_then(|arg| {
+                if let syn::FnArg::Typed(syn::PatType { pat, ty, .. }) = arg {
+                    if let syn::Pat::Ident(syn::PatIdent {
+                        ident,
+                        by_ref: None,
+                        ..
+                    }) = pat.deref_mut()
+                    {
+                        let conn_type = ty.clone();
+                        let conn_name = ident.clone();
+                        let span = ident.span();
+                        *ident = syn::Ident::new(
+                            "__dropshot_websocket_upgrade",
+                            span,
+                        );
+                        *ty = Box::new(syn::Type::Verbatim(
+                            quote! { dropshot::WebsocketUpgrade },
+                        ));
+                        return Some((conn_name, conn_type));
+                    }
+                }
+                return None;
+            });
+            if found.is_none() {
+                return Err(Error::new_spanned(
+                    &attr,
+                    "An argument of type dropshot::WebsocketConnection must be provided immediately following Arc<RequestContext<T>>.",
+                ));
+            }
+
+            sig.output =
+                syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))?;
+
+            let (conn_name, conn_type) = found.unwrap();
+
+            let new_item = quote! {
+                #(#attrs)*
+                #vis #sig {
+                    async fn __dropshot_websocket_handler(#inner_args) #inner_output #body
+                    __dropshot_websocket_upgrade.handle(move | #conn_name: #conn_type | async move {
+                        __dropshot_websocket_handler(#(#arg_names),*).await
+                    })
+                }
+            };
+
+            let metadata = EndpointMetadata {
+                method: MethodType::GET,
+                path,
+                tags,
+                unpublished,
+                content_type: Some("application/json".to_string()),
+                _dropshot_crate,
+            };
+            do_endpoint_inner(metadata, attr, new_item)
+        }
+    }
+}
+
+fn do_output(
+    res: Result<(proc_macro2::TokenStream, Vec<Error>), Error>,
+) -> proc_macro::TokenStream {
+    match res {
         Err(err) => err.to_compile_error().into(),
         Ok((endpoint, errors)) => {
             let compiler_errors =
@@ -113,11 +252,12 @@ pub fn endpoint(
     }
 }
 
-fn do_endpoint(
-    attr: TokenStream,
-    item: TokenStream,
-) -> Result<(TokenStream, Vec<Error>), Error> {
-    let metadata = from_tokenstream::<Metadata>(&attr)?;
+fn do_endpoint_inner(
+    metadata: EndpointMetadata,
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+    let ast: ItemFnForSignature = syn::parse2(item.clone())?;
     let method = metadata.method.as_str();
     let path = metadata.path;
     let content_type =
@@ -131,8 +271,6 @@ fn do_endpoint(
             "invalid content type for endpoint",
         ));
     }
-
-    let ast: ItemFnForSignature = syn::parse2(item.clone())?;
 
     let mut errors = Vec::new();
 
@@ -472,7 +610,7 @@ fn do_endpoint(
     Ok((stream, errors))
 }
 
-fn get_crate(var: Option<String>) -> TokenStream {
+fn get_crate(var: Option<String>) -> proc_macro2::TokenStream {
     if let Some(s) = var {
         if let Ok(ts) = syn::parse_str(s.as_str()) {
             return ts;
