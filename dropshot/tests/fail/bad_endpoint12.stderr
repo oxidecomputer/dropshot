@@ -4,6 +4,12 @@ error[E0277]: the trait bound `String: HttpCodedResponse` is not satisfied
 16 | ) -> Result<String, HttpError> {
    |      ^^^^^^ the trait `HttpCodedResponse` is not implemented for `String`
    |
+   = help: the following other types implement trait `HttpCodedResponse`:
+             HttpResponseAccepted<T>
+             HttpResponseCreated<T>
+             HttpResponseDeleted
+             HttpResponseOk<T>
+             HttpResponseUpdatedNoContent
    = note: required because of the requirements on the impl of `HttpResponse` for `String`
 note: required because of the requirements on the impl of `ResultTrait` for `Result<String, HttpError>`
   --> tests/fail/bad_endpoint12.rs:16:6

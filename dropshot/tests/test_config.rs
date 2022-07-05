@@ -25,9 +25,8 @@ fn test_config_bad_bind_address_port_too_small() {
     )
     .unwrap_err()
     .to_string();
-    assert!(
-        error.starts_with("invalid IP address syntax for key `bind_address`")
-    );
+    assert!(error
+        .starts_with("invalid socket address syntax for key `bind_address`"));
 }
 
 #[test]
@@ -38,9 +37,8 @@ fn test_config_bad_bind_address_port_too_large() {
     )
     .unwrap_err()
     .to_string();
-    assert!(
-        error.starts_with("invalid IP address syntax for key `bind_address`")
-    );
+    assert!(error
+        .starts_with("invalid socket address syntax for key `bind_address`"));
 }
 
 #[test]
@@ -51,9 +49,8 @@ fn test_config_bad_bind_address_garbage() {
     )
     .unwrap_err()
     .to_string();
-    assert!(
-        error.starts_with("invalid IP address syntax for key `bind_address`")
-    );
+    assert!(error
+        .starts_with("invalid socket address syntax for key `bind_address`"));
 }
 
 /*

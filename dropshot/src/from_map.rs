@@ -310,7 +310,7 @@ where
 /*
  * Deserializer component for processing enums.
  */
-impl<'de, 'a, Z> EnumAccess<'de> for &mut MapDeserializer<'de, Z>
+impl<'de, Z> EnumAccess<'de> for &mut MapDeserializer<'de, Z>
 where
     Z: MapValue + Debug + Clone + 'static,
 {
@@ -331,7 +331,7 @@ where
 /*
  * Deserializer component for processing enum variants.
  */
-impl<'de, 'a, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z>
+impl<'de, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z>
 where
     Z: MapValue + Clone + Debug + 'static,
 {
@@ -381,7 +381,7 @@ struct MapMapAccess<Z> {
     value: Option<Z>,
 }
 
-impl<'de, 'a, Z> MapAccess<'de> for MapMapAccess<Z>
+impl<'de, Z> MapAccess<'de> for MapMapAccess<Z>
 where
     Z: MapValue + Debug + Clone + 'static,
 {
@@ -427,7 +427,7 @@ struct MapSeqAccess<Z> {
     iter: Box<dyn Iterator<Item = Z>>,
 }
 
-impl<'de, 'a, Z> SeqAccess<'de> for MapSeqAccess<Z>
+impl<'de, Z> SeqAccess<'de> for MapSeqAccess<Z>
 where
     Z: MapValue + Debug + Clone + 'static,
 {
