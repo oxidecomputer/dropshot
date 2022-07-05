@@ -4,6 +4,15 @@ error[E0277]: the trait bound `String: Extractor` is not satisfied
 17 |     param: String,
    |            ^^^^^^ the trait `Extractor` is not implemented for `String`
    |
+   = help: the following other types implement trait `Extractor`:
+             ()
+             (T1, T2)
+             (T1, T2, T3)
+             (T1,)
+             TypedBody<BodyType>
+             UntypedBody
+             dropshot::Path<PathType>
+             dropshot::Query<QueryType>
 note: required by a bound in `need_extractor`
   --> tests/fail/bad_endpoint3.rs:11:1
    |
