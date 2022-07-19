@@ -82,7 +82,7 @@ subprocess = "0.2.9"
 tempfile = "3.3"
 trybuild = "1.0.53"
 # Used by the https examples and tests
-pem = "1.0"
+pem = "1.1"
 rcgen = "0.9.3"
 
 [dev-dependencies.rustls]
