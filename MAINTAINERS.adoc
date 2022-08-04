@@ -85,25 +85,25 @@ Here's how to cut a release.
 cargo install cargo-release
 ----
 +
-If you're daring, just run:
+**You should be able to just run:**
 +
 [source,text]
 ----
-$ cargo release --prev-tag-name=PREV_RELEASE_TAG -vv RELEASE_KIND
+$ cargo release --prev-tag-name=PREV_RELEASE_TAG -vv --execute RELEASE_KIND|NEW_VERSION
 ----
 +
 If you want to be extra careful, you can do this in a dry-run form.  First, check that the log output here looks right (and especially that you got the version number that you expected!):
 +
 [source,text]
 ----
-$ cargo release --dry-run --prev-tag-name=PREV_RELEASE_TAG -vv RELEASE_KIND
+$ cargo release --prev-tag-name=PREV_RELEASE_TAG -vv RELEASE_KIND|NEW_VERSION
 ----
 +
-Now, run `cargo release` for real (i.e. no `--dry-run`), but without publishing to crates.io or pushing the git tags:
+Now, run `cargo release` for real (i.e. with `--execute`), but without publishing to crates.io or pushing the git tags:
 +
 [source,text]
 ----
-$ cargo release --skip-push --skip-publish --prev-tag-name=PREV_RELEASE_TAG -vv minor
+$ cargo release --execute --no-push --no-publish --prev-tag-name=PREV_RELEASE_TAG -vv RELEASE_KIND|NEW_VERSION
 ----
 +
 Inspect the resulting commits and the new tags from above.  There should be four commits: one to each of "dropshot" and "dropshot_endpoint" that sets the version to the one you specified, and one that sets the version to the _next_ version.  For example, if the current version is 0.5.1 and you're publishing 0.5.2, the repo will start at 0.5.2-pre, you'll see one commit that sets it to 0.5.2, and then you'll see one that sets it to 0.5.3-pre.
@@ -120,7 +120,7 @@ and do the release again with the publish step:
 +
 [source,text]
 ----
-$ cargo release --skip-push --prev-tag-name=PREV_RELEASE_TAG -vv minor
+$ cargo release --execute --no-push --prev-tag-name=PREV_RELEASE_TAG -vv minor
 ----
 +
 At this point, the new crates should be published to crates.io.  Check and
@@ -140,8 +140,8 @@ We could automate more of this with a script that takes a commit, checks the Git
 
 === What if something goes wrong
 
-At the end of the day, the release is just a git tag and the crates.io publish.
+At the end of the day, the release is just a few commits that update the crate versions, a git tag, and the crates.io publish.
 
-If something went wrong prior to the crates.io publish, then you can `git reset` to the commit you started with, delete your local tag, and try again.  (If you followed the above steps, you won't have pushed any git tags, so there's nothing on GitHub to undo.)
+If something went wrong prior to the crates.io publish, then you can `git reset` your local clone to the commit you started with, delete your local tag, and try again.  (If you followed the above steps, you won't have pushed any git tags, so there's nothing on GitHub to undo.)
 
 If something went wrong after the crates.io publish, you could try to fix up the Git state to match what it should be.  Or you could yank the version you published, reset your local state, and try again.

@@ -1,4 +1,5 @@
 # This file is used by cargo-release.
+# This version is written for cargo-release 0.21.1.
 
 # Update the change log to reflect the new release and set us up for the next release.
 pre-release-replacements = [
@@ -10,9 +11,12 @@ pre-release-replacements = [
   {file="../CHANGELOG.adoc", search="// cargo-release: next header goes here \\(do not change this line\\)", replace="// cargo-release: next header goes here (do not change this line)\n\n== Unreleased changes (release date TBD)\n\nhttps://github.com/oxidecomputer/dropshot/compare/{{tag_name}}\\...HEAD[Full list of commits]", exactly=1},
 ]
 
-disable-push = true
+push = false
 pre-release-commit-message = "release {{crate_name}} {{version}}"
 post-release-commit-message = "starting {{crate_name}} {{next_version}} after releasing {{version}}"
 tag-message = "release {{crate_name}} {{version}}"
 tag-prefix=""
+dev-version = true
 dev-version-ext = "dev"
+allow-branch = [ "main" ]
+shared-versio = true

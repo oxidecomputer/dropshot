@@ -1,3 +1,3 @@
 # Overrides the cargo-release config file from the root of this repo.
 pre-release-replacements = []
-disable-tag = true
+tag = false
