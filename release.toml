@@ -12,11 +12,12 @@ pre-release-replacements = [
 ]
 
 push = false
-pre-release-commit-message = "release {{crate_name}} {{version}}"
-post-release-commit-message = "starting {{crate_name}} {{next_version}} after releasing {{version}}"
-tag-message = "release {{crate_name}} {{version}}"
+pre-release-commit-message = "release {{version}}"
+post-release-commit-message = "starting {{next_version}} after releasing {{version}}"
+tag-message = "release {{version}}"
 tag-prefix=""
 dev-version = true
 dev-version-ext = "dev"
 allow-branch = [ "main" ]
 shared-version = true
+consolidate-commits = true
