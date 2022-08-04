@@ -85,7 +85,7 @@ Here's how to cut a release.
 cargo install cargo-release
 ----
 +
-Make sure you have a compatible version.  These instructions were written for v0.21.1.  "release.toml" in this repo should also include the version it was written for.  If you've got a different version, [check the changelog to make sure it's compatible](https://github.com/crate-ci/cargo-release/blob/master/CHANGELOG.md).
+Make sure you have a compatible version.  These instructions were written for v0.21.1.  "release.toml" in this repo should also include the version it was written for.  If you've got a different version, https://github.com/crate-ci/cargo-release/blob/master/CHANGELOG.md[check the changelog to make sure it's compatible].
 +
 **You should be able to just run:**
 +
