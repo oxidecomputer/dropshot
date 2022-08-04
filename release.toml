@@ -19,4 +19,4 @@ tag-prefix=""
 dev-version = true
 dev-version-ext = "dev"
 allow-branch = [ "main" ]
-shared-versio = true
+shared-version = true
