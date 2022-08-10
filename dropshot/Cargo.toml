@@ -22,7 +22,7 @@ indexmap = "1.9.1"
 openapiv3 = "=1.0.1"
 paste = "1.0.8"
 percent-encoding = "2.1.0"
-proc-macro2 = "1.0.42"
+proc-macro2 = "1.0.43"
 rustls = "0.20.6"
 rustls-pemfile = "1.0.0"
 serde_json = "1.0.82"
@@ -35,7 +35,7 @@ tokio-rustls = "0.23.4"
 toml = "0.5.9"
 
 [dependencies.chrono]
-version = "0.4.20"
+version = "0.4.21"
 features = [ "serde" ]
 
 [dependencies.dropshot_endpoint]
