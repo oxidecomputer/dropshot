@@ -68,6 +68,8 @@ pub struct DropshotState<C: ServerContext> {
     pub log: Logger,
     /** bound local address for the server. */
     pub local_addr: SocketAddr,
+    /** are requests served over HTTPS */
+    pub tls: bool,
 }
 
 /**
@@ -253,6 +255,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             router: api.into_router(),
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
+            tls: false,
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
@@ -503,6 +506,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             router: api.into_router(),
             log: logger,
             local_addr,
+            tls: true,
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
