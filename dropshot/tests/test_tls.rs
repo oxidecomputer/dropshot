@@ -4,7 +4,7 @@
  * including certificate loading and supported modes.
  */
 
-use dropshot::{ConfigDropshot, ConfigTls, HttpServerStarter};
+use dropshot::{ConfigDropshot, ConfigTls, HttpResponseOk, HttpServerStarter};
 use slog::{o, Logger};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -240,4 +240,111 @@ async fn test_tls_aborted_negotiation() {
     server.close().await.unwrap();
 
     logctx.cleanup_successful();
+}
+
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct TlsCheckArgs {
+    tls: bool,
+}
+
+/*
+ * The same handler is used for both an HTTP and HTTPS server.
+ * Make sure that we can distinguish between the two.
+ * The intended version is determined by a query parameter
+ * that varies between both tests.
+ */
+#[dropshot::endpoint {
+    method = GET,
+    path = "/",
+}]
+async fn tls_check_handler(
+    rqctx: Arc<dropshot::RequestContext<usize>>,
+    query: dropshot::Query<TlsCheckArgs>,
+) -> Result<HttpResponseOk<()>, dropshot::HttpError> {
+    if rqctx.server.tls != query.into_inner().tls {
+        return Err(dropshot::HttpError::for_bad_request(
+            None,
+            "mismatch between expected and actual tls state".to_string(),
+        ));
+    }
+    Ok(HttpResponseOk(()))
+}
+
+#[tokio::test]
+async fn test_server_is_https() {
+    let logctx = create_log_context("test_server_is_https");
+    let log = logctx.log.new(o!());
+
+    // Generate key for the server
+    let (certs, key) = common::generate_tls_key();
+    let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
+
+    let config = ConfigDropshot {
+        bind_address: "127.0.0.1:0".parse().unwrap(),
+        request_body_max_bytes: 1024,
+        tls: Some(ConfigTls {
+            cert_file: cert_file.path().to_path_buf(),
+            key_file: key_file.path().to_path_buf(),
+        }),
+    };
+    let mut api = dropshot::ApiDescription::new();
+    api.register(tls_check_handler).unwrap();
+    let server = HttpServerStarter::new(&config, api, 0, &log).unwrap().start();
+    let port = server.local_addr().port();
+
+    let https_client = make_https_client(make_pki_verifier(&certs));
+
+    // Expect request with tls=true to pass with https server
+    let https_request = hyper::Request::builder()
+        .method(http::method::Method::GET)
+        .uri(format!("https://localhost:{}/?tls=true", port))
+        .body(hyper::Body::empty())
+        .unwrap();
+    let res = https_client.request(https_request).await.unwrap();
+    assert_eq!(res.status(), hyper::StatusCode::OK);
+
+    // Expect request with tls=false to fail with https server
+    let https_request = hyper::Request::builder()
+        .method(http::method::Method::GET)
+        .uri(format!("https://localhost:{}/?tls=false", port))
+        .body(hyper::Body::empty())
+        .unwrap();
+    let res = https_client.request(https_request).await.unwrap();
+    assert_eq!(res.status(), hyper::StatusCode::BAD_REQUEST);
+
+    server.close().await.unwrap();
+
+    logctx.cleanup_successful();
+}
+
+#[tokio::test]
+async fn test_server_is_http() {
+    let mut api = dropshot::ApiDescription::new();
+    api.register(tls_check_handler).unwrap();
+
+    let testctx = common::test_setup("test_server_is_http", api);
+
+    // Expect request with tls=false to pass with plain http server
+    testctx
+        .client_testctx
+        .make_request(
+            hyper::Method::GET,
+            "/?tls=false",
+            None as Option<()>,
+            hyper::StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+
+    // Expect request with tls=true to fail with plain http server
+    testctx
+        .client_testctx
+        .make_request(
+            hyper::Method::GET,
+            "/?tls=true",
+            None as Option<()>,
+            hyper::StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
 }
