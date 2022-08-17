@@ -1,4 +1,4 @@
-error: constant is never used: `unused_endpoint`
+error: constant `unused_endpoint` is never used
   --> tests/fail/unused_endpoint.rs:23:10
    |
 23 | async fn unused_endpoint(
