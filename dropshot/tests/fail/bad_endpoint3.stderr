@@ -11,6 +11,7 @@ error[E0277]: the trait bound `String: Extractor` is not satisfied
              (T1,)
              TypedBody<BodyType>
              UntypedBody
+             WebsocketUpgrade
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
 note: required by a bound in `need_extractor`

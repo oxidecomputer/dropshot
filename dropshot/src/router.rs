@@ -822,7 +822,7 @@ mod test {
             summary: None,
             description: None,
             tags: vec![],
-            paginated: false,
+            extension_mode: Default::default(),
             visible: true,
         }
     }

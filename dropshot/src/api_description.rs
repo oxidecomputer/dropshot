@@ -45,7 +45,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub summary: Option<String>,
     pub description: Option<String>,
     pub tags: Vec<String>,
-    pub paginated: bool,
+    pub extension_mode: ExtensionMode,
     pub visible: bool,
 }
 
@@ -78,7 +78,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             summary: None,
             description: None,
             tags: vec![],
-            paginated: func_parameters.paginated,
+            extension_mode: func_parameters.extension_mode,
             visible: true,
         }
     }
@@ -688,11 +688,20 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 })
                 .next();
 
-            if endpoint.paginated {
-                operation.extensions.insert(
-                    crate::pagination::PAGINATION_EXTENSION.to_string(),
-                    serde_json::json! {true},
-                );
+            match endpoint.extension_mode {
+                ExtensionMode::None => {}
+                ExtensionMode::Paginated => {
+                    operation.extensions.insert(
+                        crate::pagination::PAGINATION_EXTENSION.to_string(),
+                        serde_json::json! {true},
+                    );
+                }
+                ExtensionMode::Websocket => {
+                    operation.extensions.insert(
+                        crate::websocket::WEBSOCKET_EXTENSION.to_string(),
+                        serde_json::json!({}),
+                    );
+                }
             }
 
             let response = if let Some(schema) = &endpoint.response.schema {
@@ -1577,6 +1586,22 @@ pub struct TagDetails {
 pub struct TagExternalDocs {
     pub description: Option<String>,
     pub url: String,
+}
+
+/**
+ * Dropshot/Progenitor features used by endpoints which are not a part of the base OpenAPI spec.
+ */
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ExtensionMode {
+    None,
+    Paginated,
+    Websocket,
+}
+
+impl Default for ExtensionMode {
+    fn default() -> Self {
+        ExtensionMode::None
+    }
 }
 
 #[cfg(test)]
