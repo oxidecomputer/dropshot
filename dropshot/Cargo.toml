@@ -88,7 +88,6 @@ rcgen = "0.9.3"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tungstenite = "0.17.3"
 tokio-tungstenite = "0.17.2"
-futures-util = "0.3.24"
 
 [dev-dependencies.rustls]
 version = "0.20.6"

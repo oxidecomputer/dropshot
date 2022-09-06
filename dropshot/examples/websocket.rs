@@ -12,7 +12,7 @@ use dropshot::HttpServerStarter;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::WebsocketConnection;
-use futures_util::SinkExt;
+use futures::SinkExt;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::sync::Arc;
