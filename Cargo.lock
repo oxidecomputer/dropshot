@@ -286,7 +286,6 @@ dependencies = [
  "dropshot_endpoint",
  "expectorate",
  "futures",
- "futures-util",
  "hostname",
  "http",
  "hyper",

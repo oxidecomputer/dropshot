@@ -36,8 +36,8 @@ use dropshot::UntypedBody;
 use dropshot::WebsocketChannelResult;
 use dropshot::WebsocketConnection;
 use dropshot::CONTENT_TYPE_JSON;
-use futures_util::SinkExt;
-use futures_util::StreamExt;
+use futures::stream::StreamExt;
+use futures::SinkExt;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Method;
@@ -972,7 +972,6 @@ async fn demo_handler_websocket(
     rqctx: RequestCtx,
     upgraded: WebsocketConnection,
 ) -> WebsocketChannelResult {
-    use futures_util::stream::StreamExt;
     let mut ws_stream = WebSocketStream::from_raw_socket(
         upgraded.into_inner(),
         Role::Server,

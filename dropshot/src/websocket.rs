@@ -209,7 +209,7 @@ impl WebsocketUpgrade {
           let logger = rqctx.log.new(slog::o!());
           websock.handle(move |upgraded| async move {
               slog::info!(logger, "Entered handler for ID {}", id.into_inner());
-              use futures_util::stream::StreamExt;
+              use futures::stream::StreamExt;
               let mut ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
                   upgraded.into_inner(), tungstenite::protocol::Role::Server, None
               ).await;
