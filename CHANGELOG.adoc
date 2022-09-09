@@ -18,7 +18,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.7.0\...HEAD[Full list of co
 === Breaking Changes
 
 * https://github.com/oxidecomputer/dropshot/pull/403[#403] The `ExtractorMetadata` type has been changed to represent our nonstandard extensions to OpenAPI in a field `extension_mode: ExtensionMode`, rather than `paginated: bool`, which was previously our only nonstandard extension, but is now joined by WebSockets.
-
++
 In any existing code that checked `extractor_metadata.paginated`, you can instead check that `extractor_metadata.extension_mode` is `ExtensionMode::Paginated`.
 
 * https://github.com/oxidecomputer/dropshot/pull/351[#351] The `uuid` crate has been updated to version 1.0.0 from 0.8.0. Consumers will need to update to a compatible version of `uuid`. In addition consumers that were using the `uuid` feature flag of the `schemars` crate (so that `uuid::Uuid` implements `schemars::JsonSchema`) will need to use the `uuid1` feature flag instead to force the use of `uuid` version 1.0.0.
