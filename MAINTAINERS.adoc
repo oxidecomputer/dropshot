@@ -94,6 +94,8 @@ Make sure you have a compatible version.  These instructions were written for v0
 $ cargo release --prev-tag-name=PREV_RELEASE_TAG -vv --execute RELEASE_KIND|NEW_VERSION
 ----
 +
+**and then remember to push the commits and the tags!**  (You may have to temporarily allow administrators to override branch protection in order to do this.)
++
 If you want to be extra careful, you can do this in a dry-run form.  First, check that the log output here looks right (and especially that you got the version number that you expected!):
 +
 [source,text]
@@ -125,14 +127,15 @@ and do the release again with the publish step:
 $ cargo release --execute --no-push --prev-tag-name=PREV_RELEASE_TAG -vv minor
 ----
 +
-At this point, the new crates should be published to crates.io.  Check and
-push the commits and the tags.
+At this point, the new crates should be published to crates.io.  Check and push the commits and the tags.
 +
 [source,text]
 ----
 $ git push
 $ git push --tags
 ----
++
+You may have to temporarily allow administrators to override branch protection in order to do this.
 
 === Why all that checking?  Is that going overboard?
 
