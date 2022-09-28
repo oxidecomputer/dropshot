@@ -25,8 +25,11 @@ use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
+use dropshot::HttpResponseFoundNoContent;
 use dropshot::HttpResponseHeaders;
 use dropshot::HttpResponseOk;
+use dropshot::HttpResponseSeeOtherNoContent;
+use dropshot::HttpResponseTemporaryRedirectNoContent;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Path;
 use dropshot::Query;
@@ -68,6 +71,9 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_untyped_body).unwrap();
     api.register(demo_handler_delete).unwrap();
     api.register(demo_handler_headers).unwrap();
+    api.register(demo_handler_302_found).unwrap();
+    api.register(demo_handler_303_see_other).unwrap();
+    api.register(demo_handler_307_temporary_redirect).unwrap();
     api.register(demo_handler_websocket).unwrap();
 
     /*
@@ -744,6 +750,84 @@ async fn test_header_request() {
 }
 
 /*
+ * Test 302 "Found" response
+ */
+#[tokio::test]
+async fn test_302_found() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_302_found", api);
+    let response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/test_302_found",
+            None as Option<()>,
+            StatusCode::FOUND,
+        )
+        .await
+        .expect("expected success");
+    let headers = response
+        .headers()
+        .get_all(http::header::LOCATION)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["/path1"]);
+}
+
+/*
+ * Test 303 "See Other" response
+ */
+#[tokio::test]
+async fn test_303_see_other() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_303_see_other", api);
+    let response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/test_303_see_other",
+            None as Option<()>,
+            StatusCode::SEE_OTHER,
+        )
+        .await
+        .expect("expected success");
+    let headers = response
+        .headers()
+        .get_all(http::header::LOCATION)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["/path2"]);
+}
+
+/*
+ * Test 307 "Temporary Redirect" response
+ */
+#[tokio::test]
+async fn test_307_temporary_redirect() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_307_temporary_redirect", api);
+    let response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/test_307_temporary_redirect",
+            None as Option<()>,
+            StatusCode::TEMPORARY_REDIRECT,
+        )
+        .await
+        .expect("expected success");
+    let headers = response
+        .headers()
+        .get_all(http::header::LOCATION)
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(headers, vec!["/path3"]);
+}
+
+/*
  * The "test_demo_websocket" handler upgrades to a websocket and exchanges
  * greetings with the client.
  */
@@ -962,6 +1046,36 @@ async fn demo_handler_headers(
     headers
         .append(TEST_HEADER_2, http::header::HeaderValue::from_static("howdy"));
     Ok(response)
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/302_found",
+}]
+async fn demo_handler_302_found(
+    _rqctx: RequestCtx,
+) -> Result<HttpResponseFoundNoContent, HttpError> {
+    Ok(HttpResponseFoundNoContent(String::from("/path1")))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/303_see_other",
+}]
+async fn demo_handler_303_see_other(
+    _rqctx: RequestCtx,
+) -> Result<HttpResponseSeeOtherNoContent, HttpError> {
+    Ok(HttpResponseSeeOtherNoContent(String::from("/path2")))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/307_temporary_redirect",
+}]
+async fn demo_handler_307_temporary_redirect(
+    _rqctx: RequestCtx,
+) -> Result<HttpResponseTemporaryRedirectNoContent, HttpError> {
+    Ok(HttpResponseTemporaryRedirectNoContent(String::from("/path3")))
 }
 
 #[channel {

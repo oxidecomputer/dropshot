@@ -1436,6 +1436,101 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     }
 }
 
+/**
+ * `HttpResponseFoundNoContent` represents an HTTP 302 "Found" response with no
+ * response body.
+ *
+ * The sole item, a `String`, will become the value of the `Location` header.
+ * This is where you want to redirect the client to.
+ *
+ * Per MDN and RFC 9110 S15.4.3, you might want to use 307 ("Temporary
+ * Redirect") or 303 ("See Other") instead.
+ */
+pub struct HttpResponseFoundNoContent(pub String);
+
+impl HttpCodedResponse for HttpResponseFoundNoContent {
+    type Body = Empty;
+    const STATUS_CODE: StatusCode = StatusCode::FOUND;
+    const DESCRIPTION: &'static str = "redirect (302)";
+}
+
+impl From<HttpResponseFoundNoContent> for HttpHandlerResult {
+    fn from(response: HttpResponseFoundNoContent) -> HttpHandlerResult {
+        const STATUS_CODE: http::StatusCode =
+            <HttpResponseFoundNoContent as HttpCodedResponse>::STATUS_CODE;
+        Empty.to_response(
+            Response::builder()
+                .status(STATUS_CODE)
+                .header(http::header::LOCATION, &response.0),
+        )
+    }
+}
+
+/**
+ * `HttpResponseSeeOtherNoContent` represents an HTTP 303 "See Other" response
+ * with no response body.
+ *
+ * The sole item, a `String`, will become the value of the `Location` header.
+ * This is where you want to redirect the client to.
+ *
+ * Use this (as opposed to 307 "Temporary Redirect") when you want the client to
+ * follow up with a GET, rather than whatever method they used to make the
+ * current request.  This is intended to be used after a PUT or POST to show a
+ * confirmation page or the like.
+ */
+pub struct HttpResponseSeeOtherNoContent(pub String);
+
+impl HttpCodedResponse for HttpResponseSeeOtherNoContent {
+    type Body = Empty;
+    const STATUS_CODE: StatusCode = StatusCode::SEE_OTHER;
+    const DESCRIPTION: &'static str = "redirect (303)";
+}
+
+impl From<HttpResponseSeeOtherNoContent> for HttpHandlerResult {
+    fn from(response: HttpResponseSeeOtherNoContent) -> HttpHandlerResult {
+        const STATUS_CODE: http::StatusCode =
+            <HttpResponseSeeOtherNoContent as HttpCodedResponse>::STATUS_CODE;
+        Empty.to_response(
+            Response::builder()
+                .status(STATUS_CODE)
+                .header(http::header::LOCATION, &response.0),
+        )
+    }
+}
+
+/**
+ * `HttpResponseTemporaryRedirectNoContent` represents an HTTP 307 "Temporary
+ * Redirect" response with no response body.
+ *
+ * The sole item, a `String`, will become the value of the `Location` header.
+ * This is where you want to redirect the client to.
+ *
+ * Use this (as opposed to 303 "See Other") when you want the client to use the
+ * same request method and body when it makes the follow-up request.
+ */
+pub struct HttpResponseTemporaryRedirectNoContent(pub String);
+
+impl HttpCodedResponse for HttpResponseTemporaryRedirectNoContent {
+    type Body = Empty;
+    const STATUS_CODE: StatusCode = StatusCode::SEE_OTHER;
+    const DESCRIPTION: &'static str = "redirect (307)";
+}
+
+impl From<HttpResponseTemporaryRedirectNoContent> for HttpHandlerResult {
+    fn from(
+        response: HttpResponseTemporaryRedirectNoContent,
+    ) -> HttpHandlerResult {
+        const STATUS_CODE: http::StatusCode =
+            <HttpResponseTemporaryRedirectNoContent as
+            HttpCodedResponse>::STATUS_CODE;
+        Empty.to_response(
+            Response::builder()
+                .status(STATUS_CODE)
+                .header(http::header::LOCATION, &response.0),
+        )
+    }
+}
+
 #[derive(Serialize, JsonSchema)]
 pub struct NoHeaders {}
 
