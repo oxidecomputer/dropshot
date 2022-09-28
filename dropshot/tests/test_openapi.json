@@ -285,6 +285,63 @@
         }
       }
     },
+    "/test/302_found": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler21",
+        "responses": {
+          "302": {
+            "description": "redirect (302)"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test/303_see_other": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler22",
+        "responses": {
+          "303": {
+            "description": "redirect (303)"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test/307_temporary_redirect": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler23",
+        "responses": {
+          "307": {
+            "description": "redirect (307)"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/test/camera": {
       "post": {
         "tags": [

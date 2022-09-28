@@ -1512,7 +1512,7 @@ pub struct HttpResponseTemporaryRedirectNoContent(pub String);
 
 impl HttpCodedResponse for HttpResponseTemporaryRedirectNoContent {
     type Body = Empty;
-    const STATUS_CODE: StatusCode = StatusCode::SEE_OTHER;
+    const STATUS_CODE: StatusCode = StatusCode::TEMPORARY_REDIRECT;
     const DESCRIPTION: &'static str = "redirect (307)";
 }
 

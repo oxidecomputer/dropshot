@@ -2,10 +2,11 @@
 
 use dropshot::{
     endpoint, ApiDescription, FreeformBody, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
-    HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
-    Query, RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody,
-    UntypedBody,
+    HttpResponseCreated, HttpResponseDeleted, HttpResponseFoundNoContent,
+    HttpResponseHeaders, HttpResponseOk, HttpResponseSeeOtherNoContent,
+    HttpResponseTemporaryRedirectNoContent, HttpResponseUpdatedNoContent,
+    PaginationParams, Path, Query, RequestContext, ResultsPage, TagConfig,
+    TagDetails, TypedBody, UntypedBody,
 };
 use hyper::Body;
 use schemars::JsonSchema;
@@ -420,6 +421,39 @@ async fn handler20(
     Ok(HttpResponseCreated(Response {}))
 }
 
+#[endpoint {
+    method = GET,
+    path = "/test/302_found",
+    tags = [ "it"],
+}]
+async fn handler21(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseFoundNoContent, HttpError> {
+    Ok(HttpResponseFoundNoContent(String::from("/path1")))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/test/303_see_other",
+    tags = [ "it"],
+}]
+async fn handler22(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseSeeOtherNoContent, HttpError> {
+    Ok(HttpResponseSeeOtherNoContent(String::from("/path2")))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/test/307_temporary_redirect",
+    tags = [ "it"],
+}]
+async fn handler23(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseTemporaryRedirectNoContent, HttpError> {
+    Ok(HttpResponseTemporaryRedirectNoContent(String::from("/path3")))
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -449,6 +483,9 @@ fn make_api(
     api.register(handler18)?;
     api.register(handler19)?;
     api.register(handler20)?;
+    api.register(handler21)?;
+    api.register(handler22)?;
+    api.register(handler23)?;
     Ok(api)
 }
 

@@ -760,7 +760,7 @@ async fn test_302_found() {
         .client_testctx
         .make_request(
             Method::GET,
-            "/testing/test_302_found",
+            "/testing/302_found",
             None as Option<()>,
             StatusCode::FOUND,
         )
@@ -786,7 +786,7 @@ async fn test_303_see_other() {
         .client_testctx
         .make_request(
             Method::GET,
-            "/testing/test_303_see_other",
+            "/testing/303_see_other",
             None as Option<()>,
             StatusCode::SEE_OTHER,
         )
@@ -812,7 +812,7 @@ async fn test_307_temporary_redirect() {
         .client_testctx
         .make_request(
             Method::GET,
-            "/testing/test_307_temporary_redirect",
+            "/testing/307_temporary_redirect",
             None as Option<()>,
             StatusCode::TEMPORARY_REDIRECT,
         )
