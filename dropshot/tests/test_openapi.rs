@@ -1,12 +1,13 @@
 // Copyright 2022 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, FreeformBody, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseFoundNoContent,
-    HttpResponseHeaders, HttpResponseOk, HttpResponseSeeOtherNoContent,
-    HttpResponseTemporaryRedirectNoContent, HttpResponseUpdatedNoContent,
-    PaginationParams, Path, Query, RequestContext, ResultsPage, TagConfig,
-    TagDetails, TypedBody, UntypedBody,
+    endpoint, http_response_found, http_response_see_other,
+    http_response_temporary_redirect, ApiDescription, FreeformBody, HttpError,
+    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
+    HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
+    HttpResponseSeeOther, HttpResponseTemporaryRedirect,
+    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
+    RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
 };
 use hyper::Body;
 use schemars::JsonSchema;
@@ -428,8 +429,8 @@ async fn handler20(
 }]
 async fn handler21(
     _rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseFoundNoContent, HttpError> {
-    Ok(HttpResponseFoundNoContent(String::from("/path1")))
+) -> Result<HttpResponseFound, HttpError> {
+    Ok(http_response_found(http::HeaderValue::from_static("/path1")))
 }
 
 #[endpoint {
@@ -439,8 +440,8 @@ async fn handler21(
 }]
 async fn handler22(
     _rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseSeeOtherNoContent, HttpError> {
-    Ok(HttpResponseSeeOtherNoContent(String::from("/path2")))
+) -> Result<HttpResponseSeeOther, HttpError> {
+    Ok(http_response_see_other(http::HeaderValue::from_static("/path2")))
 }
 
 #[endpoint {
@@ -450,8 +451,10 @@ async fn handler22(
 }]
 async fn handler23(
     _rqctx: Arc<RequestContext<()>>,
-) -> Result<HttpResponseTemporaryRedirectNoContent, HttpError> {
-    Ok(HttpResponseTemporaryRedirectNoContent(String::from("/path3")))
+) -> Result<HttpResponseTemporaryRedirect, HttpError> {
+    Ok(http_response_temporary_redirect(http::HeaderValue::from_static(
+        "/path3",
+    )))
 }
 
 fn make_api(

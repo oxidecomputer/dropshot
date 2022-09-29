@@ -8,11 +8,11 @@ error[E0277]: the trait bound `String: HttpCodedResponse` is not satisfied
              HttpResponseAccepted<T>
              HttpResponseCreated<T>
              HttpResponseDeleted
-             HttpResponseFoundNoContent
              HttpResponseOk<T>
-             HttpResponseSeeOtherNoContent
-             HttpResponseTemporaryRedirectNoContent
              HttpResponseUpdatedNoContent
+             dropshot::handler::HttpResponseFoundStatus
+             dropshot::handler::HttpResponseSeeOtherStatus
+             dropshot::handler::HttpResponseTemporaryRedirectStatus
    = note: required because of the requirements on the impl of `HttpResponse` for `String`
 note: required because of the requirements on the impl of `ResultTrait` for `Result<String, HttpError>`
   --> tests/fail/bad_endpoint12.rs:16:6

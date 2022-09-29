@@ -293,7 +293,17 @@
         "operationId": "handler21",
         "responses": {
           "302": {
-            "description": "redirect (302)"
+            "description": "redirect (302)",
+            "headers": {
+              "location": {
+                "description": "We use `http::HeaderValue` here to reflect that the value has been validated as a header.  This is annoying for us (because `http::HeaderValue` doesn't implement JsonSchema or Serialize) and for callers (because they have to do the conversion and handle the error case).  But it's precise and puts this error handling in the place it should go.",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/String"
+                }
+              }
+            }
           },
           "4XX": {
             "$ref": "#/components/responses/Error"
@@ -312,7 +322,17 @@
         "operationId": "handler22",
         "responses": {
           "303": {
-            "description": "redirect (303)"
+            "description": "redirect (303)",
+            "headers": {
+              "location": {
+                "description": "We use `http::HeaderValue` here to reflect that the value has been validated as a header.  This is annoying for us (because `http::HeaderValue` doesn't implement JsonSchema or Serialize) and for callers (because they have to do the conversion and handle the error case).  But it's precise and puts this error handling in the place it should go.",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/String"
+                }
+              }
+            }
           },
           "4XX": {
             "$ref": "#/components/responses/Error"
@@ -331,7 +351,17 @@
         "operationId": "handler23",
         "responses": {
           "307": {
-            "description": "redirect (307)"
+            "description": "redirect (307)",
+            "headers": {
+              "location": {
+                "description": "We use `http::HeaderValue` here to reflect that the value has been validated as a header.  This is annoying for us (because `http::HeaderValue` doesn't implement JsonSchema or Serialize) and for callers (because they have to do the conversion and handle the error case).  But it's precise and puts this error handling in the place it should go.",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/String"
+                }
+              }
+            }
           },
           "4XX": {
             "$ref": "#/components/responses/Error"
@@ -939,6 +969,9 @@
         "required": [
           "items"
         ]
+      },
+      "String": {
+        "type": "string"
       },
       "Foo": {
         "type": "string"

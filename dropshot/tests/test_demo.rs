@@ -17,6 +17,9 @@
 
 use dropshot::channel;
 use dropshot::endpoint;
+use dropshot::http_response_found;
+use dropshot::http_response_see_other;
+use dropshot::http_response_temporary_redirect;
 use dropshot::test_util::object_delete;
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
@@ -25,11 +28,11 @@ use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
-use dropshot::HttpResponseFoundNoContent;
+use dropshot::HttpResponseFound;
 use dropshot::HttpResponseHeaders;
 use dropshot::HttpResponseOk;
-use dropshot::HttpResponseSeeOtherNoContent;
-use dropshot::HttpResponseTemporaryRedirectNoContent;
+use dropshot::HttpResponseSeeOther;
+use dropshot::HttpResponseTemporaryRedirect;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Path;
 use dropshot::Query;
@@ -1054,8 +1057,8 @@ async fn demo_handler_headers(
 }]
 async fn demo_handler_302_found(
     _rqctx: RequestCtx,
-) -> Result<HttpResponseFoundNoContent, HttpError> {
-    Ok(HttpResponseFoundNoContent(String::from("/path1")))
+) -> Result<HttpResponseFound, HttpError> {
+    Ok(http_response_found(http::HeaderValue::from_static("/path1")))
 }
 
 #[endpoint {
@@ -1064,8 +1067,8 @@ async fn demo_handler_302_found(
 }]
 async fn demo_handler_303_see_other(
     _rqctx: RequestCtx,
-) -> Result<HttpResponseSeeOtherNoContent, HttpError> {
-    Ok(HttpResponseSeeOtherNoContent(String::from("/path2")))
+) -> Result<HttpResponseSeeOther, HttpError> {
+    Ok(http_response_see_other(http::HeaderValue::from_static("/path2")))
 }
 
 #[endpoint {
@@ -1074,8 +1077,10 @@ async fn demo_handler_303_see_other(
 }]
 async fn demo_handler_307_temporary_redirect(
     _rqctx: RequestCtx,
-) -> Result<HttpResponseTemporaryRedirectNoContent, HttpError> {
-    Ok(HttpResponseTemporaryRedirectNoContent(String::from("/path3")))
+) -> Result<HttpResponseTemporaryRedirect, HttpError> {
+    Ok(http_response_temporary_redirect(http::HeaderValue::from_static(
+        "/path3",
+    )))
 }
 
 #[channel {

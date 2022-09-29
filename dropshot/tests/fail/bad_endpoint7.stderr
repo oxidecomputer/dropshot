@@ -13,7 +13,7 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
                (T0, T1, T2, T3)
                (T0, T1, T2, T3, T4)
                (T0, T1, T2, T3, T4, T5)
-             and 219 others
+             and 220 others
      = note: required because of the requirements on the impl of `dropshot::handler::HttpResponseContent` for `Ret`
 note: required by a bound in `HttpResponseOk`
     --> src/handler.rs

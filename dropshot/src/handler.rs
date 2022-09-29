@@ -1436,98 +1436,188 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
     }
 }
 
+/** Describes headers associated with a 300-level response. */
+#[derive(JsonSchema, Serialize)]
+#[doc(hidden)]
+pub struct RedirectHeaders {
+    /**
+     * What type should we use to represent header values?
+     *
+     * It's tempting to use `http::HeaderValue` here.  But in HTTP, header
+     * values can contain bytes that aren't valid Rust strings.  See
+     * `http::header::HeaderValue`.  We could propagate this nonsense all the
+     * way to the OpenAPI spec, encoding the Location header as, say,
+     * base64-encoded bytes.  This sounds really annoying to consumers.  It's
+     * also a fair bit more work to implement.  We'd need to create a separate
+     * type for this field so that we can impl `Serialize` and `JsonSchema` on
+     * it, and we'd need to also impl serialization of byte sequences in
+     * `MapSerializer`.  Ugh.
+     *
+     * We could just use `String`.  This might contain values that aren't valid
+     * in HTTP response headers!  But we can at least validate that at runtime,
+     * and it sure is easier to implement!
+     *
+     *
+     *
+     * We use `http::HeaderValue` here to reflect that the value has been
+     * validated as a header.  This is annoying for us (because
+     * `http::HeaderValue` doesn't implement JsonSchema or Serialize) and for
+     * callers (because they have to do the conversion and handle the error
+     * case).  But it's precise and puts this error handling in the place it
+     * should go.
+     */
+    #[serde(serialize_with = "serialize_http_header_value")]
+    location: SerializedHttpHeaderValue,
+}
+
+struct SerializedHttpHeaderValue(http::HeaderValue);
+
+fn serialize_http_header_value<S: serde::Serializer>(
+    value: &SerializedHttpHeaderValue,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    // Technically, a header value can contain any bytes.
+    let str_value = value.0.to_str().map_err(|error| {
+        serde::ser::Error::custom(format!(
+            "response header contained invalid characters: {:#}",
+            error
+        ))
+    })?;
+    serializer.serialize_str(str_value)
+}
+
+impl JsonSchema for SerializedHttpHeaderValue {
+    fn schema_name() -> String {
+        <String as JsonSchema>::schema_name()
+    }
+
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        <String as JsonSchema>::json_schema(gen)
+    }
+}
+
+/** See `http_response_found()` */
+pub type HttpResponseFound =
+    HttpResponseHeaders<HttpResponseFoundStatus, RedirectHeaders>;
+
 /**
- * `HttpResponseFoundNoContent` represents an HTTP 302 "Found" response with no
- * response body.
+ * `http_response_found` returns an HTTP 302 "Found" response with no response
+ * body.
  *
- * The sole item, a `String`, will become the value of the `Location` header.
- * This is where you want to redirect the client to.
+ * The sole argument will become the value of the `Location` header.  This is
+ * where you want to redirect the client to.
  *
  * Per MDN and RFC 9110 S15.4.3, you might want to use 307 ("Temporary
  * Redirect") or 303 ("See Other") instead.
  */
-pub struct HttpResponseFoundNoContent(pub String);
+pub fn http_response_found(location: http::HeaderValue) -> HttpResponseFound {
+    HttpResponseHeaders::new(
+        HttpResponseFoundStatus,
+        RedirectHeaders { location: SerializedHttpHeaderValue(location) },
+    )
+}
 
-impl HttpCodedResponse for HttpResponseFoundNoContent {
+/**
+ * This internal type impls HttpCodedResponse.  External clients should use
+ * `HttpResponseFound` instead, which includes metadata about the `Location`
+ * header.
+ */
+#[doc(hidden)]
+pub struct HttpResponseFoundStatus;
+impl HttpCodedResponse for HttpResponseFoundStatus {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::FOUND;
     const DESCRIPTION: &'static str = "redirect (302)";
 }
-
-impl From<HttpResponseFoundNoContent> for HttpHandlerResult {
-    fn from(response: HttpResponseFoundNoContent) -> HttpHandlerResult {
-        const STATUS_CODE: http::StatusCode =
-            <HttpResponseFoundNoContent as HttpCodedResponse>::STATUS_CODE;
-        Empty.to_response(
-            Response::builder()
-                .status(STATUS_CODE)
-                .header(http::header::LOCATION, &response.0),
-        )
+impl From<HttpResponseFoundStatus> for HttpHandlerResult {
+    fn from(_: HttpResponseFoundStatus) -> HttpHandlerResult {
+        HttpResponseFoundStatus::for_object(Empty)
     }
 }
 
+/** See `http_response_see_other()` */
+pub type HttpResponseSeeOther =
+    HttpResponseHeaders<HttpResponseSeeOtherStatus, RedirectHeaders>;
+
 /**
- * `HttpResponseSeeOtherNoContent` represents an HTTP 303 "See Other" response
- * with no response body.
+ * `http_response_see_other` returns an HTTP 303 "See Other" response with no
+ * response body.
  *
- * The sole item, a `String`, will become the value of the `Location` header.
- * This is where you want to redirect the client to.
+ * The sole argument will become the value of the `Location` header.  This is
+ * where you want to redirect the client to.
  *
  * Use this (as opposed to 307 "Temporary Redirect") when you want the client to
  * follow up with a GET, rather than whatever method they used to make the
  * current request.  This is intended to be used after a PUT or POST to show a
  * confirmation page or the like.
  */
-pub struct HttpResponseSeeOtherNoContent(pub String);
+pub fn http_response_see_other(
+    location: http::HeaderValue,
+) -> HttpResponseSeeOther {
+    HttpResponseHeaders::new(
+        HttpResponseSeeOtherStatus,
+        RedirectHeaders { location: SerializedHttpHeaderValue(location) },
+    )
+}
 
-impl HttpCodedResponse for HttpResponseSeeOtherNoContent {
+/**
+ * This internal type impls HttpCodedResponse.  External clients should use
+ * `HttpResponseSeeOther` instead, which includes metadata about the `Location`
+ * header.
+ */
+#[doc(hidden)]
+pub struct HttpResponseSeeOtherStatus;
+impl HttpCodedResponse for HttpResponseSeeOtherStatus {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::SEE_OTHER;
     const DESCRIPTION: &'static str = "redirect (303)";
 }
-
-impl From<HttpResponseSeeOtherNoContent> for HttpHandlerResult {
-    fn from(response: HttpResponseSeeOtherNoContent) -> HttpHandlerResult {
-        const STATUS_CODE: http::StatusCode =
-            <HttpResponseSeeOtherNoContent as HttpCodedResponse>::STATUS_CODE;
-        Empty.to_response(
-            Response::builder()
-                .status(STATUS_CODE)
-                .header(http::header::LOCATION, &response.0),
-        )
+impl From<HttpResponseSeeOtherStatus> for HttpHandlerResult {
+    fn from(_: HttpResponseSeeOtherStatus) -> HttpHandlerResult {
+        HttpResponseSeeOtherStatus::for_object(Empty)
     }
 }
 
+/** See `http_response_temporary_redirect()` */
+pub type HttpResponseTemporaryRedirect =
+    HttpResponseHeaders<HttpResponseTemporaryRedirectStatus, RedirectHeaders>;
+
 /**
- * `HttpResponseTemporaryRedirectNoContent` represents an HTTP 307 "Temporary
+ * `http_response_temporary_redirect` represents an HTTP 307 "Temporary
  * Redirect" response with no response body.
  *
- * The sole item, a `String`, will become the value of the `Location` header.
- * This is where you want to redirect the client to.
+ * The sole argument will become the value of the `Location` header.  This is
+ * where you want to redirect the client to.
  *
  * Use this (as opposed to 303 "See Other") when you want the client to use the
  * same request method and body when it makes the follow-up request.
  */
-pub struct HttpResponseTemporaryRedirectNoContent(pub String);
+pub fn http_response_temporary_redirect(
+    location: http::HeaderValue,
+) -> HttpResponseTemporaryRedirect {
+    HttpResponseHeaders::new(
+        HttpResponseTemporaryRedirectStatus,
+        RedirectHeaders { location: SerializedHttpHeaderValue(location) },
+    )
+}
 
-impl HttpCodedResponse for HttpResponseTemporaryRedirectNoContent {
+/**
+ * This internal type impls HttpCodedResponse.  External clients should use
+ * `HttpResponseTemporaryRedirect` instead, which includes metadata about the
+ * `Location` header.
+ */
+#[doc(hidden)]
+pub struct HttpResponseTemporaryRedirectStatus;
+impl HttpCodedResponse for HttpResponseTemporaryRedirectStatus {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::TEMPORARY_REDIRECT;
     const DESCRIPTION: &'static str = "redirect (307)";
 }
-
-impl From<HttpResponseTemporaryRedirectNoContent> for HttpHandlerResult {
-    fn from(
-        response: HttpResponseTemporaryRedirectNoContent,
-    ) -> HttpHandlerResult {
-        const STATUS_CODE: http::StatusCode =
-            <HttpResponseTemporaryRedirectNoContent as
-            HttpCodedResponse>::STATUS_CODE;
-        Empty.to_response(
-            Response::builder()
-                .status(STATUS_CODE)
-                .header(http::header::LOCATION, &response.0),
-        )
+impl From<HttpResponseTemporaryRedirectStatus> for HttpHandlerResult {
+    fn from(_: HttpResponseTemporaryRedirectStatus) -> HttpHandlerResult {
+        HttpResponseTemporaryRedirectStatus::for_object(Empty)
     }
 }
 
