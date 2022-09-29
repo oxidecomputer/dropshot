@@ -96,6 +96,10 @@ features = [ "dangerous_configuration" ]
 version = "0.8.10"
 features = [ "chrono", "uuid1" ]
 
+[dev-dependencies.slog]
+version = "2.5.0"
+features = [ "max_level_trace", "release_max_level_debug" ]
+
 # This is required for the build.rs script to check for an appropriate compiler
 # version so that `usdt` can be built on stable rust.
 [build-dependencies]
