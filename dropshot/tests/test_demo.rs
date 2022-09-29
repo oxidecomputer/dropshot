@@ -759,7 +759,7 @@ async fn test_header_request() {
 async fn test_302_found() {
     let api = demo_api();
     let testctx = common::test_setup("test_302_found", api);
-    let response = testctx
+    let mut response = testctx
         .client_testctx
         .make_request(
             Method::GET,
@@ -776,6 +776,7 @@ async fn test_302_found() {
         .map(|v| v.to_str().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(headers, vec!["/path1"]);
+    assert_eq!(read_string(&mut response).await, "");
 }
 
 /*
@@ -785,7 +786,7 @@ async fn test_302_found() {
 async fn test_303_see_other() {
     let api = demo_api();
     let testctx = common::test_setup("test_303_see_other", api);
-    let response = testctx
+    let mut response = testctx
         .client_testctx
         .make_request(
             Method::GET,
@@ -802,6 +803,7 @@ async fn test_303_see_other() {
         .map(|v| v.to_str().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(headers, vec!["/path2"]);
+    assert_eq!(read_string(&mut response).await, "");
 }
 
 /*
@@ -811,7 +813,7 @@ async fn test_303_see_other() {
 async fn test_307_temporary_redirect() {
     let api = demo_api();
     let testctx = common::test_setup("test_307_temporary_redirect", api);
-    let response = testctx
+    let mut response = testctx
         .client_testctx
         .make_request(
             Method::GET,
@@ -828,6 +830,7 @@ async fn test_307_temporary_redirect() {
         .map(|v| v.to_str().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(headers, vec!["/path3"]);
+    assert_eq!(read_string(&mut response).await, "");
 }
 
 /*
