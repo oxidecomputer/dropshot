@@ -1477,11 +1477,22 @@ pub type HttpResponseFound =
  */
 pub fn http_response_found(
     location: String,
-) -> Result<HttpResponseFound, http::header::InvalidHeaderValue> {
-    let _ = http::HeaderValue::from_str(&location)?;
+) -> Result<HttpResponseFound, HttpError> {
+    let _ = http::HeaderValue::from_str(&location)
+        .map_err(|e| http_redirect_error(e, &location))?;
     Ok(HttpResponseHeaders::new(
         HttpResponseFoundStatus,
         RedirectHeaders { location },
+    ))
+}
+
+fn http_redirect_error(
+    error: http::header::InvalidHeaderValue,
+    location: &str,
+) -> HttpError {
+    HttpError::for_internal_error(format!(
+        "error encoding redirect URL {:?}: {:#}",
+        location, error
     ))
 }
 
@@ -1521,8 +1532,9 @@ pub type HttpResponseSeeOther =
  */
 pub fn http_response_see_other(
     location: String,
-) -> Result<HttpResponseSeeOther, http::header::InvalidHeaderValue> {
-    let _ = http::HeaderValue::from_str(&location)?;
+) -> Result<HttpResponseSeeOther, HttpError> {
+    let _ = http::HeaderValue::from_str(&location)
+        .map_err(|e| http_redirect_error(e, &location))?;
     Ok(HttpResponseHeaders::new(
         HttpResponseSeeOtherStatus,
         RedirectHeaders { location },
@@ -1563,8 +1575,9 @@ pub type HttpResponseTemporaryRedirect =
  */
 pub fn http_response_temporary_redirect(
     location: String,
-) -> Result<HttpResponseTemporaryRedirect, http::header::InvalidHeaderValue> {
-    let _ = http::HeaderValue::from_str(&location)?;
+) -> Result<HttpResponseTemporaryRedirect, HttpError> {
+    let _ = http::HeaderValue::from_str(&location)
+        .map_err(|e| http_redirect_error(e, &location))?;
     Ok(HttpResponseHeaders::new(
         HttpResponseTemporaryRedirectStatus,
         RedirectHeaders { location },

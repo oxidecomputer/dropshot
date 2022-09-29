@@ -74,6 +74,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_untyped_body).unwrap();
     api.register(demo_handler_delete).unwrap();
     api.register(demo_handler_headers).unwrap();
+    api.register(demo_handler_302_bogus).unwrap();
     api.register(demo_handler_302_found).unwrap();
     api.register(demo_handler_303_see_other).unwrap();
     api.register(demo_handler_307_temporary_redirect).unwrap();
@@ -753,6 +754,24 @@ async fn test_header_request() {
 }
 
 /*
+ * Test 302 "Found" response with an invalid header value
+ */
+#[tokio::test]
+async fn test_302_bogus() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_302_bogus", api);
+    let error = testctx
+        .client_testctx
+        .make_request_error(
+            Method::GET,
+            "/testing/302_bogus",
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+        .await;
+    assert_eq!(error.message, "Internal Server Error");
+}
+
+/*
  * Test 302 "Found" response
  */
 #[tokio::test]
@@ -1052,6 +1071,16 @@ async fn demo_handler_headers(
     headers
         .append(TEST_HEADER_2, http::header::HeaderValue::from_static("howdy"));
     Ok(response)
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/302_bogus",
+}]
+async fn demo_handler_302_bogus(
+    _rqctx: RequestCtx,
+) -> Result<HttpResponseFound, HttpError> {
+    http_response_found(String::from("\x10"))
 }
 
 #[endpoint {
