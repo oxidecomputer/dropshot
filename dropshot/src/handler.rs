@@ -1440,7 +1440,8 @@ impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
 #[derive(JsonSchema, Serialize)]
 #[doc(hidden)]
 pub struct RedirectHeaders {
-    /**
+    /** HTTP "Location" header */
+    /*
      * What type should we use to represent header values?
      *
      * It's tempting to use `http::HeaderValue` here.  But in HTTP, header

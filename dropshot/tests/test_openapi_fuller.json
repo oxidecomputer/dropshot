@@ -304,7 +304,7 @@
             "description": "redirect (302)",
             "headers": {
               "location": {
-                "description": "What type should we use to represent header values?\n\nIt's tempting to use `http::HeaderValue` here.  But in HTTP, header values can contain bytes that aren't valid Rust strings.  See `http::header::HeaderValue`.  We could propagate this nonsense all the way to the OpenAPI spec, encoding the Location header as, say, base64-encoded bytes.  This sounds really annoying to consumers.  It's also a fair bit more work to implement.  We'd need to create a separate type for this field so that we can impl `Serialize` and `JsonSchema` on it, and we'd need to also impl serialization of byte sequences in `MapSerializer`.  Ugh.\n\nWe just use `String`.  This might contain values that aren't valid in HTTP response headers.  But we can at least validate that at runtime, and it sure is easier to implement!",
+                "description": "HTTP \"Location\" header",
                 "style": "simple",
                 "required": true,
                 "schema": {
@@ -333,7 +333,7 @@
             "description": "redirect (303)",
             "headers": {
               "location": {
-                "description": "What type should we use to represent header values?\n\nIt's tempting to use `http::HeaderValue` here.  But in HTTP, header values can contain bytes that aren't valid Rust strings.  See `http::header::HeaderValue`.  We could propagate this nonsense all the way to the OpenAPI spec, encoding the Location header as, say, base64-encoded bytes.  This sounds really annoying to consumers.  It's also a fair bit more work to implement.  We'd need to create a separate type for this field so that we can impl `Serialize` and `JsonSchema` on it, and we'd need to also impl serialization of byte sequences in `MapSerializer`.  Ugh.\n\nWe just use `String`.  This might contain values that aren't valid in HTTP response headers.  But we can at least validate that at runtime, and it sure is easier to implement!",
+                "description": "HTTP \"Location\" header",
                 "style": "simple",
                 "required": true,
                 "schema": {
@@ -362,7 +362,7 @@
             "description": "redirect (307)",
             "headers": {
               "location": {
-                "description": "What type should we use to represent header values?\n\nIt's tempting to use `http::HeaderValue` here.  But in HTTP, header values can contain bytes that aren't valid Rust strings.  See `http::header::HeaderValue`.  We could propagate this nonsense all the way to the OpenAPI spec, encoding the Location header as, say, base64-encoded bytes.  This sounds really annoying to consumers.  It's also a fair bit more work to implement.  We'd need to create a separate type for this field so that we can impl `Serialize` and `JsonSchema` on it, and we'd need to also impl serialization of byte sequences in `MapSerializer`.  Ugh.\n\nWe just use `String`.  This might contain values that aren't valid in HTTP response headers.  But we can at least validate that at runtime, and it sure is easier to implement!",
+                "description": "HTTP \"Location\" header",
                 "style": "simple",
                 "required": true,
                 "schema": {
