@@ -3,7 +3,7 @@
  * Interface for implementing HTTP endpoint handler functions.
  *
  * For information about supported endpoint function signatures, argument types,
- * extractors, and return types, see the top-level documentation dependencies: () for this crate.
+ * extractors, and return types, see the top-level documentation for this crate.
  * As documented there, we support several different sets of function arguments
  * and return types.
  *
@@ -1497,7 +1497,7 @@ fn http_redirect_error(
 }
 
 /**
- * This internal type impls HttpCodedResponse.  External clients should use
+ * This internal type impls HttpCodedResponse.  Consumers should use
  * `HttpResponseFound` instead, which includes metadata about the `Location`
  * header.
  */
@@ -1506,7 +1506,7 @@ pub struct HttpResponseFoundStatus;
 impl HttpCodedResponse for HttpResponseFoundStatus {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::FOUND;
-    const DESCRIPTION: &'static str = "redirect (302)";
+    const DESCRIPTION: &'static str = "redirect (found)";
 }
 impl From<HttpResponseFoundStatus> for HttpHandlerResult {
     fn from(_: HttpResponseFoundStatus) -> HttpHandlerResult {
@@ -1542,7 +1542,7 @@ pub fn http_response_see_other(
 }
 
 /**
- * This internal type impls HttpCodedResponse.  External clients should use
+ * This internal type impls HttpCodedResponse.  Consumers should use
  * `HttpResponseSeeOther` instead, which includes metadata about the `Location`
  * header.
  */
@@ -1551,7 +1551,7 @@ pub struct HttpResponseSeeOtherStatus;
 impl HttpCodedResponse for HttpResponseSeeOtherStatus {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::SEE_OTHER;
-    const DESCRIPTION: &'static str = "redirect (303)";
+    const DESCRIPTION: &'static str = "redirect (see other)";
 }
 impl From<HttpResponseSeeOtherStatus> for HttpHandlerResult {
     fn from(_: HttpResponseSeeOtherStatus) -> HttpHandlerResult {
@@ -1585,7 +1585,7 @@ pub fn http_response_temporary_redirect(
 }
 
 /**
- * This internal type impls HttpCodedResponse.  External clients should use
+ * This internal type impls HttpCodedResponse.  Consumers should use
  * `HttpResponseTemporaryRedirect` instead, which includes metadata about the
  * `Location` header.
  */
@@ -1594,7 +1594,7 @@ pub struct HttpResponseTemporaryRedirectStatus;
 impl HttpCodedResponse for HttpResponseTemporaryRedirectStatus {
     type Body = Empty;
     const STATUS_CODE: StatusCode = StatusCode::TEMPORARY_REDIRECT;
-    const DESCRIPTION: &'static str = "redirect (307)";
+    const DESCRIPTION: &'static str = "redirect (temporary redirect)";
 }
 impl From<HttpResponseTemporaryRedirectStatus> for HttpHandlerResult {
     fn from(_: HttpResponseTemporaryRedirectStatus) -> HttpHandlerResult {

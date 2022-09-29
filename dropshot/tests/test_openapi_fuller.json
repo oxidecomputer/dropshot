@@ -301,7 +301,7 @@
         "operationId": "handler21",
         "responses": {
           "302": {
-            "description": "redirect (302)",
+            "description": "redirect (found)",
             "headers": {
               "location": {
                 "description": "HTTP \"Location\" header",
@@ -330,7 +330,7 @@
         "operationId": "handler22",
         "responses": {
           "303": {
-            "description": "redirect (303)",
+            "description": "redirect (see other)",
             "headers": {
               "location": {
                 "description": "HTTP \"Location\" header",
@@ -359,7 +359,7 @@
         "operationId": "handler23",
         "responses": {
           "307": {
-            "description": "redirect (307)",
+            "description": "redirect (temporary redirect)",
             "headers": {
               "location": {
                 "description": "HTTP \"Location\" header",
