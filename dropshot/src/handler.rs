@@ -1453,49 +1453,11 @@ pub struct RedirectHeaders {
      * it, and we'd need to also impl serialization of byte sequences in
      * `MapSerializer`.  Ugh.
      *
-     * We could just use `String`.  This might contain values that aren't valid
-     * in HTTP response headers!  But we can at least validate that at runtime,
-     * and it sure is easier to implement!
-     *
-     *
-     *
-     * We use `http::HeaderValue` here to reflect that the value has been
-     * validated as a header.  This is annoying for us (because
-     * `http::HeaderValue` doesn't implement JsonSchema or Serialize) and for
-     * callers (because they have to do the conversion and handle the error
-     * case).  But it's precise and puts this error handling in the place it
-     * should go.
+     * We just use `String`.  This might contain values that aren't valid in
+     * HTTP response headers.  But we can at least validate that at runtime, and
+     * it sure is easier to implement!
      */
-    #[serde(serialize_with = "serialize_http_header_value")]
-    location: SerializedHttpHeaderValue,
-}
-
-struct SerializedHttpHeaderValue(http::HeaderValue);
-
-fn serialize_http_header_value<S: serde::Serializer>(
-    value: &SerializedHttpHeaderValue,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    // Technically, a header value can contain any bytes.
-    let str_value = value.0.to_str().map_err(|error| {
-        serde::ser::Error::custom(format!(
-            "response header contained invalid characters: {:#}",
-            error
-        ))
-    })?;
-    serializer.serialize_str(str_value)
-}
-
-impl JsonSchema for SerializedHttpHeaderValue {
-    fn schema_name() -> String {
-        <String as JsonSchema>::schema_name()
-    }
-
-    fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        <String as JsonSchema>::json_schema(gen)
-    }
+    location: String,
 }
 
 /** See `http_response_found()` */
@@ -1512,11 +1474,14 @@ pub type HttpResponseFound =
  * Per MDN and RFC 9110 S15.4.3, you might want to use 307 ("Temporary
  * Redirect") or 303 ("See Other") instead.
  */
-pub fn http_response_found(location: http::HeaderValue) -> HttpResponseFound {
-    HttpResponseHeaders::new(
+pub fn http_response_found(
+    location: String,
+) -> Result<HttpResponseFound, http::header::InvalidHeaderValue> {
+    let _ = http::HeaderValue::from_str(&location)?;
+    Ok(HttpResponseHeaders::new(
         HttpResponseFoundStatus,
-        RedirectHeaders { location: SerializedHttpHeaderValue(location) },
-    )
+        RedirectHeaders { location },
+    ))
 }
 
 /**
@@ -1554,12 +1519,13 @@ pub type HttpResponseSeeOther =
  * confirmation page or the like.
  */
 pub fn http_response_see_other(
-    location: http::HeaderValue,
-) -> HttpResponseSeeOther {
-    HttpResponseHeaders::new(
+    location: String,
+) -> Result<HttpResponseSeeOther, http::header::InvalidHeaderValue> {
+    let _ = http::HeaderValue::from_str(&location)?;
+    Ok(HttpResponseHeaders::new(
         HttpResponseSeeOtherStatus,
-        RedirectHeaders { location: SerializedHttpHeaderValue(location) },
-    )
+        RedirectHeaders { location },
+    ))
 }
 
 /**
@@ -1595,12 +1561,13 @@ pub type HttpResponseTemporaryRedirect =
  * same request method and body when it makes the follow-up request.
  */
 pub fn http_response_temporary_redirect(
-    location: http::HeaderValue,
-) -> HttpResponseTemporaryRedirect {
-    HttpResponseHeaders::new(
+    location: String,
+) -> Result<HttpResponseTemporaryRedirect, http::header::InvalidHeaderValue> {
+    let _ = http::HeaderValue::from_str(&location)?;
+    Ok(HttpResponseHeaders::new(
         HttpResponseTemporaryRedirectStatus,
-        RedirectHeaders { location: SerializedHttpHeaderValue(location) },
-    )
+        RedirectHeaders { location },
+    ))
 }
 
 /**

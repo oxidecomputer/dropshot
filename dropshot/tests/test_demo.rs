@@ -1058,7 +1058,7 @@ async fn demo_handler_headers(
 async fn demo_handler_302_found(
     _rqctx: RequestCtx,
 ) -> Result<HttpResponseFound, HttpError> {
-    Ok(http_response_found(http::HeaderValue::from_static("/path1")))
+    Ok(http_response_found(String::from("/path1")).unwrap())
 }
 
 #[endpoint {
@@ -1068,7 +1068,7 @@ async fn demo_handler_302_found(
 async fn demo_handler_303_see_other(
     _rqctx: RequestCtx,
 ) -> Result<HttpResponseSeeOther, HttpError> {
-    Ok(http_response_see_other(http::HeaderValue::from_static("/path2")))
+    Ok(http_response_see_other(String::from("/path2")).unwrap())
 }
 
 #[endpoint {
@@ -1078,9 +1078,7 @@ async fn demo_handler_303_see_other(
 async fn demo_handler_307_temporary_redirect(
     _rqctx: RequestCtx,
 ) -> Result<HttpResponseTemporaryRedirect, HttpError> {
-    Ok(http_response_temporary_redirect(http::HeaderValue::from_static(
-        "/path3",
-    )))
+    Ok(http_response_temporary_redirect(String::from("/path3")).unwrap())
 }
 
 #[channel {

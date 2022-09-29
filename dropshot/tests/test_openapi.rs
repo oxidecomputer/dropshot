@@ -430,7 +430,7 @@ async fn handler20(
 async fn handler21(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseFound, HttpError> {
-    Ok(http_response_found(http::HeaderValue::from_static("/path1")))
+    Ok(http_response_found(String::from("/path1")).unwrap())
 }
 
 #[endpoint {
@@ -441,7 +441,7 @@ async fn handler21(
 async fn handler22(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseSeeOther, HttpError> {
-    Ok(http_response_see_other(http::HeaderValue::from_static("/path2")))
+    Ok(http_response_see_other(String::from("/path2")).unwrap())
 }
 
 #[endpoint {
@@ -452,9 +452,7 @@ async fn handler22(
 async fn handler23(
     _rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseTemporaryRedirect, HttpError> {
-    Ok(http_response_temporary_redirect(http::HeaderValue::from_static(
-        "/path3",
-    )))
+    Ok(http_response_temporary_redirect(String::from("/path3")).unwrap())
 }
 
 fn make_api(
