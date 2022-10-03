@@ -293,6 +293,93 @@
         }
       }
     },
+    "/test/302_found": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler21",
+        "responses": {
+          "302": {
+            "description": "redirect (found)",
+            "headers": {
+              "location": {
+                "description": "HTTP \"Location\" header",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test/303_see_other": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler22",
+        "responses": {
+          "303": {
+            "description": "redirect (see other)",
+            "headers": {
+              "location": {
+                "description": "HTTP \"Location\" header",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test/307_temporary_redirect": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler23",
+        "responses": {
+          "307": {
+            "description": "redirect (temporary redirect)",
+            "headers": {
+              "location": {
+                "description": "HTTP \"Location\" header",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/test/camera": {
       "post": {
         "tags": [
