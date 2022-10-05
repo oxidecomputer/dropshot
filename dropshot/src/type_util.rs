@@ -7,7 +7,9 @@
 use std::collections::HashSet;
 
 use indexmap::IndexMap;
-use schemars::schema::{InstanceType, Schema, SchemaObject, SingleOrVec};
+use schemars::schema::{
+    InstanceType, Schema, SchemaObject, SingleOrVec, SubschemaValidation,
+};
 
 /**
  * Returns true iff the input schema is a boolean, floating-point number,
@@ -54,12 +56,12 @@ fn type_is_scalar_common(
     /* Make sure we're examining a type and not a reference */
     let schema = type_resolve(schema, dependencies);
 
-    /*
-     * We're looking for types that have no subschemas, are not arrays, are not
-     * objects, are not references, and whose instance type matches the limited
-     * set of scalar types.
-     */
     match schema {
+        /*
+         * Types that have no subschemas, are not arrays, are not objects, are
+         * not references, and whose instance type matches the limited set of
+         * scalar types.
+         */
         Schema::Object(SchemaObject {
             instance_type: Some(SingleOrVec::Single(instance_type)),
             subschemas: None,
@@ -68,7 +70,88 @@ fn type_is_scalar_common(
             reference: None,
             ..
         }) if type_check(instance_type.as_ref()) => Ok(()),
+
+        /*
+         * Handle subschemas.
+         */
+        Schema::Object(SchemaObject {
+            instance_type: None,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: Some(subschemas),
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: None,
+            ..
+        }) if type_is_scalar_subschemas(
+            name,
+            subschemas,
+            dependencies,
+            type_check,
+        ) =>
+        {
+            Ok(())
+        }
+
         _ => Err(format!("the parameter '{}' must have a scalar type", name)),
+    }
+}
+
+/**
+ * Determine if a collection of subschemas are scalar (and meet the criteria of
+ * the `type_check` parameter). For `allOf` and `anyOf` subschemas, we proceed
+ * only if there is a lone subschema which we check recursively. For `oneOf`
+ * subschemas, we check that each subschema is scalar.
+ */
+fn type_is_scalar_subschemas(
+    name: &String,
+    subschemas: &SubschemaValidation,
+    dependencies: &IndexMap<String, Schema>,
+    type_check: fn(&InstanceType) -> bool,
+) -> bool {
+    match subschemas {
+        SubschemaValidation {
+            all_of: Some(subs),
+            any_of: None,
+            one_of: None,
+            not: None,
+            if_schema: None,
+            then_schema: None,
+            else_schema: None,
+        }
+        | SubschemaValidation {
+            all_of: None,
+            any_of: Some(subs),
+            one_of: None,
+            not: None,
+            if_schema: None,
+            then_schema: None,
+            else_schema: None,
+        } if subs.len() == 1 => type_is_scalar_common(
+            name,
+            subs.first().unwrap(),
+            dependencies,
+            type_check,
+        )
+        .is_ok(),
+
+        SubschemaValidation {
+            all_of: None,
+            any_of: None,
+            one_of: Some(subs),
+            not: None,
+            if_schema: None,
+            then_schema: None,
+            else_schema: None,
+        } => subs.iter().all(|schema| {
+            type_is_scalar_common(name, schema, dependencies, type_check)
+                .is_ok()
+        }),
+
+        _ => false,
     }
 }
 
