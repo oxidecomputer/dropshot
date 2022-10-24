@@ -12,7 +12,7 @@ categories = ["network-programming", "web-programming::http-server"]
 
 [dependencies]
 async-stream = "0.3.3"
-async-trait = "0.1.57"
+async-trait = "0.1.58"
 base64 = "0.13.1"
 bytes = "1"
 futures = "0.3.25"
