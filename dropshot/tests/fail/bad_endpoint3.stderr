@@ -28,17 +28,18 @@ note: required by a bound in `need_extractor`
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(Arc<RequestContext<()>>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
-  --> tests/fail/bad_endpoint3.rs:11:1
+  --> tests/fail/bad_endpoint3.rs:15:10
    |
 11 | / #[endpoint {
 12 | |     method = GET,
 13 | |     path = "/test",
 14 | | }]
-   | |__^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for `fn(Arc<RequestContext<()>>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}`
+   | |__- required by a bound introduced by this call
+15 |   async fn bad_endpoint(
+   |            ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(Arc<RequestContext<()>>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}`
    |
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
    |
    |         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`
-   = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
