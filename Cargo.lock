@@ -1337,9 +1337,9 @@ dependencies = [
 
 [[package]]
 name = "serde_tokenstream"
-version = "0.1.3"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6deb15c3a535e81438110111d90168d91721652f502abb147f31cde129f683d"
+checksum = "2794f0ba0179a8ca422c30d9975d86faf8306be0164bfc3b0b1ca4f060ac639d"
 dependencies = [
  "proc-macro2",
  "serde",
