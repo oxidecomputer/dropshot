@@ -57,7 +57,7 @@ version = "1.19"
 features = [ "full" ]
 
 [dependencies.usdt]
-version = "0.3.2"
+version = "0.3.4"
 optional = true
 default-features = false
 
