@@ -320,7 +320,7 @@ dependencies = [
  "tokio-tungstenite",
  "toml",
  "trybuild",
- "tungstenite",
+ "tungstenite 0.18.0",
  "usdt",
  "uuid",
  "version_check",
@@ -1686,7 +1686,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite",
+ "tungstenite 0.17.3",
 ]
 
 [[package]]
@@ -1773,6 +1773,25 @@ dependencies = [
  "log",
  "rand",
  "sha-1 0.10.0",
+ "thiserror",
+ "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
+dependencies = [
+ "base64",
+ "byteorder",
+ "bytes",
+ "http",
+ "httparse",
+ "log",
+ "rand",
+ "sha1",
  "thiserror",
  "url",
  "utf-8",
