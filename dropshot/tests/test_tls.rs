@@ -267,7 +267,7 @@ async fn test_tls_refresh_certificates() {
     };
 
     // Refresh the server to use the new certificate chain.
-    server.refresh_tls(&config).await;
+    server.refresh_tls(&config).await.unwrap();
 
     // Client requests which have already been accepted should succeed.
     https_client.request(https_request_maker()).await.unwrap();

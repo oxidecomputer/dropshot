@@ -565,12 +565,17 @@ impl<C: ServerContext> HttpServer<C> {
     }
 
     /// Update TLS certificates for a running HTTPS server.
-    pub async fn refresh_tls(&self, config: &ConfigTls) {
-        if let Some(acceptor) = &self.app_state.tls_acceptor {
-            *acceptor.lock().await = TlsAcceptor::from(Arc::new(
-                rustls::ServerConfig::try_from(config).unwrap(),
-            ));
-        }
+    pub async fn refresh_tls(&self, config: &ConfigTls) -> Result<(), String> {
+        let acceptor = &self
+            .app_state
+            .tls_acceptor
+            .as_ref()
+            .ok_or_else(|| "Not configured for TLS".to_string())?;
+
+        *acceptor.lock().await = TlsAcceptor::from(Arc::new(
+            rustls::ServerConfig::try_from(config).unwrap(),
+        ));
+        Ok(())
     }
 
     /**
