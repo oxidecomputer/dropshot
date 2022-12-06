@@ -377,7 +377,7 @@ impl ProjectCollection {
             let name = format!("project{:03}", n);
             let project = Arc::new(Project {
                 name: name.clone(),
-                mtime: Utc.timestamp_millis(timestamp),
+                mtime: Utc.timestamp_millis_opt(timestamp).unwrap(),
             });
             /*
              * To make this dataset at least somewhat interesting in terms of

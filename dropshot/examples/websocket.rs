@@ -16,8 +16,8 @@ use futures::SinkExt;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::sync::Arc;
-use tungstenite::protocol::Role;
-use tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::Role;
+use tokio_tungstenite::tungstenite::Message;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

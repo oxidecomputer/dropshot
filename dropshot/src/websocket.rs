@@ -211,7 +211,7 @@ impl WebsocketUpgrade {
               slog::info!(logger, "Entered handler for ID {}", id.into_inner());
               use futures::stream::StreamExt;
               let mut ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
-                  upgraded.into_inner(), tungstenite::protocol::Role::Server, None
+                  upgraded.into_inner(), tokio_tungstenite::tungstenite::protocol::Role::Server, None
               ).await;
               slog::info!(logger, "Received from websocket: {:?}", ws_stream.next().await);
               Ok(())
