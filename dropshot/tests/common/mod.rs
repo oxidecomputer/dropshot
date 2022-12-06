@@ -43,43 +43,91 @@ pub fn create_log_context(test_name: &str) -> LogContext {
     LogContext::new(test_name, &log_config)
 }
 
+pub struct TestCertificateChain {
+    root_cert: rustls::Certificate,
+    intermediate_cert: rustls::Certificate,
+    intermediate_keypair: rcgen::Certificate,
+    end_cert: rustls::Certificate,
+    end_keypair: rcgen::Certificate,
+}
+
+impl TestCertificateChain {
+    pub fn new() -> Self {
+        let mut root_params = rcgen::CertificateParams::new(vec![]);
+        root_params.is_ca =
+            rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let root_keypair = rcgen::Certificate::from_params(root_params)
+            .expect("failed to generate root keys");
+
+        let mut intermediate_params = rcgen::CertificateParams::new(vec![]);
+        intermediate_params.is_ca =
+            rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let intermediate_keypair =
+            rcgen::Certificate::from_params(intermediate_params)
+                .expect("failed to generate intermediate keys");
+
+        let end_keypair = rcgen::Certificate::from_params(
+            rcgen::CertificateParams::new(vec!["localhost".into()]),
+        )
+        .expect("failed to generate end-entity keys");
+
+        let root_cert = rustls::Certificate(
+            root_keypair
+                .serialize_der()
+                .expect("failed to serialize root cert"),
+        );
+        let intermediate_cert = rustls::Certificate(
+            intermediate_keypair
+                .serialize_der_with_signer(&root_keypair)
+                .expect("failed to serialize intermediate cert"),
+        );
+        let end_cert = rustls::Certificate(
+            end_keypair
+                .serialize_der_with_signer(&intermediate_keypair)
+                .expect("failed to serialize end-entity cert"),
+        );
+
+        Self {
+            root_cert,
+            intermediate_cert,
+            intermediate_keypair,
+            end_cert,
+            end_keypair,
+        }
+    }
+
+    pub fn end_cert_private_key(&self) -> rustls::PrivateKey {
+        rustls::PrivateKey(self.end_keypair.serialize_private_key_der())
+    }
+
+    pub fn cert_chain(&self) -> Vec<rustls::Certificate> {
+        vec![
+            self.end_cert.clone(),
+            self.intermediate_cert.clone(),
+            self.root_cert.clone(),
+        ]
+    }
+
+    pub fn generate_new_end_cert(&mut self) {
+        let end_keypair = rcgen::Certificate::from_params(
+            rcgen::CertificateParams::new(vec!["localhost".into()]),
+        )
+        .expect("failed to generate end-entity keys");
+        let end_cert = rustls::Certificate(
+            end_keypair
+                .serialize_der_with_signer(&self.intermediate_keypair)
+                .expect("failed to serialize end-entity cert"),
+        );
+        self.end_keypair = end_keypair;
+        self.end_cert = end_cert;
+    }
+}
+
 /// Generate a TLS key and a certificate chain containing a certificate for
 /// the key, an intermediate cert, and a self-signed root cert.
 pub fn generate_tls_key() -> (Vec<rustls::Certificate>, rustls::PrivateKey) {
-    let mut root_params = rcgen::CertificateParams::new(vec![]);
-    root_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
-    let root_keypair = rcgen::Certificate::from_params(root_params)
-        .expect("failed to generate root keys");
-
-    let mut intermediate_params = rcgen::CertificateParams::new(vec![]);
-    intermediate_params.is_ca =
-        rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
-    let intermediate_keypair =
-        rcgen::Certificate::from_params(intermediate_params)
-            .expect("failed to generate intermediate keys");
-
-    let end_keypair =
-        rcgen::Certificate::from_params(rcgen::CertificateParams::new(vec![
-            "localhost".into(),
-        ]))
-        .expect("failed to generate end-entity keys");
-
-    let root_cert = rustls::Certificate(
-        root_keypair.serialize_der().expect("failed to serialize root cert"),
-    );
-    let intermediate_cert = rustls::Certificate(
-        intermediate_keypair
-            .serialize_der_with_signer(&root_keypair)
-            .expect("failed to serialize intermediate cert"),
-    );
-    let end_cert = rustls::Certificate(
-        end_keypair
-            .serialize_der_with_signer(&intermediate_keypair)
-            .expect("failed to serialize end-entity cert"),
-    );
-
-    let key = rustls::PrivateKey(end_keypair.serialize_private_key_der());
-    (vec![end_cert, intermediate_cert, root_cert], key)
+    let ca = TestCertificateChain::new();
+    (ca.cert_chain(), ca.end_cert_private_key())
 }
 
 fn make_temp_file() -> std::io::Result<NamedTempFile> {

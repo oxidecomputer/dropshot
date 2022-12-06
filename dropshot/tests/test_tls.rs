@@ -195,6 +195,96 @@ async fn test_tls_only() {
 }
 
 #[tokio::test]
+async fn test_tls_refresh_certificates() {
+    let logctx = create_log_context("test_tls_refresh_certificates");
+    let log = logctx.log.new(o!());
+
+    // Generate key for the server
+    let ca = common::TestCertificateChain::new();
+    let (certs, key) = (ca.cert_chain(), ca.end_cert_private_key());
+    let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
+
+    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let port = server.local_addr().port();
+
+    let https_uri: hyper::Uri =
+        format!("https://localhost:{}/", port).parse().unwrap();
+
+    let https_request_maker = || {
+        hyper::Request::builder()
+            .method(http::method::Method::GET)
+            .uri(&https_uri)
+            .body(hyper::Body::empty())
+            .unwrap()
+    };
+
+    let make_cert_verifier = |certs: Vec<rustls::Certificate>| {
+        CertificateVerifier(Box::new(
+            move |end_entity: &rustls::Certificate,
+                  intermediates: &[rustls::Certificate],
+                  server_name: &rustls::ServerName,
+                  _scts: &mut dyn Iterator<Item = &[u8]>,
+                  _ocsp_response: &[u8],
+                  _now: SystemTime|
+                  -> Result<
+                rustls::client::ServerCertVerified,
+                rustls::Error,
+            > {
+                // Verify we're seeing the right cert chain from the server
+                if *end_entity != certs[0] {
+                    return Err(rustls::Error::InvalidCertificateData(
+                        "Invalid end cert".to_string(),
+                    ));
+                }
+                if intermediates != &certs[1..3] {
+                    return Err(rustls::Error::InvalidCertificateData(
+                        "Invalid intermediates".to_string(),
+                    ));
+                }
+                if *server_name
+                    != rustls::ServerName::try_from("localhost").unwrap()
+                {
+                    return Err(rustls::Error::InvalidCertificateData(
+                        "Invalid name".to_string(),
+                    ));
+                }
+                Ok(rustls::client::ServerCertVerified::assertion())
+            },
+        ))
+    };
+
+    // Make an HTTPS request successfully with the original certificate chain.
+    let https_client = make_https_client(make_cert_verifier(certs.clone()));
+    https_client.request(https_request_maker()).await.unwrap();
+
+    // Create a brand new certificate chain.
+    let ca = common::TestCertificateChain::new();
+    let (new_certs, new_key) = (ca.cert_chain(), ca.end_cert_private_key());
+    let (cert_file, key_file) = common::tls_key_to_file(&new_certs, &new_key);
+    let config = ConfigTls {
+        cert_file: cert_file.path().to_path_buf(),
+        key_file: key_file.path().to_path_buf(),
+    };
+
+    // Refresh the server to use the new certificate chain.
+    server.refresh_tls(&config).await;
+
+    // Client requests which have already been accepted should succeed.
+    https_client.request(https_request_maker()).await.unwrap();
+
+    // New client requests using the old certificate chain should fail.
+    let https_client = make_https_client(make_cert_verifier(certs.clone()));
+    https_client.request(https_request_maker()).await.unwrap_err();
+
+    // New client requests using the new certificate chain should succeed.
+    let https_client = make_https_client(make_cert_verifier(new_certs.clone()));
+    https_client.request(https_request_maker()).await.unwrap();
+
+    server.close().await.unwrap();
+    logctx.cleanup_successful();
+}
+
+#[tokio::test]
 async fn test_tls_aborted_negotiation() {
     let logctx = create_log_context("test_tls_aborted_negotiation");
     let log = logctx.log.new(o!());
@@ -261,7 +351,7 @@ async fn tls_check_handler(
     rqctx: Arc<dropshot::RequestContext<usize>>,
     query: dropshot::Query<TlsCheckArgs>,
 ) -> Result<HttpResponseOk<()>, dropshot::HttpError> {
-    if rqctx.server.tls != query.into_inner().tls {
+    if rqctx.server.using_tls() != query.into_inner().tls {
         return Err(dropshot::HttpError::for_bad_request(
             None,
             "mismatch between expected and actual tls state".to_string(),
