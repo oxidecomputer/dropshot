@@ -102,12 +102,14 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 ///     method = { DELETE | GET | OPTIONS | PATCH | POST | PUT },
 ///     path = "/path/name/with/{named}/{variables}",
 ///
-///     // Optional tags for the API description
+///     // Optional tags for the operation's description
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
-///     // A value of `true` causes the API to be omitted from the API description
-///     unpublished = { true | false },
 ///     // Specifies the media type used to encode the request body
 ///     content_type = { "application/json" | "application/x-www-form-urlencoded" }
+///     // A value of `true` marks the operation as deprecated
+///     deprecated = { true | false },
+///     // A value of `true` causes the operation to be omitted from the API description
+///     unpublished = { true | false },
 /// }]
 /// ```
 ///
