@@ -134,27 +134,47 @@ fn make_temp_file() -> std::io::Result<NamedTempFile> {
     tempfile::Builder::new().prefix("dropshot-test-").rand_bytes(5).tempfile()
 }
 
+pub fn tls_key_to_buffer(
+    certs: &Vec<rustls::Certificate>,
+    key: &rustls::PrivateKey,
+) -> (Vec<u8>, Vec<u8>) {
+    let mut serialized_certs = vec![];
+    let mut cert_writer = std::io::BufWriter::new(&mut serialized_certs);
+    for cert in certs {
+        let encoded_cert = pem::encode(&pem::Pem {
+            tag: "CERTIFICATE".to_string(),
+            contents: cert.0.clone(),
+        });
+        cert_writer
+            .write(encoded_cert.as_bytes())
+            .expect("failed to serialize cert");
+    }
+    drop(cert_writer);
+
+    let mut serialized_key = vec![];
+    let mut key_writer = std::io::BufWriter::new(&mut serialized_key);
+    let encoded_key = pem::encode(&pem::Pem {
+        tag: "PRIVATE KEY".to_string(),
+        contents: key.0.clone(),
+    });
+    key_writer.write(encoded_key.as_bytes()).expect("failed to serialize key");
+    drop(key_writer);
+
+    (serialized_certs, serialized_key)
+}
+
 /// Write keys to a temporary file for passing to the server config
 pub fn tls_key_to_file(
     certs: &Vec<rustls::Certificate>,
     key: &rustls::PrivateKey,
 ) -> (NamedTempFile, NamedTempFile) {
     let mut cert_file = make_temp_file().expect("failed to create cert_file");
-    for cert in certs {
-        let encoded_cert = pem::encode(&pem::Pem {
-            tag: "CERTIFICATE".to_string(),
-            contents: cert.0.clone(),
-        });
-        cert_file
-            .write(encoded_cert.as_bytes())
-            .expect("failed to write cert_file");
-    }
-
     let mut key_file = make_temp_file().expect("failed to create key_file");
-    let encoded_key = pem::encode(&pem::Pem {
-        tag: "PRIVATE KEY".to_string(),
-        contents: key.0.clone(),
-    });
-    key_file.write(encoded_key.as_bytes()).expect("failed to write key_file");
+
+    let (certs, key) = tls_key_to_buffer(certs, key);
+
+    cert_file.write(certs.as_slice()).expect("Failed to write certs");
+    key_file.write(key.as_slice()).expect("Failed to write key");
+
     (cert_file, key_file)
 }

@@ -73,7 +73,7 @@ fn make_server(
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        tls: Some(ConfigTls {
+        tls: Some(ConfigTls::AsFile {
             cert_file: cert_file.to_path_buf(),
             key_file: key_file.to_path_buf(),
         }),
@@ -261,7 +261,7 @@ async fn test_tls_refresh_certificates() {
     let ca = common::TestCertificateChain::new();
     let (new_certs, new_key) = (ca.cert_chain(), ca.end_cert_private_key());
     let (cert_file, key_file) = common::tls_key_to_file(&new_certs, &new_key);
-    let config = ConfigTls {
+    let config = ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),
         key_file: key_file.path().to_path_buf(),
     };
@@ -372,7 +372,7 @@ async fn test_server_is_https() {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        tls: Some(ConfigTls {
+        tls: Some(ConfigTls::AsFile {
             cert_file: cert_file.path().to_path_buf(),
             key_file: key_file.path().to_path_buf(),
         }),

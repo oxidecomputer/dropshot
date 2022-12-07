@@ -72,7 +72,7 @@ async fn main() -> Result<(), String> {
      * In addition, we'll make this an HTTPS server.
      */
     let config_dropshot = ConfigDropshot {
-        tls: Some(ConfigTls {
+        tls: Some(ConfigTls::AsFile {
             cert_file: cert_file.path().to_path_buf(),
             key_file: key_file.path().to_path_buf(),
         }),
