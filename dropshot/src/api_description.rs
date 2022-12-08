@@ -47,6 +47,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub tags: Vec<String>,
     pub extension_mode: ExtensionMode,
     pub visible: bool,
+    pub deprecated: bool,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -80,6 +81,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             tags: vec![],
             extension_mode: func_parameters.extension_mode,
             visible: true,
+            deprecated: false,
         }
     }
 
@@ -100,6 +102,11 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
 
     pub fn visible(mut self, visible: bool) -> Self {
         self.visible = visible;
+        self
+    }
+
+    pub fn deprecated(mut self, deprecated: bool) -> Self {
+        self.deprecated = deprecated;
         self
     }
 }
@@ -588,6 +595,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             operation.summary = endpoint.summary.clone();
             operation.description = endpoint.description.clone();
             operation.tags = endpoint.tags.clone();
+            operation.deprecated = endpoint.deprecated;
 
             operation.parameters = endpoint
                 .parameters

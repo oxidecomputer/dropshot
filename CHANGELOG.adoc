@@ -17,6 +17,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.8.0\...HEAD[Full list of co
 
 * https://github.com/oxidecomputer/dropshot/pull/452[#452] Dropshot no longer enables the `slog` cargo features `max_level_trace` and `release_max_level_debug`. Previously, clients were unable to set a release log level of `trace`; now they can. However, clients that did not select their own max log levels will see behavior change from the levels Dropshot was choosing to the default levels of `slog` itself (`debug` for debug builds and `info` for release builds).
 * https://github.com/oxidecomputer/dropshot/pull/451[#451] There are now response types to support 302 ("Found"), 303 ("See Other"), and 307 ("Temporary Redirect") HTTP response codes.  See `HttpResponseFound`, `HttpResponseSeeOther`, and `HttpResponseTemporaryRedirect`.
+* https://github.com/oxidecomputer/dropshot/pull/503[#503] Add an optional `deprecated` field to the `#[endpoint]` macro.
 
 == 0.8.0 (released 2022-09-09)
 

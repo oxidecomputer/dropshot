@@ -824,6 +824,7 @@ mod test {
             tags: vec![],
             extension_mode: Default::default(),
             visible: true,
+            deprecated: false,
         }
     }
 

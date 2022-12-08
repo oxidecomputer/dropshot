@@ -416,6 +416,36 @@
         }
       }
     },
+    "/test/deprecated": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler24",
+        "responses": {
+          "307": {
+            "description": "redirect (temporary redirect)",
+            "headers": {
+              "location": {
+                "description": "HTTP \"Location\" header",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "deprecated": true
+      }
+    },
     "/test/man/{x}": {
       "delete": {
         "tags": [
