@@ -222,8 +222,7 @@
               "type": "integer",
               "format": "uint16",
               "minimum": 0
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -234,8 +233,7 @@
               "type": "integer",
               "format": "uint32",
               "minimum": 1
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -244,8 +242,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "responses": {
@@ -459,8 +456,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "simple"
+            }
           }
         ],
         "responses": {
@@ -525,8 +521,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "simple"
+            }
           },
           {
             "in": "query",
@@ -535,8 +530,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -545,8 +539,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "requestBody": {
@@ -635,8 +628,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -645,8 +637,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "responses": {
