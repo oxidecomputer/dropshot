@@ -1,4 +1,5 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
+
 /*!
  * Detailed end-user documentation for pagination lives in the Dropshot top-
  * level block comment.  Here we discuss some of the design choices.
@@ -100,7 +101,9 @@
 
 use crate::error::HttpError;
 use crate::from_map::from_map;
-use base64::URL_SAFE;
+use base64::alphabet::URL_SAFE;
+use base64::engine::fast_portable::FastPortable;
+use base64::engine::fast_portable::PAD;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -444,7 +447,7 @@ fn serialize_page_token<PageSelector: Serialize>(
                 ))
             })?;
 
-        base64::encode_config(json_bytes, URL_SAFE)
+        base64::encode_engine(json_bytes, &FastPortable::from(&URL_SAFE, PAD))
     };
 
     /*
@@ -478,9 +481,11 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
             "failed to parse pagination token: too large",
         ));
     }
-
-    let json_bytes = base64::decode_config(token_str.as_bytes(), URL_SAFE)
-        .map_err(|e| format!("failed to parse pagination token: {}", e))?;
+    let json_bytes = base64::decode_engine(
+        token_str.as_bytes(),
+        &FastPortable::from(&URL_SAFE, PAD),
+    )
+    .map_err(|e| format!("failed to parse pagination token: {}", e))?;
 
     /*
      * TODO-debugging: we don't want the user to have to know about the
