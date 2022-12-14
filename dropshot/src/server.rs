@@ -68,8 +68,14 @@ pub struct DropshotState<C: ServerContext> {
     pub log: Logger,
     /** bound local address for the server. */
     pub local_addr: SocketAddr,
-    /** are requests served over HTTPS */
-    pub tls: bool,
+    /** Identifies how to accept TLS connections */
+    pub(crate) tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
+}
+
+impl<C: ServerContext> DropshotState<C> {
+    pub fn using_tls(&self) -> bool {
+        self.tls_acceptor.is_some()
+    }
 }
 
 /**
@@ -255,7 +261,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             router: api.into_router(),
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
-            tls: false,
+            tls_acceptor: None,
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
@@ -337,7 +343,7 @@ struct HttpsAcceptor {
 impl HttpsAcceptor {
     pub fn new(
         log: slog::Logger,
-        tls_acceptor: TlsAcceptor,
+        tls_acceptor: Arc<Mutex<TlsAcceptor>>,
         tcp_listener: TcpListener,
     ) -> HttpsAcceptor {
         HttpsAcceptor {
@@ -351,7 +357,7 @@ impl HttpsAcceptor {
 
     fn new_stream(
         log: slog::Logger,
-        tls_acceptor: TlsAcceptor,
+        tls_acceptor: Arc<Mutex<TlsAcceptor>>,
         tcp_listener: TcpListener,
     ) -> impl Stream<Item = std::io::Result<TlsConn>> {
         stream! {
@@ -402,6 +408,8 @@ impl HttpsAcceptor {
                         };
 
                         let tls_negotiation = tls_acceptor
+                            .lock()
+                            .await
                             .accept(socket)
                             .map_ok(move |stream| TlsConn::new(stream, addr));
                         tls_negotiations.push(tls_negotiation);
@@ -481,11 +489,11 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
-        let acceptor = TlsAcceptor::from(Arc::new(
+        let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             // Unwrap is safe here because we cannot enter this code path
             // without a TLS configuration
             rustls::ServerConfig::try_from(config.tls.as_ref().unwrap())?,
-        ));
+        ))));
 
         let tcp = {
             let listener = std::net::TcpListener::bind(&config.bind_address)?;
@@ -498,7 +506,8 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
 
         let local_addr = tcp.local_addr()?;
         let logger = log.new(o!("local_addr" => local_addr));
-        let https_acceptor = HttpsAcceptor::new(logger.clone(), acceptor, tcp);
+        let https_acceptor =
+            HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
 
         let app_state = Arc::new(DropshotState {
             private,
@@ -506,7 +515,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             router: api.into_router(),
             log: logger,
             local_addr,
-            tls: true,
+            tls_acceptor: Some(acceptor),
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
@@ -553,6 +562,20 @@ impl<C: ServerContext> HttpServer<C> {
 
     pub fn app_private(&self) -> &C {
         &self.app_state.private
+    }
+
+    /// Update TLS certificates for a running HTTPS server.
+    pub async fn refresh_tls(&self, config: &ConfigTls) -> Result<(), String> {
+        let acceptor = &self
+            .app_state
+            .tls_acceptor
+            .as_ref()
+            .ok_or_else(|| "Not configured for TLS".to_string())?;
+
+        *acceptor.lock().await = TlsAcceptor::from(Arc::new(
+            rustls::ServerConfig::try_from(config).unwrap(),
+        ));
+        Ok(())
     }
 
     /**

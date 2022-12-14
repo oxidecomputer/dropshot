@@ -334,7 +334,7 @@ mod tests {
                     IpAddr::V6(Ipv6Addr::LOCALHOST),
                     8080,
                 ),
-                tls: false,
+                tls_acceptor: None,
             }),
             request: Arc::new(Mutex::new(
                 Request::builder()
