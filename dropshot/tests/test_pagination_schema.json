@@ -22,8 +22,7 @@
             "name": "garbage_goes_in",
             "schema": {
               "$ref": "#/components/schemas/GarbageGoesIn"
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -34,8 +33,7 @@
               "type": "integer",
               "format": "uint32",
               "minimum": 1
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -44,8 +42,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "responses": {

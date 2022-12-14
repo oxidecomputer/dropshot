@@ -455,6 +455,18 @@ async fn handler23(
     Ok(http_response_temporary_redirect(String::from("/path3")).unwrap())
 }
 
+#[endpoint {
+    method = GET,
+    path = "/test/deprecated",
+    tags = [ "it"],
+    deprecated = true,
+}]
+async fn handler24(
+    _rqctx: Arc<RequestContext<()>>,
+) -> Result<HttpResponseTemporaryRedirect, HttpError> {
+    unimplemented!()
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -487,6 +499,7 @@ fn make_api(
     api.register(handler21)?;
     api.register(handler22)?;
     api.register(handler23)?;
+    api.register(handler24)?;
     Ok(api)
 }
 

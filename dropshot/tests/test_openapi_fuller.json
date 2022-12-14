@@ -222,8 +222,7 @@
               "type": "integer",
               "format": "uint16",
               "minimum": 0
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -234,8 +233,7 @@
               "type": "integer",
               "format": "uint32",
               "minimum": 1
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -244,8 +242,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "responses": {
@@ -416,6 +413,36 @@
         }
       }
     },
+    "/test/deprecated": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler24",
+        "responses": {
+          "307": {
+            "description": "redirect (temporary redirect)",
+            "headers": {
+              "location": {
+                "description": "HTTP \"Location\" header",
+                "style": "simple",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "deprecated": true
+      }
+    },
     "/test/man/{x}": {
       "delete": {
         "tags": [
@@ -429,8 +456,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "simple"
+            }
           }
         ],
         "responses": {
@@ -495,8 +521,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "simple"
+            }
           },
           {
             "in": "query",
@@ -505,8 +530,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -515,8 +539,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "requestBody": {
@@ -605,8 +628,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "style": "form"
+            }
           },
           {
             "in": "query",
@@ -615,8 +637,7 @@
             "schema": {
               "nullable": true,
               "type": "string"
-            },
-            "style": "form"
+            }
           }
         ],
         "responses": {

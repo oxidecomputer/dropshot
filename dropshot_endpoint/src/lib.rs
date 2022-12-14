@@ -51,8 +51,12 @@ impl MethodType {
 struct EndpointMetadata {
     method: MethodType,
     path: String,
-    tags: Option<Vec<String>>,
-    unpublished: Option<bool>,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    unpublished: bool,
+    #[serde(default)]
+    deprecated: bool,
     content_type: Option<String>,
     _dropshot_crate: Option<String>,
 }
@@ -67,8 +71,12 @@ enum ChannelProtocol {
 struct ChannelMetadata {
     protocol: ChannelProtocol,
     path: String,
-    tags: Option<Vec<String>>,
-    unpublished: Option<bool>,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    unpublished: bool,
+    #[serde(default)]
+    deprecated: bool,
     _dropshot_crate: Option<String>,
 }
 
@@ -94,12 +102,14 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 ///     method = { DELETE | GET | OPTIONS | PATCH | POST | PUT },
 ///     path = "/path/name/with/{named}/{variables}",
 ///
-///     // Optional tags for the API description
+///     // Optional tags for the operation's description
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
-///     // A value of `true` causes the API to be omitted from the API description
-///     unpublished = { true | false },
 ///     // Specifies the media type used to encode the request body
 ///     content_type = { "application/json" | "application/x-www-form-urlencoded" }
+///     // A value of `true` marks the operation as deprecated
+///     deprecated = { true | false },
+///     // A value of `true` causes the operation to be omitted from the API description
+///     unpublished = { true | false },
 /// }]
 /// ```
 ///
@@ -153,8 +163,14 @@ fn do_channel(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
 ) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
-    let ChannelMetadata { protocol, path, tags, unpublished, _dropshot_crate } =
-        from_tokenstream(&attr)?;
+    let ChannelMetadata {
+        protocol,
+        path,
+        tags,
+        unpublished,
+        deprecated,
+        _dropshot_crate,
+    } = from_tokenstream(&attr)?;
     match protocol {
         ChannelProtocol::WEBSOCKETS => {
             // here we construct a wrapper function and mutate the arguments a bit
@@ -225,6 +241,7 @@ fn do_channel(
                 path,
                 tags,
                 unpublished,
+                deprecated,
                 content_type: Some("application/json".to_string()),
                 _dropshot_crate,
             };
@@ -347,20 +364,25 @@ fn do_endpoint_inner(
 
     let tags = metadata
         .tags
-        .map(|v| {
-            v.iter()
-                .map(|tag| {
-                    quote! {
-                        .tag(#tag)
-                    }
-                })
-                .collect::<Vec<_>>()
+        .iter()
+        .map(|tag| {
+            quote! {
+                .tag(#tag)
+            }
         })
-        .unwrap_or_default();
+        .collect::<Vec<_>>();
 
-    let visible = if let Some(true) = metadata.unpublished {
+    let visible = if metadata.unpublished {
         quote! {
             .visible(false)
+        }
+    } else {
+        quote! {}
+    };
+
+    let deprecated = if metadata.deprecated {
+        quote! {
+            .deprecated(true)
         }
     } else {
         quote! {}
@@ -553,6 +575,7 @@ fn do_endpoint_inner(
             #description
             #(#tags)*
             #visible
+            #deprecated
         }
     } else {
         quote! {
@@ -599,7 +622,7 @@ fn do_endpoint_inner(
         errors.insert(0, Error::new_spanned(&ast.sig, USAGE));
     }
 
-    if path.contains(":.*}") && metadata.unpublished != Some(true) {
+    if path.contains(":.*}") && !metadata.unpublished {
         errors.push(Error::new_spanned(
             &attr,
             "paths that contain a wildcard match must include 'unpublished = \

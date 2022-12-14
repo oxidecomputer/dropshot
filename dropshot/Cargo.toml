@@ -12,14 +12,13 @@ categories = ["network-programming", "web-programming::http-server"]
 
 [dependencies]
 async-stream = "0.3.3"
-async-trait = "0.1.58"
-base64 = "0.13.1"
+async-trait = "0.1.59"
+base64 = "0.20.0"
 bytes = "1"
 futures = "0.3.25"
 hostname = "0.3.0"
 http = "0.2.8"
 indexmap = "1.9.2"
-openapiv3 = "=1.0.1"
 paste = "1.0.9"
 percent-encoding = "2.2.0"
 proc-macro2 = "1.0.47"
@@ -48,8 +47,12 @@ path = "../dropshot_endpoint"
 version = "0.14"
 features = [ "full" ]
 
+[dependencies.openapiv3]
+version = "1.0.2"
+features = [ "skip_serializing_defaults" ]
+
 [dependencies.serde]
-version = "1.0.148"
+version = "1.0.150"
 features = [ "derive" ]
 
 [dependencies.tokio]
@@ -71,7 +74,7 @@ features = [ "uuid1" ]
 
 [dev-dependencies]
 expectorate = "1.0.5"
-hyper-rustls = "0.23.1"
+hyper-rustls = "0.23.2"
 hyper-staticfile = "0.9"
 lazy_static = "1.4.0"
 libc = "0.2.137"
@@ -83,8 +86,7 @@ trybuild = "1.0.72"
 pem = "1.1"
 rcgen = "0.10.0"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
-tungstenite = "0.17.3"
-tokio-tungstenite = "0.17.2"
+tokio-tungstenite = "0.18.0"
 
 [dev-dependencies.rustls]
 version = "0.20.7"
