@@ -52,9 +52,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
+use tokio_tungstenite::tungstenite::protocol::Role;
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
-use tungstenite::protocol::Role;
-use tungstenite::Message;
 use uuid::Uuid;
 
 extern crate slog;
