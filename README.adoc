@@ -50,16 +50,30 @@ include:
 |No
 |Specifies the maximum number of bytes allowed in a request body. Larger requests will receive a 400 error. Defaults to 1024.
 
+|`tls.type`
+|`"AsFile", "AsBytes"`
+|No
+|Specifies if and how TLS certificate and key information is provided.
+
 |`tls.cert_file`
 |`"/path/to/cert.pem"`
-|Only if `tls.key_file` is set
+|Only if `tls.type = AsFile`
 |Specifies the path to a PEM file containing a certificate chain for the server to identify itself with. The first certificate is the end-entity certificate, and the remaining are intermediate certificates on the way to a trusted CA. If specified, the server will only listen for TLS connections.
 
 |`tls.key_file`
 |`"/path/to/key.pem"`
-|Only if `tls.cert_file` is set
+|Only if `tls.type = AsFile`
 |Specifies the path to a PEM-encoded PKCS #8 file containing the private key the server will use. If specified, the server will only listen for TLS connections.
 
+|`tls.certs`
+|`Vec<u8> of certificate data`
+|Only if `tls.type = AsBytes`
+|Identical to `tls.cert_file`, but provided as a buffer.
+
+|`tls.key`
+|`Vec<u8> of key data`
+|Only if `tls.type = AsBytes`
+|Identical to `tls.key_file`, but provided as a buffer.
 |===
 
 === Logging

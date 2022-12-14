@@ -34,6 +34,7 @@ use std::path::PathBuf;
  *             request_body_max_bytes = 1024
  *             ## Optional, to enable TLS
  *             [http_api_server.tls]
+ *             type = "AsFile"
  *             cert_file = "/path/to/certs.pem"
  *             key_file = "/path/to/key.pem"
  *
@@ -61,17 +62,68 @@ pub struct ConfigDropshot {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ConfigTls {
-    /** Path to a PEM file containing a certificate chain for the
-     *  server to identify itself with. The first certificate is the
-     *  end-entity certificate, and the remaining are intermediate
-     *  certificates on the way to a trusted CA.
-     */
-    pub cert_file: PathBuf,
-    /** Path to a PEM-encoded PKCS #8 file containing the private key the
-     *  server will use.
-     */
-    pub key_file: PathBuf,
+#[serde(tag = "type")]
+pub enum ConfigTls {
+    AsFile {
+        /** Path to a PEM file containing a certificate chain for the
+         *  server to identify itself with. The first certificate is the
+         *  end-entity certificate, and the remaining are intermediate
+         *  certificates on the way to a trusted CA.
+         */
+        cert_file: PathBuf,
+        /** Path to a PEM-encoded PKCS #8 file containing the private key the
+         *  server will use.
+         */
+        key_file: PathBuf,
+    },
+    AsBytes {
+        certs: Vec<u8>,
+        key: Vec<u8>,
+    },
+}
+
+impl ConfigTls {
+    pub(crate) fn cert_reader(
+        &self,
+    ) -> std::io::Result<Box<dyn std::io::BufRead + '_>> {
+        match self {
+            ConfigTls::AsFile { cert_file, .. } => {
+                let certfile = std::fs::File::open(cert_file).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!(
+                            "failed to open {}: {}",
+                            cert_file.display(),
+                            e
+                        ),
+                    )
+                })?;
+                Ok(Box::new(std::io::BufReader::new(certfile)))
+            }
+            ConfigTls::AsBytes { certs, .. } => {
+                Ok(Box::new(std::io::BufReader::new(certs.as_slice())))
+            }
+        }
+    }
+
+    pub(crate) fn key_reader(
+        &self,
+    ) -> std::io::Result<Box<dyn std::io::BufRead + '_>> {
+        match self {
+            ConfigTls::AsFile { key_file, .. } => {
+                let keyfile = std::fs::File::open(key_file).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("failed to open {}: {}", key_file.display(), e),
+                    )
+                })?;
+                Ok(Box::new(std::io::BufReader::new(keyfile)))
+            }
+            ConfigTls::AsBytes { key, .. } => {
+                Ok(Box::new(std::io::BufReader::new(key.as_slice())))
+            }
+        }
+    }
 }
 
 impl Default for ConfigDropshot {

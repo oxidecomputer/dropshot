@@ -8,6 +8,7 @@ use dropshot::{ConfigDropshot, ConfigTls};
 use dropshot::{HttpServer, HttpServerStarter};
 use slog::o;
 use slog::Logger;
+use std::str::FromStr;
 use tempfile::NamedTempFile;
 
 pub mod common;
@@ -87,7 +88,7 @@ fn test_config_bad_request_body_max_bytes_too_large() {
 fn test_config_bad_key_file_garbage() {
     let error = read_config::<ConfigDropshot>(
         "bad_key_file_garbage",
-        "[tls]\ncert_file = ''\nkey_file = 23",
+        "[tls]\ntype = 'AsFile'\ncert_file = ''\nkey_file = 23",
     )
     .unwrap_err()
     .to_string();
@@ -102,7 +103,7 @@ fn test_config_bad_key_file_garbage() {
 fn test_config_bad_cert_file_garbage() {
     let error = read_config::<ConfigDropshot>(
         "bad_cert_file_garbage",
-        "[tls]\ncert_file = 23\nkey_file=''",
+        "[tls]\ntype = 'AsFile'\ncert_file = 23\nkey_file=''",
     )
     .unwrap_err()
     .to_string();
@@ -125,7 +126,7 @@ fn test_config_bad_tls_garbage() {
 fn test_config_bad_tls_incomplete() {
     let error = read_config::<ConfigDropshot>(
         "bad_tls_incomplete",
-        "[tls]\ncert_file = ''",
+        "[tls]\ntype = 'AsFile'\ncert_file = ''",
     )
     .unwrap_err()
     .to_string();
@@ -133,7 +134,7 @@ fn test_config_bad_tls_incomplete() {
 
     let error = read_config::<ConfigDropshot>(
         "bad_tls_incomplete",
-        "[tls]\nkey_file = ''",
+        "[tls]\ntype = 'AsFile'\nkey_file = ''",
     )
     .unwrap_err()
     .to_string();
@@ -153,19 +154,14 @@ fn make_config(
     bind_port: u16,
     tls: Option<ConfigTls>,
 ) -> ConfigDropshot {
-    let mut config_text = format!(
-        "bind_address = \"{}:{}\"\nrequest_body_max_bytes = 1024",
-        bind_ip_str, bind_port,
-    );
-    if let Some(tls) = tls {
-        config_text = format!(
-            "{}\n[tls]\ncert_file = '{}'\nkey_file = '{}'",
-            config_text,
-            tls.cert_file.to_str().unwrap(),
-            tls.key_file.to_str().unwrap(),
-        );
+    ConfigDropshot {
+        bind_address: std::net::SocketAddr::new(
+            std::net::IpAddr::from_str(bind_ip_str).unwrap(),
+            bind_port,
+        ),
+        request_body_max_bytes: 1024,
+        tls,
     }
-    read_config::<ConfigDropshot>("bind_address", &config_text).unwrap()
 }
 
 // Trait for abstracting out test case specific properties from the common bind
@@ -319,7 +315,7 @@ async fn test_config_bind_address_https() {
         }
 
         fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
-            let tls = Some(ConfigTls {
+            let tls = Some(ConfigTls::AsFile {
                 cert_file: self.cert_file.path().to_path_buf(),
                 key_file: self.key_file.path().to_path_buf(),
             });
@@ -342,6 +338,79 @@ async fn test_config_bind_address_https() {
 
     /* This must be different than the bind_port used in the http test. */
     let bind_port = 12217;
+    test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
+        .await;
+
+    logctx.cleanup_successful();
+}
+
+#[tokio::test]
+async fn test_config_bind_address_https_buffer() {
+    struct ConfigBindServerHttps {
+        log: slog::Logger,
+        certs: Vec<rustls::Certificate>,
+        serialized_certs: Vec<u8>,
+        serialized_key: Vec<u8>,
+    }
+
+    impl
+        TestConfigBindServer<
+            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        > for ConfigBindServerHttps
+    {
+        fn make_client(
+            &self,
+        ) -> hyper::Client<
+            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        > {
+            // Configure TLS to trust the self-signed cert
+            let mut root_store = rustls::RootCertStore { roots: vec![] };
+            root_store
+                .add(&self.certs[self.certs.len() - 1])
+                .expect("adding root cert");
+
+            let tls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
+            let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+                .with_tls_config(tls_config)
+                .https_only()
+                .enable_http1()
+                .build();
+            hyper::Client::builder().build(https_connector)
+        }
+
+        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
+            format!("https://localhost:{}/", bind_port).parse().unwrap()
+        }
+
+        fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
+            let tls = Some(ConfigTls::AsBytes {
+                certs: self.serialized_certs.clone(),
+                key: self.serialized_key.clone(),
+            });
+            let config = make_config("127.0.0.1", bind_port, tls);
+            make_server(&config, &self.log).start()
+        }
+
+        fn log(&self) -> &Logger {
+            &self.log
+        }
+    }
+
+    let logctx = create_log_context("config_bind_address_https_buffer");
+    let log = logctx.log.new(o!());
+
+    // Generate key for the server
+    let (certs, key) = common::generate_tls_key();
+    let (serialized_certs, serialized_key) =
+        common::tls_key_to_buffer(&certs, &key);
+    let test_config =
+        ConfigBindServerHttps { log, certs, serialized_certs, serialized_key };
+
+    /* This must be different than the bind_port used in the http test. */
+    let bind_port = 12218;
     test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
         .await;
 

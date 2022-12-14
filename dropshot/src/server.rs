@@ -30,7 +30,6 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
-use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -445,8 +444,8 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
     type Error = std::io::Error;
 
     fn try_from(config: &ConfigTls) -> std::io::Result<Self> {
-        let certs = load_certs(&config.cert_file)?;
-        let private_key = load_private_key(&config.key_file)?;
+        let certs = load_certs(&config)?;
+        let private_key = load_private_key(&config)?;
         let mut cfg = rustls::ServerConfig::builder()
             // TODO: We may want to expose protocol configuration in our
             // config
@@ -914,37 +913,31 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
     }
 }
 
-fn error(err: String) -> std::io::Error {
+fn io_error(err: String) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, err)
 }
 
-// Load public certificate from file.
-fn load_certs(filename: &Path) -> std::io::Result<Vec<rustls::Certificate>> {
-    // Open certificate file.
-    let certfile = std::fs::File::open(filename).map_err(|e| {
-        error(format!("failed to open {}: {}", filename.display(), e))
-    })?;
-    let mut reader = std::io::BufReader::new(certfile);
+// Load public certificate from config.
+fn load_certs(config: &ConfigTls) -> std::io::Result<Vec<rustls::Certificate>> {
+    let mut reader = config.cert_reader()?;
 
     // Load and return certificate.
     rustls_pemfile::certs(&mut reader)
-        .map_err(|err| error(format!("failed to load certificate: {err}")))
+        .map_err(|err| io_error(format!("failed to load certificate: {err}")))
         .map(|mut chain| chain.drain(..).map(rustls::Certificate).collect())
 }
 
-// Load private key from file.
-fn load_private_key(filename: &Path) -> std::io::Result<rustls::PrivateKey> {
-    // Open keyfile.
-    let keyfile = std::fs::File::open(filename).map_err(|e| {
-        error(format!("failed to open {}: {}", filename.display(), e))
-    })?;
-    let mut reader = std::io::BufReader::new(keyfile);
+// Load private key from config.
+fn load_private_key(config: &ConfigTls) -> std::io::Result<rustls::PrivateKey> {
+    let mut reader = config.key_reader()?;
 
     // Load and return a single private key.
-    let keys = rustls_pemfile::pkcs8_private_keys(&mut reader)
-        .map_err(|err| error(format!("failed to load private key: {err}")))?;
+    let keys =
+        rustls_pemfile::pkcs8_private_keys(&mut reader).map_err(|err| {
+            io_error(format!("failed to load private key: {err}"))
+        })?;
     if keys.len() != 1 {
-        return Err(error("expected a single private key".into()));
+        return Err(io_error("expected a single private key".into()));
     }
     Ok(rustls::PrivateKey(keys[0].clone()))
 }
