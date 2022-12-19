@@ -20,8 +20,8 @@ fn main() {
         println!("cargo:rustc-cfg=usdt_stable_asm");
     }
 
-    // Once asm_sym is stablilized, add an additional check so that those
-    // building on macos can use the stable toolchain with any hassle.
-    //
-    // A matching rust-cfg option named `usdt_stable_asm_sym` seems appropriate.
+    #[cfg(target_os = "macos")]
+    if version_check::is_min_version("1.66").unwrap_or(false) {
+        println!("cargo:rustc-cfg=usdt_stable_asm_sym");
+    }
 }
