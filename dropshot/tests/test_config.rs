@@ -410,7 +410,7 @@ async fn test_config_bind_address_https_buffer() {
         ConfigBindServerHttps { log, certs, serialized_certs, serialized_key };
 
     /* This must be different than the bind_port used in the http test. */
-    let bind_port = 12218;
+    let bind_port = 12219;
     test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
         .await;
 
