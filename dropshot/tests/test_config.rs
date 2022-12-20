@@ -179,7 +179,7 @@ where
 
 // Validate that we can create a server with the given configuration and that
 // it binds to ports as expected.
-async fn test_config_bind_server<C, T>(test_config: T, bind_port: u16)
+async fn test_config_bind_server<C, T>(test_config: T)
 where
     C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
     T: TestConfigBindServer<C>,
@@ -187,51 +187,17 @@ where
     let client = test_config.make_client();
 
     /*
-     * Make sure there is not currently a server running on our expected
-     * port so that when we subsequently create a server and run it we know
-     * we're getting the one we configured.
-     */
-    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    /*
-     * Now start a server with our configuration and make the request again.
+     * Start a server with our configuration and make the request.
      * This should succeed in terms of making the request.  (The request
      * itself might fail with a 400-level or 500-level response code -- we
      * don't want to depend on too much from the ApiServer here -- but we
      * should have successfully made the request.)
      */
+    let bind_port = 0;
     let server = test_config.make_server(bind_port);
+    let bind_port = server.local_addr().port();
     client.get(test_config.make_uri(bind_port)).await.unwrap();
     server.close().await.unwrap();
-
-    /*
-     * Make another request to make sure it fails now that we've shut down
-     * the server.  We need a new client to make sure our client-side connection
-     * starts from a clean slate.  (Otherwise, a race during shutdown could
-     * cause us to successfully send a request packet, only to have the TCP
-     * stack return with ECONNRESET, which gets in the way of what we're trying
-     * to test here.)
-     */
-    let client = test_config.make_client();
-    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    /*
-     * Start a server on another TCP port and make sure we can reach that
-     * one (and NOT the one we just shut down).
-     */
-    let server = test_config.make_server(bind_port + 1);
-    client.get(test_config.make_uri(bind_port + 1)).await.unwrap();
-    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-    server.close().await.unwrap();
-
-    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-    let error =
-        client.get(test_config.make_uri(bind_port + 1)).await.unwrap_err();
-    assert!(error.is_connect());
 }
 
 #[tokio::test]
@@ -266,9 +232,7 @@ async fn test_config_bind_address_http() {
     }
 
     let test_config = ConfigBindServerHttp { log };
-    let bind_port = 12215;
-    test_config_bind_server::<_, ConfigBindServerHttp>(test_config, bind_port)
-        .await;
+    test_config_bind_server::<_, ConfigBindServerHttp>(test_config).await;
 
     logctx.cleanup_successful();
 }
@@ -337,9 +301,7 @@ async fn test_config_bind_address_https() {
     let test_config = ConfigBindServerHttps { log, certs, cert_file, key_file };
 
     /* This must be different than the bind_port used in the http test. */
-    let bind_port = 12217;
-    test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
-        .await;
+    test_config_bind_server::<_, ConfigBindServerHttps>(test_config).await;
 
     logctx.cleanup_successful();
 }
@@ -410,9 +372,7 @@ async fn test_config_bind_address_https_buffer() {
         ConfigBindServerHttps { log, certs, serialized_certs, serialized_key };
 
     /* This must be different than the bind_port used in the http test. */
-    let bind_port = 12219;
-    test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
-        .await;
+    test_config_bind_server::<_, ConfigBindServerHttps>(test_config).await;
 
     logctx.cleanup_successful();
 }
