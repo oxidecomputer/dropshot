@@ -28,7 +28,6 @@ use hyper::Response;
 use rustls;
 use std::convert::TryFrom;
 use std::future::Future;
-use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::pin::Pin;
@@ -201,9 +200,10 @@ impl<C: ServerContext> HttpServerStarter<C> {
             probe_registration,
             app_state: self.app_state,
             local_addr: self.local_addr,
-            closer: Some(HttpServerCloser { close_channel: Some(tx) }),
-            joiner: Some(HttpServerJoiner { join_handle: Some(join_handle) }),
-            _phantom: PhantomData,
+            closer: Closeable(HttpServerCloser { close_channel: Some(tx) }),
+            joiner: Joinable(HttpServerJoiner {
+                join_handle: Some(join_handle),
+            }),
         }
     }
 }
@@ -545,52 +545,33 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
     }
 }
 
-/// Marker trait used to control whether or not an HTTP server can be closed.
-pub trait Closer: Send + Sync + Unpin + 'static {}
-
-/// Implements [Closer] and identifies that the server can be closed.
+/// Marker type identifying that the server can be closed.
 ///
 /// This implies:
 /// - [HttpServer::close] can be called
-pub struct Closeable {}
+pub struct Closeable(HttpServerCloser);
 
-/// Implements [Closer] and identifies that the server cannot be closed
-/// directly.
+/// Marker type identifying that the server cannot be closed directly.
 pub struct Uncloseable {}
 
-impl Closer for Closeable {}
-impl Closer for Uncloseable {}
+/// Marker type identifying that the server can be joined.
+pub struct Joinable(HttpServerJoiner);
 
-/// Marker trait used to control whether or not an HTTP server can be joined.
-pub trait Joiner: Send + Sync + 'static {}
-
-/// Implements [Joiner] and identifies that the server can be joined
-pub struct Joinable {}
-
-/// Implements [Joiner] and identifies that the server cannot be joined
-/// directly.
+/// Marker type identifying that the server cannot be joined directly.
 pub struct Unjoinable {}
-
-impl Joiner for Joinable {}
-impl Joiner for Unjoinable {}
 
 /// A running Dropshot HTTP server.
 ///
 /// The generic traits represent the following:
 /// - C: Caller-supplied server context
-/// - CL: A marker trait identifying if the server struct is [Closeable].
-/// - J: A merker trait identifying if the server struct is [Joinable].
-pub struct HttpServer<
-    C: ServerContext,
-    CL: Closer = Closeable,
-    J: Joiner = Joinable,
-> {
+/// - Closer: A marker type identifying if the server struct is [Closeable].
+/// - Joiner: A marker type identifying if the server struct is [Joinable].
+pub struct HttpServer<C: ServerContext, Closer = Closeable, Joiner = Joinable> {
     probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
-    closer: Option<HttpServerCloser>,
-    joiner: Option<HttpServerJoiner>,
-    _phantom: PhantomData<(CL, J)>,
+    closer: Closer,
+    joiner: Joiner,
 }
 
 /// Represents the ability to close a running HTTP server.
@@ -621,7 +602,7 @@ pub struct HttpServerJoiner {
     join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
 }
 
-impl<C: ServerContext, CL: Closer, J: Joiner> HttpServer<C, CL, J> {
+impl<C: ServerContext, Closer, Joiner> HttpServer<C, Closer, Joiner> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -654,19 +635,18 @@ impl<C: ServerContext, CL: Closer, J: Joiner> HttpServer<C, CL, J> {
     }
 }
 
-impl<C: ServerContext, CL: Closer> HttpServer<C, CL, Joinable> {
+impl<C: ServerContext, Closer> HttpServer<C, Closer, Joinable> {
     /// Separates the [HttpServer] from the [HttpServerJoining] object which is
     /// capable of joining it.
     pub fn get_joiner(
         self,
-    ) -> (HttpServer<C, CL, Unjoinable>, HttpServerJoiner) {
+    ) -> (HttpServer<C, Closer, Unjoinable>, HttpServerJoiner) {
         let HttpServer {
             probe_registration,
             app_state,
             local_addr,
             closer,
             joiner,
-            _phantom: PhantomData,
         } = self;
 
         (
@@ -675,25 +655,25 @@ impl<C: ServerContext, CL: Closer> HttpServer<C, CL, Joinable> {
                 app_state,
                 local_addr,
                 closer,
-                joiner: None,
-                _phantom: PhantomData,
+                joiner: Unjoinable {},
             },
-            joiner.unwrap(),
+            joiner.0,
         )
     }
 }
 
-impl<C: ServerContext, J: Joiner> HttpServer<C, Closeable, J> {
+impl<C: ServerContext, Joiner> HttpServer<C, Closeable, Joiner> {
     /// Separates the [HttpServer] from the [HttpServerCloser] object which is
     /// capable of closing it.
-    pub fn get_closer(self) -> (HttpServer<C, Uncloseable>, HttpServerCloser) {
+    pub fn get_closer(
+        self,
+    ) -> (HttpServer<C, Uncloseable, Joiner>, HttpServerCloser) {
         let HttpServer {
             probe_registration,
             app_state,
             local_addr,
             closer,
             joiner,
-            _phantom: PhantomData,
         } = self;
 
         (
@@ -701,20 +681,19 @@ impl<C: ServerContext, J: Joiner> HttpServer<C, Closeable, J> {
                 probe_registration,
                 app_state,
                 local_addr,
-                closer: None,
+                closer: Uncloseable {},
                 joiner,
-                _phantom: PhantomData,
             },
-            closer.unwrap(),
+            closer.0,
         )
     }
 }
 
 impl<C: ServerContext> HttpServer<C, Closeable, Joinable> {
     /// Signals the currently running server to stop and waits for it to exit.
-    pub async fn close(mut self) -> Result<(), String> {
-        let mut closer = self.closer.take().expect("already took closer");
-        let mut joiner = self.joiner.take().expect("already took joiner");
+    pub async fn close(self) -> Result<(), String> {
+        let mut closer = self.closer.0;
+        let mut joiner = self.joiner.0;
 
         closer
             .close_channel
@@ -775,36 +754,25 @@ impl FusedFuture for HttpServerJoiner {
     }
 }
 
-impl<C: ServerContext, CL: Closer> Future for HttpServer<C, CL, Joinable> {
+impl<C: ServerContext, Closer> Future for HttpServer<C, Closer, Joinable>
+where
+    Closer: Unpin,
+{
     type Output = Result<(), String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let server = Pin::into_inner(self);
-        let mut joiner = server
-            .joiner
-            .take()
-            .expect("polling a server which has already closed");
-        let mut handle = joiner
-            .join_handle
-            .take()
-            .expect("polling a server future which has already completed");
-        let poll = handle.poll_unpin(cx).map(|result| {
-            result
-                .map_err(|error| format!("waiting for server: {}", error))?
-                .map_err(|error| format!("server stopped: {}", error))
-        });
-
-        if poll.is_pending() {
-            joiner.join_handle.replace(handle);
-            server.joiner.replace(joiner);
-        }
-        return poll;
+        let joiner = Pin::new(&mut server.joiner.0);
+        joiner.poll(cx)
     }
 }
 
-impl<C: ServerContext, CL: Closer> FusedFuture for HttpServer<C, CL, Joinable> {
+impl<C: ServerContext, Closer> FusedFuture for HttpServer<C, Closer, Joinable>
+where
+    Closer: Unpin,
+{
     fn is_terminated(&self) -> bool {
-        self.closer.is_none()
+        self.joiner.0.is_terminated()
     }
 }
 
