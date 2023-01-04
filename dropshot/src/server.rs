@@ -14,7 +14,9 @@ use super::router::HttpRouter;
 use super::ProbeRegistration;
 
 use async_stream::stream;
-use futures::future::{BoxFuture, FusedFuture, FutureExt, TryFutureExt};
+use futures::future::{
+    BoxFuture, FusedFuture, FutureExt, Shared, TryFutureExt,
+};
 use futures::lock::Mutex;
 use futures::stream::{Stream, StreamExt};
 use hyper::server::{
@@ -166,7 +168,11 @@ impl<C: ServerContext> HttpServerStarter<C> {
             WrappedHttpServerStarter::Https(https) => {
                 https.start(rx, log_close)
             }
-        };
+        }
+        .map(|r| {
+            r.map_err(|e| format!("waiting for server: {e}"))?
+                .map_err(|e| format!("server stopped: {e}"))
+        });
         info!(self.app_state.log, "listening");
 
         #[cfg(feature = "usdt-probes")]
@@ -201,7 +207,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             app_state: self.app_state,
             local_addr: self.local_addr,
             closer: Closeable { close_channel: Some(tx) },
-            joiner: Joinable { join_handle: Some(join_handle) },
+            join_future: join_handle.boxed().shared(),
         }
     }
 }
@@ -543,23 +549,24 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
     }
 }
 
+type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
+
 /// A running Dropshot HTTP server.
 ///
 /// The generic traits represent the following:
 /// - C: Caller-supplied server context
 /// - Closer: Identifies if the server is directly closeable.
-/// - Joiner: Identifies if the server is directly joinable.
-pub struct HttpServer<C: ServerContext, Closer = Closeable, Joiner = Joinable> {
+pub struct HttpServer<C: ServerContext, Closer = Closeable> {
     probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     closer: Closer,
-    joiner: Joiner,
+    join_future: SharedBoxFuture<Result<(), String>>,
 }
 
 /// Represents the ability to close a running HTTP server.
 ///
-/// Returned from [HttpServer::get_closer].
+/// Returned from [HttpServer::take_close_handle].
 pub struct Closeable {
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -567,7 +574,7 @@ pub struct Closeable {
 impl Closeable {
     /// Closes the server without waiting for it to terminate.
     ///
-    /// To await termination, see: [Joinable].
+    /// To await termination, see: [HttpServer::wait_for_shutdown].
     pub async fn close(mut self) -> Result<(), String> {
         self.close_channel
             .take()
@@ -581,17 +588,7 @@ impl Closeable {
 /// Identifies that the server cannot be closed directly.
 pub struct Uncloseable {}
 
-/// Represents the ability to join a running HTTP server.
-///
-/// Returned from [HttpServer::get_joiner].
-pub struct Joinable {
-    join_handle: Option<tokio::task::JoinHandle<Result<(), hyper::Error>>>,
-}
-
-/// Identifies that the server cannot be joined directly.
-pub struct Unjoinable {}
-
-impl<C: ServerContext, Closer, Joiner> HttpServer<C, Closer, Joiner> {
+impl<C: ServerContext, Closer> HttpServer<C, Closer> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -622,43 +619,32 @@ impl<C: ServerContext, Closer, Joiner> HttpServer<C, Closer, Joiner> {
     pub fn probe_registration(&self) -> &ProbeRegistration {
         &self.probe_registration
     }
-}
 
-impl<C: ServerContext, Closer> HttpServer<C, Closer, Joinable> {
-    /// Separates the [HttpServer] from the [Joinable] object which is
-    /// capable of joining it.
-    pub fn get_joiner(self) -> (HttpServer<C, Closer, Unjoinable>, Joinable) {
-        let HttpServer {
-            probe_registration,
-            app_state,
-            local_addr,
-            closer,
-            joiner,
-        } = self;
-
-        (
-            HttpServer {
-                probe_registration,
-                app_state,
-                local_addr,
-                closer,
-                joiner: Unjoinable {},
-            },
-            joiner,
-        )
+    /// Returns a future which completes when the server has shut down.
+    ///
+    /// This function does not cause the server to shut down, it just waits for
+    /// the shutdown to happen.
+    ///
+    /// To trigger a shutdown:
+    /// - Call [HttpServer::take_close_handle] and [Closeable::close].
+    /// - Call [HttpServer::close] (which also awaits shutdown).
+    pub fn wait_for_shutdown(
+        &self,
+    ) -> impl FusedFuture<Output = Result<(), String>> {
+        self.join_future.clone()
     }
 }
 
-impl<C: ServerContext, Joiner> HttpServer<C, Closeable, Joiner> {
+impl<C: ServerContext> HttpServer<C, Closeable> {
     /// Separates the [HttpServer] from the [Closeable] object which is
     /// capable of closing it.
-    pub fn get_closer(self) -> (HttpServer<C, Uncloseable, Joiner>, Closeable) {
+    pub fn take_close_handle(self) -> (HttpServer<C, Uncloseable>, Closeable) {
         let HttpServer {
             probe_registration,
             app_state,
             local_addr,
             closer,
-            joiner,
+            join_future,
         } = self;
 
         (
@@ -667,33 +653,21 @@ impl<C: ServerContext, Joiner> HttpServer<C, Closeable, Joiner> {
                 app_state,
                 local_addr,
                 closer: Uncloseable {},
-                joiner,
+                join_future,
             },
             closer,
         )
     }
-}
 
-impl<C: ServerContext> HttpServer<C, Closeable, Joinable> {
     /// Signals the currently running server to stop and waits for it to exit.
-    pub async fn close(self) -> Result<(), String> {
-        let mut closer = self.closer;
-        let mut joiner = self.joiner;
-
-        closer
+    pub async fn close(mut self) -> Result<(), String> {
+        self.closer
             .close_channel
             .take()
             .expect("cannot close twice")
             .send(())
             .expect("failed to send close signal");
-        if let Some(handle) = joiner.join_handle.take() {
-            handle
-                .await
-                .map_err(|error| format!("waiting for server: {}", error))?
-                .map_err(|error| format!("server stopped: {}", error))
-        } else {
-            Ok(())
-        }
+        self.join_future.await
     }
 }
 
@@ -711,35 +685,7 @@ impl Drop for Closeable {
     }
 }
 
-impl Future for Joinable {
-    type Output = Result<(), String>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let server = Pin::into_inner(self);
-        let mut handle = server
-            .join_handle
-            .take()
-            .expect("polling a server future which has already completed");
-        let poll = handle.poll_unpin(cx).map(|result| {
-            result
-                .map_err(|error| format!("waiting for server: {}", error))?
-                .map_err(|error| format!("server stopped: {}", error))
-        });
-
-        if poll.is_pending() {
-            server.join_handle.replace(handle);
-        }
-        return poll;
-    }
-}
-
-impl FusedFuture for Joinable {
-    fn is_terminated(&self) -> bool {
-        self.join_handle.is_none()
-    }
-}
-
-impl<C: ServerContext, Closer> Future for HttpServer<C, Closer, Joinable>
+impl<C: ServerContext, Closer> Future for HttpServer<C, Closer>
 where
     Closer: Unpin,
 {
@@ -747,17 +693,17 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let server = Pin::into_inner(self);
-        let joiner = Pin::new(&mut server.joiner);
-        joiner.poll(cx)
+        let join_future = Pin::new(&mut server.join_future);
+        join_future.poll(cx)
     }
 }
 
-impl<C: ServerContext, Closer> FusedFuture for HttpServer<C, Closer, Joinable>
+impl<C: ServerContext, Closer> FusedFuture for HttpServer<C, Closer>
 where
     Closer: Unpin,
 {
     fn is_terminated(&self) -> bool {
-        self.joiner.is_terminated()
+        self.join_future.is_terminated()
     }
 }
 

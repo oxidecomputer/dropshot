@@ -40,8 +40,8 @@ async fn main() -> Result<(), String> {
         HttpServerStarter::new(&config_dropshot, api, api_context, &log)
             .map_err(|error| format!("failed to create server: {}", error))?
             .start();
-    let (server, closer) = server.get_closer();
-    let (server, joiner) = server.get_joiner();
+    let (server, close_handle) = server.take_close_handle();
+    let shutdown = server.wait_for_shutdown();
 
     tokio::task::spawn(async move {
         loop {
@@ -59,11 +59,14 @@ async fn main() -> Result<(), String> {
             }
         }
         // Once the timeout has been reached, we stop the server ourselves.
-        closer.close().await.unwrap();
+        close_handle.close().await.unwrap();
+
+        // This background task can also wait for the server to stop
+        let _ = server.await;
     });
 
     // Wait for the server to stop.
-    joiner.await
+    shutdown.await
 }
 
 /**
