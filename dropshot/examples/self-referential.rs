@@ -1,5 +1,7 @@
 // Copyright 2020 Oxide Computer Company
 
+//! An example which demonstrates a server that can manage its own lifecycle.
+
 use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
