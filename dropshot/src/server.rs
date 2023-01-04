@@ -556,39 +556,20 @@ type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
 /// The generic traits represent the following:
 /// - C: Caller-supplied server context
 /// - Closer: Identifies if the server is directly closeable.
-pub struct HttpServer<C: ServerContext, Closer = CloseHandle> {
+pub struct HttpServer<C: ServerContext> {
     probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
-    closer: Closer,
+    closer: CloseHandle,
     join_future: SharedBoxFuture<Result<(), String>>,
 }
 
-/// Handle used to trigger the shutdown of an [HttpServer].
-///
-/// Returned from [HttpServer::take_close_handle].
-pub struct CloseHandle {
+// Handle used to trigger the shutdown of an [HttpServer].
+struct CloseHandle {
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl CloseHandle {
-    /// Closes the server without waiting for it to terminate.
-    ///
-    /// To await termination, see: [HttpServer::wait_for_shutdown].
-    pub async fn close(mut self) -> Result<(), String> {
-        self.close_channel
-            .take()
-            .expect("cannot close twice")
-            .send(())
-            .expect("failed to send close signal");
-        Ok(())
-    }
-}
-
-/// Identifies that the server cannot be closed directly.
-pub struct Uncloseable {}
-
-impl<C: ServerContext, Closer> HttpServer<C, Closer> {
+impl<C: ServerContext> HttpServer<C> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -625,40 +606,11 @@ impl<C: ServerContext, Closer> HttpServer<C, Closer> {
     /// This function does not cause the server to shut down, it just waits for
     /// the shutdown to happen.
     ///
-    /// To trigger a shutdown:
-    /// - Call [HttpServer::take_close_handle] and [CloseHandle::close].
-    /// - Call [HttpServer::close] (which also awaits shutdown).
+    /// To trigger a shutdown, Call [HttpServer::close] (which also awaits shutdown).
     pub fn wait_for_shutdown(
         &self,
     ) -> impl FusedFuture<Output = Result<(), String>> {
         self.join_future.clone()
-    }
-}
-
-impl<C: ServerContext> HttpServer<C, CloseHandle> {
-    /// Separates the [HttpServer] from the [CloseHandle] object which is
-    /// capable of closing it.
-    pub fn take_close_handle(
-        self,
-    ) -> (HttpServer<C, Uncloseable>, CloseHandle) {
-        let HttpServer {
-            probe_registration,
-            app_state,
-            local_addr,
-            closer,
-            join_future,
-        } = self;
-
-        (
-            HttpServer {
-                probe_registration,
-                app_state,
-                local_addr,
-                closer: Uncloseable {},
-                join_future,
-            },
-            closer,
-        )
     }
 
     /// Signals the currently running server to stop and waits for it to exit.
@@ -687,10 +639,7 @@ impl Drop for CloseHandle {
     }
 }
 
-impl<C: ServerContext, Closer> Future for HttpServer<C, Closer>
-where
-    Closer: Unpin,
-{
+impl<C: ServerContext> Future for HttpServer<C> {
     type Output = Result<(), String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -700,10 +649,7 @@ where
     }
 }
 
-impl<C: ServerContext, Closer> FusedFuture for HttpServer<C, Closer>
-where
-    Closer: Unpin,
-{
+impl<C: ServerContext> FusedFuture for HttpServer<C> {
     fn is_terminated(&self) -> bool {
         self.join_future.is_terminated()
     }
