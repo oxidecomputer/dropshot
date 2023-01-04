@@ -577,6 +577,10 @@ impl<C: ServerContext> HttpServer<C> {
         &self.app_state.private
     }
 
+    pub fn using_tls(&self) -> bool {
+        self.app_state.using_tls()
+    }
+
     /// Update TLS certificates for a running HTTPS server.
     pub async fn refresh_tls(&self, config: &ConfigTls) -> Result<(), String> {
         let acceptor = &self
