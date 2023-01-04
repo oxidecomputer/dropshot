@@ -206,7 +206,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             probe_registration,
             app_state: self.app_state,
             local_addr: self.local_addr,
-            closer: Closeable { close_channel: Some(tx) },
+            closer: CloseHandle { close_channel: Some(tx) },
             join_future: join_handle.boxed().shared(),
         }
     }
@@ -556,7 +556,7 @@ type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
 /// The generic traits represent the following:
 /// - C: Caller-supplied server context
 /// - Closer: Identifies if the server is directly closeable.
-pub struct HttpServer<C: ServerContext, Closer = Closeable> {
+pub struct HttpServer<C: ServerContext, Closer = CloseHandle> {
     probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
@@ -564,14 +564,14 @@ pub struct HttpServer<C: ServerContext, Closer = Closeable> {
     join_future: SharedBoxFuture<Result<(), String>>,
 }
 
-/// Represents the ability to close a running HTTP server.
+/// Handle used to trigger the shutdown of an [HttpServer].
 ///
 /// Returned from [HttpServer::take_close_handle].
-pub struct Closeable {
+pub struct CloseHandle {
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl Closeable {
+impl CloseHandle {
     /// Closes the server without waiting for it to terminate.
     ///
     /// To await termination, see: [HttpServer::wait_for_shutdown].
@@ -626,7 +626,7 @@ impl<C: ServerContext, Closer> HttpServer<C, Closer> {
     /// the shutdown to happen.
     ///
     /// To trigger a shutdown:
-    /// - Call [HttpServer::take_close_handle] and [Closeable::close].
+    /// - Call [HttpServer::take_close_handle] and [CloseHandle::close].
     /// - Call [HttpServer::close] (which also awaits shutdown).
     pub fn wait_for_shutdown(
         &self,
@@ -635,10 +635,12 @@ impl<C: ServerContext, Closer> HttpServer<C, Closer> {
     }
 }
 
-impl<C: ServerContext> HttpServer<C, Closeable> {
-    /// Separates the [HttpServer] from the [Closeable] object which is
+impl<C: ServerContext> HttpServer<C, CloseHandle> {
+    /// Separates the [HttpServer] from the [CloseHandle] object which is
     /// capable of closing it.
-    pub fn take_close_handle(self) -> (HttpServer<C, Uncloseable>, Closeable) {
+    pub fn take_close_handle(
+        self,
+    ) -> (HttpServer<C, Uncloseable>, CloseHandle) {
         let HttpServer {
             probe_registration,
             app_state,
@@ -677,7 +679,7 @@ impl<C: ServerContext> HttpServer<C, Closeable> {
  * `Drop` to attempt to shut down the server to handle less clean shutdowns
  * (e.g., from failing tests).
  */
-impl Drop for Closeable {
+impl Drop for CloseHandle {
     fn drop(&mut self) {
         if let Some(c) = self.close_channel.take() {
             c.send(()).expect("failed to send close signal")
