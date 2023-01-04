@@ -1,6 +1,6 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
-//! An example which demonstrates a server that can manage its own lifecycle.
+//! An example that demonstrates server shutdown (and waiting for shutdown).
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
@@ -33,9 +33,6 @@ async fn main() -> Result<(), String> {
     let api_context = Arc::new(ExampleContext::new());
 
     // Set up the server.
-    //
-    // Note that we split the "closer" from the "server", so we can continue
-    // to reference the server while simultaneously waiting for it to shut down.
     let server =
         HttpServerStarter::new(&config_dropshot, api, api_context, &log)
             .map_err(|error| format!("failed to create server: {}", error))?

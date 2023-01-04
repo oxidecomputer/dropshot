@@ -555,7 +555,6 @@ type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
 ///
 /// The generic traits represent the following:
 /// - C: Caller-supplied server context
-/// - Closer: Identifies if the server is directly closeable.
 pub struct HttpServer<C: ServerContext> {
     probe_registration: ProbeRegistration,
     app_state: Arc<DropshotState<C>>,
@@ -603,7 +602,7 @@ impl<C: ServerContext> HttpServer<C> {
 
     /// Returns a future which completes when the server has shut down.
     ///
-    /// This function does not cause the server to shut down, it just waits for
+    /// This function does not cause the server to shut down. It just waits for
     /// the shutdown to happen.
     ///
     /// To trigger a shutdown, Call [HttpServer::close] (which also awaits shutdown).
