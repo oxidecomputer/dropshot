@@ -14,6 +14,7 @@ categories = ["network-programming", "web-programming::http-server"]
 async-stream = "0.3.3"
 async-trait = "0.1.60"
 base64 = "0.20.0"
+buf-list = "0.1.3"
 bytes = "1"
 futures = "0.3.25"
 hostname = "0.3.0"

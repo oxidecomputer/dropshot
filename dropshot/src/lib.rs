@@ -214,7 +214,8 @@
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
- *      [body_param: UntypedBody<J>,]
+ *      [body_param: UntypedBody,]
+ *      [body_param: ChunkedBody,]
  * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
@@ -237,11 +238,13 @@
  *   body as JSON (or form/url-encoded) and deserializing it into an instance
  *   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
  * * [`UntypedBody`] extracts the raw bytes of the request body.
+ * * [`ChunkedBody`] extracts the raw bytes of the request body as a list of bytes.
+ *   This is recommended for larger bodies.
  *
- * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
- * `UntypedBody`, and the corresponding extraction cannot be completed, the
- * request fails with status code 400 and an error message reflecting a
- * validation error.
+ * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`,
+ * `UntypedBody`, or `ChunkedBody, and the corresponding extraction cannot be
+ * completed, the request fails with status code 400 and an error message
+ * reflecting a validation error.
  *
  * As with any serde-deserializable type, you can make fields optional by having
  * the corresponding property of the type be an `Option`.  Here's an example of
@@ -637,6 +640,7 @@ pub use error::HttpErrorResponseBody;
 pub use handler::http_response_found;
 pub use handler::http_response_see_other;
 pub use handler::http_response_temporary_redirect;
+pub use handler::ChunkedBody;
 pub use handler::Extractor;
 pub use handler::ExtractorMetadata;
 pub use handler::FreeformBody;

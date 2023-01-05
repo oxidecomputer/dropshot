@@ -35,6 +35,36 @@
         }
       }
     },
+    "/datagoeshere-chunked": {
+      "put": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler7a",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/dup1": {
       "get": {
         "tags": [

@@ -35,7 +35,7 @@
 
 use super::error::HttpError;
 use super::http_util::http_extract_path_params;
-use super::http_util::http_read_body;
+use super::http_util::http_read_body_bytes;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
@@ -46,6 +46,7 @@ use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
+use crate::http_util::http_read_body_buf_list;
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::router::VariableSet;
@@ -53,6 +54,7 @@ use crate::to_map::to_map;
 use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 
 use async_trait::async_trait;
+use buf_list::BufList;
 use bytes::Bytes;
 use futures::lock::Mutex;
 use http::HeaderMap;
@@ -972,7 +974,7 @@ where
 {
     let server = &rqctx.server;
     let mut request = rqctx.request.lock().await;
-    let body = http_read_body(
+    let body = http_read_body_bytes(
         request.body_mut(),
         server.config.request_body_max_bytes,
     )
@@ -1072,6 +1074,9 @@ where
 /**
  * `UntypedBody` is an extractor for reading in the contents of the HTTP request
  * body and making the raw bytes directly available to the consumer.
+ *
+ * `UntypedBody` stores its content as a single, contiguous `Bytes`, and is
+ * recommended for small request bodies. For larger ones, use `ChunkedBody`.
  */
 #[derive(Debug)]
 pub struct UntypedBody {
@@ -1110,7 +1115,7 @@ impl Extractor for UntypedBody {
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
         let mut request = rqctx.request.lock().await;
-        let body_bytes = http_read_body(
+        let body_bytes = http_read_body_bytes(
             request.body_mut(),
             server.config.request_body_max_bytes,
         )
@@ -1121,25 +1126,68 @@ impl Extractor for UntypedBody {
     fn metadata(
         _content_type: ApiEndpointBodyContentType,
     ) -> ExtractorMetadata {
-        ExtractorMetadata {
-            parameters: vec![ApiEndpointParameter::new_body(
-                ApiEndpointBodyContentType::Bytes,
-                true,
-                ApiSchemaGenerator::Static {
-                    schema: Box::new(
-                        SchemaObject {
-                            instance_type: Some(InstanceType::String.into()),
-                            format: Some(String::from("binary")),
-                            ..Default::default()
-                        }
-                        .into(),
-                    ),
-                    dependencies: indexmap::IndexMap::default(),
-                },
-                vec![],
-            )],
-            extension_mode: ExtensionMode::None,
-        }
+        untyped_metadata()
+    }
+}
+
+/// An extractor that makes the raw bytes directly available to the consumer as a
+/// [`BufList`].
+///
+/// `ChunkedBody` stores its content as a [`BufList`], and is recommended for
+/// large request bodies.
+#[derive(Debug)]
+pub struct ChunkedBody {
+    content: BufList,
+}
+
+impl ChunkedBody {
+    /// Returns the contents as a `BufList`.
+    pub fn into_inner(self) -> BufList {
+        self.content
+    }
+}
+
+#[async_trait]
+impl Extractor for ChunkedBody {
+    async fn from_request<Context: ServerContext>(
+        rqctx: Arc<RequestContext<Context>>,
+    ) -> Result<ChunkedBody, HttpError> {
+        let server = &rqctx.server;
+        let mut request = rqctx.request.lock().await;
+        let content = http_read_body_buf_list(
+            request.body_mut(),
+            server.config.request_body_max_bytes,
+        )
+        .await?;
+        Ok(ChunkedBody { content })
+    }
+
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
+        untyped_metadata()
+    }
+}
+
+fn untyped_metadata() -> ExtractorMetadata {
+    ExtractorMetadata {
+        parameters: vec![ApiEndpointParameter::new_body(
+            ApiEndpointBodyContentType::Bytes,
+            true,
+            ApiSchemaGenerator::Static {
+                schema: Box::new(
+                    SchemaObject {
+                        instance_type: Some(InstanceType::String.into()),
+                        format: Some(String::from("binary")),
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                dependencies: indexmap::IndexMap::default(),
+            },
+            vec![],
+        )],
+        extension_mode: ExtensionMode::None,
     }
 }
 

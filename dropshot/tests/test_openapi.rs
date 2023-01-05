@@ -2,10 +2,10 @@
 
 use dropshot::{
     endpoint, http_response_found, http_response_see_other,
-    http_response_temporary_redirect, ApiDescription, FreeformBody, HttpError,
-    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
-    HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
-    HttpResponseSeeOther, HttpResponseTemporaryRedirect,
+    http_response_temporary_redirect, ApiDescription, ChunkedBody,
+    FreeformBody, HttpError, HttpResponseAccepted, HttpResponseCreated,
+    HttpResponseDeleted, HttpResponseFound, HttpResponseHeaders,
+    HttpResponseOk, HttpResponseSeeOther, HttpResponseTemporaryRedirect,
     HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
 };
@@ -168,6 +168,18 @@ async fn handler6(
 async fn handler7(
     _rqctx: Arc<RequestContext<()>>,
     _dump: UntypedBody,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/datagoeshere-chunked",
+    tags = ["it"],
+}]
+async fn handler7a(
+    _rqctx: Arc<RequestContext<()>>,
+    _dump: ChunkedBody,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
 }
@@ -483,6 +495,7 @@ fn make_api(
     api.register(handler5)?;
     api.register(handler6)?;
     api.register(handler7)?;
+    api.register(handler7a)?;
     api.register(handler8)?;
     api.register(handler9)?;
     api.register(handler10)?;

@@ -26,6 +26,7 @@ use dropshot::test_util::read_string;
 use dropshot::test_util::TEST_HEADER_1;
 use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
+use dropshot::ChunkedBody;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
 use dropshot::HttpResponseFound;
@@ -72,6 +73,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_uuid).unwrap();
     api.register(demo_handler_path_param_u32).unwrap();
     api.register(demo_handler_untyped_body).unwrap();
+    api.register(demo_handler_chunked_body).unwrap();
     api.register(demo_handler_delete).unwrap();
     api.register(demo_handler_headers).unwrap();
     api.register(demo_handler_302_bogus).unwrap();
@@ -704,6 +706,95 @@ async fn test_untyped_body() {
     testctx.teardown().await;
 }
 
+#[tokio::test]
+async fn test_chunked_body() {
+    const MAX_BYTES: usize = 1 * 1024 * 1024;
+
+    let api = demo_api();
+    let testctx = common::test_setup_with_large_request_bodies(
+        "test_chunked_body",
+        api,
+        MAX_BYTES,
+    );
+    let client = &testctx.client_testctx;
+
+    /* Success case: large body that's still under the limit. */
+    let big_body = vec![0u8; MAX_BYTES];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/chunked_body",
+            big_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoChunked = read_json(&mut response).await;
+    println!("for big body, got: {:?}", json);
+    assert_eq!(json.nbytes, MAX_BYTES);
+
+    /* Error case: body too large. */
+    let big_body = vec![0u8; MAX_BYTES + 1];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/chunked_body",
+            big_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        format!("request body exceeded maximum size of {MAX_BYTES} bytes")
+    );
+
+    /* Success case: invalid UTF-8 (chunked_body doesn't do any parsing). */
+    let bad_body = vec![0x80u8; 1];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/chunked_body",
+            bad_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoChunked = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 1);
+
+    /* Success case: empty body */
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?parse_str=true",
+            "".into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 0);
+    assert_eq!(json.as_utf8, Some(String::from("")));
+
+    /* Success case: non-empty content */
+    let body: Vec<u8> = Vec::from(&b"t\xce\xbcv"[..]);
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?parse_str=true",
+            body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 4);
+    assert_eq!(json.as_utf8, Some(String::from("tμv")));
+
+    testctx.teardown().await;
+}
+
 /*
  * Test delete request
  */
@@ -1027,6 +1118,27 @@ async fn demo_handler_untyped_body(
     };
 
     Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct DemoChunked {
+    pub nbytes: usize,
+    pub nchunks: usize,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/testing/chunked_body"
+}]
+async fn demo_handler_chunked_body(
+    _rqctx: Arc<RequestContext<usize>>,
+    body: ChunkedBody,
+) -> Result<HttpResponseOk<DemoChunked>, HttpError> {
+    let buf_list = body.into_inner();
+    let nbytes = buf_list.num_bytes();
+    let nchunks = buf_list.num_chunks();
+
+    Ok(HttpResponseOk(DemoChunked { nbytes, nchunks }))
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
