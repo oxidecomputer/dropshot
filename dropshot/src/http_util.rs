@@ -3,8 +3,10 @@
  * General-purpose HTTP-related facilities
  */
 
+use buf_list::BufList;
 use bytes::BufMut;
 use bytes::Bytes;
+use bytes::BytesMut;
 use hyper::body::HttpBody;
 use serde::de::DeserializeOwned;
 
@@ -23,17 +25,91 @@ pub const CONTENT_TYPE_NDJSON: &str = "application/x-ndjson";
 /** MIME type for form/urlencoded data */
 pub const CONTENT_TYPE_URL_ENCODED: &str = "application/x-www-form-urlencoded";
 
-/**
- * Reads the rest of the body from the request up to the given number of bytes.
- * If the body fits within the specified cap, a buffer is returned with all the
- * bytes read.  If not, an error is returned.
- */
-pub async fn http_read_body<T>(
+/// Reads the rest of the body from the request up to the given number of bytes, as a `Bytes`.
+///
+/// This is intended for smaller bodies (e.g. a few kilobytes).
+///
+/// # Errors
+///
+/// Errors if the body length exceeds the given cap.
+pub async fn http_read_body_bytes<T>(
     body: &mut T,
     cap: usize,
 ) -> Result<Bytes, HttpError>
 where
     T: HttpBody<Data = Bytes, Error = hyper::Error> + std::marker::Unpin,
+{
+    http_read_body::<BytesMut, _>(body, cap).await
+}
+
+/// Reads the rest of the body from the request up to the given number of bytes, as a `BufList`.
+///
+/// This is intended for larger bodies (e.g. a megabyte or larger).
+///
+/// # Errors
+///
+/// Errors if the body length exceeds the given cap.
+pub async fn http_read_body_buf_list<T>(
+    body: &mut T,
+    cap: usize,
+) -> Result<BufList, HttpError>
+where
+    T: HttpBody<Data = Bytes, Error = hyper::Error> + std::marker::Unpin,
+{
+    http_read_body::<BufList, _>(body, cap).await
+}
+
+trait BufListLike {
+    type Output;
+    fn new() -> Self;
+    fn push_chunk(&mut self, chunk: Bytes);
+    fn finish(self) -> Self::Output;
+}
+
+impl BufListLike for BytesMut {
+    type Output = Bytes;
+
+    fn new() -> Self {
+        BytesMut::new()
+    }
+
+    fn push_chunk(&mut self, chunk: Bytes) {
+        self.put(chunk);
+    }
+
+    fn finish(self) -> Self::Output {
+        self.freeze()
+    }
+}
+
+impl BufListLike for BufList {
+    type Output = BufList;
+
+    fn new() -> Self {
+        BufList::new()
+    }
+
+    fn push_chunk(&mut self, chunk: Bytes) {
+        self.push_chunk(chunk);
+    }
+
+    fn finish(self) -> Self::Output {
+        self
+    }
+}
+
+/**
+ * Reads the rest of the body from the request up to the given number of bytes.
+ * If the body fits within the specified cap, a buffer is returned with all the
+ * bytes read.  If not, an error is returned.
+ */
+async fn http_read_body<B, T>(
+    body: &mut T,
+    cap: usize,
+) -> Result<B::Output, HttpError>
+where
+    T: HttpBody<Data = Bytes, Error = hyper::Error> + std::marker::Unpin,
+    B: BufListLike,
 {
     /*
      * This looks a lot like the implementation of hyper::body::to_bytes(), but
@@ -47,7 +123,7 @@ where
      * work too?
      * TODO do we need to use saturating_add() here?
      */
-    let mut parts = std::vec::Vec::new();
+    let mut parts = B::new();
     let mut nbytesread: usize = 0;
     while let Some(maybebuf) = body.data().await {
         let buf = maybebuf?;
@@ -63,7 +139,7 @@ where
         }
 
         nbytesread += bufsize;
-        parts.put(buf);
+        parts.push_chunk(buf);
     }
 
     /*
@@ -78,7 +154,7 @@ where
     // assert!(body.is_end_stream());
     // assert!(body.data().await.is_none());
     // assert!(body.trailers().await?.is_none());
-    Ok(parts.into())
+    Ok(parts.finish())
 }
 
 /**

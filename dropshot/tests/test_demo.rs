@@ -646,7 +646,7 @@ async fn test_untyped_body() {
     let error = client
         .make_request_with_body(
             Method::PUT,
-            "/testing/untyped_body?parse_str=true",
+            "/testing/untyped_body?into=string",
             bad_body.clone().into(),
             StatusCode::BAD_REQUEST,
         )
@@ -676,7 +676,7 @@ async fn test_untyped_body() {
     let mut response = client
         .make_request_with_body(
             Method::PUT,
-            "/testing/untyped_body?parse_str=true",
+            "/testing/untyped_body?into=string",
             "".into(),
             StatusCode::OK,
         )
@@ -691,7 +691,7 @@ async fn test_untyped_body() {
     let mut response = client
         .make_request_with_body(
             Method::PUT,
-            "/testing/untyped_body?parse_str=true",
+            "/testing/untyped_body?into=string",
             body.into(),
             StatusCode::OK,
         )
@@ -700,6 +700,69 @@ async fn test_untyped_body() {
     let json: DemoUntyped = read_json(&mut response).await;
     assert_eq!(json.nbytes, 4);
     assert_eq!(json.as_utf8, Some(String::from("tμv")));
+
+    /* Success case: into BufList, body under limit. */
+    let big_body = vec![0u8; 1024];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?into=buf-list",
+            big_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 1024);
+
+    /* Error case: into BufList, body over limit. */
+    let big_body = vec![0u8; 1025];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body?into=buf-list",
+            big_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 1024 bytes"
+    );
+
+    /* Success case: into BufList with custom limit, body under limit. */
+    const MAX_BYTES: usize = 1 * 1024 * 1024;
+
+    let very_big_body = vec![0u8; MAX_BYTES];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            &format!("/testing/untyped_body?into=buf-list&limit={MAX_BYTES}"),
+            very_big_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    println!("for very big body, got: {:?}", json);
+    assert_eq!(json.nbytes, MAX_BYTES);
+
+    /* Error case: into BufList with custom limit, body over limit. */
+    let very_big_body = vec![0u8; MAX_BYTES + 1];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            &format!("/testing/untyped_body?into=buf-list&limit={MAX_BYTES}"),
+            very_big_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        format!("request body exceeded maximum size of {MAX_BYTES} bytes")
+    );
 
     testctx.teardown().await;
 }
@@ -1001,15 +1064,27 @@ async fn demo_handler_path_param_u32(
     http_echo(&path_params.into_inner())
 }
 
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct DemoUntyped {
     pub nbytes: usize,
+    pub nchunks: usize,
     pub as_utf8: Option<String>,
 }
-#[derive(Deserialize, JsonSchema)]
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct DemoUntypedQuery {
-    pub parse_str: Option<bool>,
+    pub into: Option<UntypedQueryInto>,
+    pub limit: Option<usize>,
 }
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum UntypedQueryInto {
+    Bytes,
+    String,
+    BufList,
+}
+
 #[endpoint {
     method = PUT,
     path = "/testing/untyped_body"
@@ -1019,14 +1094,31 @@ async fn demo_handler_untyped_body(
     body: UntypedBody,
     query: Query<DemoUntypedQuery>,
 ) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
-    let nbytes = body.as_bytes().len();
-    let as_utf8 = if query.into_inner().parse_str.unwrap_or(false) {
-        Some(String::from(body.as_str()?))
-    } else {
-        None
+    let query = query.into_inner();
+    let response = match query.into.unwrap_or(UntypedQueryInto::Bytes) {
+        UntypedQueryInto::Bytes => {
+            let nbytes = body.into_bytes().await?.len();
+            DemoUntyped { nbytes, nchunks: 1, as_utf8: None }
+        }
+        UntypedQueryInto::String => {
+            let s = body.into_string().await?;
+            DemoUntyped { nbytes: s.len(), nchunks: 1, as_utf8: Some(s) }
+        }
+        UntypedQueryInto::BufList => {
+            let buf_list = match query.limit {
+                Some(max_bytes) => {
+                    body.into_buf_list_with_limit(max_bytes).await?
+                }
+                None => body.into_buf_list().await?,
+            };
+            DemoUntyped {
+                nbytes: buf_list.num_bytes(),
+                nchunks: buf_list.num_chunks(),
+                as_utf8: None,
+            }
+        }
     };
-
-    Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
+    Ok(HttpResponseOk(response))
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

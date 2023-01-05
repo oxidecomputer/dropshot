@@ -35,7 +35,7 @@
 
 use super::error::HttpError;
 use super::http_util::http_extract_path_params;
-use super::http_util::http_read_body;
+use super::http_util::http_read_body_bytes;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
@@ -46,6 +46,7 @@ use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
+use crate::http_util::http_read_body_buf_list;
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::router::VariableSet;
@@ -53,10 +54,13 @@ use crate::to_map::to_map;
 use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 
 use async_trait::async_trait;
+use buf_list::BufList;
 use bytes::Bytes;
 use futures::lock::Mutex;
+use futures::Stream;
 use http::HeaderMap;
 use http::StatusCode;
+use hyper::body::HttpBody;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
@@ -75,6 +79,7 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use tokio_stream::wrappers::ReceiverStream;
 
 /**
  * Type alias for the result returned by HTTP handler functions.
@@ -972,7 +977,7 @@ where
 {
     let server = &rqctx.server;
     let mut request = rqctx.request.lock().await;
-    let body = http_read_body(
+    let body = http_read_body_bytes(
         request.body_mut(),
         server.config.request_body_max_bytes,
     )
@@ -1065,41 +1070,97 @@ where
     }
 }
 
-/*
- * UntypedBody: body extractor for a plain array of bytes of a body.
- */
-
-/**
- * `UntypedBody` is an extractor for reading in the contents of the HTTP request
- * body and making the raw bytes directly available to the consumer.
- */
+/// An extractor for raw bytes.
+///
+/// `UntypedBody` is meant to read in the contents of an HTTP request
+/// body as a series of raw bytes. An `UntypedBody` represents a read
+/// that hasn't happened yet; a method like `into_bytes()` or
+/// `into_stream()` must be called to read the full body.
 #[derive(Debug)]
 pub struct UntypedBody {
-    content: Bytes,
+    request: Arc<Mutex<Request<Body>>>,
+    max_bytes: usize,
 }
 
 impl UntypedBody {
-    /**
-     * Returns a byte slice of the underlying body content.
-     */
-    /*
-     * TODO drop this in favor of Deref?  + Display and Debug for convenience?
-     */
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.content
+    /// Reads the body into a single, contiguous [`Bytes`] chunk.
+    ///
+    /// Recommended for smaller request bodies. Constructing a single `Bytes`
+    /// chunk from larger request bodies might cause excessive copying and
+    /// reallocations.
+    ///
+    /// # Errors
+    ///
+    /// Errors if the request body is too large, or if the
+    pub async fn into_bytes(self) -> Result<Bytes, HttpError> {
+        let mut request = self.request.lock().await;
+        http_read_body_bytes(request.body_mut(), self.max_bytes).await
     }
 
-    /**
-     * Convenience wrapper to convert the body to a UTF-8 string slice,
-     * returning a 400-level error if the body is not valid UTF-8.
-     */
-    pub fn as_str(&self) -> Result<&str, HttpError> {
-        std::str::from_utf8(self.as_bytes()).map_err(|e| {
+    /// Reads the body into a `String`.
+    ///
+    /// # Errors
+    ///
+    /// In addition to the usual errors, if the stream is not valid UTF-8, this
+    /// returns a "Bad Request" error.
+    pub async fn into_string(self) -> Result<String, HttpError> {
+        let v = Vec::from(self.into_bytes().await?);
+        String::from_utf8(v).map_err(|e| {
             HttpError::for_bad_request(
                 None,
                 format!("failed to parse body as UTF-8 string: {}", e),
             )
         })
+    }
+
+    /// Reads the body into a [`BufList`].
+    ///
+    /// A `BufList` is a list of [`Bytes`] chunks that implements the
+    /// [`Buf`](bytes::Buf) trait. A `BufList` chunks can be operated on
+    /// as a unit.
+    ///
+    /// Recommended for larger request bodies.
+    pub async fn into_buf_list(self) -> Result<BufList, HttpError> {
+        let max_bytes = self.max_bytes;
+        self.into_buf_list_with_limit(max_bytes).await
+    }
+
+    /// Reads the body into a [`BufList`] with a custom limit for the maximum
+    /// size of bytes.
+    ///
+    /// This method is similar to [`into_buf_list`](Self::into_buf_list), except
+    /// a custom limit is specified. If this method is called, the default
+    /// [`request_body_max_bytes`](ServerConfig::request_body_max_bytes) limit
+    /// is ignored.
+    pub async fn into_buf_list_with_limit(
+        self,
+        max_bytes: usize,
+    ) -> Result<BufList, HttpError> {
+        let mut request = self.request.lock().await;
+        http_read_body_buf_list(request.body_mut(), max_bytes).await
+    }
+
+    /// Converts `self` into a [`Stream`] of [`Bytes`] chunks.
+    ///
+    /// This method ignores the
+    /// [`request_body_max_bytes`](ServerConfig::request_body_max_bytes) limit.
+    pub fn into_stream(
+        self,
+    ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send + Sync + 'static
+    {
+        let (sender, receiver) = tokio::sync::mpsc::channel(8);
+        tokio::spawn(async move {
+            let mut request = self.request.lock().await;
+            let body = request.body_mut();
+            while let Some(data) = body.data().await {
+                if let Err(_) = sender.send(data.map_err(Into::into)).await {
+                    // The receiver was dropped -- drop the stream.
+                    break;
+                }
+            }
+        });
+
+        ReceiverStream::new(receiver)
     }
 }
 
@@ -1108,14 +1169,10 @@ impl Extractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
     ) -> Result<UntypedBody, HttpError> {
-        let server = &rqctx.server;
-        let mut request = rqctx.request.lock().await;
-        let body_bytes = http_read_body(
-            request.body_mut(),
-            server.config.request_body_max_bytes,
-        )
-        .await?;
-        Ok(UntypedBody { content: body_bytes })
+        Ok(Self {
+            request: rqctx.request.clone(),
+            max_bytes: rqctx.server.config.request_body_max_bytes,
+        })
     }
 
     fn metadata(

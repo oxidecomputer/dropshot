@@ -214,7 +214,7 @@
  *      [query_params: Query<Q>,]
  *      [path_params: Path<P>,]
  *      [body_param: TypedBody<J>,]
- *      [body_param: UntypedBody<J>,]
+ *      [body_param: UntypedBody,]
  * ) -> Result<HttpResponse*, HttpError>
  * ```
  *
@@ -239,9 +239,9 @@
  * * [`UntypedBody`] extracts the raw bytes of the request body.
  *
  * If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
- * `UntypedBody`, and the corresponding extraction cannot be completed, the
- * request fails with status code 400 and an error message reflecting a
- * validation error.
+ * `UntypedBody`, and the corresponding extraction cannot be
+ * completed, the request fails with status code 400 and an error message
+ * reflecting a validation error.
  *
  * As with any serde-deserializable type, you can make fields optional by having
  * the corresponding property of the type be an `Option`.  Here's an example of

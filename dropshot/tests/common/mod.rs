@@ -34,10 +34,23 @@ pub fn test_setup(
     TestContext::new(api, 0 as usize, &config_dropshot, Some(logctx), log)
 }
 
+pub fn test_setup_with_large_request_bodies(
+    test_name: &str,
+    api: ApiDescription<usize>,
+    request_body_max_bytes: usize,
+) -> TestContext<usize> {
+    let config_dropshot: ConfigDropshot =
+        ConfigDropshot { request_body_max_bytes, ..Default::default() };
+
+    let logctx = create_log_context(test_name);
+    let log = logctx.log.new(o!());
+    TestContext::new(api, 0 as usize, &config_dropshot, Some(logctx), log)
+}
+
 pub fn create_log_context(test_name: &str) -> LogContext {
     let log_config = ConfigLogging::File {
         level: ConfigLoggingLevel::Debug,
-        path: "UNUSED".to_string(),
+        path: "UNUSED".into(),
         if_exists: ConfigLoggingIfExists::Fail,
     };
     LogContext::new(test_name, &log_config)
