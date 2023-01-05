@@ -53,6 +53,7 @@ use crate::router::VariableSet;
 use crate::to_map::to_map;
 use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 
+use async_stream::try_stream;
 use async_trait::async_trait;
 use buf_list::BufList;
 use bytes::Bytes;
@@ -79,7 +80,6 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use tokio_stream::wrappers::ReceiverStream;
 
 /**
  * Type alias for the result returned by HTTP handler functions.
@@ -1148,19 +1148,13 @@ impl UntypedBody {
         self,
     ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send + Sync + 'static
     {
-        let (sender, receiver) = tokio::sync::mpsc::channel(8);
-        tokio::spawn(async move {
+        try_stream! {
             let mut request = self.request.lock().await;
             let body = request.body_mut();
             while let Some(data) = body.data().await {
-                if let Err(_) = sender.send(data.map_err(Into::into)).await {
-                    // The receiver was dropped -- drop the stream.
-                    break;
-                }
+                yield data?;
             }
-        });
-
-        ReceiverStream::new(receiver)
+        }
     }
 }
 
