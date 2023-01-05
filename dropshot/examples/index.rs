@@ -63,7 +63,7 @@ struct AllPath {
 }
 
 /**
- * Return static content.for all paths.
+ * Return static content for all paths.
  */
 #[endpoint {
     method = GET,
