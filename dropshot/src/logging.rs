@@ -11,6 +11,7 @@ use slog::Drain;
 use slog::Level;
 use slog::Logger;
 use std::fs::OpenOptions;
+use std::io::LineWriter;
 use std::{io, path::Path};
 
 /**
@@ -136,12 +137,13 @@ fn log_drain_for_file(
     open_options: &OpenOptions,
     path: &Path,
     log_name: String,
-) -> Result<slog::Fuse<slog_json::Json<std::fs::File>>, io::Error> {
+) -> Result<slog::Fuse<slog_json::Json<LineWriter<std::fs::File>>>, io::Error> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    let file = open_options.open(path)?;
+    // Buffer writes to the file around newlines to minimize syscalls.
+    let file = LineWriter::new(open_options.open(path)?);
 
     /*
      * Record a message to the stderr so that a reader who doesn't already know
