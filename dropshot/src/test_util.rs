@@ -4,7 +4,6 @@
  * and dependents of this crate.
  */
 
-use camino::Utf8PathBuf;
 use chrono::DateTime;
 use chrono::Utc;
 use http::method::Method;
@@ -20,12 +19,12 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use slog::Logger;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fs;
 use std::iter::Iterator;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
@@ -427,7 +426,7 @@ impl ClientTestContext {
 pub struct LogContext {
     /** general-purpose logger */
     pub log: Logger,
-    log_path: Option<Utf8PathBuf>,
+    log_path: Option<PathBuf>,
 }
 
 impl LogContext {
@@ -460,12 +459,13 @@ impl LogContext {
                      each test."
                 );
                 let new_path = log_file_for_test(test_name);
-                eprintln!("log file: {}", new_path);
+                let new_path_str = new_path.as_path().display().to_string();
+                eprintln!("log file: {:?}", new_path_str);
                 (
-                    Some(new_path.clone()),
+                    Some(new_path),
                     ConfigLogging::File {
                         level: level.clone(),
-                        path: new_path,
+                        path: new_path_str,
                         if_exists: if_exists.clone(),
                     },
                 )
@@ -764,14 +764,13 @@ static TEST_SUITE_LOGGER_ID: AtomicU32 = AtomicU32::new(0);
  * Returns a unique path name in a temporary directory that includes the given
  * `test_name`.
  */
-pub fn log_file_for_test(test_name: &str) -> Utf8PathBuf {
+pub fn log_file_for_test(test_name: &str) -> PathBuf {
     let arg0 = {
-        let arg0path = Utf8PathBuf::from(std::env::args().next().unwrap());
-        arg0path.file_name().unwrap().to_owned()
+        let arg0path = std::env::args().next().unwrap();
+        Path::new(&arg0path).file_name().unwrap().to_str().unwrap().to_string()
     };
 
-    let mut pathbuf = Utf8PathBuf::try_from(std::env::temp_dir())
-        .expect("temp dir is valid UTF-8");
+    let mut pathbuf = std::env::temp_dir();
     let id = TEST_SUITE_LOGGER_ID.fetch_add(1, Ordering::SeqCst);
     let pid = std::process::id();
     pathbuf.push(format!("{}-{}.{}.{}.log", arg0, test_name, pid, id));

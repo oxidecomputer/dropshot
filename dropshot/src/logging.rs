@@ -5,14 +5,12 @@
  * they're provided because they're commonly wanted by consumers of this crate.
  */
 
-use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 use slog::Drain;
 use slog::Level;
 use slog::Logger;
 use std::fs::OpenOptions;
-use std::io::LineWriter;
 use std::{io, path::Path};
 
 /**
@@ -27,7 +25,7 @@ pub enum ConfigLogging {
     /** Bunyan-formatted output to a specified file. */
     File {
         level: ConfigLoggingLevel,
-        path: Utf8PathBuf,
+        path: String,
         if_exists: ConfigLoggingIfExists,
     },
 }
@@ -138,13 +136,12 @@ fn log_drain_for_file(
     open_options: &OpenOptions,
     path: &Path,
     log_name: String,
-) -> Result<slog::Fuse<slog_json::Json<LineWriter<std::fs::File>>>, io::Error> {
+) -> Result<slog::Fuse<slog_json::Json<std::fs::File>>, io::Error> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    // Buffer writes to the file around newlines to minimize syscalls.
-    let file = LineWriter::new(open_options.open(path)?);
+    let file = open_options.open(path)?;
 
     /*
      * Record a message to the stderr so that a reader who doesn't already know
