@@ -1154,6 +1154,9 @@ impl UntypedBody {
             while let Some(data) = body.data().await {
                 yield data?;
             }
+            // Read the trailers even though we aren't going to do anything with
+            // them.
+            body.trailers().await?;
         }
     }
 }
@@ -1192,6 +1195,12 @@ impl Extractor for UntypedBody {
             extension_mode: ExtensionMode::None,
         }
     }
+}
+
+struct CappedStream<St> {
+    inner: St,
+    max_bytes: usize,
+    current_bytes: usize,
 }
 
 /*
