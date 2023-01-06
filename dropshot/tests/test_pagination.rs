@@ -873,7 +873,7 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
         path,
         &ConfigLogging::File {
             level: ConfigLoggingLevel::Info,
-            path: "UNUSED".into(),
+            path: "UNUSED".to_string(),
             if_exists: ConfigLoggingIfExists::Fail,
         },
     );

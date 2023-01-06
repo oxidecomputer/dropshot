@@ -50,7 +50,7 @@ pub fn test_setup_with_large_request_bodies(
 pub fn create_log_context(test_name: &str) -> LogContext {
     let log_config = ConfigLogging::File {
         level: ConfigLoggingLevel::Debug,
-        path: "UNUSED".into(),
+        path: "UNUSED".to_string(),
         if_exists: ConfigLoggingIfExists::Fail,
     };
     LogContext::new(test_name, &log_config)
