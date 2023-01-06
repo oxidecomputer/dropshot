@@ -1144,8 +1144,7 @@ impl UntypedBody {
     /// functions, this function fails if the body exceeds the server's
     /// configured maximum body size.
     pub async fn into_buf_list(self) -> Result<BufList, HttpError> {
-        let max_bytes = self.max_bytes;
-        self.into_buf_list_with_cap(max_bytes).await
+        self.into_stream().try_collect().await
     }
 
     /// Reads the body into a [`BufList`], with a custom limit for the maximum
