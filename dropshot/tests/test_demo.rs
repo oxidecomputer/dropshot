@@ -1107,7 +1107,7 @@ async fn demo_handler_untyped_body(
         UntypedQueryInto::BufList => {
             let buf_list = match query.limit {
                 Some(max_bytes) => {
-                    body.into_buf_list_with_limit(max_bytes).await?
+                    body.into_buf_list_with_cap(max_bytes).await?
                 }
                 None => body.into_buf_list().await?,
             };

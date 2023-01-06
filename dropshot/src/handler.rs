@@ -35,7 +35,6 @@
 
 use super::error::HttpError;
 use super::http_util::http_extract_path_params;
-use super::http_util::http_read_body_bytes;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
@@ -46,25 +45,30 @@ use crate::api_description::ApiEndpointParameterLocation;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
-use crate::http_util::http_read_body_buf_list;
 use crate::pagination::PaginationParams;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::router::VariableSet;
 use crate::to_map::to_map;
 use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 
-use async_stream::try_stream;
+use async_stream::stream;
 use async_trait::async_trait;
 use buf_list::BufList;
+use bytes::BufMut;
 use bytes::Bytes;
+use bytes::BytesMut;
 use futures::lock::Mutex;
+use futures::ready;
+use futures::stream::BoxStream;
 use futures::Stream;
+use futures::StreamExt;
 use http::HeaderMap;
 use http::StatusCode;
 use hyper::body::HttpBody;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use pin_project_lite::pin_project;
 use schemars::schema::InstanceType;
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
@@ -79,7 +83,9 @@ use std::fmt::Result as FmtResult;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Poll;
 
 /**
  * Type alias for the result returned by HTTP handler functions.
@@ -976,12 +982,14 @@ where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
-    let body = http_read_body_bytes(
-        request.body_mut(),
-        server.config.request_body_max_bytes,
-    )
+    let body = UntypedBody {
+        request: rqctx.request.clone(),
+        max_bytes: server.config.request_body_max_bytes,
+    }
+    .into_bytes()
     .await?;
+
+    let request = rqctx.request.lock().await;
 
     // RFC 7231 §3.1.1.1: media types are case insensitive and may
     // be followed by whitespace and/or a parameter (e.g., charset),
@@ -1093,8 +1101,14 @@ impl UntypedBody {
     ///
     /// Errors if the request body is too large, or if the
     pub async fn into_bytes(self) -> Result<Bytes, HttpError> {
-        let mut request = self.request.lock().await;
-        http_read_body_bytes(request.body_mut(), self.max_bytes).await
+        let mut stream = self.into_stream();
+        let mut bytes = BytesMut::new();
+
+        while let Some(data) = stream.next().await {
+            bytes.put(data?);
+        }
+
+        Ok(bytes.freeze())
     }
 
     /// Reads the body into a `String`.
@@ -1122,7 +1136,7 @@ impl UntypedBody {
     /// Recommended for larger request bodies.
     pub async fn into_buf_list(self) -> Result<BufList, HttpError> {
         let max_bytes = self.max_bytes;
-        self.into_buf_list_with_limit(max_bytes).await
+        self.into_buf_list_with_cap(max_bytes).await
     }
 
     /// Reads the body into a [`BufList`] with a custom limit for the maximum
@@ -1132,32 +1146,50 @@ impl UntypedBody {
     /// a custom limit is specified. If this method is called, the default
     /// [`request_body_max_bytes`](ServerConfig::request_body_max_bytes) limit
     /// is ignored.
-    pub async fn into_buf_list_with_limit(
+    pub async fn into_buf_list_with_cap(
         self,
         max_bytes: usize,
     ) -> Result<BufList, HttpError> {
-        let mut request = self.request.lock().await;
-        http_read_body_buf_list(request.body_mut(), max_bytes).await
+        let mut stream =
+            self.into_stream().into_uncapped().into_capped(max_bytes);
+        let mut buf_list = BufList::new();
+
+        while let Some(data) = stream.next().await {
+            buf_list.push_chunk(data?);
+        }
+
+        Ok(buf_list)
     }
 
-    /// Converts `self` into a [`Stream`] of [`Bytes`] chunks.
-    ///
-    /// This method ignores the
-    /// [`request_body_max_bytes`](ServerConfig::request_body_max_bytes) limit.
-    pub fn into_stream(
-        self,
-    ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send + Sync + 'static
-    {
-        try_stream! {
+    /// Converts `self` into a [`Stream`] of `Result<Bytes, HttpError>` chunks.
+    pub fn into_stream(self) -> CappedBodyStream {
+        let max_bytes = self.max_bytes;
+
+        let stream = stream! {
             let mut request = self.request.lock().await;
             let body = request.body_mut();
-            while let Some(data) = body.data().await {
-                yield data?;
+
+            'outer: {
+                while let Some(data) = body.data().await {
+                    match data {
+                        Ok(data) => yield Ok(data),
+                        Err(e) => {
+                            yield Err(HttpError::from(e));
+                            break 'outer;
+                        }
+                    }
+                }
+
+                // Read the trailers even though we aren't going to do anything
+                // with them.
+                if let Err(e) = body.trailers().await {
+                    yield Err(HttpError::from(e));
+                }
             }
-            // Read the trailers even though we aren't going to do anything with
-            // them.
-            body.trailers().await?;
-        }
+        };
+
+        let uncapped = UncappedBodyStream::new(stream);
+        CappedBodyStream::new(uncapped, max_bytes)
     }
 }
 
@@ -1197,10 +1229,116 @@ impl Extractor for UntypedBody {
     }
 }
 
-struct CappedStream<St> {
-    inner: St,
-    max_bytes: usize,
-    current_bytes: usize,
+pin_project! {
+    /// A stream over an HTTP body that sets a limit on the number of bytes that
+    /// can be read from it.
+    ///
+    /// To change the cap read from it, use
+    /// [`into_uncapped`](Self::into_uncapped), then apply a new cap with
+    /// `UncappedStream::into_capped`.
+    pub struct CappedBodyStream {
+        #[pin]
+        stream: UncappedBodyStream,
+        max_bytes: usize,
+        current_bytes: usize,
+    }
+}
+
+impl CappedBodyStream {
+    pub(crate) fn new(stream: UncappedBodyStream, max_bytes: usize) -> Self {
+        Self { stream, max_bytes, current_bytes: 0 }
+    }
+
+    /// Returns the maximum number of bytes that can be read from this stream.
+    pub fn max_bytes(&self) -> usize {
+        self.max_bytes
+    }
+
+    /// Returns the current number of bytes read from the stream.
+    pub fn current_bytes(&self) -> usize {
+        self.current_bytes
+    }
+
+    /// Turns this stream into an uncapped one.
+    pub fn into_uncapped(self) -> UncappedBodyStream {
+        self.stream
+    }
+}
+
+impl Stream for CappedBodyStream {
+    type Item = Result<Bytes, HttpError>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let this = self.as_mut().project();
+        let result = ready!(this.stream.poll_next(cx));
+        let bytes = match result {
+            Some(Ok(bytes)) => bytes,
+            x @ None | x @ Some(Err(_)) => return Poll::Ready(x),
+        };
+
+        let max_bytes = *this.max_bytes;
+
+        let is_too_large =
+            Arc::new(this.current_bytes.checked_add(bytes.len()))
+                .map_or(true, |x| x > max_bytes);
+        if is_too_large {
+            // The request was too large. Drain the rest of the stream.
+            while let Some(data) =
+                futures::ready!(self.as_mut().project().stream.poll_next(cx))
+            {
+                if let Err(e) = data {
+                    return Poll::Ready(Some(Err(e)));
+                }
+            }
+            return Poll::Ready(Some(Err(HttpError::for_bad_request(
+                None,
+                format!(
+                    "request body exceeded maximum size of {} bytes",
+                    max_bytes
+                ),
+            ))));
+        }
+
+        *this.current_bytes += bytes.len();
+
+        Poll::Ready(Some(Ok(bytes)))
+    }
+}
+
+pin_project! {
+    /// A stream over an HTTP request body that does not cap the bytes.
+    pub struct UncappedBodyStream {
+        // TODO: replace with a concrete type once TAIT is stabilized.
+        #[pin]
+        stream: BoxStream<'static, Result<Bytes, HttpError>>,
+    }
+}
+
+impl UncappedBodyStream {
+    pub(crate) fn new(
+        stream: impl Stream<Item = Result<Bytes, HttpError>> + Send + 'static,
+    ) -> Self {
+        Self { stream: stream.boxed() }
+    }
+
+    /// Adds a cap to this stream.
+    pub fn into_capped(self, cap: usize) -> CappedBodyStream {
+        CappedBodyStream::new(self, cap)
+    }
+}
+
+impl Stream for UncappedBodyStream {
+    type Item = Result<Bytes, HttpError>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        self.project().stream.poll_next(cx)
+    }
 }
 
 /*
