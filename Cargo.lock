@@ -110,9 +110,9 @@ dependencies = [
 
 [[package]]
 name = "buf-list"
-version = "0.1.3"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb213ab6aa87733e74428d8a33f0bb93181810b0ae09ae96b8cc1521d265283"
+checksum = "4851afb0c681f0bf27d675eff71da4d659ea32949363b048470e69b11fdcd02f"
 dependencies = [
  "bytes",
 ]

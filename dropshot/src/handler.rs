@@ -62,6 +62,7 @@ use futures::ready;
 use futures::stream::BoxStream;
 use futures::Stream;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use http::HeaderMap;
 use http::StatusCode;
 use hyper::body::HttpBody;
@@ -1080,10 +1081,11 @@ where
 
 /// An extractor for raw bytes.
 ///
-/// `UntypedBody` is meant to read in the contents of an HTTP request
-/// body as a series of raw bytes. An `UntypedBody` represents a read
-/// that hasn't happened yet; a method like `into_bytes()` or
-/// `into_stream()` must be called to read the full body.
+/// `UntypedBody` is meant to read in the contents of an HTTP request body as a
+/// series of raw bytes. Unlike [`TypedBody`], an `UntypedBody` represents a
+/// read that hasn't happened yet; a method like
+/// [`into_bytes`](Self::into_bytes) or [`into_stream`](Self::into_stream) must
+/// be called to read the full body.
 #[derive(Debug)]
 pub struct UntypedBody {
     request: Arc<Mutex<Request<Body>>>,
@@ -1091,7 +1093,8 @@ pub struct UntypedBody {
 }
 
 impl UntypedBody {
-    /// Reads the body into a single, contiguous [`Bytes`] chunk.
+    /// Reads the body into a single, contiguous [`Bytes`] chunk, up to the
+    /// server's configured maximum body size.
     ///
     /// Recommended for smaller request bodies. Constructing a single `Bytes`
     /// chunk from larger request bodies might cause excessive copying and
@@ -1099,7 +1102,8 @@ impl UntypedBody {
     ///
     /// # Errors
     ///
-    /// Errors if the request body is too large, or if the
+    /// Errors if there's an underlying HTTP error. Returns a "400 Bad Request"
+    /// error if the request body is too large.
     pub async fn into_bytes(self) -> Result<Bytes, HttpError> {
         let mut stream = self.into_stream();
         let mut bytes = BytesMut::new();
@@ -1111,12 +1115,13 @@ impl UntypedBody {
         Ok(bytes.freeze())
     }
 
-    /// Reads the body into a `String`.
+    /// Reads the body into a `String`, up to the server's configured maximum
+    /// body size.
     ///
     /// # Errors
     ///
-    /// In addition to the usual errors, if the stream is not valid UTF-8, this
-    /// returns a "Bad Request" error.
+    /// In addition to the errors returned by [`into_bytes`](Self::into_bytes),
+    /// returns a "400 Bad Request" error if the if the body is not valid UTF-8.
     pub async fn into_string(self) -> Result<String, HttpError> {
         let v = Vec::from(self.into_bytes().await?);
         String::from_utf8(v).map_err(|e| {
@@ -1127,20 +1132,24 @@ impl UntypedBody {
         })
     }
 
-    /// Reads the body into a [`BufList`].
+    /// Reads the body into a [`BufList`], up to the server's configured maximum
+    /// body size.
     ///
     /// A `BufList` is a list of [`Bytes`] chunks that implements the
     /// [`Buf`](bytes::Buf) trait. A `BufList` chunks can be operated on
     /// as a unit.
     ///
-    /// Recommended for larger request bodies.
+    /// Recommended over [`into_bytes`](Self::into_bytes) or
+    /// [`into_string`](Self::into_string) for larger request bodies. Like those
+    /// functions, this function fails if the body exceeds the server's
+    /// configured maximum body size.
     pub async fn into_buf_list(self) -> Result<BufList, HttpError> {
         let max_bytes = self.max_bytes;
         self.into_buf_list_with_cap(max_bytes).await
     }
 
-    /// Reads the body into a [`BufList`] with a custom limit for the maximum
-    /// size of bytes.
+    /// Reads the body into a [`BufList`], with a custom limit for the maximum
+    /// body size.
     ///
     /// This method is similar to [`into_buf_list`](Self::into_buf_list), except
     /// a custom limit is specified. If this method is called, the default
@@ -1150,18 +1159,24 @@ impl UntypedBody {
         self,
         max_bytes: usize,
     ) -> Result<BufList, HttpError> {
-        let mut stream =
-            self.into_stream().into_uncapped().into_capped(max_bytes);
-        let mut buf_list = BufList::new();
-
-        while let Some(data) = stream.next().await {
-            buf_list.push_chunk(data?);
-        }
-
-        Ok(buf_list)
+        self.into_stream()
+            .into_uncapped()
+            .into_capped(max_bytes)
+            .try_collect()
+            .await
     }
 
     /// Converts `self` into a [`Stream`] of `Result<Bytes, HttpError>` chunks.
+    ///
+    /// This stream is limited to the server's configured maximum body size. To
+    /// set a different maximum body size, call
+    /// [`into_uncapped`](CappedBodyStream::into_uncapped), followed by
+    /// [`UncappedBodyStream::into_capped`].
+    ///
+    /// # Errors
+    ///
+    /// The stream errors if there's an underlying HTTP error, or if the request
+    /// body exceeds the cap.
     pub fn into_stream(self) -> CappedBodyStream {
         let max_bytes = self.max_bytes;
 
@@ -1233,9 +1248,11 @@ pin_project! {
     /// A stream over an HTTP body that sets a limit on the number of bytes that
     /// can be read from it.
     ///
-    /// To change the cap read from it, use
+    /// Returned by [`UntypedBody::into_stream`].
+    ///
+    /// To change the maximum body size, use
     /// [`into_uncapped`](Self::into_uncapped), then apply a new cap with
-    /// `UncappedStream::into_capped`.
+    /// [`UncappedStream::into_capped`].
     pub struct CappedBodyStream {
         #[pin]
         stream: UncappedBodyStream,
@@ -1259,7 +1276,7 @@ impl CappedBodyStream {
         self.current_bytes
     }
 
-    /// Turns this stream into an uncapped one.
+    /// Turns this stream into one that does not have a maximum size limit.
     pub fn into_uncapped(self) -> UncappedBodyStream {
         self.stream
     }
@@ -1309,7 +1326,10 @@ impl Stream for CappedBodyStream {
 }
 
 pin_project! {
-    /// A stream over an HTTP request body that does not cap the bytes.
+    /// A stream over an HTTP request body that does not set a limit on the
+    /// maximum body size.
+    ///
+    /// Returned by [`CappedBodyStream::into_uncapped`].
     pub struct UncappedBodyStream {
         // TODO: replace with a concrete type once TAIT is stabilized.
         #[pin]
@@ -1324,9 +1344,12 @@ impl UncappedBodyStream {
         Self { stream: stream.boxed() }
     }
 
-    /// Adds a cap to this stream.
-    pub fn into_capped(self, cap: usize) -> CappedBodyStream {
-        CappedBodyStream::new(self, cap)
+    /// Turns this stream into one that sets a limit on the request body size.
+    ///
+    /// Note that the `CappedBodyStream`'s count starts from zero: it will only
+    /// consider bytes read from here on out.
+    pub fn into_capped(self, max_bytes: usize) -> CappedBodyStream {
+        CappedBodyStream::new(self, max_bytes)
     }
 }
 
