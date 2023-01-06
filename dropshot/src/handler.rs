@@ -1151,32 +1151,27 @@ impl UntypedBody {
     /// body size.
     ///
     /// This method is similar to [`into_buf_list`](Self::into_buf_list), except
-    /// a custom limit is specified. If this method is called, the default
+    /// it specifies a custom limit. If this method is called, the default
     /// [`request_body_max_bytes`](ServerConfig::request_body_max_bytes) limit
     /// is ignored.
-    pub async fn into_buf_list_with_cap(
+    pub async fn into_buf_list_with_limit(
         self,
         max_bytes: usize,
     ) -> Result<BufList, HttpError> {
-        self.into_stream()
-            .into_uncapped()
-            .into_capped(max_bytes)
-            .try_collect()
-            .await
+        self.into_stream().with_limit(max_bytes).try_collect().await
     }
 
     /// Converts `self` into a [`Stream`] of `Result<Bytes, HttpError>` chunks.
     ///
-    /// This stream is limited to the server's configured maximum body size. To
-    /// set a different maximum body size, call
-    /// [`into_uncapped`](CappedBodyStream::into_uncapped), followed by
-    /// [`UncappedBodyStream::into_capped`].
+    /// By default, the stream is limited to the server's configured maximum
+    /// body size. To set a different maximum body size, call
+    /// [`with_limit`](UntypedBodyStream::with_limit) on the returned stream.
     ///
     /// # Errors
     ///
     /// The stream errors if there's an underlying HTTP error, or if the request
-    /// body exceeds the cap.
-    pub fn into_stream(self) -> CappedBodyStream {
+    /// body exceeds the limit.
+    pub fn into_stream(self) -> UntypedBodyStream {
         let max_bytes = self.max_bytes;
 
         let stream = stream! {
@@ -1202,8 +1197,7 @@ impl UntypedBody {
             }
         };
 
-        let uncapped = UncappedBodyStream::new(stream);
-        CappedBodyStream::new(uncapped, max_bytes)
+        UntypedBodyStream::new(stream, max_bytes)
     }
 }
 
@@ -1244,25 +1238,23 @@ impl Extractor for UntypedBody {
 }
 
 pin_project! {
-    /// A stream over an HTTP body that sets a limit on the number of bytes that
-    /// can be read from it.
-    ///
-    /// Returned by [`UntypedBody::into_stream`].
-    ///
-    /// To change the maximum body size, use
-    /// [`into_uncapped`](Self::into_uncapped), then apply a new cap with
-    /// [`UncappedStream::into_capped`].
-    pub struct CappedBodyStream {
+    /// A stream over an HTTP body. This stream that a limit on the number of
+    /// bytes that can be read from it.
+    pub struct UntypedBodyStream {
+        // TODO: replace with concrete type once TAIT is stabilized.
         #[pin]
-        stream: UncappedBodyStream,
+        stream: BoxStream<'static, Result<Bytes, HttpError>>,
         max_bytes: usize,
         current_bytes: usize,
     }
 }
 
-impl CappedBodyStream {
-    pub(crate) fn new(stream: UncappedBodyStream, max_bytes: usize) -> Self {
-        Self { stream, max_bytes, current_bytes: 0 }
+impl UntypedBodyStream {
+    pub(crate) fn new(
+        stream: impl Stream<Item = Result<Bytes, HttpError>> + Send + 'static,
+        max_bytes: usize,
+    ) -> Self {
+        Self { stream: stream.boxed(), max_bytes, current_bytes: 0 }
     }
 
     /// Returns the maximum number of bytes that can be read from this stream.
@@ -1275,13 +1267,22 @@ impl CappedBodyStream {
         self.current_bytes
     }
 
-    /// Turns this stream into one that does not have a maximum size limit.
-    pub fn into_uncapped(self) -> UncappedBodyStream {
-        self.stream
+    /// Sets a new limit on the stream.
+    ///
+    /// [`Self::current_bytes`] does not change.
+    pub fn set_limit(&mut self, new_limit: usize) -> &mut Self {
+        self.max_bytes = new_limit;
+        self
+    }
+
+    /// An owned version of [`set_limit`](Self::set_limit).
+    pub fn with_limit(mut self, new_limit: usize) -> Self {
+        self.set_limit(new_limit);
+        self
     }
 }
 
-impl Stream for CappedBodyStream {
+impl Stream for UntypedBodyStream {
     type Item = Result<Bytes, HttpError>;
 
     fn poll_next(
@@ -1321,45 +1322,6 @@ impl Stream for CappedBodyStream {
         *this.current_bytes += bytes.len();
 
         Poll::Ready(Some(Ok(bytes)))
-    }
-}
-
-pin_project! {
-    /// A stream over an HTTP request body that does not set a limit on the
-    /// maximum body size.
-    ///
-    /// Returned by [`CappedBodyStream::into_uncapped`].
-    pub struct UncappedBodyStream {
-        // TODO: replace with a concrete type once TAIT is stabilized.
-        #[pin]
-        stream: BoxStream<'static, Result<Bytes, HttpError>>,
-    }
-}
-
-impl UncappedBodyStream {
-    pub(crate) fn new(
-        stream: impl Stream<Item = Result<Bytes, HttpError>> + Send + 'static,
-    ) -> Self {
-        Self { stream: stream.boxed() }
-    }
-
-    /// Turns this stream into one that sets a limit on the request body size.
-    ///
-    /// Note that the `CappedBodyStream`'s count starts from zero: it will only
-    /// consider bytes read from here on out.
-    pub fn into_capped(self, max_bytes: usize) -> CappedBodyStream {
-        CappedBodyStream::new(self, max_bytes)
-    }
-}
-
-impl Stream for UncappedBodyStream {
-    type Item = Result<Bytes, HttpError>;
-
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        self.project().stream.poll_next(cx)
     }
 }
 
