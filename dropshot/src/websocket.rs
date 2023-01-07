@@ -14,9 +14,9 @@ use crate::{
     RequestContext, ServerContext,
 };
 use async_trait::async_trait;
-use http::header;
 use http::Response;
 use http::StatusCode;
+use http::{header, Request};
 use hyper::upgrade::OnUpgrade;
 use hyper::Body;
 use schemars::JsonSchema;
@@ -97,8 +97,9 @@ fn derive_accept_key(request_key: &[u8]) -> String {
 impl Extractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
+        request: Option<Request<Body>>,
     ) -> Result<Self, HttpError> {
-        let request = &mut *rqctx.request.lock().await;
+        let request = request.unwrap();
 
         if !request
             .headers()
@@ -180,6 +181,10 @@ impl Extractor for WebsocketUpgrade {
             parameters: vec![],
             extension_mode: ExtensionMode::Websocket,
         }
+    }
+
+    fn requires_body() -> bool {
+        true
     }
 }
 
@@ -310,7 +315,6 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{Extractor, HttpError, RequestContext, WebsocketUpgrade};
-    use futures::lock::Mutex;
     use http::Request;
     use hyper::Body;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
@@ -320,39 +324,41 @@ mod tests {
 
     async fn ws_upg_from_mock_rqctx() -> Result<WebsocketUpgrade, HttpError> {
         let log = slog::Logger::root(slog::Discard, slog::o!()).new(slog::o!());
-        let fut = WebsocketUpgrade::from_request(Arc::new(RequestContext {
-            server: Arc::new(DropshotState {
-                private: (),
-                config: ServerConfig {
-                    request_body_max_bytes: 0,
-                    page_max_nitems: NonZeroU32::new(1).unwrap(),
-                    page_default_nitems: NonZeroU32::new(1).unwrap(),
-                },
-                router: HttpRouter::new(),
+        let request = Request::builder()
+            .header(http::header::CONNECTION, "Upgrade")
+            .header(http::header::UPGRADE, "websocket")
+            .header(http::header::SEC_WEBSOCKET_VERSION, "13")
+            .header(http::header::SEC_WEBSOCKET_KEY, "aGFjayB0aGUgcGxhbmV0IQ==")
+            .body(Body::empty())
+            .unwrap();
+        let fut = WebsocketUpgrade::from_request(
+            Arc::new(RequestContext {
+                server: Arc::new(DropshotState {
+                    private: (),
+                    config: ServerConfig {
+                        request_body_max_bytes: 0,
+                        page_max_nitems: NonZeroU32::new(1).unwrap(),
+                        page_default_nitems: NonZeroU32::new(1).unwrap(),
+                    },
+                    router: HttpRouter::new(),
+                    log: log.clone(),
+                    local_addr: SocketAddr::new(
+                        IpAddr::V6(Ipv6Addr::LOCALHOST),
+                        8080,
+                    ),
+                    tls_acceptor: None,
+                }),
+                method: request.method().clone(),
+                uri: request.uri().clone(),
+                version: request.version(),
+                headers: request.headers().clone(),
+                path_variables: Default::default(),
+                body_content_type: Default::default(),
+                request_id: "".to_string(),
                 log: log.clone(),
-                local_addr: SocketAddr::new(
-                    IpAddr::V6(Ipv6Addr::LOCALHOST),
-                    8080,
-                ),
-                tls_acceptor: None,
             }),
-            request: Arc::new(Mutex::new(
-                Request::builder()
-                    .header(http::header::CONNECTION, "Upgrade")
-                    .header(http::header::UPGRADE, "websocket")
-                    .header(http::header::SEC_WEBSOCKET_VERSION, "13")
-                    .header(
-                        http::header::SEC_WEBSOCKET_KEY,
-                        "aGFjayB0aGUgcGxhbmV0IQ==",
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )),
-            path_variables: Default::default(),
-            body_content_type: Default::default(),
-            request_id: "".to_string(),
-            log: log.clone(),
-        }));
+            Some(request),
+        );
         tokio::time::timeout(Duration::from_secs(1), fut)
             .await
             .expect("Deadlocked in WebsocketUpgrade constructor")

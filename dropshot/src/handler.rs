@@ -54,9 +54,12 @@ use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::lock::Mutex;
 use http::HeaderMap;
+use http::HeaderValue;
+use http::Method;
 use http::StatusCode;
+use http::Uri;
+use http::Version;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
@@ -84,21 +87,18 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 /**
  * Handle for various interfaces useful during request processing.
  */
-/*
- * TODO-cleanup What's the right way to package up "request"?  The only time we
- * need it to be mutable is when we're reading the body (e.g., as part of the
- * JSON extractor).  In order to support that, we wrap it in something that
- * supports interior mutability.  It also needs to be thread-safe, since we're
- * using async/await.  That brings us to Arc<Mutex<...>>, but it seems like
- * overkill since it will only really be used by one thread at a time (at all,
- * let alone mutably) and there will never be contention on the Mutex.
- */
 #[derive(Debug)]
 pub struct RequestContext<Context: ServerContext> {
     /** shared server state */
     pub server: Arc<DropshotState<Context>>,
-    /** HTTP request details */
-    pub request: Arc<Mutex<Request<Body>>>,
+    /// The request's method
+    pub method: Method,
+    /// The request's URI
+    pub uri: Uri,
+    /// The request's version
+    pub version: Version,
+    /// The request's headers
+    pub headers: HeaderMap<HeaderValue>,
     /** HTTP request routing variables */
     pub path_variables: VariableSet,
     /** expected request body mime type */
@@ -188,10 +188,18 @@ impl<T: 'static + ServerContext> RequestContextArgument
 pub trait Extractor: Send + Sync + Sized {
     /**
      * Construct an instance of this type from a `RequestContext`.
+     *
+     * `request` is `Some()` if and only if `requires_body` returns true.
+     * For a particular request, if more than one extractor requires the body,
+     * the request handler will panic.
      */
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
+        request: Option<Request<Body>>,
     ) -> Result<Self, HttpError>;
+
+    /// Returns true if this extractor requires the request body.
+    fn requires_body() -> bool;
 
     fn metadata(
         body_content_type: ApiEndpointBodyContentType,
@@ -216,10 +224,26 @@ macro_rules! impl_extractor_for_tuple {
     #[async_trait]
     impl< $($T: Extractor + 'static,)* > Extractor for ($($T,)*)
     {
-        async fn from_request<Context: ServerContext>(_rqctx: Arc<RequestContext<Context>>)
+        // unused_mut and unused_variables are for the zero-element case.
+        #[allow(unused_mut)]
+        #[allow(unused_variables)]
+        async fn from_request<Context: ServerContext>(
+            _rqctx: Arc<RequestContext<Context>>,
+            mut body: Option<Request<Body>>,
+        )
             -> Result<( $($T,)* ), HttpError>
         {
-            futures::try_join!($($T::from_request(Arc::clone(&_rqctx)),)*)
+            let requires_body = [$($T::requires_body(),)*];
+            if requires_body.iter().filter(|x| **x).count() > 1 {
+                panic!("multiple extractors use body");
+            }
+            futures::try_join!(
+                $($T::from_request(
+                    Arc::clone(&_rqctx),
+                    if $T::requires_body() {
+                        Some(body.take().expect("extractor uses body, but it is unavailable"))
+                    } else { None },
+                ),)*)
         }
 
         fn metadata(_body_content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
@@ -239,6 +263,11 @@ macro_rules! impl_extractor_for_tuple {
                 parameters.append(&mut metadata.parameters);
             )*
             ExtractorMetadata { extension_mode, parameters }
+        }
+
+        fn requires_body() -> bool {
+            let uses_body = [$($T::requires_body(),)*];
+            uses_body.iter().any(|x| *x)
         }
     }
 }}
@@ -417,6 +446,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
+        request: Request<Body>,
     ) -> HttpHandlerResult;
 }
 
@@ -483,6 +513,7 @@ where
     async fn handle_request(
         &self,
         rqctx_raw: RequestContext<Context>,
+        request: Request<Body>,
     ) -> HttpHandlerResult {
         /*
          * This is where the magic happens: in the code below, `funcparams` has
@@ -503,7 +534,8 @@ where
          * resolved statically.
          */
         let rqctx = Arc::new(rqctx_raw);
-        let funcparams = Extractor::from_request(Arc::clone(&rqctx)).await?;
+        let funcparams =
+            Extractor::from_request(Arc::clone(&rqctx), Some(request)).await?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -580,12 +612,12 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
  * it as an instance of `QueryType`.
  */
 fn http_request_load_query<QueryType>(
-    request: &Request<Body>,
+    uri: &Uri,
 ) -> Result<Query<QueryType>, HttpError>
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,
 {
-    let raw_query_string = request.uri().query().unwrap_or("");
+    let raw_query_string = uri.query().unwrap_or("");
     /*
      * TODO-correctness: are query strings defined to be urlencoded in this way?
      */
@@ -613,15 +645,19 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
+        _request: Option<Request<Body>>,
     ) -> Result<Query<QueryType>, HttpError> {
-        let request = rqctx.request.lock().await;
-        http_request_load_query(&request)
+        http_request_load_query(&rqctx.uri)
     }
 
     fn metadata(
         _body_content_type: ApiEndpointBodyContentType,
     ) -> ExtractorMetadata {
         get_metadata::<QueryType>(&ApiEndpointParameterLocation::Query)
+    }
+
+    fn requires_body() -> bool {
+        false
     }
 }
 
@@ -661,6 +697,7 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
+        _request: Option<Request<Body>>,
     ) -> Result<Path<PathType>, HttpError> {
         let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
         Ok(Path { inner: params })
@@ -670,6 +707,10 @@ where
         _body_content_type: ApiEndpointBodyContentType,
     ) -> ExtractorMetadata {
         get_metadata::<PathType>(&ApiEndpointParameterLocation::Path)
+    }
+
+    fn requires_body() -> bool {
+        false
     }
 }
 
@@ -966,12 +1007,12 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
  */
 async fn http_request_load_body<Context: ServerContext, BodyType>(
     rqctx: Arc<RequestContext<Context>>,
+    mut request: Request<Body>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
     let body = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
@@ -1044,8 +1085,9 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
+        request: Option<Request<Body>>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
-        http_request_load_body(rqctx).await
+        http_request_load_body(rqctx, request.unwrap()).await
     }
 
     fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
@@ -1062,6 +1104,10 @@ where
             extension_mode: ExtensionMode::None,
             parameters: vec![body],
         }
+    }
+
+    fn requires_body() -> bool {
+        true
     }
 }
 
@@ -1107,9 +1153,10 @@ impl UntypedBody {
 impl Extractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
         rqctx: Arc<RequestContext<Context>>,
+        request: Option<Request<Body>>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
-        let mut request = rqctx.request.lock().await;
+        let mut request = request.unwrap();
         let body_bytes = http_read_body(
             request.body_mut(),
             server.config.request_body_max_bytes,
@@ -1140,6 +1187,10 @@ impl Extractor for UntypedBody {
             )],
             extension_mode: ExtensionMode::None,
         }
+    }
+
+    fn requires_body() -> bool {
+        true
     }
 }
 

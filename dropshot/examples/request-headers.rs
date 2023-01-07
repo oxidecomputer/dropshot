@@ -48,9 +48,8 @@ async fn main() -> Result<(), String> {
 async fn example_api_get_header_generic(
     rqctx: Arc<RequestContext<()>>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
-    let request = rqctx.request.lock().await;
     // Note that clients can provide multiple values for a header.  See
     // http::HeaderMap for ways to get all of them.
-    let header = request.headers().get("demo-header");
+    let header = rqctx.headers.get("demo-header");
     Ok(HttpResponseOk(format!("value for header: {:?}", header)))
 }
