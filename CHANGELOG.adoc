@@ -19,6 +19,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.8.0\...HEAD[Full list of co
 
 * https://github.com/oxidecomputer/dropshot/pull/504[#504] Dropshot allows TLS configuration to be supplied either by path or as bytes. For compatibility, the `AsFile` variant of `ConfigTls` contains the `cert_file` and `key_file` fields, and may be used similarly to the old variant.
 * https://github.com/oxidecomputer/dropshot/pull/502[#502] Dropshot exposes a `refresh_tls` method to update the TLS certificates being used by a running server. If you previously tried to access `DropshotState.tls`, you can access the `DropshotState.using_tls()` method instead.
+* https://github.com/oxidecomputer/dropshot/pull/540[#540] `ConfigDropshot` now uses a [`camino::Utf8PathBuf`](https://docs.rs/camino/1.1.1/camino/struct.Utf8PathBuf.html) for its file path. There is no change to the configuration format itself, just its representation in Rust.
 
 === Other notable Changes
 

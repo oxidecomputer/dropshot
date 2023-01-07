@@ -5,6 +5,7 @@
  * they're provided because they're commonly wanted by consumers of this crate.
  */
 
+use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 use slog::Drain;
@@ -26,7 +27,7 @@ pub enum ConfigLogging {
     /** Bunyan-formatted output to a specified file. */
     File {
         level: ConfigLoggingLevel,
-        path: String,
+        path: Utf8PathBuf,
         if_exists: ConfigLoggingIfExists,
     },
 }
