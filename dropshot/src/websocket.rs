@@ -189,20 +189,20 @@ impl WebsocketUpgrade {
     /// ```
     /// #[dropshot::endpoint { method = GET, path = "/my/ws/endpoint/{id}" }]
     /// async fn my_ws_endpoint(
-    /// rqctx: std::sync::Arc<dropshot::RequestContext<()>>,
-    /// websock: dropshot::WebsocketUpgrade,
-    /// id: dropshot::Path<String>,
+    ///     rqctx: std::sync::Arc<dropshot::RequestContext<()>>,
+    ///     websock: dropshot::WebsocketUpgrade,
+    ///     id: dropshot::Path<String>,
     /// ) -> dropshot::WebsocketEndpointResult {
-    /// let logger = rqctx.log.new(slog::o!());
-    /// websock.handle(move |upgraded| async move {
-    /// slog::info!(logger, "Entered handler for ID {}", id.into_inner());
-    /// use futures::stream::StreamExt;
-    /// let mut ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
-    /// upgraded.into_inner(), tokio_tungstenite::tungstenite::protocol::Role::Server, None
-    /// ).await;
-    /// slog::info!(logger, "Received from websocket: {:?}", ws_stream.next().await);
-    /// Ok(())
-    /// })
+    ///     let logger = rqctx.log.new(slog::o!());
+    ///     websock.handle(move |upgraded| async move {
+    ///         slog::info!(logger, "Entered handler for ID {}", id.into_inner());
+    ///         use futures::stream::StreamExt;
+    ///         let mut ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
+    ///             upgraded.into_inner(), tokio_tungstenite::tungstenite::protocol::Role::Server, None
+    ///         ).await;
+    ///         slog::info!(logger, "Received from websocket: {:?}", ws_stream.next().await);
+    ///         Ok(())
+    ///     })
     /// }
     /// ```
     ///
