@@ -43,12 +43,10 @@ struct QueryArgs {
     path = "/test/woman",
     tags = ["it"],
 }]
-/**
- * C-style comment
- *
- * This is a multi-
- * line comment.
- */
+/// C-style comment
+///
+/// This is a multi-
+/// line comment.
 async fn handler2(
     _rqctx: Arc<RequestContext<()>>,
     _query: Query<QueryArgs>,
@@ -172,10 +170,8 @@ async fn handler7(
     unimplemented!();
 }
 
-/*
- * Test that we do not generate duplicate type definitions when the same type is
- * returned by two different handler functions.
- */
+// Test that we do not generate duplicate type definitions when the same type is
+// returned by two different handler functions.
 
 /// Best non-duplicated type
 #[derive(JsonSchema, Serialize)]
@@ -213,10 +209,8 @@ async fn handler9(
     unimplemented!();
 }
 
-/*
- * Similarly, test that we do not generate duplicate type definitions when the
- * same type is accepted as a typed body to two different handler functions.
- */
+// Similarly, test that we do not generate duplicate type definitions when the
+// same type is accepted as a typed body to two different handler functions.
 
 #[derive(Deserialize, JsonSchema)]
 struct NeverDuplicatedBodyTopLevel {
@@ -253,10 +247,8 @@ async fn handler11(
     unimplemented!();
 }
 
-/*
- * Finally, test that we do not generate duplicate type definitions when the
- * same type is used in two different places.
- */
+// Finally, test that we do not generate duplicate type definitions when the
+// same type is used in two different places.
 
 #[derive(Deserialize, JsonSchema, Serialize)]
 #[allow(dead_code)]
