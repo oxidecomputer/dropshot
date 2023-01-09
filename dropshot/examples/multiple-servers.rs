@@ -1,73 +1,71 @@
 // Copyright 2023 Oxide Computer Company
 
-/*!
- * Example use of Dropshot with multiple servers sharing context.
- *
- * This example initially starts two servers named "A" and "B" listening on
- * `127.0.0.1:12345` and `127.0.0.1:12346`. On either address, a client can
- * query the list of currently-running servers:
- *
- * ```text
- * sh$ curl -X GET http://127.0.0.1:12345/servers | jq
- * [
- *   {
- *     "name": "B",
- *     "bind_addr": "127.0.0.1:12346"
- *   },
- *   {
- *     "name": "A",
- *     "bind_addr": "127.0.0.1:12345"
- *   }
- * ]
- * ```
- *
- * start a new server, as long as the name and bind address aren't already in
- * use:
- *
- * ```text
- * sh$ curl -X POST -H 'Content-Type: application/json' http://127.0.0.1:12345/servers/C -d '"127.0.0.1:12347"' | jq
- * {
- *   "name": "C",
- *   "bind_addr": "127.0.0.1:12347"
- * }
- * sh$ % curl -X GET http://127.0.0.1:12345/servers | jq
- * [
- *   {
- *     "name": "B",
- *     "bind_addr": "127.0.0.1:12346"
- *   },
- *   {
- *     "name": "C",
- *     "bind_addr": "127.0.0.1:12347"
- *   },
- *   {
- *     "name": "A",
- *     "bind_addr": "127.0.0.1:12345"
- *   }
- * ]
- * ```
- *
- * or stop a running server by name:
- *
- * ```text
- * sh$ % curl -X DELETE http://127.0.0.1:12347/servers/B
- * sh$ curl -X GET http://127.0.0.1:12345/servers | jq
- * [
- *   {
- *     "name": "C",
- *     "bind_addr": "127.0.0.1:12347"
- *   },
- *   {
- *     "name": "A",
- *     "bind_addr": "127.0.0.1:12345"
- *   }
- * ]
- * ```
- *
- * The final example shows deleting server "B" via server C's address, and then
- * querying server "A" to show that "B" is gone. The logfiles of the running
- * process will also note the shutdown of server B.
- */
+//! Example use of Dropshot with multiple servers sharing context.
+//!
+//! This example initially starts two servers named "A" and "B" listening on
+//! `127.0.0.1:12345` and `127.0.0.1:12346`. On either address, a client can
+//! query the list of currently-running servers:
+//!
+//! ```text
+//! sh$ curl -X GET http://127.0.0.1:12345/servers | jq
+//! [
+//!   {
+//!     "name": "B",
+//!     "bind_addr": "127.0.0.1:12346"
+//!   },
+//!   {
+//!     "name": "A",
+//!     "bind_addr": "127.0.0.1:12345"
+//!   }
+//! ]
+//! ```
+//!
+//! start a new server, as long as the name and bind address aren't already in
+//! use:
+//!
+//! ```text
+//! sh$ curl -X POST -H 'Content-Type: application/json' http://127.0.0.1:12345/servers/C -d '"127.0.0.1:12347"' | jq
+//! {
+//!   "name": "C",
+//!   "bind_addr": "127.0.0.1:12347"
+//! }
+//! sh$ % curl -X GET http://127.0.0.1:12345/servers | jq
+//! [
+//!   {
+//!     "name": "B",
+//!     "bind_addr": "127.0.0.1:12346"
+//!   },
+//!   {
+//!     "name": "C",
+//!     "bind_addr": "127.0.0.1:12347"
+//!   },
+//!   {
+//!     "name": "A",
+//!     "bind_addr": "127.0.0.1:12345"
+//!   }
+//! ]
+//! ```
+//!
+//! or stop a running server by name:
+//!
+//! ```text
+//! sh$ % curl -X DELETE http://127.0.0.1:12347/servers/B
+//! sh$ curl -X GET http://127.0.0.1:12345/servers | jq
+//! [
+//!   {
+//!     "name": "C",
+//!     "bind_addr": "127.0.0.1:12347"
+//!   },
+//!   {
+//!     "name": "A",
+//!     "bind_addr": "127.0.0.1:12345"
+//!   }
+//! ]
+//! ```
+//!
+//! The final example shows deleting server "B" via server C's address, and then
+//! querying server "A" to show that "B" is gone. The logfiles of the running
+//! process will also note the shutdown of server B.
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
@@ -102,16 +100,12 @@ use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    /*
-     * Initial set of servers to start. Once they're running, we may add or
-     * remove servers based on client requests.
-     */
+    // Initial set of servers to start. Once they're running, we may add or
+    // remove servers based on client requests.
     let initial_servers = [("A", "127.0.0.1:12345"), ("B", "127.0.0.1:12346")];
 
-    /*
-     * We keep the set of running servers in a `FuturesUnordered` to allow us to
-     * drive them all concurrently.
-     */
+    // We keep the set of running servers in a `FuturesUnordered` to allow us to
+    // drive them all concurrently.
     let mut running_servers = FuturesUnordered::new();
     let (running_servers_tx, mut running_servers_rx) = mpsc::channel(8);
 
@@ -122,21 +116,17 @@ async fn main() -> Result<(), String> {
         shared_context.start_server(name, bind_address).await?;
     }
 
-    /*
-     * Explicitly drop `shared_context` so we can detect when all servers are
-     * gone via `running_servers_rx` (which returns `None` when all transmitters
-     * are dropped).
-     */
+    // Explicitly drop `shared_context` so we can detect when all servers are
+    // gone via `running_servers_rx` (which returns `None` when all transmitters
+    // are dropped).
     mem::drop(shared_context);
 
-    /*
-     * Loop until all servers are shut down.
-     *
-     * If we receive a new server on `running_servers_rx`, we added it to
-     * `running_servers`. If `running_servers_rx` indicates the channel is
-     * closed, we know all server contexts have been dropped and no servers
-     * remain.
-     */
+    // Loop until all servers are shut down.
+    //
+    // If we receive a new server on `running_servers_rx`, we added it to
+    // `running_servers`. If `running_servers_rx` indicates the channel is
+    // closed, we know all server contexts have been dropped and no servers
+    // remain.
     loop {
         tokio::select! {
             maybe_new_server = running_servers_rx.recv() => {
@@ -158,9 +148,7 @@ async fn main() -> Result<(), String> {
 
 type ServerShutdownFuture = BoxFuture<'static, Result<(), String>>;
 
-/**
- * Application-specific server context (state shared by handler functions)
- */
+/// Application-specific server context (state shared by handler functions)
 struct MultiServerContext {
     // All running servers have the same underlying `shared` context.
     shared: Arc<SharedMultiServerContext>,
@@ -177,9 +165,7 @@ impl Drop for MultiServerContext {
     }
 }
 
-/**
- * Context shared by all running servers.
- */
+/// Context shared by all running servers.
 struct SharedMultiServerContext {
     servers: Mutex<HashMap<String, HttpServer<MultiServerContext>>>,
     started_server_shutdown_handles: mpsc::Sender<ServerShutdownFuture>,
@@ -205,36 +191,28 @@ impl SharedMultiServerContext {
             Entry::Vacant(slot) => slot,
         };
 
-        /*
-         * For simplicity, we'll configure an "info"-level logger that writes to
-         * stderr assuming that it's a terminal.
-         */
+        // For simplicity, we'll configure an "info"-level logger that writes to
+        // stderr assuming that it's a terminal.
         let config_logging =
             ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
         let log = config_logging
             .to_logger(format!("example-multiserver-{name}"))
             .map_err(|error| format!("failed to create logger: {}", error))?;
 
-        /*
-         * Build a description of the API.
-         *
-         * TODO: Could `ApiDescription` implement `Clone`, or could we pass an
-         * `Arc<ApiDescription>` instead?
-         */
+        // Build a description of the API.
+        //
+        // TODO: Could `ApiDescription` implement `Clone`, or could we pass an
+        // `Arc<ApiDescription>` instead?
         let mut api = ApiDescription::new();
         api.register(api_get_servers).unwrap();
         api.register(api_start_server).unwrap();
         api.register(api_stop_server).unwrap();
 
-        /*
-         * Configure the server with the requested bind address.
-         */
+        // Configure the server with the requested bind address.
         let config_dropshot =
             ConfigDropshot { bind_address, ..Default::default() };
 
-        /*
-         * Set up the server.
-         */
+        // Set up the server.
         let context = MultiServerContext {
             shared: Arc::clone(self),
             name: name.to_string(),
@@ -248,19 +226,15 @@ impl SharedMultiServerContext {
 
         slot.insert(server);
 
-        /*
-         * Explicitly drop `servers`, releasing the lock, before we potentially
-         * block waiting to tell `main()` about this new server.
-         */
+        // Explicitly drop `servers`, releasing the lock, before we potentially
+        // block waiting to tell `main()` about this new server.
         mem::drop(servers);
 
-        /*
-         * Tell `main()` about this new running server, allowing it to wait for
-         * its shutdown.
-         *
-         * Ignore the result of this `send()`: we can't unwrap due to missing
-         * `Debug` impls, but if `main()` is gone we don't care.
-         */
+        // Tell `main()` about this new running server, allowing it to wait for
+        // its shutdown.
+        //
+        // Ignore the result of this `send()`: we can't unwrap due to missing
+        // `Debug` impls, but if `main()` is gone we don't care.
         _ = self
             .started_server_shutdown_handles
             .send(shutdown_handle.boxed())
@@ -270,9 +244,7 @@ impl SharedMultiServerContext {
     }
 }
 
-/*
- * HTTP API interface
- */
+// HTTP API interface
 
 #[derive(Debug, Serialize, JsonSchema)]
 struct ServerDescription {
@@ -280,9 +252,7 @@ struct ServerDescription {
     bind_addr: SocketAddr,
 }
 
-/**
- * Fetch the current list of running servers.
- */
+/// Fetch the current list of running servers.
 #[endpoint {
     method = GET,
     path = "/servers",
@@ -309,9 +279,7 @@ struct PathName {
     name: String,
 }
 
-/**
- * Start a new running server.
- */
+/// Start a new running server.
 #[endpoint {
     method = POST,
     path = "/servers/{name}",
@@ -326,12 +294,10 @@ async fn api_start_server(
     let bind_addr = body.into_inner();
 
     api_context.shared.start_server(&name, bind_addr).await.map_err(|err| {
-        /*
-         * `for_bad_request` _might_ not be right (e.g., we might have some
-         * spurious OS error starting the server), but it's likely right (the
-         * most likely cause for failure is a duplicate name or already-in-use
-         * bind address), and we're being lazy with errors in this example.
-         */
+        // `for_bad_request` _might_ not be right (e.g., we might have some
+        // spurious OS error starting the server), but it's likely right (the
+        // most likely cause for failure is a duplicate name or already-in-use
+        // bind address), and we're being lazy with errors in this example.
         HttpError::for_bad_request(
             Some("StartServerFailed".to_string()),
             format!("failed to start server {name:?}: {err}"),
@@ -341,9 +307,7 @@ async fn api_start_server(
     Ok(HttpResponseCreated(ServerDescription { name, bind_addr }))
 }
 
-/**
- * Stop a running server by name.
- */
+/// Stop a running server by name.
 #[endpoint {
     method = DELETE,
     path = "/servers/{name}",
@@ -363,14 +327,12 @@ async fn api_stop_server(
         )
     })?;
 
-    /*
-     * We want to shut down `server`, but it might be the very server handling
-     * this request! Move the shutdown onto a background task to allow this
-     * request to complete; otherwise, we deadlock.
-     *
-     * We can safely discard the result of `close()` because `main()` also gets
-     * it via the shutdown handle it received when `server` was created.
-     */
+    // We want to shut down `server`, but it might be the very server handling
+    // this request! Move the shutdown onto a background task to allow this
+    // request to complete; otherwise, we deadlock.
+    //
+    // We can safely discard the result of `close()` because `main()` also gets
+    // it via the shutdown handle it received when `server` was created.
     tokio::spawn(server.close());
 
     Ok(HttpResponseDeleted())

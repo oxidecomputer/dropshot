@@ -1,7 +1,5 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Tests for configuration file.
- */
+//! Tests for configuration file.
 
 use dropshot::test_util::read_config;
 use dropshot::{ConfigDropshot, ConfigTls};
@@ -14,9 +12,7 @@ use tempfile::NamedTempFile;
 pub mod common;
 use common::create_log_context;
 
-/*
- * Bad values for "bind_address"
- */
+// Bad values for "bind_address"
 
 #[test]
 fn test_config_bad_bind_address_port_too_small() {
@@ -54,9 +50,7 @@ fn test_config_bad_bind_address_garbage() {
         .starts_with("invalid socket address syntax for key `bind_address`"));
 }
 
-/*
- * Bad values for "request_body_max_bytes"
- */
+// Bad values for "request_body_max_bytes"
 
 #[test]
 fn test_config_bad_request_body_max_bytes_negative() {
@@ -80,9 +74,7 @@ fn test_config_bad_request_body_max_bytes_too_large() {
     assert!(error.starts_with(""));
 }
 
-/*
- * Bad values for "key_file"
- */
+// Bad values for "key_file"
 
 #[test]
 fn test_config_bad_key_file_garbage() {
@@ -95,9 +87,7 @@ fn test_config_bad_key_file_garbage() {
     assert!(error.starts_with("invalid type: integer"));
 }
 
-/*
- * Bad values for "cert_file"
- */
+// Bad values for "cert_file"
 
 #[test]
 fn test_config_bad_cert_file_garbage() {
@@ -110,9 +100,7 @@ fn test_config_bad_cert_file_garbage() {
     assert!(error.starts_with("invalid type: integer"));
 }
 
-/*
- * Bad values for "tls"
- */
+// Bad values for "tls"
 
 #[test]
 fn test_config_bad_tls_garbage() {
@@ -186,41 +174,33 @@ where
 {
     let client = test_config.make_client();
 
-    /*
-     * Make sure there is not currently a server running on our expected
-     * port so that when we subsequently create a server and run it we know
-     * we're getting the one we configured.
-     */
+    // Make sure there is not currently a server running on our expected
+    // port so that when we subsequently create a server and run it we know
+    // we're getting the one we configured.
     let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
 
-    /*
-     * Now start a server with our configuration and make the request again.
-     * This should succeed in terms of making the request.  (The request
-     * itself might fail with a 400-level or 500-level response code -- we
-     * don't want to depend on too much from the ApiServer here -- but we
-     * should have successfully made the request.)
-     */
+    // Now start a server with our configuration and make the request again.
+    // This should succeed in terms of making the request.  (The request
+    // itself might fail with a 400-level or 500-level response code -- we
+    // don't want to depend on too much from the ApiServer here -- but we
+    // should have successfully made the request.)
     let server = test_config.make_server(bind_port);
     client.get(test_config.make_uri(bind_port)).await.unwrap();
     server.close().await.unwrap();
 
-    /*
-     * Make another request to make sure it fails now that we've shut down
-     * the server.  We need a new client to make sure our client-side connection
-     * starts from a clean slate.  (Otherwise, a race during shutdown could
-     * cause us to successfully send a request packet, only to have the TCP
-     * stack return with ECONNRESET, which gets in the way of what we're trying
-     * to test here.)
-     */
+    // Make another request to make sure it fails now that we've shut down
+    // the server.  We need a new client to make sure our client-side connection
+    // starts from a clean slate.  (Otherwise, a race during shutdown could
+    // cause us to successfully send a request packet, only to have the TCP
+    // stack return with ECONNRESET, which gets in the way of what we're trying
+    // to test here.)
     let client = test_config.make_client();
     let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
     assert!(error.is_connect());
 
-    /*
-     * Start a server on another TCP port and make sure we can reach that
-     * one (and NOT the one we just shut down).
-     */
+    // Start a server on another TCP port and make sure we can reach that
+    // one (and NOT the one we just shut down).
     let server = test_config.make_server(bind_port + 1);
     client.get(test_config.make_uri(bind_port + 1)).await.unwrap();
     let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
@@ -336,7 +316,7 @@ async fn test_config_bind_address_https() {
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
     let test_config = ConfigBindServerHttps { log, certs, cert_file, key_file };
 
-    /* This must be different than the bind_port used in the http test. */
+    // This must be different than the bind_port used in the http test.
     let bind_port = 12217;
     test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
         .await;
@@ -409,7 +389,7 @@ async fn test_config_bind_address_https_buffer() {
     let test_config =
         ConfigBindServerHttps { log, certs, serialized_certs, serialized_key };
 
-    /* This must be different than the bind_port used in the http test. */
+    // This must be different than the bind_port used in the http test.
     let bind_port = 12219;
     test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
         .await;

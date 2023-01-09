@@ -1,9 +1,7 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Example that shows a paginated API that uses the same pagination fields on
- * multiple resources.  See the other pagination examples for more information
- * about how to run this.
- */
+//! Example that shows a paginated API that uses the same pagination fields on
+//! multiple resources.  See the other pagination examples for more information
+//! about how to run this.
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
@@ -31,10 +29,8 @@ use std::ops::Bound;
 use std::sync::Arc;
 use uuid::Uuid;
 
-/*
- * Example API data model: we have three resources, each having an "id" and
- * "name".  We'll have one endpoint for each resource to list it.
- */
+// Example API data model: we have three resources, each having an "id" and
+// "name".  We'll have one endpoint for each resource to list it.
 
 #[derive(Clone, JsonSchema, Serialize)]
 struct Project {
@@ -57,12 +53,10 @@ struct Instance {
     // lots more instance-like fields
 }
 
-/*
- * In an API with many resources sharing the same identifying fields, we might
- * define a trait to get those fields.  Then we could define pagination in terms
- * of that trait.  To avoid hand-writing the impls, we use a macro.  (This might
- * be better as a "derive" procedural macro.)
- */
+// In an API with many resources sharing the same identifying fields, we might
+// define a trait to get those fields.  Then we could define pagination in terms
+// of that trait.  To avoid hand-writing the impls, we use a macro.  (This might
+// be better as a "derive" procedural macro.)
 trait HasIdentity {
     fn id(&self) -> &Uuid;
     fn name(&self) -> &str;
@@ -85,9 +79,7 @@ impl_HasIdentity!(Project);
 impl_HasIdentity!(Disk);
 impl_HasIdentity!(Instance);
 
-/*
- * Pagination-related types
- */
+// Pagination-related types
 #[derive(Deserialize, Clone, JsonSchema, Serialize)]
 struct ExScanParams {
     #[serde(default = "default_sort_mode")]
@@ -155,13 +147,11 @@ fn scan_params(p: &WhichPage<ExScanParams, ExPageSelector>) -> ExScanParams {
     }
 }
 
-/*
- * Paginated endpoints to list each type of resource.
- *
- * These could be commonized further (to the point where each of these endpoint
- * functions is just a one-line call to a generic function), but we implement
- * them separately here for clarity.
- */
+// Paginated endpoints to list each type of resource.
+//
+// These could be commonized further (to the point where each of these endpoint
+// functions is just a one-line call to a generic function), but we implement
+// them separately here for clarity.
 
 #[endpoint {
     method = GET,
@@ -274,9 +264,7 @@ where
     }
 }
 
-/*
- * General Dropshot-server boilerplate
- */
+// General Dropshot-server boilerplate
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -287,9 +275,7 @@ async fn main() -> Result<(), String> {
         .map_err(|e| format!("failed to parse \"port\" argument: {}", e))?
         .unwrap_or(0);
 
-    /*
-     * Run the Dropshot server.
-     */
+    // Run the Dropshot server.
     let ctx = DataCollection::new();
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
@@ -311,11 +297,9 @@ async fn main() -> Result<(), String> {
     server.await
 }
 
-/**
- * Tracks a (static) collection of Projects indexed in two different ways to
- * demonstrate an endpoint that provides multiple ways to scan a large
- * collection.
- */
+/// Tracks a (static) collection of Projects indexed in two different ways to
+/// demonstrate an endpoint that provides multiple ways to scan a large
+/// collection.
 struct DataCollection {
     projects_by_name: BTreeMap<String, Arc<Project>>,
     projects_by_id: BTreeMap<Uuid, Arc<Project>>,
@@ -328,10 +312,8 @@ struct DataCollection {
 type ItemIter<'a, T> = Box<dyn Iterator<Item = Arc<T>> + 'a>;
 
 impl DataCollection {
-    /**
-     * Constructs an example collection of projects, disks, and instances to
-     * back the API endpoints
-     */
+    /// Constructs an example collection of projects, disks, and instances to
+    /// back the API endpoints
     pub fn new() -> DataCollection {
         let mut data = DataCollection {
             projects_by_id: BTreeMap::new(),
@@ -399,10 +381,8 @@ impl DataCollection {
         self.make_iter(iter)
     }
 
-    /**
-     * Helper function to turn the initial iterators produced above into what we
-     * actually need to provide consumers.
-     */
+    /// Helper function to turn the initial iterators produced above into what we
+    /// actually need to provide consumers.
     fn make_iter<'a, K, I, T>(&'a self, iter: I) -> ItemIter<'a, T>
     where
         I: Iterator<Item = (K, &'a Arc<T>)> + 'a,

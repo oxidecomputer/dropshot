@@ -1,20 +1,18 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Example showing a relatively simple use of the pagination API
- *
- * When you run this program, it will start an HTTP server on an available local
- * port.  See the log entry to see what port it ran on.  Then use curl to use
- * it, like this:
- *
- * ```ignore
- * $ curl localhost:50568/projects
- * ```
- *
- * (Replace 50568 with whatever port your server is listening on.)
- *
- * Try passing different values of the `limit` query parameter.  Try passing the
- * next page token from the response as a query parameter, too.
- */
+//! Example showing a relatively simple use of the pagination API
+//!
+//! When you run this program, it will start an HTTP server on an available local
+//! port.  See the log entry to see what port it ran on.  Then use curl to use
+//! it, like this:
+//!
+//! ```ignore
+//! $ curl localhost:50568/projects
+//! ```
+//!
+//! (Replace 50568 with whatever port your server is listening on.)
+//!
+//! Try passing different values of the `limit` query parameter.  Try passing the
+//! next page token from the response as a query parameter, too.
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
@@ -39,39 +37,33 @@ use std::net::SocketAddr;
 use std::ops::Bound;
 use std::sync::Arc;
 
-/**
- * Object returned by our paginated endpoint
- *
- * Like anything returned by Dropshot, we must implement `JsonSchema` and
- * `Serialize`.  We also implement `Clone` to simplify the example.
- */
+/// Object returned by our paginated endpoint
+///
+/// Like anything returned by Dropshot, we must implement `JsonSchema` and
+/// `Serialize`.  We also implement `Clone` to simplify the example.
 #[derive(Clone, JsonSchema, Serialize)]
 struct Project {
     name: String,
     // lots more fields
 }
 
-/**
- * Parameters describing the client's position in a scan through all projects
- *
- * This implementation only needs the name of the last project seen, as we only
- * support listing projects in ascending order by name.
- *
- * This must be `Serialize` so that Dropshot can turn it into a page token to
- * include with each page of results, and it must be `Deserialize` to get it
- * back in a querystring.
- */
+/// Parameters describing the client's position in a scan through all projects
+///
+/// This implementation only needs the name of the last project seen, as we only
+/// support listing projects in ascending order by name.
+///
+/// This must be `Serialize` so that Dropshot can turn it into a page token to
+/// include with each page of results, and it must be `Deserialize` to get it
+/// back in a querystring.
 #[derive(Deserialize, JsonSchema, Serialize)]
 struct ProjectPage {
     name: String,
 }
 
-/**
- * API endpoint for listing projects
- *
- * This implementation stores all the projects in a BTreeMap, which makes it
- * very easy to fetch a particular range of items based on the key.
- */
+/// API endpoint for listing projects
+///
+/// This implementation stores all the projects in a BTreeMap, which makes it
+/// very easy to fetch a particular range of items based on the key.
 #[endpoint {
     method = GET,
     path = "/projects"
@@ -85,14 +77,14 @@ async fn example_list_projects(
     let tree = rqctx.context();
     let projects = match &pag_params.page {
         WhichPage::First(..) => {
-            /* Return a list of the first "limit" projects. */
+            // Return a list of the first "limit" projects.
             tree.iter()
                 .take(limit)
                 .map(|(_, project)| project.clone())
                 .collect()
         }
         WhichPage::Next(ProjectPage { name: last_seen }) => {
-            /* Return a list of the first "limit" projects after this name. */
+            // Return a list of the first "limit" projects after this name.
             tree.range((Bound::Excluded(last_seen.clone()), Bound::Unbounded))
                 .take(limit)
                 .map(|(_, project)| project.clone())
@@ -116,9 +108,7 @@ async fn main() -> Result<(), String> {
         .map_err(|e| format!("failed to parse \"port\" argument: {}", e))?
         .unwrap_or(0);
 
-    /*
-     * Create 1000 projects up front.
-     */
+    // Create 1000 projects up front.
     let mut tree = BTreeMap::new();
     for n in 1..1000 {
         let name = format!("project{:03}", n);
@@ -126,9 +116,7 @@ async fn main() -> Result<(), String> {
         tree.insert(name, project);
     }
 
-    /*
-     * Run the Dropshot server.
-     */
+    // Run the Dropshot server.
     let ctx = tree;
     let config_dropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),

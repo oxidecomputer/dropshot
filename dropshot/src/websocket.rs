@@ -1,12 +1,10 @@
 // Copyright 2022 Oxide Computer Company
-/*!
- * Implements websocket upgrades as an Extractor for use in API route handler
- * parameters to indicate that the given endpoint is meant to be upgraded to
- * a websocket.
- *
- * This exposes a raw upgraded HTTP connection to a user-provided async future,
- * which will be spawned to handle the incoming connection.
- */
+//! Implements websocket upgrades as an Extractor for use in API route handler
+//! parameters to indicate that the given endpoint is meant to be upgraded to
+//! a websocket.
+//!
+//! This exposes a raw upgraded HTTP connection to a user-provided async future,
+//! which will be spawned to handle the incoming connection.
 
 use crate::api_description::ExtensionMode;
 use crate::{
@@ -26,37 +24,29 @@ use slog::Logger;
 use std::future::Future;
 use std::sync::Arc;
 
-/**
- * WebsocketUpgrade is an Extractor used to upgrade and handle an HTTP request
- * as a websocket when present in a Dropshot endpoint's function arguments.
- *
- * The consumer of this must call [WebsocketUpgrade::handle] for the connection
- * to be upgraded. (This is done for you by `#[channel]`.)
- */
+/// WebsocketUpgrade is an Extractor used to upgrade and handle an HTTP request
+/// as a websocket when present in a Dropshot endpoint's function arguments.
+///
+/// The consumer of this must call [WebsocketUpgrade::handle] for the connection
+/// to be upgraded. (This is done for you by `#[channel]`.)
 #[derive(Debug)]
 pub struct WebsocketUpgrade(Option<WebsocketUpgradeInner>);
 
-/**
- * This is the return type of the websocket-handling future provided to
- * [`dropshot_endpoint::channel`]
- * (which in turn provides it to [WebsocketUpgrade::handle]).
- */
+/// This is the return type of the websocket-handling future provided to
+/// [`dropshot_endpoint::channel`]
+/// (which in turn provides it to [WebsocketUpgrade::handle]).
 pub type WebsocketChannelResult =
     Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>;
 
-/**
- * [WebsocketUpgrade::handle]'s return type.
- * The `#[endpoint]` handler must return the value returned by
- * [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
- */
+/// [WebsocketUpgrade::handle]'s return type.
+/// The `#[endpoint]` handler must return the value returned by
+/// [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
 pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 
-/**
- * The upgraded connection passed as the second argument to the websocket
- * handler function. [`WebsocketConnection::into_inner`] can be used to
- * access the raw upgraded connection, for passing to any implementation
- * of the websockets protocol.
- */
+/// The upgraded connection passed as the second argument to the websocket
+/// handler function. [`WebsocketConnection::into_inner`] can be used to
+/// access the raw upgraded connection, for passing to any implementation
+/// of the websockets protocol.
 pub struct WebsocketConnection(WebsocketConnectionRaw);
 
 /// A type that implements [tokio::io::AsyncRead] + [tokio::io::AsyncWrite].
@@ -88,11 +78,9 @@ fn derive_accept_key(request_key: &[u8]) -> String {
     base64::encode(&sha1.finalize())
 }
 
-/**
- * This `Extractor` implementation constructs an instance of `WebsocketUpgrade`
- * from an HTTP request, and returns an error if the given request does not
- * contain websocket upgrade headers.
- */
+/// This `Extractor` implementation constructs an instance of `WebsocketUpgrade`
+/// from an HTTP request, and returns an error if the given request does not
+/// contain websocket upgrade headers.
 #[async_trait]
 impl Extractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
@@ -184,45 +172,43 @@ impl Extractor for WebsocketUpgrade {
 }
 
 impl WebsocketUpgrade {
-    /**
-    * Upgrade the HTTP connection to a websocket and spawn a user-provided
-    * async handler to service it.
-    *
-    * This function's return value should be the basis of the return value of
-    * your endpoint's function, as it sends the headers to tell the HTTP
-    * client that we are accepting the upgrade.
-    *
-    * `handler` is a closure that accepts a [`WebsocketConnection`]
-    * and returns a future that will be spawned by this function,
-    * in which the `WebsocketConnection`'s inner `Upgraded` connection may be
-    * used with your choice of websocket-handling code operating over an
-    * [`tokio::io::AsyncRead`] + [`tokio::io::AsyncWrite`] type
-    * (e.g. `tokio_tungstenite`).
-    *
-    * ```
-      #[dropshot::endpoint { method = GET, path = "/my/ws/endpoint/{id}" }]
-      async fn my_ws_endpoint(
-          rqctx: std::sync::Arc<dropshot::RequestContext<()>>,
-          websock: dropshot::WebsocketUpgrade,
-          id: dropshot::Path<String>,
-      ) -> dropshot::WebsocketEndpointResult {
-          let logger = rqctx.log.new(slog::o!());
-          websock.handle(move |upgraded| async move {
-              slog::info!(logger, "Entered handler for ID {}", id.into_inner());
-              use futures::stream::StreamExt;
-              let mut ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
-                  upgraded.into_inner(), tokio_tungstenite::tungstenite::protocol::Role::Server, None
-              ).await;
-              slog::info!(logger, "Received from websocket: {:?}", ws_stream.next().await);
-              Ok(())
-          })
-      }
-    * ```
-    *
-    * Note that as a consumer of this crate, you most likely do not want to
-    * call this function directly; rather, prefer to annotate your function
-    * with [`dropshot_endpoint::channel`] instead of `endpoint`.
-    */
+    /// Upgrade the HTTP connection to a websocket and spawn a user-provided
+    /// async handler to service it.
+    ///
+    /// This function's return value should be the basis of the return value of
+    /// your endpoint's function, as it sends the headers to tell the HTTP
+    /// client that we are accepting the upgrade.
+    ///
+    /// `handler` is a closure that accepts a [`WebsocketConnection`]
+    /// and returns a future that will be spawned by this function,
+    /// in which the `WebsocketConnection`'s inner `Upgraded` connection may be
+    /// used with your choice of websocket-handling code operating over an
+    /// [`tokio::io::AsyncRead`] + [`tokio::io::AsyncWrite`] type
+    /// (e.g. `tokio_tungstenite`).
+    ///
+    /// ```
+    /// #[dropshot::endpoint { method = GET, path = "/my/ws/endpoint/{id}" }]
+    /// async fn my_ws_endpoint(
+    /// rqctx: std::sync::Arc<dropshot::RequestContext<()>>,
+    /// websock: dropshot::WebsocketUpgrade,
+    /// id: dropshot::Path<String>,
+    /// ) -> dropshot::WebsocketEndpointResult {
+    /// let logger = rqctx.log.new(slog::o!());
+    /// websock.handle(move |upgraded| async move {
+    /// slog::info!(logger, "Entered handler for ID {}", id.into_inner());
+    /// use futures::stream::StreamExt;
+    /// let mut ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
+    /// upgraded.into_inner(), tokio_tungstenite::tungstenite::protocol::Role::Server, None
+    /// ).await;
+    /// slog::info!(logger, "Received from websocket: {:?}", ws_stream.next().await);
+    /// Ok(())
+    /// })
+    /// }
+    /// ```
+    ///
+    /// Note that as a consumer of this crate, you most likely do not want to
+    /// call this function directly; rather, prefer to annotate your function
+    /// with [`dropshot_endpoint::channel`] instead of `endpoint`.
     pub fn handle<C, F>(mut self, handler: C) -> WebsocketEndpointResult
     where
         C: FnOnce(WebsocketConnection) -> F + Send + 'static,

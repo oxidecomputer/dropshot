@@ -1,7 +1,5 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Generic server-wide state and facilities
- */
+//! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
 use super::config::{ConfigDropshot, ConfigTls};
@@ -42,34 +40,30 @@ use uuid::Uuid;
 
 use slog::Logger;
 
-/* TODO Replace this with something else? */
+// TODO Replace this with something else?
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
-/**
- * Endpoint-accessible context associated with a server.
- *
- * Automatically implemented for all Send + Sync types.
- */
+/// Endpoint-accessible context associated with a server.
+///
+/// Automatically implemented for all Send + Sync types.
 pub trait ServerContext: Send + Sync + 'static {}
 
 impl<T: 'static> ServerContext for T where T: Send + Sync {}
 
-/**
- * Stores shared state used by the Dropshot server.
- */
+/// Stores shared state used by the Dropshot server.
 #[derive(Debug)]
 pub struct DropshotState<C: ServerContext> {
-    /** caller-specific state */
+    /// caller-specific state
     pub private: C,
-    /** static server configuration parameters */
+    /// static server configuration parameters
     pub config: ServerConfig,
-    /** request router */
+    /// request router
     pub router: HttpRouter<C>,
-    /** server-wide log handle */
+    /// server-wide log handle
     pub log: Logger,
-    /** bound local address for the server. */
+    /// bound local address for the server.
     pub local_addr: SocketAddr,
-    /** Identifies how to accept TLS connections */
+    /// Identifies how to accept TLS connections
     pub(crate) tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
 }
 
@@ -79,24 +73,20 @@ impl<C: ServerContext> DropshotState<C> {
     }
 }
 
-/**
- * Stores static configuration associated with the server
- * TODO-cleanup merge with ConfigDropshot
- */
+/// Stores static configuration associated with the server
+/// TODO-cleanup merge with ConfigDropshot
 #[derive(Debug)]
 pub struct ServerConfig {
-    /** maximum allowed size of a request body */
+    /// maximum allowed size of a request body
     pub request_body_max_bytes: usize,
-    /** maximum size of any page of results */
+    /// maximum size of any page of results
     pub page_max_nitems: NonZeroU32,
-    /** default size for a page of results */
+    /// default size for a page of results
     pub page_default_nitems: NonZeroU32,
 }
 
-/**
- * A thin wrapper around a Hyper Server object that exposes some interfaces that
- * we find useful.
- */
+/// A thin wrapper around a Hyper Server object that exposes some interfaces that
+/// we find useful.
 pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
@@ -111,7 +101,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, GenericError> {
         let server_config = ServerConfig {
-            /* We start aggressively to ensure test coverage. */
+            // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
@@ -241,14 +231,12 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         tokio::spawn(async { graceful.await })
     }
 
-    /**
-     * Set up an HTTP server bound on the specified address that runs registered
-     * handlers.  You must invoke `start()` on the returned instance of
-     * `HttpServerStarter` (and await the result) to actually start the server.
-     *
-     * TODO-cleanup We should be able to take a reference to the ApiDescription.
-     * We currently can't because we need to hang onto the router.
-     */
+    /// Set up an HTTP server bound on the specified address that runs registered
+    /// handlers.  You must invoke `start()` on the returned instance of
+    /// `HttpServerStarter` (and await the result) to actually start the server.
+    ///
+    /// TODO-cleanup We should be able to take a reference to the ApiDescription.
+    /// We currently can't because we need to hang onto the router.
     fn new(
         config: &ConfigDropshot,
         server_config: ServerConfig,
@@ -259,7 +247,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
 
-        /* TODO-cleanup too many Arcs? */
+        // TODO-cleanup too many Arcs?
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
@@ -595,11 +583,9 @@ impl<C: ServerContext> HttpServer<C> {
         Ok(())
     }
 
-    /**
-     * Return the result of registering the server's DTrace USDT probes.
-     *
-     * See [`ProbeRegistration`] for details.
-     */
+    /// Return the result of registering the server's DTrace USDT probes.
+    ///
+    /// See [`ProbeRegistration`] for details.
     pub fn probe_registration(&self) -> &ProbeRegistration {
         &self.probe_registration
     }
@@ -628,12 +614,10 @@ impl<C: ServerContext> HttpServer<C> {
     }
 }
 
-/*
- * For graceful termination, the `close()` function is preferred, as it can
- * report errors and wait for termination to complete.  However, we impl
- * `Drop` to attempt to shut down the server to handle less clean shutdowns
- * (e.g., from failing tests).
- */
+// For graceful termination, the `close()` function is preferred, as it can
+// report errors and wait for termination to complete.  However, we impl
+// `Drop` to attempt to shut down the server to handle less clean shutdowns
+// (e.g., from failing tests).
 impl Drop for CloseHandle {
     fn drop(&mut self) {
         if let Some(c) = self.close_channel.take() {
@@ -658,12 +642,10 @@ impl<C: ServerContext> FusedFuture for HttpServer<C> {
     }
 }
 
-/**
- * Initial entry point for handling a new connection to the HTTP server.
- * This is invoked by Hyper when a new connection is accepted.  This function
- * must return a Hyper Service object that will handle requests for this
- * connection.
- */
+/// Initial entry point for handling a new connection to the HTTP server.
+/// This is invoked by Hyper when a new connection is accepted.  This function
+/// must return a Hyper Service object that will handle requests for this
+/// connection.
 async fn http_connection_handle<C: ServerContext>(
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
@@ -672,23 +654,19 @@ async fn http_connection_handle<C: ServerContext>(
     Ok(ServerRequestHandler::new(server, remote_addr))
 }
 
-/**
- * Initial entry point for handling a new request to the HTTP server.  This is
- * invoked by Hyper when a new request is received.  This function returns a
- * Result that either represents a valid HTTP response or an error (which will
- * also get turned into an HTTP response).
- */
+/// Initial entry point for handling a new request to the HTTP server.  This is
+/// invoked by Hyper when a new request is received.  This function returns a
+/// Result that either represents a valid HTTP response or an error (which will
+/// also get turned into an HTTP response).
 async fn http_request_handle_wrap<C: ServerContext>(
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
     request: Request<Body>,
 ) -> Result<Response<Body>, GenericError> {
-    /*
-     * This extra level of indirection makes error handling much more
-     * straightforward, since the request handling code can simply return early
-     * with an error and we'll treat it like an error from any of the endpoints
-     * themselves.
-     */
+    // This extra level of indirection makes error handling much more
+    // straightforward, since the request handling code can simply return early
+    // with an error and we'll treat it like an error from any of the endpoints
+    // themselves.
     let request_id = generate_request_id();
     let request_log = server.log.new(o!(
         "remote_addr" => remote_addr,
@@ -740,7 +718,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 }
             });
 
-            /* TODO-debug: add request and response headers here */
+            // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
                 "response_code" => r.status().as_str().to_string(),
                 "error_message_internal" => message_internal,
@@ -751,7 +729,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         }
 
         Ok(response) => {
-            /* TODO-debug: add request and response headers here */
+            // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
                 "response_code" => response.status().as_str().to_string()
             );
@@ -780,14 +758,12 @@ async fn http_request_handle<C: ServerContext>(
     request_id: &str,
     request_log: Logger,
 ) -> Result<Response<Body>, HttpError> {
-    /*
-     * TODO-hardening: is it correct to (and do we correctly) read the entire
-     * request body even if we decide it's too large and are going to send a 400
-     * response?
-     * TODO-hardening: add a request read timeout as well so that we don't allow
-     * this to take forever.
-     * TODO-correctness: Do we need to dump the body on errors?
-     */
+    // TODO-hardening: is it correct to (and do we correctly) read the entire
+    // request body even if we decide it's too large and are going to send a 400
+    // response?
+    // TODO-hardening: add a request read timeout as well so that we don't allow
+    // this to take forever.
+    // TODO-correctness: Do we need to dump the body on errors?
     let method = request.method();
     let uri = request.uri();
     let lookup_result =
@@ -808,48 +784,40 @@ async fn http_request_handle<C: ServerContext>(
     Ok(response)
 }
 
-/*
- * This function should probably be parametrized by some name of the service
- * that is expected to be unique within an organization.  That way, it would be
- * possible to determine from a given request id which service it was from.
- * TODO should we encode more information here?  Service?  Instance?  Time up to
- * the hour?
- */
+// This function should probably be parametrized by some name of the service
+// that is expected to be unique within an organization.  That way, it would be
+// possible to determine from a given request id which service it was from.
+// TODO should we encode more information here?  Service?  Instance?  Time up to
+// the hour?
 fn generate_request_id() -> String {
     format!("{}", Uuid::new_v4())
 }
 
-/**
- * ServerConnectionHandler is a Hyper Service implementation that forwards
- * incoming connections to `http_connection_handle()`, providing the server
- * state object as an additional argument.  We could use `make_service_fn` here
- * using a closure to capture the state object, but the resulting code is a bit
- * simpler without it.
- */
+/// ServerConnectionHandler is a Hyper Service implementation that forwards
+/// incoming connections to `http_connection_handle()`, providing the server
+/// state object as an additional argument.  We could use `make_service_fn` here
+/// using a closure to capture the state object, but the resulting code is a bit
+/// simpler without it.
 pub struct ServerConnectionHandler<C: ServerContext> {
-    /** backend state that will be made available to the connection handler */
+    /// backend state that will be made available to the connection handler
     server: Arc<DropshotState<C>>,
 }
 
 impl<C: ServerContext> ServerConnectionHandler<C> {
-    /**
-     * Create an ServerConnectionHandler with the given state object that
-     * will be made available to the handler.
-     */
+    /// Create an ServerConnectionHandler with the given state object that
+    /// will be made available to the handler.
     fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerConnectionHandler { server }
     }
 }
 
 impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
-    /*
-     * Recall that a Service in this context is just something that takes a
-     * request (which could be anything) and produces a response (which could be
-     * anything).  This being a connection handler, the request type is an
-     * AddrStream (which wraps a TCP connection) and the response type is
-     * another Service: one that accepts HTTP requests and produces HTTP
-     * responses.
-     */
+    // Recall that a Service in this context is just something that takes a
+    // request (which could be anything) and produces a response (which could be
+    // anything).  This being a connection handler, the request type is an
+    // AddrStream (which wraps a TCP connection) and the response type is
+    // another Service: one that accepts HTTP requests and produces HTTP
+    // responses.
     type Response = ServerRequestHandler<T>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -863,39 +831,33 @@ impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
     }
 
     fn call(&mut self, conn: &AddrStream) -> Self::Future {
-        /*
-         * We're given a borrowed reference to the AddrStream, but our interface
-         * is async (which is good, so that we can support time-consuming
-         * operations as part of receiving requests).  To avoid having to ensure
-         * that conn's lifetime exceeds that of this async operation, we simply
-         * copy the only useful information out of the conn: the SocketAddr.  We
-         * may want to create our own connection type to encapsulate the socket
-         * address and any other per-connection state that we want to keep.
-         */
+        // We're given a borrowed reference to the AddrStream, but our interface
+        // is async (which is good, so that we can support time-consuming
+        // operations as part of receiving requests).  To avoid having to ensure
+        // that conn's lifetime exceeds that of this async operation, we simply
+        // copy the only useful information out of the conn: the SocketAddr.  We
+        // may want to create our own connection type to encapsulate the socket
+        // address and any other per-connection state that we want to keep.
         let server = Arc::clone(&self.server);
         let remote_addr = conn.remote_addr();
         Box::pin(http_connection_handle(server, remote_addr))
     }
 }
 
-/**
- * ServerRequestHandler is a Hyper Service implementation that forwards
- * incoming requests to `http_request_handle_wrap()`, including as an argument
- * the backend server state object.  We could use `service_fn` here using a
- * closure to capture the server state object, but the resulting code is a bit
- * simpler without all that.
- */
+/// ServerRequestHandler is a Hyper Service implementation that forwards
+/// incoming requests to `http_request_handle_wrap()`, including as an argument
+/// the backend server state object.  We could use `service_fn` here using a
+/// closure to capture the server state object, but the resulting code is a bit
+/// simpler without all that.
 pub struct ServerRequestHandler<C: ServerContext> {
-    /** backend state that will be made available to the request handler */
+    /// backend state that will be made available to the request handler
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
 }
 
 impl<C: ServerContext> ServerRequestHandler<C> {
-    /**
-     * Create a ServerRequestHandler object with the given state object that
-     * will be provided to the handler function.
-     */
+    /// Create a ServerRequestHandler object with the given state object that
+    /// will be provided to the handler function.
     fn new(server: Arc<DropshotState<C>>, remote_addr: SocketAddr) -> Self {
         ServerRequestHandler { server, remote_addr }
     }

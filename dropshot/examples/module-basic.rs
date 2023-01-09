@@ -1,7 +1,5 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Example use of Dropshot.
- */
+//! Example use of Dropshot.
 
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
@@ -14,86 +12,64 @@ use std::sync::atomic::AtomicU64;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    /*
-     * We must specify a configuration with a bind address.  We'll use 127.0.0.1
-     * since it's available and won't expose this server outside the host.  We
-     * request port 0, which allows the operating system to pick any available
-     * port.
-     */
+    // We must specify a configuration with a bind address.  We'll use 127.0.0.1
+    // since it's available and won't expose this server outside the host.  We
+    // request port 0, which allows the operating system to pick any available
+    // port.
     let config_dropshot = Default::default();
 
-    /*
-     * For simplicity, we'll configure an "info"-level logger that writes to
-     * stderr assuming that it's a terminal.
-     */
+    // For simplicity, we'll configure an "info"-level logger that writes to
+    // stderr assuming that it's a terminal.
     let config_logging =
         ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
         .to_logger("example-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
-    /*
-     * Build a description of the API.
-     */
+    // Build a description of the API.
     let mut api = ApiDescription::new();
     api.register(routes::example_api_get_counter).unwrap();
     api.register(routes::example_api_put_counter).unwrap();
 
-    /*
-     * The functions that implement our API endpoints will share this context.
-     */
+    // The functions that implement our API endpoints will share this context.
     let api_context = ExampleContext::new();
 
-    /*
-     * Set up the server.
-     */
+    // Set up the server.
     let server =
         HttpServerStarter::new(&config_dropshot, api, api_context, &log)
             .map_err(|error| format!("failed to create server: {}", error))?
             .start();
 
-    /*
-     * Wait for the server to stop.  Note that there's not any code to shut down
-     * this server, so we should never get past this point.
-     */
+    // Wait for the server to stop.  Note that there's not any code to shut down
+    // this server, so we should never get past this point.
     server.await
 }
 
-/**
- * Application-specific example context (state shared by handler functions)
- */
+/// Application-specific example context (state shared by handler functions)
 pub struct ExampleContext {
-    /** counter that can be manipulated by requests to the HTTP API */
+    /// counter that can be manipulated by requests to the HTTP API
     pub counter: AtomicU64,
 }
 
 impl ExampleContext {
-    /**
-     * Return a new ExampleContext.
-     */
+    /// Return a new ExampleContext.
     pub fn new() -> ExampleContext {
         ExampleContext { counter: AtomicU64::new(0) }
     }
 }
 
-/*
- * HTTP API interface
- */
+// HTTP API interface
 
-/**
- * `CounterValue` represents the value of the API's counter, either as the
- * response to a GET request to fetch the counter or as the body of a PUT
- * request to update the counter.
- */
+/// `CounterValue` represents the value of the API's counter, either as the
+/// response to a GET request to fetch the counter or as the body of a PUT
+/// request to update the counter.
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CounterValue {
     counter: u64,
 }
 
-/**
- * The routes module might be imported from another crate that publishes
- * mountable routes
- */
+/// The routes module might be imported from another crate that publishes
+/// mountable routes
 pub mod routes {
     use crate::{CounterValue, ExampleContext};
     use dropshot::endpoint;
@@ -105,11 +81,9 @@ pub mod routes {
     use std::sync::atomic::Ordering;
     use std::sync::Arc;
 
-    /**
-     * Fetch the current value of the counter.
-     * NOTE: The endpoint macro inherits its module visibility from
-     * the endpoint async function definition
-     */
+    /// Fetch the current value of the counter.
+    /// NOTE: The endpoint macro inherits its module visibility from
+    /// the endpoint async function definition
     #[endpoint {
           method = GET,
           path = "/counter",
@@ -124,10 +98,8 @@ pub mod routes {
         }))
     }
 
-    /**
-     * Update the current value of the counter.  Note that the special value of 10
-     * is not allowed (just to demonstrate how to generate an error).
-     */
+    /// Update the current value of the counter.  Note that the special value of 10
+    /// is not allowed (just to demonstrate how to generate an error).
     #[endpoint {
           method = PUT,
           path = "/counter",
