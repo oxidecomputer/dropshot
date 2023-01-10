@@ -17,6 +17,10 @@ https://github.com/oxidecomputer/dropshot/compare/v0.8.0\...HEAD[Full list of co
 
 === Breaking Changes
 
+// XXX-dap TODO more updates for RawRequest extractor
+// also update crate-level docs and other places we talk about TypedBody, etc.
+// maybe add an example?
+
 There are a number of breaking changes in this release but we expect they will be easy to manage.  **If you have any trouble updating to this release or want help with it, please do https://github.com/oxidecomputer/dropshot/discussions[start a discussion] or https://github.com/oxidecomputer/dropshot/issues/new[file an issue]!**
 
 * https://github.com/oxidecomputer/dropshot/pull/556[#556] Better type-safety around the use of extractors.  It is now a compile-time error to define an endpoint that accepts two extractors that use the HTTP request body (e.g., to accept both a `TypedBody` and an `UntypedBody`, or two `TypedBody` arguments).  Previously, this would have resulted in a runtime error.  The main change is that the `Extractor` trait has been split into two separate traits: `SharedExtractor` and `ExclusiveExtractor`.  Endpoint functions can still accept 0-3 extractors, but only one can be an `ExclusiveExtractor` and it must be the last one.  The function signatures for `*Extractor::from_request` have also changed.
