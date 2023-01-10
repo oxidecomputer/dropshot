@@ -15,7 +15,7 @@ use std::time::Duration;
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<i32>, HttpError> {
     let non_send_type = Rc::new(0);
     tokio::time::sleep(Duration::from_millis(1)).await;

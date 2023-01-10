@@ -5,7 +5,6 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(JsonSchema, Deserialize)]
 #[allow(dead_code)]
@@ -25,7 +24,7 @@ struct MyPath {
     path = "/{type}/{ref}/{@}",
 }]
 async fn handler(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _path: Path<MyPath>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))

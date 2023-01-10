@@ -19,7 +19,7 @@ use dropshot::{
     tags = ["simpsons"],
 }]
 async fn get_homerism(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     unimplemented!()
 }
@@ -30,7 +30,7 @@ async fn get_homerism(
     tags = ["simpsons"],
 }]
 async fn get_barneyism(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     unimplemented!()
 }
@@ -41,7 +41,7 @@ async fn get_barneyism(
     tags = ["futurama"],
 }]
 async fn get_fryism(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     unimplemented!()
 }

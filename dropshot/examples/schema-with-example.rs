@@ -66,7 +66,7 @@ fn main() -> Result<(), String> {
 }]
 /// Get a foo
 async fn get_foo(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<Foo>, HttpError> {
     let foo = foo_example();
     Ok(HttpResponseOk(foo))

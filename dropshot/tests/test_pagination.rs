@@ -39,7 +39,6 @@ use std::net::SocketAddr;
 use std::ops::Bound;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use subprocess::Exec;
@@ -172,7 +171,7 @@ fn range_u16(start: u16, limit: u16) -> Vec<u16> {
     path = "/intapi",
 }]
 async fn api_integers(
-    rqctx: Arc<RequestContext<usize>>,
+    rqctx: RequestContext<usize>,
     query: Query<PaginationParams<EmptyScanParams, IntegersPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<u16>>, HttpError> {
     let pag_params = query.into_inner();
@@ -354,7 +353,7 @@ async fn test_paginate_basic() {
     path = "/empty",
 }]
 async fn api_empty(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestContext<usize>,
     _query: Query<PaginationParams<EmptyScanParams, IntegersPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<u16>>, HttpError> {
     Ok(HttpResponseOk(ResultsPage::new(
@@ -411,7 +410,7 @@ async fn test_paginate_empty() {
     path = "/ints_extra",
 }]
 async fn api_with_extra_params(
-    rqctx: Arc<RequestContext<usize>>,
+    rqctx: RequestContext<usize>,
     query_pag: Query<PaginationParams<EmptyScanParams, IntegersPageSelector>>,
     query_extra: Query<ExtraQueryParams>,
 ) -> Result<HttpResponseOk<ExtraResultsPage>, HttpError> {
@@ -502,7 +501,7 @@ struct ReqScanParams {
     path = "/required",
 }]
 async fn api_with_required_params(
-    rqctx: Arc<RequestContext<usize>>,
+    rqctx: RequestContext<usize>,
     query: Query<PaginationParams<ReqScanParams, IntegersPageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<u16>>, HttpError> {
     let pag_params = query.into_inner();
@@ -608,7 +607,7 @@ struct DictionaryPageSelector {
     path = "/dictionary",
 }]
 async fn api_dictionary(
-    rqctx: Arc<RequestContext<usize>>,
+    rqctx: RequestContext<usize>,
     query: Query<
         PaginationParams<DictionaryScanParams, DictionaryPageSelector>,
     >,

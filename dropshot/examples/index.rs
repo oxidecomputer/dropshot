@@ -66,7 +66,7 @@ struct AllPath {
     unpublished = true,
 }]
 async fn index(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     path: Path<AllPath>,
 ) -> Result<Response<Body>, HttpError> {
     Ok(Response::builder()

@@ -76,7 +76,7 @@ struct AllPath {
     unpublished = true,
 }]
 async fn static_content(
-    rqctx: Arc<RequestContext<FileServerContext>>,
+    rqctx: RequestContext<FileServerContext>,
     path: Path<AllPath>,
 ) -> Result<Response<Body>, HttpError> {
     let path = path.into_inner().path;

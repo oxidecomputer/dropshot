@@ -258,7 +258,7 @@ struct ServerDescription {
     path = "/servers",
 }]
 async fn api_get_servers(
-    rqctx: Arc<RequestContext<MultiServerContext>>,
+    rqctx: RequestContext<MultiServerContext>,
 ) -> Result<HttpResponseOk<Vec<ServerDescription>>, HttpError> {
     let api_context = rqctx.context();
 
@@ -285,7 +285,7 @@ struct PathName {
     path = "/servers/{name}",
 }]
 async fn api_start_server(
-    rqctx: Arc<RequestContext<MultiServerContext>>,
+    rqctx: RequestContext<MultiServerContext>,
     path: Path<PathName>,
     body: TypedBody<SocketAddr>,
 ) -> Result<HttpResponseCreated<ServerDescription>, HttpError> {
@@ -313,7 +313,7 @@ async fn api_start_server(
     path = "/servers/{name}",
 }]
 async fn api_stop_server(
-    rqctx: Arc<RequestContext<MultiServerContext>>,
+    rqctx: RequestContext<MultiServerContext>,
     path: Path<PathName>,
 ) -> Result<HttpResponseDeleted, HttpError> {
     let api_context = rqctx.context();

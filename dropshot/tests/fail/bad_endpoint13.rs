@@ -6,7 +6,6 @@ use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
-use std::sync::Arc;
 
 trait Stuff {
     fn do_stuff();
@@ -17,7 +16,7 @@ trait Stuff {
     path = "/test",
 }]
 async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
-    _: Arc<RequestContext<S>>,
+    _: RequestContext<S>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     S::do_stuff();
     panic!()

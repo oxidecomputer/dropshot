@@ -46,7 +46,7 @@ async fn main() -> Result<(), String> {
     path = "/header-example-generic",
 }]
 async fn example_api_get_header_generic(
-    rqctx: Arc<RequestContext<()>>,
+    rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     // Note that clients can provide multiple values for a header.  See
     // http::HeaderMap for ways to get all of them.

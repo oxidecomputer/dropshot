@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `String: HttpCodedResponse` is not satisfied
-  --> tests/fail/bad_endpoint12.rs:16:6
+  --> tests/fail/bad_endpoint12.rs:15:6
    |
-16 | ) -> Result<String, HttpError> {
+15 | ) -> Result<String, HttpError> {
    |      ^^^^^^ the trait `HttpCodedResponse` is not implemented for `String`
    |
    = help: the following other types implement trait `HttpCodedResponse`:
@@ -15,7 +15,7 @@ error[E0277]: the trait bound `String: HttpCodedResponse` is not satisfied
              dropshot::handler::HttpResponseTemporaryRedirectStatus
    = note: required for `String` to implement `HttpResponse`
 note: required for `Result<String, HttpError>` to implement `ResultTrait`
-  --> tests/fail/bad_endpoint12.rs:16:6
+  --> tests/fail/bad_endpoint12.rs:15:6
    |
-16 | ) -> Result<String, HttpError> {
+15 | ) -> Result<String, HttpError> {
    |      ^^^^^^

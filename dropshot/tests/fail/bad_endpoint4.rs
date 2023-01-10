@@ -7,7 +7,6 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::Query;
 use dropshot::RequestContext;
-use std::sync::Arc;
 
 #[allow(dead_code)]
 struct QueryParams {
@@ -20,7 +19,7 @@ struct QueryParams {
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _params: Query<QueryParams>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))

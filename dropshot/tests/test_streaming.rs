@@ -6,7 +6,6 @@ use dropshot::{endpoint, ApiDescription, HttpError, RequestContext};
 use http::{Method, Response, StatusCode};
 use hyper::{body::HttpBody, Body};
 use hyper_staticfile::FileBytesStream;
-use std::sync::Arc;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 extern crate slog;
@@ -28,7 +27,7 @@ const BUF_COUNT: usize = 128;
     path = "/streaming",
 }]
 async fn api_streaming(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestContext<usize>,
 ) -> Result<Response<Body>, HttpError> {
     let mut file = tempfile::tempfile()
         .map_err(|_| {
@@ -58,7 +57,7 @@ async fn api_streaming(
     path = "/not-streaming",
 }]
 async fn api_not_streaming(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestContext<usize>,
 ) -> Result<Response<Body>, HttpError> {
     Ok(Response::builder()
         .status(StatusCode::OK)

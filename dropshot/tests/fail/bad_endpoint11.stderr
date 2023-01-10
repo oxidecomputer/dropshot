@@ -1,18 +1,18 @@
 error: Endpoint handlers must have the following signature:
            async fn(
-               rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
+               rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
                [path_params: Path<P>,]
                [body_param: TypedBody<J>,]
                [body_param: UntypedBody<J>,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint11.rs:13:1
+  --> tests/fail/bad_endpoint11.rs:12:1
    |
-13 | async fn bad_no_result(_: Arc<RequestContext<()>>) {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+12 | async fn bad_no_result(_: RequestContext<()>) {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: Endpoint must return a Result
-  --> tests/fail/bad_endpoint11.rs:13:1
+  --> tests/fail/bad_endpoint11.rs:12:1
    |
-13 | async fn bad_no_result(_: Arc<RequestContext<()>>) {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+12 | async fn bad_no_result(_: RequestContext<()>) {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -828,7 +828,7 @@ async fn test_demo_websocket() {
 
 // Demo handler functions
 
-type RequestCtx = Arc<RequestContext<usize>>;
+type RequestCtx = RequestContext<usize>;
 
 #[endpoint {
     method = GET,
@@ -965,7 +965,7 @@ pub struct DemoUntypedQuery {
     path = "/testing/untyped_body"
 }]
 async fn demo_handler_untyped_body(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestContext<usize>,
     query: Query<DemoUntypedQuery>,
     body: UntypedBody,
 ) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
@@ -988,7 +988,7 @@ pub struct DemoPathImpossible {
     path = "/testing/demo_path_impossible/{different_param_name}",
 }]
 async fn demo_handler_path_param_impossible(
-    _rqctx: Arc<RequestContext<usize>>,
+    _rqctx: RequestContext<usize>,
     path_params: Path<DemoPathImpossible>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&path_params.into_inner())

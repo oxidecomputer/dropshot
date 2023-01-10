@@ -1561,7 +1561,7 @@ mod test {
     }
 
     async fn test_badpath_handler(
-        _: Arc<RequestContext<()>>,
+        _: RequestContext<()>,
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
@@ -1627,7 +1627,7 @@ mod test {
             path = "I don't start with a slash"
         }]
         async fn test_badpath_handler(
-            _: Arc<RequestContext<()>>,
+            _: RequestContext<()>,
         ) -> Result<Response<Body>, HttpError> {
             unimplemented!();
         }
@@ -1708,7 +1708,7 @@ mod test {
             path = "/testing/{thing}"
         }]
         async fn test_dup_names_handler(
-            _: Arc<RequestContext<()>>,
+            _: RequestContext<()>,
             _: Query<TheThing>,
             _: Path<TheThing>,
         ) -> Result<Response<Body>, HttpError> {

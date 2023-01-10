@@ -166,15 +166,13 @@ impl<Context: ServerContext> RequestContext<Context> {
 /// endpoint macro parse this argument.
 ///
 /// The first argument to an endpoint handler must be of the form:
-/// `Arc<RequestContext<T>>` where `T` is a caller-supplied
+/// `RequestContext<T>` where `T` is a caller-supplied
 /// value that implements `ServerContext`.
 pub trait RequestContextArgument {
     type Context;
 }
 
-impl<T: 'static + ServerContext> RequestContextArgument
-    for Arc<RequestContext<T>>
-{
+impl<T: 'static + ServerContext> RequestContextArgument for RequestContext<T> {
     type Context = T;
 }
 
@@ -203,7 +201,7 @@ where
 {
     async fn handle_request(
         &self,
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: RequestContext<Context>,
         p: FuncParams,
     ) -> HttpHandlerResult;
 }
@@ -294,7 +292,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
         HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
     where
         Context: ServerContext,
-        FuncType: Fn(Arc<RequestContext<Context>>, $($T,)*)
+        FuncType: Fn(RequestContext<Context>, $($T,)*)
             -> FutureType + Send + Sync + 'static,
         FutureType: Future<Output = Result<ResponseType, HttpError>>
             + Send + 'static,
@@ -304,7 +302,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     {
         async fn handle_request(
             &self,
-            rqctx: Arc<RequestContext<Context>>,
+            rqctx: RequestContext<Context>,
             _param_tuple: ($($T,)*)
         ) -> HttpHandlerResult
         {
@@ -398,7 +396,7 @@ where
 
     async fn handle_request(
         &self,
-        rqctx_raw: RequestContext<Context>,
+        rqctx: RequestContext<Context>,
         request: hyper::Request<hyper::Body>,
     ) -> HttpHandlerResult {
         // This is where the magic happens: in the code below, `funcparams` has
@@ -417,7 +415,6 @@ where
         // is resolved statically.makes them actual function arguments for the
         // actual handler function.  From this point down, all of this is
         // resolved statically.
-        let rqctx = Arc::new(rqctx_raw);
         let funcparams =
             RequestExtractor::from_request(&rqctx, request).await?;
         let future = self.handler.handle_request(rqctx, funcparams);

@@ -61,7 +61,7 @@ struct QueryParams {
     path = "/counter",
 }]
 async fn example_api_websocket_counter(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     upgraded: WebsocketConnection,
     qp: Query<QueryParams>,
 ) -> dropshot::WebsocketChannelResult {

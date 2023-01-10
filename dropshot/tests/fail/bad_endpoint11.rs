@@ -4,12 +4,11 @@
 
 use dropshot::endpoint;
 use dropshot::RequestContext;
-use std::sync::Arc;
 
 #[endpoint {
     method = GET,
     path = "/test",
 }]
-async fn bad_no_result(_: Arc<RequestContext<()>>) {}
+async fn bad_no_result(_: RequestContext<()>) {}
 
 fn main() {}
