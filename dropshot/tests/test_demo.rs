@@ -966,8 +966,8 @@ pub struct DemoUntypedQuery {
 }]
 async fn demo_handler_untyped_body(
     _rqctx: Arc<RequestContext<usize>>,
-    body: UntypedBody,
     query: Query<DemoUntypedQuery>,
+    body: UntypedBody,
 ) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
     let nbytes = body.as_bytes().len();
     let as_utf8 = if query.into_inner().parse_str.unwrap_or(false) {

@@ -32,7 +32,7 @@
 //! OpenAPI document generation.
 
 use super::error::HttpError;
-use super::extractor::Extractor;
+use super::extractor::RequestExtractor;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
@@ -166,7 +166,7 @@ pub trait HttpHandlerFunc<Context, FuncParams, ResponseType>:
     Send + Sync + 'static
 where
     Context: ServerContext,
-    FuncParams: Extractor,
+    FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
     async fn handle_request(
@@ -267,7 +267,8 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
         FutureType: Future<Output = Result<ResponseType, HttpError>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
-        $($T: Extractor + Send + Sync + 'static,)*
+        ($($T,)*): RequestExtractor,
+        $($T: Send + Sync + 'static,)*
     {
         async fn handle_request(
             &self,
@@ -318,7 +319,7 @@ pub struct HttpRouteHandler<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
     HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-    FuncParams: Extractor,
+    FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
     /// the actual HttpHandlerFunc used to implement this route
@@ -341,7 +342,7 @@ impl<Context, HandlerType, FuncParams, ResponseType> Debug
 where
     Context: ServerContext,
     HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-    FuncParams: Extractor,
+    FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -355,7 +356,7 @@ impl<Context, HandlerType, FuncParams, ResponseType> RouteHandler<Context>
 where
     Context: ServerContext,
     HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-    FuncParams: Extractor + 'static,
+    FuncParams: RequestExtractor + 'static,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
     fn label(&self) -> &str {
@@ -371,10 +372,10 @@ where
         // arguments to the handler function.  This could be `()`, `(Query<Q>)`,
         // `(TypedBody<J>)`, `(Query<Q>, TypedBody<J>)`, or any other
         // combination of extractors we decide to support in the future.
-        // Whatever it is must implement `Extractor`, which means we can invoke
-        // `Extractor::from_request()` to construct the argument tuple,
-        // generally from information available in the `request` object.  We
-        // pass this down to the `HttpHandlerFunc`, for which there's a
+        // Whatever it is must implement `RequestExtractor`, which means we can
+        // invoke `RequestExtractor::from_request()` to construct the argument
+        // tuple, generally from information available in the `request` object.
+        // We pass this down to the `HttpHandlerFunc`, for which there's a
         // different implementation for each value of `FuncParams`.  The
         // `HttpHandlerFunc` for each `FuncParams` just pulls the arguments out
         // of the `funcparams` tuple and makes them actual function arguments
@@ -383,7 +384,7 @@ where
         // actual handler function.  From this point down, all of this is
         // resolved statically.
         let rqctx = Arc::new(rqctx_raw);
-        let funcparams = Extractor::from_request(Arc::clone(&rqctx)).await?;
+        let funcparams = RequestExtractor::from_request(&rqctx).await?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -396,7 +397,7 @@ impl<Context, HandlerType, FuncParams, ResponseType>
 where
     Context: ServerContext,
     HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-    FuncParams: Extractor + 'static,
+    FuncParams: RequestExtractor + 'static,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
     /// Given a function matching one of the supported API handler function

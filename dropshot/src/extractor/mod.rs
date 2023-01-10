@@ -30,78 +30,15 @@ use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
-use std::sync::Arc;
 
-/// `Extractor` defines an interface allowing a type to be constructed from a
-/// `RequestContext`.  Unlike most traits, `Extractor` essentially defines only a
-/// constructor function, not instance functions.
-///
-/// The extractors that we provide (`Query`, `Path`, `TypedBody`, `UntypedBody`, and
-/// `WebsocketUpgrade`) implement `Extractor` in order to construct themselves from
-/// the request. For example, `Extractor` is implemented for `Query<Q>` with a
-/// function that reads the query string from the request, parses it, and
-/// constructs a `Query<Q>` with it.
-///
-/// We also define implementations of `Extractor` for tuples of types that
-/// themselves implement `Extractor`.  See the implementation of
-/// `HttpRouteHandler` for more on why this needed.
-#[async_trait]
-pub trait Extractor: Send + Sync + Sized {
-    /// Construct an instance of this type from a `RequestContext`.
-    async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
-    ) -> Result<Self, HttpError>;
+mod common;
 
-    fn metadata(
-        body_content_type: ApiEndpointBodyContentType,
-    ) -> ExtractorMetadata;
-}
+pub use common::ExclusiveExtractor;
+pub use common::ExtractorMetadata;
+pub use common::RequestExtractor;
+pub use common::SharedExtractor;
 
-/// Metadata associated with an extractor including parameters and whether or not
-/// the associated endpoint is paginated.
-pub struct ExtractorMetadata {
-    pub extension_mode: ExtensionMode,
-    pub parameters: Vec<ApiEndpointParameter>,
-}
-
-/// `impl_derived_for_tuple!` defines implementations of `Extractor` for tuples
-/// whose elements themselves implement `Extractor`.
-macro_rules! impl_extractor_for_tuple {
-    ($( $T:ident),*) => {
-    #[async_trait]
-    impl< $($T: Extractor + 'static,)* > Extractor for ($($T,)*)
-    {
-        async fn from_request<Context: ServerContext>(_rqctx: Arc<RequestContext<Context>>)
-            -> Result<( $($T,)* ), HttpError>
-        {
-            futures::try_join!($($T::from_request(Arc::clone(&_rqctx)),)*)
-        }
-
-        fn metadata(_body_content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
-            #[allow(unused_mut)]
-            let mut extension_mode = ExtensionMode::None;
-            #[allow(unused_mut)]
-            let mut parameters = vec![];
-            $(
-                let mut metadata = $T::metadata(_body_content_type.clone());
-                extension_mode = match (extension_mode, metadata.extension_mode) {
-                    (ExtensionMode::None, x) | (x, ExtensionMode::None) => x,
-                    (x, y) if x != y => {
-                        panic!("incompatible extension modes in tuple: {:?} != {:?}", x, y);
-                    }
-                    (_, x) => x,
-                };
-                parameters.append(&mut metadata.parameters);
-            )*
-            ExtractorMetadata { extension_mode, parameters }
-        }
-    }
-}}
-
-impl_extractor_for_tuple!();
-impl_extractor_for_tuple!(T1);
-impl_extractor_for_tuple!(T1, T2);
-impl_extractor_for_tuple!(T1, T2, T3);
+// XXX-dap move these definitions to separate files?
 
 // Query: query string extractor
 
@@ -140,19 +77,19 @@ where
     }
 }
 
-// The `Extractor` implementation for Query<QueryType> describes how to construct
-// an instance of `Query<QueryType>` from an HTTP request: namely, by parsing
-// the query string to an instance of `QueryType`.
+// The `SharedExtractor` implementation for Query<QueryType> describes how to
+// construct an instance of `Query<QueryType>` from an HTTP request: namely, by
+// parsing the query string to an instance of `QueryType`.
 // TODO-cleanup We shouldn't have to use the "'static" bound on `QueryType`
 // here.  It seems like we ought to be able to use 'async_trait, but that
 // doesn't seem to be defined.
 #[async_trait]
-impl<QueryType> Extractor for Query<QueryType>
+impl<QueryType> SharedExtractor for Query<QueryType>
 where
     QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &RequestContext<Context>,
     ) -> Result<Query<QueryType>, HttpError> {
         let request = rqctx.request.lock().await;
         http_request_load_query(&request)
@@ -183,16 +120,16 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
     }
 }
 
-// The `Extractor` implementation for Path<PathType> describes how to construct
-// an instance of `Path<QueryType>` from an HTTP request: namely, by extracting
-// parameters from the query string.
+// The `SharedExtractor` implementation for Path<PathType> describes how to
+// construct an instance of `Path<QueryType>` from an HTTP request: namely, by
+// extracting parameters from the query string.
 #[async_trait]
-impl<PathType> Extractor for Path<PathType>
+impl<PathType> SharedExtractor for Path<PathType>
 where
     PathType: DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &RequestContext<Context>,
     ) -> Result<Path<PathType>, HttpError> {
         let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
         Ok(Path { inner: params })
@@ -288,7 +225,7 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
 /// Given an HTTP request, attempt to read the body, parse it according
 /// to the content type, and deserialize it to an instance of `BodyType`.
 async fn http_request_load_body<Context: ServerContext, BodyType>(
-    rqctx: Arc<RequestContext<Context>>,
+    rqctx: &RequestContext<Context>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
@@ -352,19 +289,19 @@ where
     Ok(TypedBody { inner: content })
 }
 
-// The `Extractor` implementation for TypedBody<BodyType> describes how to
-// construct an instance of `TypedBody<BodyType>` from an HTTP request: namely,
-// by reading the request body and parsing it as JSON into type `BodyType`.
-// TODO-cleanup We shouldn't have to use the "'static" bound on `BodyType` here.
-// It seems like we ought to be able to use 'async_trait, but that doesn't seem
-// to be defined.
+// The `ExclusiveExtractor` implementation for TypedBody<BodyType> describes how
+// to construct an instance of `TypedBody<BodyType>` from an HTTP request:
+// namely, by reading the request body and parsing it as JSON into type
+// `BodyType`.  TODO-cleanup We shouldn't have to use the "'static" bound on
+// `BodyType` here.  It seems like we ought to be able to use 'async_trait, but
+// that doesn't seem to be defined.
 #[async_trait]
-impl<BodyType> Extractor for TypedBody<BodyType>
+impl<BodyType> ExclusiveExtractor for TypedBody<BodyType>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
 {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &RequestContext<Context>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
         http_request_load_body(rqctx).await
     }
@@ -415,9 +352,9 @@ impl UntypedBody {
 }
 
 #[async_trait]
-impl Extractor for UntypedBody {
+impl ExclusiveExtractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &RequestContext<Context>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
         let mut request = rqctx.request.lock().await;
