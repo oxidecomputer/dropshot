@@ -101,9 +101,8 @@
 
 use crate::error::HttpError;
 use crate::from_map::from_map;
-use base64::alphabet::URL_SAFE;
-use base64::engine::fast_portable::FastPortable;
-use base64::engine::fast_portable::PAD;
+use base64::engine::general_purpose::URL_SAFE;
+use base64::Engine;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -447,7 +446,7 @@ fn serialize_page_token<PageSelector: Serialize>(
                 ))
             })?;
 
-        base64::encode_engine(json_bytes, &FastPortable::from(&URL_SAFE, PAD))
+        URL_SAFE.encode(json_bytes)
     };
 
     /*
@@ -481,11 +480,9 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
             "failed to parse pagination token: too large",
         ));
     }
-    let json_bytes = base64::decode_engine(
-        token_str.as_bytes(),
-        &FastPortable::from(&URL_SAFE, PAD),
-    )
-    .map_err(|e| format!("failed to parse pagination token: {}", e))?;
+    let json_bytes = URL_SAFE
+        .decode(token_str.as_bytes())
+        .map_err(|e| format!("failed to parse pagination token: {}", e))?;
 
     /*
      * TODO-debugging: we don't want the user to have to know about the
@@ -521,6 +518,8 @@ mod test {
     use super::ResultsPage;
     use super::WhichPage;
     use super::PAGINATION_PARAM_SENTINEL;
+    use base64::engine::general_purpose::URL_SAFE;
+    use base64::Engine;
     use schemars::JsonSchema;
     use serde::de::DeserializeOwned;
     use serde::Deserialize;
@@ -594,26 +593,26 @@ mod test {
 
         /* Non-JSON */
         let error =
-            deserialize_page_token::<TokenWithStr>(&base64::encode("{"))
+            deserialize_page_token::<TokenWithStr>(&URL_SAFE.encode("{"))
                 .unwrap_err();
         assert!(error.contains("corrupted token"));
 
         /* Wrong top-level JSON type */
         let error =
-            deserialize_page_token::<TokenWithStr>(&base64::encode("[]"))
+            deserialize_page_token::<TokenWithStr>(&URL_SAFE.encode("[]"))
                 .unwrap_err();
         assert!(error.contains("corrupted token"));
 
         /* Structure does not match our general Dropshot schema. */
         let error =
-            deserialize_page_token::<TokenWithStr>(&base64::encode("{}"))
+            deserialize_page_token::<TokenWithStr>(&URL_SAFE.encode("{}"))
                 .unwrap_err();
         assert!(error.contains("corrupted token"));
 
         /* Bad version */
-        let error = deserialize_page_token::<TokenWithStr>(&base64::encode(
-            "{\"v\":11}",
-        ))
+        let error = deserialize_page_token::<TokenWithStr>(
+            &URL_SAFE.encode("{\"v\":11}"),
+        )
         .unwrap_err();
         assert!(error.contains("corrupted token"));
     }
