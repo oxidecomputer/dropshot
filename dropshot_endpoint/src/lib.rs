@@ -173,7 +173,8 @@ fn do_channel(
         ChannelProtocol::WEBSOCKETS => {
             // here we construct a wrapper function and mutate the arguments a bit
             // for the outer layer: we replace WebsocketConnection, which is not
-            // an extractor, with WebsocketUpgrade, which is.
+            // an extractor, with WebsocketUpgrade, which is.  We also move it
+            // to the end.
             let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
                 syn::parse2(item)?;
 
@@ -218,6 +219,13 @@ fn do_channel(
                     "An argument of type dropshot::WebsocketConnection must be provided immediately following Arc<RequestContext<T>>.",
                 ));
             }
+
+            // XXX-dap TODO-cleanup This is a gross way to do it.
+            let mut input_pairs =
+                sig.inputs.clone().into_pairs().collect::<Vec<_>>();
+            let second_pair = input_pairs.remove(1);
+            input_pairs.push(second_pair);
+            sig.inputs = input_pairs.into_iter().collect();
 
             sig.output =
                 syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))?;
@@ -425,12 +433,12 @@ fn do_endpoint_inner(
         .inputs
         .iter()
         .enumerate()
-        .map(|(index, arg)| {
+        .filter_map(|(index, arg)| {
             match arg {
                 syn::FnArg::Receiver(_) => {
                     // The compiler failure here is already comprehensible.
                     arg_is_receiver = true;
-                    quote! {}
+                    Some(quote! {})
                 }
                 syn::FnArg::Typed(pat) => {
                     let span = pat.ty.span();
@@ -440,23 +448,15 @@ fn do_endpoint_inner(
                         // The first parameter must be an Arc<RequestContext<T>>
                         // and fortunately we already have a trait that we can
                         // use to validate this type.
-                        quote_spanned! { span=>
+                        Some(quote_spanned! { span=>
                             const _: fn() = || {
                                 struct NeedRequestContext(<#ty as #dropshot::RequestContextArgument>::Context);
                             };
-                        }
+                        })
                     } else {
-                        // Subsequent parameters must implement Extractor.
-                        quote_spanned! { span=>
-                            const _: fn() = || {
-                                fn need_extractor<T>()
-                                where
-                                    T: ?Sized + #dropshot::Extractor,
-                                {
-                                }
-                                need_extractor::<#ty>();
-                            };
-                        }
+                        // XXX-dap the remaining stuff must together impl
+                        // `RequestExtractor`
+                        None
                     }
                 }
             }
@@ -936,14 +936,6 @@ mod tests {
                 struct NeedRequestContext(<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
-                fn need_extractor<T>()
-                where
-                    T: ?Sized + dropshot::Extractor,
-                {
-                }
-                need_extractor::<Query<Q> >();
-            };
-            const _: fn() = || {
                 trait ResultTrait {
                     type T;
                     type E;
@@ -1040,14 +1032,6 @@ mod tests {
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                fn need_extractor<T>()
-                where
-                    T: ?Sized + dropshot::Extractor,
-                {
-                }
-                need_extractor::<Query<Q> >();
             };
             const _: fn() = || {
                 trait ResultTrait {
