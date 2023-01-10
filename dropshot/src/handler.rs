@@ -90,6 +90,7 @@ pub struct RequestContext<Context: ServerContext> {
 
 // This is deliberately as close to compatible with `hyper::Request` as
 // reasonable.
+// XXX-dap TODO This could use a better name.
 #[derive(Debug)]
 pub struct RequestHeader {
     method: http::Method,
