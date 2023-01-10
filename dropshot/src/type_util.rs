@@ -1,8 +1,6 @@
 // Copyright 2021 Oxide Computer Company
 
-/*!
- * Utility functions for working with JsonSchema types.
- */
+//! Utility functions for working with JsonSchema types.
 
 use std::collections::HashSet;
 
@@ -11,10 +9,8 @@ use schemars::schema::{
     InstanceType, Schema, SchemaObject, SingleOrVec, SubschemaValidation,
 };
 
-/**
- * Returns true iff the input schema is a boolean, floating-point number,
- * string or integer.
- */
+/// Returns true iff the input schema is a boolean, floating-point number,
+/// string or integer.
 pub fn type_is_scalar(
     name: &String,
     schema: &Schema,
@@ -31,9 +27,7 @@ pub fn type_is_scalar(
     })
 }
 
-/**
- * Returns true iff the input schema is a string.
- */
+/// Returns true iff the input schema is a string.
 pub fn type_is_string(
     name: &String,
     schema: &Schema,
@@ -44,24 +38,20 @@ pub fn type_is_string(
     })
 }
 
-/**
- * Helper function for scalar types.
- */
+/// Helper function for scalar types.
 fn type_is_scalar_common(
     name: &String,
     schema: &Schema,
     dependencies: &IndexMap<String, Schema>,
     type_check: fn(&InstanceType) -> bool,
 ) -> Result<(), String> {
-    /* Make sure we're examining a type and not a reference */
+    // Make sure we're examining a type and not a reference
     let schema = type_resolve(schema, dependencies);
 
     match schema {
-        /*
-         * Types that have no subschemas, are not arrays, are not objects, are
-         * not references, and whose instance type matches the limited set of
-         * scalar types.
-         */
+        // Types that have no subschemas, are not arrays, are not objects, are
+        // not references, and whose instance type matches the limited set of
+        // scalar types.
         Schema::Object(SchemaObject {
             instance_type: Some(SingleOrVec::Single(instance_type)),
             subschemas: None,
@@ -71,9 +61,7 @@ fn type_is_scalar_common(
             ..
         }) if type_check(instance_type.as_ref()) => Ok(()),
 
-        /*
-         * Handle subschemas.
-         */
+        // Handle subschemas.
         Schema::Object(SchemaObject {
             instance_type: None,
             format: None,
@@ -100,12 +88,10 @@ fn type_is_scalar_common(
     }
 }
 
-/**
- * Determine if a collection of subschemas are scalar (and meet the criteria of
- * the `type_check` parameter). For `allOf` and `anyOf` subschemas, we proceed
- * only if there is a lone subschema which we check recursively. For `oneOf`
- * subschemas, we check that each subschema is scalar.
- */
+/// Determine if a collection of subschemas are scalar (and meet the criteria of
+/// the `type_check` parameter). For `allOf` and `anyOf` subschemas, we proceed
+/// only if there is a lone subschema which we check recursively. For `oneOf`
+/// subschemas, we check that each subschema is scalar.
 fn type_is_scalar_subschemas(
     name: &String,
     subschemas: &SubschemaValidation,
@@ -160,7 +146,7 @@ pub fn type_is_string_enum(
     schema: &Schema,
     dependencies: &IndexMap<String, Schema>,
 ) -> Result<(), String> {
-    /* Make sure we're examining a type and not a reference */
+    // Make sure we're examining a type and not a reference
     let schema = type_resolve(schema, dependencies);
 
     match schema {
@@ -302,7 +288,7 @@ mod tests {
 
         #[derive(JsonSchema)]
         struct ThingHolder {
-            /** This is my thing */
+            /// This is my thing
             thing: Things,
         }
 

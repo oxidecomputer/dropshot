@@ -7,9 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 fn main() -> Result<(), String> {
-    /*
-     * Build a description of the API.
-     */
+    // Build a description of the API.
     let mut api = ApiDescription::new();
     api.register(get_pet_by_id).unwrap();
     api.register(update_pet_with_form).unwrap();

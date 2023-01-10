@@ -14,11 +14,9 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 
-/**
- * Deserialize a BTreeMap<String, MapValue> into a type, invoking
- * String::parse() for all values according to the required type. MapValue may
- * be either a single String or a sequence of Strings.
- */
+/// Deserialize a BTreeMap<String, MapValue> into a type, invoking
+/// String::parse() for all values according to the required type. MapValue may
+/// be either a single String or a sequence of Strings.
 pub(crate) fn from_map<'a, T, Z>(
     map: &'a BTreeMap<String, Z>,
 ) -> Result<T, String>
@@ -48,10 +46,8 @@ impl MapValue for String {
     }
 }
 
-/**
- * Deserializer for BTreeMap<String, MapValue> that interprets the values. It has
- * two modes: about to iterate over the map or about to process a single value.
- */
+/// Deserializer for BTreeMap<String, MapValue> that interprets the values. It has
+/// two modes: about to iterate over the map or about to process a single value.
 #[derive(Debug)]
 enum MapDeserializer<'de, Z: MapValue + Debug + Clone + 'static> {
     Map(&'de BTreeMap<String, Z>),
@@ -66,10 +62,8 @@ where
         MapDeserializer::Map(input)
     }
 
-    /**
-     * Helper function to extract pattern match for Value. Fail if we're
-     * expecting a Map or return the result of the provided function.
-     */
+    /// Helper function to extract pattern match for Value. Fail if we're
+    /// expecting a Map or return the result of the provided function.
     fn value<VV, F>(&self, deserialize: F) -> Result<VV, MapError>
     where
         F: FnOnce(&Z) -> Result<VV, MapError>,
@@ -104,9 +98,7 @@ impl serde::de::Error for MapError {
 
 impl std::error::Error for MapError {}
 
-/**
- * Stub out Deserializer trait functions that aren't applicable.
- */
+/// Stub out Deserializer trait functions that aren't applicable.
 macro_rules! de_unimp {
     ($i:ident $(, $p:ident : $t:ty )*) => {
         fn $i<V>(self $(, $p: $t)*, _visitor: V) -> Result<V::Value, MapError>
@@ -121,11 +113,9 @@ macro_rules! de_unimp {
     };
 }
 
-/*
- * Generate handlers for primitive types using FromStr::parse() to deserialize
- * from the string form. Note that for integral types parse does not accept
- * prefixes such as "0x", but we could add this easily with a custom handler.
- */
+// Generate handlers for primitive types using FromStr::parse() to deserialize
+// from the string form. Note that for integral types parse does not accept
+// prefixes such as "0x", but we could add this easily with a custom handler.
 macro_rules! de_value {
     ($i:ident) => {
         paste! {
@@ -199,10 +189,8 @@ where
     {
         self.deserialize_map(visitor)
     }
-    /*
-     * This will only be called when deserializing a structure that contains a
-     * flattened structure. See `deserialize_any` below for details.
-     */
+    // This will only be called when deserializing a structure that contains a
+    // flattened structure. See `deserialize_any` below for details.
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -251,27 +239,25 @@ where
         self.value(|raw_value| visitor.visit_str(raw_value.as_value()?))
     }
 
-    /*
-     * We really shouldn't have to implement this, and we can't actually do so
-     * properly, but due to the way that serde currently handles flattened
-     * structs this will be called for all members in flattened (i.e. non-
-     * root) structs
-     *
-     * See serde-rs/serde#1183 for details. The macro for serde::Deserialize
-     * can't know the members of flattened structs (those are in a different
-     * scope) so serde forces all items to be deserialized, saves them in a
-     * map, and then deserialized them into the flattened structures without
-     * interpretation (as opposed to the interpretation of strings that we
-     * do in *this* Deserializer for a similar map). This is generally true
-     * for all non-self-describing formats.
-     *
-     * A better approach in serde might be to defer type assignment with a
-     * new function analogous to deserialize_any, but with the option of
-     * returning the raw data, frozen for future processing. The serde
-     * internal `FlatMapDeserializer` would then need to be able to send
-     * those "frozen" values back to the Deserializer to be processed with
-     * type information.
-     */
+    // We really shouldn't have to implement this, and we can't actually do so
+    // properly, but due to the way that serde currently handles flattened
+    // structs this will be called for all members in flattened (i.e. non-
+    // root) structs
+    //
+    // See serde-rs/serde#1183 for details. The macro for serde::Deserialize
+    // can't know the members of flattened structs (those are in a different
+    // scope) so serde forces all items to be deserialized, saves them in a
+    // map, and then deserialized them into the flattened structures without
+    // interpretation (as opposed to the interpretation of strings that we
+    // do in *this* Deserializer for a similar map). This is generally true
+    // for all non-self-describing formats.
+    //
+    // A better approach in serde might be to defer type assignment with a
+    // new function analogous to deserialize_any, but with the option of
+    // returning the raw data, frozen for future processing. The serde
+    // internal `FlatMapDeserializer` would then need to be able to send
+    // those "frozen" values back to the Deserializer to be processed with
+    // type information.
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -307,9 +293,7 @@ where
     }
 }
 
-/*
- * Deserializer component for processing enums.
- */
+// Deserializer component for processing enums.
 impl<'de, Z> EnumAccess<'de> for &mut MapDeserializer<'de, Z>
 where
     Z: MapValue + Debug + Clone + 'static,
@@ -328,9 +312,7 @@ where
     }
 }
 
-/*
- * Deserializer component for processing enum variants.
- */
+// Deserializer component for processing enum variants.
 impl<'de, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z>
 where
     Z: MapValue + Clone + Debug + 'static,
@@ -371,13 +353,11 @@ where
     }
 }
 
-/*
- * Deserializer component for iterating over the Map.
- */
+// Deserializer component for iterating over the Map.
 struct MapMapAccess<Z> {
-    /** Iterator through the Map */
+    /// Iterator through the Map
     iter: Box<dyn Iterator<Item = (String, Z)>>,
-    /** Pending value in a key-value pair */
+    /// Pending value in a key-value pair
     value: Option<Z>,
 }
 
@@ -396,9 +376,9 @@ where
     {
         match self.iter.next() {
             Some((key, value)) => {
-                /* Save the value for later. */
+                // Save the value for later.
                 self.value.replace(value);
-                /* Create a Deserializer for that single value. */
+                // Create a Deserializer for that single value.
                 let mut deserializer = MapDeserializer::Value(key);
                 seed.deserialize(&mut deserializer).map(Some)
             }
@@ -414,10 +394,8 @@ where
                 let mut deserializer = MapDeserializer::Value(value);
                 seed.deserialize(&mut deserializer)
             }
-            /*
-             * This means we were called without a corresponding call to
-             * next_key_seed() which should not be possible.
-             */
+            // This means we were called without a corresponding call to
+            // next_key_seed() which should not be possible.
             None => unreachable!(),
         }
     }

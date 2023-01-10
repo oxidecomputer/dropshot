@@ -1,7 +1,5 @@
 // Copyright 2022 Oxide Computer Company
-/*!
- * Describes the endpoints and handler functions in your API
- */
+//! Describes the endpoints and handler functions in your API
 
 use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
@@ -27,12 +25,10 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-/**
- * ApiEndpoint represents a single API endpoint associated with an
- * ApiDescription. It has a handler, HTTP method (e.g. GET, POST), and a path--
- * provided explicitly--as well as parameters and a description which can be
- * inferred from function parameter types and doc comments (respectively).
- */
+/// ApiEndpoint represents a single API endpoint associated with an
+/// ApiDescription. It has a handler, HTTP method (e.g. GET, POST), and a path--
+/// provided explicitly--as well as parameters and a description which can be
+/// inferred from function parameter types and doc comments (respectively).
 #[derive(Debug)]
 pub struct ApiEndpoint<Context: ServerContext> {
     pub operation_id: String,
@@ -111,11 +107,9 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
     }
 }
 
-/**
- * ApiEndpointParameter represents the discrete path and query parameters for a
- * given API endpoint. These are typically derived from the members of stucts
- * used as parameters to handler functions.
- */
+/// ApiEndpointParameter represents the discrete path and query parameters for a
+/// given API endpoint. These are typically derived from the members of stucts
+/// used as parameters to handler functions.
 #[derive(Debug)]
 pub struct ApiEndpointParameter {
     pub metadata: ApiEndpointParameterMetadata,
@@ -181,11 +175,11 @@ pub enum ApiEndpointParameterMetadata {
 
 #[derive(Debug, Clone)]
 pub enum ApiEndpointBodyContentType {
-    /** application/octet-stream */
+    /// application/octet-stream
     Bytes,
-    /** application/json */
+    /// application/json
     Json,
-    /** application/x-www-form-urlencoded */
+    /// application/x-www-form-urlencoded
     UrlEncoded,
 }
 
@@ -222,9 +216,7 @@ pub struct ApiEndpointHeader {
     pub required: bool,
 }
 
-/**
- * Metadata for an API endpoint response: type information and status code.
- */
+/// Metadata for an API endpoint response: type information and status code.
 #[derive(Debug, Default)]
 pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
@@ -233,9 +225,7 @@ pub struct ApiEndpointResponse {
     pub description: Option<String>,
 }
 
-/**
- * Wrapper for both dynamically generated and pre-generated schemas.
- */
+/// Wrapper for both dynamically generated and pre-generated schemas.
 pub enum ApiSchemaGenerator {
     Gen {
         name: fn() -> String,
@@ -259,13 +249,11 @@ impl std::fmt::Debug for ApiSchemaGenerator {
     }
 }
 
-/**
- * An ApiDescription represents the endpoints and handler functions in your API.
- * Other metadata could also be provided here.  This object can be used to
- * generate an OpenAPI spec or to run an HTTP server implementing the API.
- */
+/// An ApiDescription represents the endpoints and handler functions in your API.
+/// Other metadata could also be provided here.  This object can be used to
+/// generate an OpenAPI spec or to run an HTTP server implementing the API.
 pub struct ApiDescription<Context: ServerContext> {
-    /** In practice, all the information we need is encoded in the router. */
+    /// In practice, all the information we need is encoded in the router.
     router: HttpRouter<Context>,
     tag_config: TagConfig,
 }
@@ -283,9 +271,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         self
     }
 
-    /**
-     * Register a new API endpoint.
-     */
+    /// Register a new API endpoint.
     pub fn register<T>(&mut self, endpoint: T) -> Result<(), String>
     where
         T: Into<ApiEndpoint<Context>>,
@@ -302,11 +288,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
         Ok(())
     }
 
-    /**
-     * Validate that the tags conform to the tags policy.
-     */
+    /// Validate that the tags conform to the tags policy.
     fn validate_tags(&self, e: &ApiEndpoint<Context>) -> Result<(), String> {
-        /* Don't care about endpoints that don't appear in the OpenAPI */
+        // Don't care about endpoints that don't appear in the OpenAPI
         if !e.visible {
             return Ok(());
         }
@@ -332,10 +316,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
         Ok(())
     }
 
-    /**
-     * Validate that the parameters specified in the path match the parameters
-     * specified by the path parameter arguments to the handler function.
-     */
+    /// Validate that the parameters specified in the path match the parameters
+    /// specified by the path parameter arguments to the handler function.
     fn validate_path_parameters(
         &self,
         e: &ApiEndpoint<Context>,
@@ -392,9 +374,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         Ok(())
     }
 
-    /**
-     * Validate that we have a single body parameter.
-     */
+    /// Validate that we have a single body parameter.
     fn validate_body_parameters(
         &self,
         e: &ApiEndpoint<Context>,
@@ -419,11 +399,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
         Ok(())
     }
 
-    /**
-     * Validate that named parameters have appropriate types and their aren't
-     * duplicates. Parameters must have scalar types except in the case of the
-     * received for a wildcard path which must be an array of String.
-     */
+    /// Validate that named parameters have appropriate types and their aren't
+    /// duplicates. Parameters must have scalar types except in the case of the
+    /// received for a wildcard path which must be an array of String.
     fn validate_named_parameters(
         &self,
         e: &ApiEndpoint<Context>,
@@ -449,13 +427,13 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .collect::<BTreeMap<_, _>>();
 
         for param in &e.parameters {
-            /* Skip anything that's not a path or query parameter (i.e. body) */
+            // Skip anything that's not a path or query parameter (i.e. body)
             match &param.metadata {
                 ApiEndpointParameterMetadata::Path(_)
                 | ApiEndpointParameterMetadata::Query(_) => (),
                 _ => continue,
             }
-            /* Only body parameters should have unresolved schemas */
+            // Only body parameters should have unresolved schemas
             let (schema, dependencies) = match &param.schema {
                 ApiSchemaGenerator::Static { schema, dependencies } => {
                     (schema, dependencies)
@@ -494,15 +472,13 @@ impl<Context: ServerContext> ApiDescription<Context> {
         Ok(())
     }
 
-    /**
-     * Build the OpenAPI definition describing this API.  Returns an
-     * [`OpenApiDefinition`] which can be used to specify the contents of the
-     * definition and select an output format.
-     *
-     * The arguments to this function will be used for the mandatory `title` and
-     * `version` properties that the `Info` object in an OpenAPI definition must
-     * contain.
-     */
+    /// Build the OpenAPI definition describing this API.  Returns an
+    /// [`OpenApiDefinition`] which can be used to specify the contents of the
+    /// definition and select an output format.
+    ///
+    /// The arguments to this function will be used for the mandatory `title` and
+    /// `version` properties that the `Info` object in an OpenAPI definition must
+    /// contain.
     pub fn openapi<S1, S2>(
         &self,
         title: S1,
@@ -515,17 +491,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
         OpenApiDefinition::new(self, title.as_ref(), version.as_ref())
     }
 
-    /**
-     * Internal routine for constructing the OpenAPI definition describing this
-     * API in its JSON form.
-     */
+    /// Internal routine for constructing the OpenAPI definition describing this
+    /// API in its JSON form.
     fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
 
-        /* Gather up the ad hoc tags from endpoints */
+        // Gather up the ad hoc tags from endpoints
         let endpoint_tags = (&self.router)
             .into_iter()
             .flat_map(|(_, _, endpoint)| {
@@ -538,7 +512,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .into_iter()
             .map(|tag| openapiv3::Tag { name: tag, ..Default::default() });
 
-        /* Bundle those with the explicit tags provided by the consumer */
+        // Bundle those with the explicit tags provided by the consumer
         openapi.tags = self
             .tag_config
             .tag_definitions
@@ -558,7 +532,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .chain(endpoint_tags)
             .collect();
 
-        /* Sort the tags for stability */
+        // Sort the tags for stability
         openapi.tags.sort_by(|a, b| a.name.cmp(&b.name));
 
         let settings = schemars::gen::SchemaSettings::openapi3();
@@ -889,19 +863,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
         openapi
     }
 
-    /*
-     * TODO-cleanup is there a way to make this available only within this
-     * crate?  Once we do that, we don't need to consume the ApiDescription to
-     * do this.
-     */
+    // TODO-cleanup is there a way to make this available only within this
+    // crate?  Once we do that, we don't need to consume the ApiDescription to
+    // do this.
     pub fn into_router(self) -> HttpRouter<Context> {
         self.router
     }
 }
 
-/**
- * Returns true iff the schema represents the void schema that matches no data.
- */
+/// Returns true iff the schema represents the void schema that matches no data.
 fn is_empty(schema: &schemars::schema::Schema) -> bool {
     if let schemars::schema::Schema::Bool(false) = schema {
         return true;
@@ -957,27 +927,21 @@ fn is_empty(schema: &schemars::schema::Schema) -> bool {
     false
 }
 
-/**
- * Convert from JSON Schema into OpenAPI.
- */
-/*
- * TODO Initially this seemed like it was going to be a win, but the versions
- * of JSON Schema that the schemars and openapiv3 crates adhere to are just
- * different enough to make the conversion a real pain in the neck. A better
- * approach might be a derive(OpenAPI)-like thing, or even a generic
- * derive(schema) that we could then marshall into OpenAPI.
- * The schemars crate also seems a bit inflexible when it comes to how the
- * schema is generated wrt references vs. inline types.
- */
+/// Convert from JSON Schema into OpenAPI.
+// TODO Initially this seemed like it was going to be a win, but the versions
+// of JSON Schema that the schemars and openapiv3 crates adhere to are just
+// different enough to make the conversion a real pain in the neck. A better
+// approach might be a derive(OpenAPI)-like thing, or even a generic
+// derive(schema) that we could then marshall into OpenAPI.
+// The schemars crate also seems a bit inflexible when it comes to how the
+// schema is generated wrt references vs. inline types.
 fn j2oas_schema(
     name: Option<&String>,
     schema: &schemars::schema::Schema,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     match schema {
-        /*
-         * The permissive, "match anything" schema. We'll typically see this
-         * when consumers use a type such as serde_json::Value.
-         */
+        // The permissive, "match anything" schema. We'll typically see this
+        // when consumers use a type such as serde_json::Value.
         schemars::schema::Schema::Bool(true) => {
             openapiv3::ReferenceOr::Item(openapiv3::Schema {
                 schema_data: openapiv3::SchemaData::default(),
@@ -1397,13 +1361,11 @@ fn j2oas_object(
     }
 }
 
-/**
- * This object is used to specify configuration for building an OpenAPI
- * definition document.  It is constructed using [`ApiDescription::openapi()`].
- * Additional optional properties may be added and then the OpenAPI definition
- * document may be generated via [`write()`](`OpenApiDefinition::write`) or
- * [`json()`](`OpenApiDefinition::json`).
- */
+/// This object is used to specify configuration for building an OpenAPI
+/// definition document.  It is constructed using [`ApiDescription::openapi()`].
+/// Additional optional properties may be added and then the OpenAPI definition
+/// document may be generated via [`write()`](`OpenApiDefinition::write`) or
+/// [`json()`](`OpenApiDefinition::json`).
 pub struct OpenApiDefinition<'a, Context: ServerContext> {
     api: &'a ApiDescription<Context>,
     info: openapiv3::Info,
@@ -1423,25 +1385,21 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         OpenApiDefinition { api, info }
     }
 
-    /**
-     * Provide a short description of the API.  CommonMark syntax may be
-     * used for rich text representation.
-     *
-     * This routine will set the `description` field of the `Info` object in the
-     * OpenAPI definition.
-     */
+    /// Provide a short description of the API.  CommonMark syntax may be
+    /// used for rich text representation.
+    ///
+    /// This routine will set the `description` field of the `Info` object in the
+    /// OpenAPI definition.
     pub fn description<S: AsRef<str>>(&mut self, description: S) -> &mut Self {
         self.info.description = Some(description.as_ref().to_string());
         self
     }
 
-    /**
-     * Include a Terms of Service URL for the API.  Must be in the format of a
-     * URL.
-     *
-     * This routine will set the `termsOfService` field of the `Info` object in
-     * the OpenAPI definition.
-     */
+    /// Include a Terms of Service URL for the API.  Must be in the format of a
+    /// URL.
+    ///
+    /// This routine will set the `termsOfService` field of the `Info` object in
+    /// the OpenAPI definition.
     pub fn terms_of_service<S: AsRef<str>>(&mut self, url: S) -> &mut Self {
         self.info.terms_of_service = Some(url.as_ref().to_string());
         self
@@ -1454,36 +1412,30 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         self.info.contact.as_mut().unwrap()
     }
 
-    /**
-     * Set the identifying name of the contact person or organisation
-     * responsible for the API.
-     *
-     * This routine will set the `name` property of the `Contact` object within
-     * the `Info` object in the OpenAPI definition.
-     */
+    /// Set the identifying name of the contact person or organisation
+    /// responsible for the API.
+    ///
+    /// This routine will set the `name` property of the `Contact` object within
+    /// the `Info` object in the OpenAPI definition.
     pub fn contact_name<S: AsRef<str>>(&mut self, name: S) -> &mut Self {
         self.contact_mut().name = Some(name.as_ref().to_string());
         self
     }
 
-    /**
-     * Set a contact URL for the API.  Must be in the format of a URL.
-     *
-     * This routine will set the `url` property of the `Contact` object within
-     * the `Info` object in the OpenAPI definition.
-     */
+    /// Set a contact URL for the API.  Must be in the format of a URL.
+    ///
+    /// This routine will set the `url` property of the `Contact` object within
+    /// the `Info` object in the OpenAPI definition.
     pub fn contact_url<S: AsRef<str>>(&mut self, url: S) -> &mut Self {
         self.contact_mut().url = Some(url.as_ref().to_string());
         self
     }
 
-    /**
-     * Set the email address of the contact person or organisation responsible
-     * for the API.  Must be in the format of an email address.
-     *
-     * This routine will set the `email` property of the `Contact` object within
-     * the `Info` object in the OpenAPI definition.
-     */
+    /// Set the email address of the contact person or organisation responsible
+    /// for the API.  Must be in the format of an email address.
+    ///
+    /// This routine will set the `email` property of the `Contact` object within
+    /// the `Info` object in the OpenAPI definition.
     pub fn contact_email<S: AsRef<str>>(&mut self, email: S) -> &mut Self {
         self.contact_mut().email = Some(email.as_ref().to_string());
         self
@@ -1499,13 +1451,11 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         self.info.license.as_mut().unwrap()
     }
 
-    /**
-     * Provide the name of the licence used for the API, and a URL (must be in
-     * URL format) displaying the licence text.
-     *
-     * This routine will set the `name` and optional `url` properties of the
-     * `License` object within the `Info` object in the OpenAPI definition.
-     */
+    /// Provide the name of the licence used for the API, and a URL (must be in
+    /// URL format) displaying the licence text.
+    ///
+    /// This routine will set the `name` and optional `url` properties of the
+    /// `License` object within the `Info` object in the OpenAPI definition.
     pub fn license<S1, S2>(&mut self, name: S1, url: S2) -> &mut Self
     where
         S1: AsRef<str>,
@@ -1515,28 +1465,22 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         self
     }
 
-    /**
-     * Provide the name of the licence used for the API.
-     *
-     * This routine will set the `name` property of the License object within
-     * the `Info` object in the OpenAPI definition.
-     */
+    /// Provide the name of the licence used for the API.
+    ///
+    /// This routine will set the `name` property of the License object within
+    /// the `Info` object in the OpenAPI definition.
     pub fn license_name<S: AsRef<str>>(&mut self, name: S) -> &mut Self {
         self.license_mut(name.as_ref());
         self
     }
 
-    /**
-     * Build a JSON object containing the OpenAPI definition for this API.
-     */
+    /// Build a JSON object containing the OpenAPI definition for this API.
     pub fn json(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(&self.api.gen_openapi(self.info.clone()))
     }
 
-    /**
-     * Build a JSON object containing the OpenAPI definition for this API and
-     * write it to the provided stream.
-     */
+    /// Build a JSON object containing the OpenAPI definition for this API and
+    /// write it to the provided stream.
     pub fn write(
         &self,
         out: &mut dyn std::io::Write,
@@ -1548,14 +1492,12 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     }
 }
 
-/**
- * Configuration used describe OpenAPI tags and to validate per-endpoint tags.
- * Consumers may use this ensure that--for example--endpoints pick a tag from a
- * known set, or that each endpoint has at least one tag.
- */
+/// Configuration used describe OpenAPI tags and to validate per-endpoint tags.
+/// Consumers may use this ensure that--for example--endpoints pick a tag from a
+/// known set, or that each endpoint has at least one tag.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TagConfig {
-    /** Are endpoints allowed to use tags not specified in this config? */
+    /// Are endpoints allowed to use tags not specified in this config?
     pub allow_other_tags: bool,
     pub endpoint_tag_policy: EndpointTagPolicy,
     pub tag_definitions: HashMap<String, TagDetails>,
@@ -1571,34 +1513,32 @@ impl Default for TagConfig {
     }
 }
 
-/** Endpoint tagging policy */
+/// Endpoint tagging policy
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EndpointTagPolicy {
-    /** Any number of tags is permitted */
+    /// Any number of tags is permitted
     Any,
-    /** At least one tag is required and more are allowed */
+    /// At least one tag is required and more are allowed
     AtLeastOne,
-    /** There must be exactly one tag */
+    /// There must be exactly one tag
     ExactlyOne,
 }
 
-/** Details for a named tag */
+/// Details for a named tag
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TagDetails {
     pub description: Option<String>,
     pub external_docs: Option<TagExternalDocs>,
 }
 
-/** External docs description */
+/// External docs description
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TagExternalDocs {
     pub description: Option<String>,
     pub url: String,
 }
 
-/**
- * Dropshot/Progenitor features used by endpoints which are not a part of the base OpenAPI spec.
- */
+/// Dropshot/Progenitor features used by endpoints which are not a part of the base OpenAPI spec.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ExtensionMode {
     None,
@@ -1639,7 +1579,7 @@ mod test {
     use std::str::from_utf8;
     use std::sync::Arc;
 
-    use crate as dropshot; /* for "endpoint" macro */
+    use crate as dropshot; // for "endpoint" macro
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1943,10 +1883,8 @@ mod test {
 
     #[test]
     fn test_tags_set() {
-        /*
-         * Validate that pre-defined tags and ad-hoc tags are all accounted
-         * for and aren't duplicated.
-         */
+        // Validate that pre-defined tags and ad-hoc tags are all accounted
+        // for and aren't duplicated.
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
             endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,

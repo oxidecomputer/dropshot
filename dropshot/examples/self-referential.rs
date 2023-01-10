@@ -62,9 +62,7 @@ async fn main() -> Result<(), String> {
     shutdown.await
 }
 
-/**
- * Application-specific example context (state shared by handler functions)
- */
+/// Application-specific example context (state shared by handler functions)
 struct ExampleContext {
     counter: AtomicU64,
 }
@@ -75,9 +73,7 @@ impl ExampleContext {
     }
 }
 
-/*
- * HTTP API interface
- */
+// HTTP API interface
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct CounterValue {

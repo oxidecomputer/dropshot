@@ -1,9 +1,7 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Provides basic facilities for configuring logging and creating loggers, all
- * using Slog.  None of these facilities are required for this crate, but
- * they're provided because they're commonly wanted by consumers of this crate.
- */
+//! Provides basic facilities for configuring logging and creating loggers, all
+//! using Slog.  None of these facilities are required for this crate, but
+//! they're provided because they're commonly wanted by consumers of this crate.
 
 use camino::Utf8PathBuf;
 use serde::Deserialize;
@@ -15,16 +13,14 @@ use std::fs::OpenOptions;
 use std::io::LineWriter;
 use std::{io, path::Path};
 
-/**
- * Represents the logging configuration for a server.  This is expected to be a
- * top-level block in a TOML config file, although that's not required.
- */
+/// Represents the logging configuration for a server.  This is expected to be a
+/// top-level block in a TOML config file, although that's not required.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case", tag = "mode")]
 pub enum ConfigLogging {
-    /** Pretty-printed output to stderr, assumed to support terminal escapes. */
+    /// Pretty-printed output to stderr, assumed to support terminal escapes.
     StderrTerminal { level: ConfigLoggingLevel },
-    /** Bunyan-formatted output to a specified file. */
+    /// Bunyan-formatted output to a specified file.
     File {
         level: ConfigLoggingLevel,
         path: Utf8PathBuf,
@@ -32,9 +28,7 @@ pub enum ConfigLogging {
     },
 }
 
-/**
- * Log messages have a level that's used for filtering in the usual way.
- */
+/// Log messages have a level that's used for filtering in the usual way.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConfigLoggingLevel {
@@ -59,24 +53,20 @@ impl From<&ConfigLoggingLevel> for Level {
     }
 }
 
-/**
- * Specifies the behavior when logging to a file that already exists.
- */
+/// Specifies the behavior when logging to a file that already exists.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConfigLoggingIfExists {
-    /** Fail to create the log */
+    /// Fail to create the log
     Fail,
-    /** Truncate the existing file */
+    /// Truncate the existing file
     Truncate,
-    /** Append to the existing file */
+    /// Append to the existing file
     Append,
 }
 
 impl ConfigLogging {
-    /**
-     * Create a root logger based on the requested configuration.
-     */
+    /// Create a root logger based on the requested configuration.
     pub fn to_logger<S: AsRef<str>>(
         &self,
         log_name: S,
@@ -117,13 +107,11 @@ impl ConfigLogging {
     }
 }
 
-/*
- * TODO-hardening We use an async drain to take care of synchronization.  That's
- * mainly because the other two documented options use a std::sync::Mutex, which
- * is not futures-aware and is likely to foul up our executor.  However, we have
- * not verified that the async implementation behaves reasonably under
- * backpressure, and it definitely makes things harder to debug.
- */
+// TODO-hardening We use an async drain to take care of synchronization.  That's
+// mainly because the other two documented options use a std::sync::Mutex, which
+// is not futures-aware and is likely to foul up our executor.  However, we have
+// not verified that the async implementation behaves reasonably under
+// backpressure, and it definitely makes things harder to debug.
 fn async_root_logger<T>(level: &ConfigLoggingLevel, drain: T) -> slog::Logger
 where
     T: slog::Drain + Send + 'static,
@@ -146,19 +134,15 @@ fn log_drain_for_file(
     // Buffer writes to the file around newlines to minimize syscalls.
     let file = LineWriter::new(open_options.open(path)?);
 
-    /*
-     * Record a message to the stderr so that a reader who doesn't already know
-     * how logging is configured knows where the rest of the log messages went.
-     */
+    // Record a message to the stderr so that a reader who doesn't already know
+    // how logging is configured knows where the rest of the log messages went.
     eprintln!("note: configured to log to \"{}\"", path.display());
 
-    /*
-     * Using leak() here is dubious.  However, we really want the logger's name
-     * to be dynamically generated from the test name.  Unfortunately, the
-     * bunyan interface requires that it be a `&'static str`.  The correct
-     * approach is to fix that interface.
-     * TODO-cleanup
-     */
+    // Using leak() here is dubious.  However, we really want the logger's name
+    // to be dynamically generated from the test name.  Unfortunately, the
+    // bunyan interface requires that it be a `&'static str`.  The correct
+    // approach is to fix that interface.
+    // TODO-cleanup
     let log_name_box = Box::new(log_name);
     let log_name_leaked = Box::leak(log_name_box);
     Ok(slog_bunyan::with_name(log_name_leaked, file).build().fuse())
@@ -178,9 +162,7 @@ mod test {
     use std::path::Path;
     use std::{io, path::PathBuf};
 
-    /**
-     * Generates a temporary filesystem path unique for the given label.
-     */
+    /// Generates a temporary filesystem path unique for the given label.
     fn temp_path(label: &str) -> PathBuf {
         let arg0str = std::env::args().next().expect("expected process arg0");
         let arg0 = Path::new(&arg0str)
@@ -194,9 +176,7 @@ mod test {
         pathbuf
     }
 
-    /**
-     * Load a configuration and create a logger from it.
-     */
+    /// Load a configuration and create a logger from it.
     fn read_config_and_create_logger(
         label: &str,
         contents: &str,
@@ -209,9 +189,7 @@ mod test {
         result
     }
 
-    /*
-     * Bad value for "log_mode"
-     */
+    // Bad value for "log_mode"
 
     #[test]
     fn test_config_bad_log_mode() {
@@ -225,12 +203,10 @@ mod test {
         ));
     }
 
-    /*
-     * Bad "mode = stderr-terminal" config
-     *
-     * TODO-coverage: consider adding tests for all variants of missing or
-     * invalid properties for all log modes
-     */
+    // Bad "mode = stderr-terminal" config
+    //
+    // TODO-coverage: consider adding tests for all variants of missing or
+    // invalid properties for all log modes
 
     #[test]
     fn test_config_bad_terminal_no_level() {
@@ -258,17 +234,15 @@ mod test {
         );
     }
 
-    /*
-     * Working "mode = stderr-terminal" config
-     *
-     * TODO-coverage: It would be nice to redirect our own stderr to a file (or
-     * something else we can collect) and then use the logger that we get below.
-     * Then we could verify that it contains the content we expect.
-     * Unfortunately, while Rust has private functions to redirect stdout and
-     * stderr, there's no exposed function for doing that, nor is there a way to
-     * provide a specific stream to a terminal logger.  (We could always
-     * implement our own.)
-     */
+    // Working "mode = stderr-terminal" config
+    //
+    // TODO-coverage: It would be nice to redirect our own stderr to a file (or
+    // something else we can collect) and then use the logger that we get below.
+    // Then we could verify that it contains the content we expect.
+    // Unfortunately, while Rust has private functions to redirect stdout and
+    // stderr, there's no exposed function for doing that, nor is there a way to
+    // provide a specific stream to a terminal logger.  (We could always
+    // implement our own.)
     #[test]
     fn test_config_stderr_terminal() {
         let config = r##"
@@ -280,9 +254,7 @@ mod test {
         config.to_logger("test-logger").unwrap();
     }
 
-    /*
-     * Bad "mode = file" configurations
-     */
+    // Bad "mode = file" configurations
 
     #[test]
     fn test_config_bad_file_no_file() {
@@ -310,11 +282,9 @@ mod test {
         assert_eq!(error, "missing field `level`");
     }
 
-    /**
-     * `LogTest` and `LogTestCleanup` are used for the tests that create various
-     * files on the filesystem to commonize code and make sure everything gets
-     * cleaned up as expected.
-     */
+    /// `LogTest` and `LogTestCleanup` are used for the tests that create various
+    /// files on the filesystem to commonize code and make sure everything gets
+    /// cleaned up as expected.
     struct LogTest {
         directory: PathBuf,
         cleanup_list: Vec<LogTestCleanup>,
@@ -327,14 +297,12 @@ mod test {
     }
 
     impl LogTest {
-        /**
-         * The setup for a logger test creates a temporary directory with the
-         * given label and returns a `LogTest` with that directory in the
-         * cleanup list so that on teardown the temporary directory will be
-         * removed.  The temporary directory must be empty by the time the
-         * `LogTest` is torn down except for files and directories created with
-         * `will_create_dir()` and `will_create_file()`.
-         */
+        /// The setup for a logger test creates a temporary directory with the
+        /// given label and returns a `LogTest` with that directory in the
+        /// cleanup list so that on teardown the temporary directory will be
+        /// removed.  The temporary directory must be empty by the time the
+        /// `LogTest` is torn down except for files and directories created with
+        /// `will_create_dir()` and `will_create_file()`.
         fn setup(label: &str) -> LogTest {
             let directory_path = temp_path(label);
 
@@ -353,14 +321,12 @@ mod test {
             }
         }
 
-        /**
-         * Records that the caller intends to create a directory with relative
-         * path "path" underneath the root directory for this log test. Returns
-         * the path to this directory. This directory will be removed during
-         * teardown. Directories and files must be recorded in the order they
-         * would be created so that the order can be reversed at teardown
-         * (without needing any kind of recursive removal).
-         */
+        /// Records that the caller intends to create a directory with relative
+        /// path "path" underneath the root directory for this log test. Returns
+        /// the path to this directory. This directory will be removed during
+        /// teardown. Directories and files must be recorded in the order they
+        /// would be created so that the order can be reversed at teardown
+        /// (without needing any kind of recursive removal).
         fn will_create_dir(&mut self, path: &str) -> PathBuf {
             let mut pathbuf = self.directory.clone();
             pathbuf.push(path);
@@ -368,14 +334,12 @@ mod test {
             pathbuf
         }
 
-        /**
-         * Records that the caller intends to create a file with relative path
-         * "path" underneath the root directory for this log test. Returns a
-         * the path to this file. This file will be removed during teardown.
-         * Directories and files must be recorded in the order they would be
-         * created so that the order can be reversed at teardown (without
-         * needing any kind of recursive removal).
-         */
+        /// Records that the caller intends to create a file with relative path
+        /// "path" underneath the root directory for this log test. Returns a
+        /// the path to this file. This file will be removed during teardown.
+        /// Directories and files must be recorded in the order they would be
+        /// created so that the order can be reversed at teardown (without
+        /// needing any kind of recursive removal).
         fn will_create_file(&mut self, path: &str) -> PathBuf {
             let mut pathbuf = self.directory.clone();
             pathbuf.push(path);
@@ -401,10 +365,8 @@ mod test {
 
     #[test]
     fn test_config_bad_file_bad_path_type() {
-        /*
-         * We create a path as a directory so that when we subsequently try to
-         * use it a file, we won't be able to.
-         */
+        // We create a path as a directory so that when we subsequently try to
+        // use it a file, we won't be able to.
         let mut logtest = LogTest::setup("bad_file_bad_path_type_dir");
         let path = logtest.will_create_dir("log_file_as_dir");
         fs::create_dir(&path).unwrap();
@@ -467,11 +429,9 @@ mod test {
         assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
     }
 
-    /*
-     * Working "mode = file" configuration.  The following test exercises
-     * successful file-based configurations for all three values of "if_exists",
-     * different log levels, and the bunyan log format.
-     */
+    // Working "mode = file" configuration.  The following test exercises
+    // successful file-based configurations for all three values of "if_exists",
+    // different log levels, and the bunyan log format.
 
     #[test]
     fn test_config_file() {
@@ -483,7 +443,7 @@ mod test {
         let escaped_path =
             logpath.display().to_string().escape_default().to_string();
 
-        /* The first attempt should succeed.  The log file doesn't exist yet. */
+        // The first attempt should succeed.  The log file doesn't exist yet.
         let config = format!(
             r#"
             mode = "file"
@@ -495,17 +455,15 @@ mod test {
         );
 
         {
-            /*
-             * Construct the logger in a block so that it's flushed by the time
-             * we proceed.
-             */
+            // Construct the logger in a block so that it's flushed by the time
+            // we proceed.
             let log = read_config_and_create_logger("file", &config).unwrap();
             debug!(log, "message1_debug");
             warn!(log, "message1_warn");
             error!(log, "message1_error");
         }
 
-        /* Try again with if_exists = "append".  This should also work. */
+        // Try again with if_exists = "append".  This should also work.
         let config = format!(
             r#"
             mode = "file"
@@ -517,7 +475,7 @@ mod test {
         );
 
         {
-            /* See above. */
+            // See above.
             let log = read_config_and_create_logger("file", &config).unwrap();
             warn!(log, "message2");
         }
@@ -545,10 +503,8 @@ mod test {
         assert_eq!(log_records[1].msg, "message1_error");
         assert_eq!(log_records[2].msg, "message2");
 
-        /*
-         * Try again with if_exists = "truncate".  This should also work, but
-         * remove the contents that's already there.
-         */
+        // Try again with if_exists = "truncate".  This should also work, but
+        // remove the contents that's already there.
         let time_before = time_after;
         let time_after = chrono::offset::Utc::now();
         let config = format!(
@@ -562,7 +518,7 @@ mod test {
         );
 
         {
-            /* See above. */
+            // See above.
             let log = read_config_and_create_logger("file", &config).unwrap();
             debug!(log, "message3_debug");
             warn!(log, "message3_warn");

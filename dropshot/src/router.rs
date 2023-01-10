@@ -1,7 +1,5 @@
 // Copyright 2021 Oxide Computer Company
-/*!
- * Routes incoming HTTP requests to handler functions
- */
+//! Routes incoming HTTP requests to handler functions
 
 use super::error::HttpError;
 use super::handler::RouteHandler;
@@ -17,114 +15,106 @@ use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-/**
- * `HttpRouter` is a simple data structure for routing incoming HTTP requests to
- * specific handler functions based on the request method and URI path.  For
- * examples, see the basic test below.
- *
- * Routes are registered and looked up according to a path, like `"/foo/bar"`.
- * Paths are split into segments separated by one or more '/' characters.  When
- * registering a route, a path segment may be either a literal string or a
- * variable.  Variables are specified by wrapping the segment in braces.
- *
- * For example, a handler registered for `"/foo/bar"` will match only
- * `"/foo/bar"` (after normalization, that is -- it will also match
- * `"/foo///bar"`).  A handler registered for `"/foo/{bar}"` uses a
- * variable for the second segment, so it will match `"/foo/123"` (with `"bar"`
- * assigned to `"123"`) as well as `"/foo/bar456"` (with `"bar"` mapped to
- * `"bar456"`).  Only one segment is matched per variable, so `"/foo/{bar}"`
- * will not match `"/foo/123/456"`.
- *
- * The implementation here is essentially a trie where edges represent segments
- * of the URI path.  ("Segments" here are chunks of the path separated by one or
- * more "/" characters.)  To register or look up the path `"/foo/bar/baz"`, we
- * would start at the root and traverse edges for the literal strings `"foo"`,
- * `"bar"`, and `"baz"`, arriving at a particular node.  Each node has a set of
- * handlers, each associated with one HTTP method.
- *
- * We make (and, in some cases, enforce) a number of simplifying assumptions.
- * These could be relaxed, but it's not clear that's useful, and enforcing them
- * makes it easier to catch some types of bugs:
- *
- * * A particular resource (node) may have child resources (edges) with either
- *   literal path segments or variable path segments, but not both.  For
- *   example, you can't register both `"/projects/{id}"` and
- *   `"/projects/default"`.
- *
- * * If a given resource has an edge with a variable name, all routes through
- *   this node must use the same name for that variable.  That is, you can't
- *   define routes for `"/projects/{id}"` and `"/projects/{project_id}/info"`.
- *
- * * A given path cannot use the same variable name twice.  For example, you
- *   can't register path `"/projects/{id}/instances/{id}"`.
- *
- * * A given resource may have at most one handler for a given HTTP method.
- *
- * * The expectation is that during server initialization,
- *   `HttpRouter::insert()` will be invoked to register a number of route
- *   handlers.  After that initialization period, the router will be
- *   read-only.  This behavior isn't enforced by `HttpRouter`.
- */
+/// `HttpRouter` is a simple data structure for routing incoming HTTP requests to
+/// specific handler functions based on the request method and URI path.  For
+/// examples, see the basic test below.
+///
+/// Routes are registered and looked up according to a path, like `"/foo/bar"`.
+/// Paths are split into segments separated by one or more '/' characters.  When
+/// registering a route, a path segment may be either a literal string or a
+/// variable.  Variables are specified by wrapping the segment in braces.
+///
+/// For example, a handler registered for `"/foo/bar"` will match only
+/// `"/foo/bar"` (after normalization, that is -- it will also match
+/// `"/foo///bar"`).  A handler registered for `"/foo/{bar}"` uses a
+/// variable for the second segment, so it will match `"/foo/123"` (with `"bar"`
+/// assigned to `"123"`) as well as `"/foo/bar456"` (with `"bar"` mapped to
+/// `"bar456"`).  Only one segment is matched per variable, so `"/foo/{bar}"`
+/// will not match `"/foo/123/456"`.
+///
+/// The implementation here is essentially a trie where edges represent segments
+/// of the URI path.  ("Segments" here are chunks of the path separated by one or
+/// more "/" characters.)  To register or look up the path `"/foo/bar/baz"`, we
+/// would start at the root and traverse edges for the literal strings `"foo"`,
+/// `"bar"`, and `"baz"`, arriving at a particular node.  Each node has a set of
+/// handlers, each associated with one HTTP method.
+///
+/// We make (and, in some cases, enforce) a number of simplifying assumptions.
+/// These could be relaxed, but it's not clear that's useful, and enforcing them
+/// makes it easier to catch some types of bugs:
+///
+/// * A particular resource (node) may have child resources (edges) with either
+///   literal path segments or variable path segments, but not both.  For
+///   example, you can't register both `"/projects/{id}"` and
+///   `"/projects/default"`.
+///
+/// * If a given resource has an edge with a variable name, all routes through
+///   this node must use the same name for that variable.  That is, you can't
+///   define routes for `"/projects/{id}"` and `"/projects/{project_id}/info"`.
+///
+/// * A given path cannot use the same variable name twice.  For example, you
+///   can't register path `"/projects/{id}/instances/{id}"`.
+///
+/// * A given resource may have at most one handler for a given HTTP method.
+///
+/// * The expectation is that during server initialization,
+///   `HttpRouter::insert()` will be invoked to register a number of route
+///   handlers.  After that initialization period, the router will be
+///   read-only.  This behavior isn't enforced by `HttpRouter`.
 #[derive(Debug)]
 pub struct HttpRouter<Context: ServerContext> {
-    /** root of the trie */
+    /// root of the trie
     root: Box<HttpRouterNode<Context>>,
 }
 
-/**
- * Each node in the tree represents a group of HTTP resources having the same
- * handler functions.  As described above, these may correspond to exactly one
- * canonical path (e.g., `"/foo/bar"`) or a set of paths that differ by some
- * number of variable assignments (e.g., `"/projects/123/instances"` and
- * `"/projects/456/instances"`).
- *
- * Edges of the tree come in one of type types: edges for literal strings and
- * edges for variable strings.  A given node has either literal string edges or
- * variable edges, but not both.  However, we don't necessarily know what type
- * of outgoing edges a node will have when we create it.
- */
+/// Each node in the tree represents a group of HTTP resources having the same
+/// handler functions.  As described above, these may correspond to exactly one
+/// canonical path (e.g., `"/foo/bar"`) or a set of paths that differ by some
+/// number of variable assignments (e.g., `"/projects/123/instances"` and
+/// `"/projects/456/instances"`).
+///
+/// Edges of the tree come in one of type types: edges for literal strings and
+/// edges for variable strings.  A given node has either literal string edges or
+/// variable edges, but not both.  However, we don't necessarily know what type
+/// of outgoing edges a node will have when we create it.
 #[derive(Debug)]
 struct HttpRouterNode<Context: ServerContext> {
-    /** Handlers, etc. for each of the HTTP methods defined for this node. */
+    /// Handlers, etc. for each of the HTTP methods defined for this node.
     methods: BTreeMap<String, ApiEndpoint<Context>>,
-    /** Edges linking to child nodes. */
+    /// Edges linking to child nodes.
     edges: Option<HttpRouterEdges<Context>>,
 }
 
 #[derive(Debug)]
 enum HttpRouterEdges<Context: ServerContext> {
-    /** Outgoing edges for literal paths. */
+    /// Outgoing edges for literal paths.
     Literals(BTreeMap<String, Box<HttpRouterNode<Context>>>),
-    /** Outgoing edge for variable-named paths. */
+    /// Outgoing edge for variable-named paths.
     VariableSingle(String, Box<HttpRouterNode<Context>>),
-    /** Outgoing edge that consumes all remaining components. */
+    /// Outgoing edge that consumes all remaining components.
     VariableRest(String, Box<HttpRouterNode<Context>>),
 }
 
-/**
- * `PathSegment` represents a segment in a URI path when the router is being
- * configured.  Each segment may be either a literal string or a variable (the
- * latter indicated by being wrapped in braces). Variables may consume a single
- * /-delimited segment or several as defined by a regex (currently only `.*` is
- * supported).
- */
+/// `PathSegment` represents a segment in a URI path when the router is being
+/// configured.  Each segment may be either a literal string or a variable (the
+/// latter indicated by being wrapped in braces). Variables may consume a single
+/// /-delimited segment or several as defined by a regex (currently only `.*` is
+/// supported).
 #[derive(Debug, PartialEq)]
 pub enum PathSegment {
-    /** a path segment for a literal string */
+    /// a path segment for a literal string
     Literal(String),
-    /** a path segment for a variable */
+    /// a path segment for a variable
     VarnameSegment(String),
-    /** a path segment that matches all remaining components for a variable */
+    /// a path segment that matches all remaining components for a variable
     VarnameWildcard(String),
 }
 
 impl PathSegment {
-    /**
-     * Given a `&str` representing a path segment from a Uri, return a
-     * PathSegment.  This is used to parse a sequence of path segments to the
-     * corresponding `PathSegment`, which basically means determining whether
-     * it's a variable or a literal.
-     */
+    /// Given a `&str` representing a path segment from a Uri, return a
+    /// PathSegment.  This is used to parse a sequence of path segments to the
+    /// corresponding `PathSegment`, which basically means determining whether
+    /// it's a variable or a literal.
     pub fn from(segment: &str) -> PathSegment {
         if segment.starts_with('{') || segment.ends_with('}') {
             assert!(
@@ -146,12 +136,10 @@ impl PathSegment {
                 (var, None)
             };
 
-            /*
-             * Note that the only constraint on the variable name is that it is
-             * not empty. Consumers may choose odd names like '_' or 'type'
-             * that are not valid Rust identifiers and rename them with
-             * serde attributes during deserialization.
-             */
+            // Note that the only constraint on the variable name is that it is
+            // not empty. Consumers may choose odd names like '_' or 'type'
+            // that are not valid Rust identifiers and rename them with
+            // serde attributes during deserialization.
             assert!(
                 !var.is_empty(),
                 "HTTP URI path segment variable name must not be empty",
@@ -172,10 +160,8 @@ impl PathSegment {
     }
 }
 
-/**
- * Wrapper for a path that's the result of user input i.e. an HTTP query.
- * We use this type to avoid confusion with paths used to define routes.
- */
+/// Wrapper for a path that's the result of user input i.e. an HTTP query.
+/// We use this type to avoid confusion with paths used to define routes.
 #[derive(Debug)]
 pub struct InputPath<'a>(&'a str);
 
@@ -185,10 +171,8 @@ impl<'a> From<&'a str> for InputPath<'a> {
     }
 }
 
-/**
- * A value for a variable which may either be a single value or a list of
- * values in the case of wildcard path matching.
- */
+/// A value for a variable which may either be a single value or a list of
+/// values in the case of wildcard path matching.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VariableValue {
     String(String),
@@ -217,13 +201,11 @@ impl MapValue for VariableValue {
     }
 }
 
-/**
- * `RouterLookupResult` represents the result of invoking
- * `HttpRouter::lookup_route()`.  A successful route lookup includes
- * the handler, a mapping of variables in the configured path to the
- * corresponding values in the actual path, and the expected body
- * content type.
- */
+/// `RouterLookupResult` represents the result of invoking
+/// `HttpRouter::lookup_route()`.  A successful route lookup includes
+/// the handler, a mapping of variables in the configured path to the
+/// corresponding values in the actual path, and the expected body
+/// content type.
 #[derive(Debug)]
 pub struct RouterLookupResult<'a, Context: ServerContext> {
     pub handler: &'a dyn RouteHandler<Context>,
@@ -238,18 +220,14 @@ impl<Context: ServerContext> HttpRouterNode<Context> {
 }
 
 impl<Context: ServerContext> HttpRouter<Context> {
-    /**
-     * Returns a new `HttpRouter` with no routes configured.
-     */
+    /// Returns a new `HttpRouter` with no routes configured.
     pub fn new() -> Self {
         HttpRouter { root: Box::new(HttpRouterNode::new()) }
     }
 
-    /**
-     * Configure a route for HTTP requests based on the HTTP `method` and
-     * URI `path`.  See the `HttpRouter` docs for information about how `path`
-     * is processed.  Requests matching `path` will be resolved to `handler`.
-     */
+    /// Configure a route for HTTP requests based on the HTTP `method` and
+    /// URI `path`.  See the `HttpRouter` docs for information about how `path`
+    /// is processed.  Requests matching `path` will be resolved to `handler`.
     pub fn insert(&mut self, endpoint: ApiEndpoint<Context>) {
         let method = endpoint.method.clone();
         let path = endpoint.path.clone();
@@ -269,12 +247,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
                         HttpRouterEdges::Literals(BTreeMap::new()),
                     );
                     match edges {
-                        /*
-                         * We do not allow both literal and variable edges from
-                         * the same node.  This could be supported (with some
-                         * caveats about how matching would work), but it seems
-                         * more likely to be a mistake.
-                         */
+                        // We do not allow both literal and variable edges from
+                        // the same node.  This could be supported (with some
+                        // caveats about how matching would work), but it seems
+                        // more likely to be a mistake.
                         HttpRouterEdges::VariableSingle(varname, _)
                         | HttpRouterEdges::VariableRest(varname, _) => {
                             panic!(
@@ -301,10 +277,8 @@ impl<Context: ServerContext> HttpRouter<Context> {
                         ),
                     );
                     match edges {
-                        /*
-                         * See the analogous check above about combining literal
-                         * and variable path segments from the same resource.
-                         */
+                        // See the analogous check above about combining literal
+                        // and variable path segments from the same resource.
                         HttpRouterEdges::Literals(_) => panic!(
                             "URI path \"{}\": attempted to register route for \
                              variable path segment (variable name: \"{}\") \
@@ -326,12 +300,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
                             ref mut node,
                         ) => {
                             if *new_varname != *varname {
-                                /*
-                                 * Don't allow people to use different names for
-                                 * the same part of the path.  Again, this could
-                                 * be supported, but it seems likely to be
-                                 * confusing and probably a mistake.
-                                 */
+                                // Don't allow people to use different names for
+                                // the same part of the path.  Again, this could
+                                // be supported, but it seems likely to be
+                                // confusing and probably a mistake.
                                 panic!(
                                     "URI path \"{}\": attempted to use \
                                      variable name \"{}\", but a different \
@@ -423,14 +395,12 @@ impl<Context: ServerContext> HttpRouter<Context> {
         node.methods.insert(methodname, endpoint);
     }
 
-    /**
-     * Look up the route handler for an HTTP request having method `method` and
-     * URI path `path`.  A successful lookup produces a `RouterLookupResult`,
-     * which includes both the handler that can process this request and a map
-     * of variables assigned based on the request path as part of the lookup.
-     * On failure, this returns an `HttpError` appropriate for the failure
-     * mode.
-     */
+    /// Look up the route handler for an HTTP request having method `method` and
+    /// URI path `path`.  A successful lookup produces a `RouterLookupResult`,
+    /// which includes both the handler that can process this request and a map
+    /// of variables assigned based on the request path as part of the lookup.
+    /// On failure, this returns an `HttpError` appropriate for the failure
+    /// mode.
     pub fn lookup_route<'a, 'b>(
         &'a self,
         method: &'b Method,
@@ -471,10 +441,8 @@ impl<Context: ServerContext> HttpRouter<Context> {
                         varname.clone(),
                         VariableValue::Components(rest),
                     );
-                    /*
-                     * There should be no outgoing edges since this is by
-                     * definition a terminal node
-                     */
+                    // There should be no outgoing edges since this is by
+                    // definition a terminal node
                     assert!(node.edges.is_none());
                     Some(node)
                 }
@@ -487,24 +455,20 @@ impl<Context: ServerContext> HttpRouter<Context> {
             })?
         }
 
-        /*
-         * The wildcard match consumes the implicit, empty path segment
-         */
+        // The wildcard match consumes the implicit, empty path segment
         match &node.edges {
             Some(HttpRouterEdges::VariableRest(varname, new_node)) => {
                 variables
                     .insert(varname.clone(), VariableValue::Components(vec![]));
-                /* There should be no outgoing edges */
+                // There should be no outgoing edges
                 assert!(new_node.edges.is_none());
                 node = new_node;
             }
             _ => {}
         }
 
-        /*
-         * As a somewhat special case, if one requests a node with no handlers
-         * at all, report a 404.  We could probably treat this as a 405 as well.
-         */
+        // As a somewhat special case, if one requests a node with no handlers
+        // at all, report a 404.  We could probably treat this as a 405 as well.
         if node.methods.is_empty() {
             return Err(HttpError::for_not_found(
                 None,
@@ -526,19 +490,15 @@ impl<Context: ServerContext> HttpRouter<Context> {
     }
 }
 
-/**
- * Insert a variable into the set after checking for duplicates.
- */
+/// Insert a variable into the set after checking for duplicates.
 fn insert_var(
     path: &str,
     varnames: &mut BTreeSet<String>,
     new_varname: &String,
 ) -> () {
-    /*
-     * Do not allow the same variable name to be used more than
-     * once in the path.  Again, this could be supported (with
-     * some caveats), but it seems more likely to be a mistake.
-     */
+    // Do not allow the same variable name to be used more than
+    // once in the path.  Again, this could be supported (with
+    // some caveats), but it seems more likely to be a mistake.
     if varnames.contains(new_varname) {
         panic!(
             "URI path \"{}\": variable name \"{}\" is used more than once",
@@ -556,16 +516,14 @@ impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
     }
 }
 
-/**
- * Route Interator implementation. We perform a preorder, depth first traversal
- * of the tree starting from the root node. For each node, we enumerate the
- * methods and then descend into its children (or single child in the case of
- * path parameter variables). `method` holds the iterator over the current
- * node's `methods`; `path` is a stack that represents the current collection
- * of path segments and the iterators at each corresponding node. We start with
- * the root node's `methods` iterator and a stack consisting of a
- * blank string and an iterator over the root node's children.
- */
+/// Route Interator implementation. We perform a preorder, depth first traversal
+/// of the tree starting from the root node. For each node, we enumerate the
+/// methods and then descend into its children (or single child in the case of
+/// path parameter variables). `method` holds the iterator over the current
+/// node's `methods`; `path` is a stack that represents the current collection
+/// of path segments and the iterators at each corresponding node. We start with
+/// the root node's `methods` iterator and a stack consisting of a
+/// blank string and an iterator over the root node's children.
 pub struct HttpRouterIter<'a, Context: ServerContext> {
     method:
         Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint<Context>)> + 'a>,
@@ -585,12 +543,10 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
         }
     }
 
-    /**
-     * Produce an iterator over `node`'s children. This is the null (empty)
-     * iterator if there are no children, a single (once) iterator for a
-     * path parameter variable, and a modified iterator in the case of
-     * literal, explicit path segments.
-     */
+    /// Produce an iterator over `node`'s children. This is the null (empty)
+    /// iterator if there are no children, a single (once) iterator for a
+    /// path parameter variable, and a modified iterator in the case of
+    /// literal, explicit path segments.
     fn iter_node(
         node: &'a HttpRouterNode<Context>,
     ) -> Box<PathIter<'a, Context>> {
@@ -615,9 +571,7 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
         }
     }
 
-    /**
-     * Produce a human-readable path from the current vector of path segments.
-     */
+    /// Produce a human-readable path from the current vector of path segments.
     fn path(&self) -> String {
         // Ignore the leading element as that's just a placeholder.
         let components: Vec<String> = self.path[1..]
@@ -673,62 +627,58 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
     }
 }
 
-/**
- * Helper function for taking a Uri path and producing a `Vec<String>` of
- * URL-decoded strings, each representing one segment of the path. The input is
- * percent-encoded. Empty segments i.e. due to consecutive "/" characters or a
- * leading "/" are omitted.
- *
- * Regarding "dot-segments" ("." and ".."), RFC 3986 section 3.3 says this:
- *    The path segments "." and "..", also known as dot-segments, are
- *    defined for relative reference within the path name hierarchy.  They
- *    are intended for use at the beginning of a relative-path reference
- *    (Section 4.2) to indicate relative position within the hierarchical
- *    tree of names.  This is similar to their role within some operating
- *    systems' file directory structures to indicate the current directory
- *    and parent directory, respectively.  However, unlike in a file
- *    system, these dot-segments are only interpreted within the URI path
- *    hierarchy and are removed as part of the resolution process (Section
- *    5.2).
- *
- * While nothing prohibits APIs from including dot-segments. We see no strong
- * case for allowing them in paths, and plenty of pitfalls if we were to
- * require consumers to consider them (e.g. "GET /../../../etc/passwd"). Note
- * that consumers may be susceptible to other information leaks, for example
- * if a client were able to follow a symlink to the root of the filesystem. As
- * always, it is incumbent on the consumer and *critical* to validate input.
- */
+/// Helper function for taking a Uri path and producing a `Vec<String>` of
+/// URL-decoded strings, each representing one segment of the path. The input is
+/// percent-encoded. Empty segments i.e. due to consecutive "/" characters or a
+/// leading "/" are omitted.
+///
+/// Regarding "dot-segments" ("." and ".."), RFC 3986 section 3.3 says this:
+///    The path segments "." and "..", also known as dot-segments, are
+///    defined for relative reference within the path name hierarchy.  They
+///    are intended for use at the beginning of a relative-path reference
+///    (Section 4.2) to indicate relative position within the hierarchical
+///    tree of names.  This is similar to their role within some operating
+///    systems' file directory structures to indicate the current directory
+///    and parent directory, respectively.  However, unlike in a file
+///    system, these dot-segments are only interpreted within the URI path
+///    hierarchy and are removed as part of the resolution process (Section
+///    5.2).
+///
+/// While nothing prohibits APIs from including dot-segments. We see no strong
+/// case for allowing them in paths, and plenty of pitfalls if we were to
+/// require consumers to consider them (e.g. "GET /../../../etc/passwd"). Note
+/// that consumers may be susceptible to other information leaks, for example
+/// if a client were able to follow a symlink to the root of the filesystem. As
+/// always, it is incumbent on the consumer and *critical* to validate input.
 fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
-    /*
-     * We're given the "path" portion of a URI and we want to construct an
-     * array of the segments of the path.   Relevant references:
-     *
-     *    RFC 7230 HTTP/1.1 Syntax and Routing
-     *             (particularly: 2.7.3 on normalization)
-     *    RFC 3986 Uniform Resource Identifier (URI): Generic Syntax
-     *             (particularly: 6.2.2 on comparison)
-     *
-     * TODO-hardening We should revisit this.  We want to consider a couple of
-     * things:
-     * - what it means (and what we should do) if the path does not begin with
-     *   a leading "/"
-     * - how to handle paths that end in "/" (in some cases, ought this send a
-     *   300-level redirect?)
-     *
-     * It would seem obvious to reach for the Rust "url" crate. That crate
-     * parses complete URLs, which include a scheme and authority section that
-     * does not apply here. We could certainly make one up (e.g.,
-     * "http://127.0.0.1") and construct a URL whose path matches the path we
-     * were given. However, while it seems natural that our internal
-     * representation would not be percent-encoded, the "url" crate
-     * percent-encodes any path that it's given. Further, we probably want to
-     * treat consecutive "/" characters as equivalent to a single "/", but that
-     * crate treats them separately (which is not unreasonable, since it's not
-     * clear that the above RFCs say anything about whether empty segments
-     * should be ignored). The net result is that that crate doesn't buy us
-     * much here, but it does create more work, so we'll just split it
-     * ourselves.
-     */
+    // We're given the "path" portion of a URI and we want to construct an
+    // array of the segments of the path.   Relevant references:
+    //
+    //    RFC 7230 HTTP/1.1 Syntax and Routing
+    //             (particularly: 2.7.3 on normalization)
+    //    RFC 3986 Uniform Resource Identifier (URI): Generic Syntax
+    //             (particularly: 6.2.2 on comparison)
+    //
+    // TODO-hardening We should revisit this.  We want to consider a couple of
+    // things:
+    // - what it means (and what we should do) if the path does not begin with
+    //   a leading "/"
+    // - how to handle paths that end in "/" (in some cases, ought this send a
+    //   300-level redirect?)
+    //
+    // It would seem obvious to reach for the Rust "url" crate. That crate
+    // parses complete URLs, which include a scheme and authority section that
+    // does not apply here. We could certainly make one up (e.g.,
+    // "http://127.0.0.1") and construct a URL whose path matches the path we
+    // were given. However, while it seems natural that our internal
+    // representation would not be percent-encoded, the "url" crate
+    // percent-encodes any path that it's given. Further, we probably want to
+    // treat consecutive "/" characters as equivalent to a single "/", but that
+    // crate treats them separately (which is not unreasonable, since it's not
+    // clear that the above RFCs say anything about whether empty segments
+    // should be ignored). The net result is that that crate doesn't buy us
+    // much here, but it does create more work, so we'll just split it
+    // ourselves.
     path.0
         .split('/')
         .filter(|segment| !segment.is_empty())
@@ -742,14 +692,12 @@ fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
         .collect()
 }
 
-/**
- * Whereas in `input_path_to_segments()` we must accommodate any user input, when
- * processing paths specified by the client program we can be more stringent and
- * fail via a panic! rather than an error. We do not percent-decode the path
- * meaning that programs may specify path segments that would require
- * percent-encoding by clients. Paths *must* begin with a "/"; only the final
- * segment may be empty i.e. the path may end with a "/".
- */
+/// Whereas in `input_path_to_segments()` we must accommodate any user input, when
+/// processing paths specified by the client program we can be more stringent and
+/// fail via a panic! rather than an error. We do not percent-decode the path
+/// meaning that programs may specify path segments that would require
+/// percent-encoding by clients. Paths *must* begin with a "/"; only the final
+/// segment may be empty i.e. the path may end with a "/".
 pub fn route_path_to_segments(path: &str) -> Vec<&str> {
     if !matches!(path.chars().next(), Some('/')) {
         panic!("route paths must begin with a '/': '{}'", path);
@@ -1001,11 +949,9 @@ mod test {
         ));
     }
 
-    /*
-     * TODO: We allow a trailing slash after the wildcard specifier, but we may
-     * reconsider this if we decided to distinguish between the presence or
-     * absence of the trailing slash.
-     */
+    // TODO: We allow a trailing slash after the wildcard specifier, but we may
+    // reconsider this if we decided to distinguish between the presence or
+    // absence of the trailing slash.
     #[test]
     fn test_slash_after_wildcard_is_fine_dot_dot_dot_for_now() {
         let mut router = HttpRouter::new();
@@ -1020,9 +966,7 @@ mod test {
     fn test_error_cases() {
         let mut router = HttpRouter::new();
 
-        /*
-         * Check a few initial conditions.
-         */
+        // Check a few initial conditions.
         let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error =
@@ -1036,10 +980,8 @@ mod test {
             .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
 
-        /*
-         * Insert a route into the middle of the tree.  This will let us look at
-         * parent nodes, sibling nodes, and child nodes.
-         */
+        // Insert a route into the middle of the tree.  This will let us look at
+        // parent nodes, sibling nodes, and child nodes.
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/bar"));
         assert!(router.lookup_route(&Method::GET, "/foo/bar".into()).is_ok());
         assert!(router.lookup_route(&Method::GET, "/foo/bar/".into()).is_ok());
@@ -1052,11 +994,9 @@ mod test {
             .lookup_route(&Method::GET, "///foo///bar///".into())
             .is_ok());
 
-        /*
-         * TODO-cleanup: consider having a "build" step that constructs a
-         * read-only router and does validation like making sure that there's a
-         * GET route on all nodes?
-         */
+        // TODO-cleanup: consider having a "build" step that constructs a
+        // read-only router and does validation like making sure that there's a
+        // GET route on all nodes?
         let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error =
@@ -1082,12 +1022,10 @@ mod test {
     fn test_router_basic() {
         let mut router = HttpRouter::new();
 
-        /*
-         * Insert a handler at the root and verify that we get that handler
-         * back, even if we use different names that normalize to "/".
-         * Before we start, sanity-check that there's nothing at the root
-         * already.  Other test cases examine the errors in more detail.
-         */
+        // Insert a handler at the root and verify that we get that handler
+        // back, even if we use different names that normalize to "/".
+        // Before we start, sanity-check that there's nothing at the root
+        // already.  Other test cases examine the errors in more detail.
         assert!(router.lookup_route(&Method::GET, "/".into()).is_err());
         router.insert(new_endpoint(new_handler_named("h1"), Method::GET, "/"));
         let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
@@ -1100,12 +1038,10 @@ mod test {
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
 
-        /*
-         * Now insert a handler for a different method at the root.  Verify that
-         * we get both this handler and the previous one if we ask for the
-         * corresponding method and that we get no handler for a different,
-         * third method.
-         */
+        // Now insert a handler for a different method at the root.  Verify that
+        // we get both this handler and the previous one if we ask for the
+        // corresponding method and that we get no handler for a different,
+        // third method.
         assert!(router.lookup_route(&Method::PUT, "/".into()).is_err());
         router.insert(new_endpoint(new_handler_named("h2"), Method::PUT, "/"));
         let result = router.lookup_route(&Method::PUT, "/".into()).unwrap();
@@ -1116,11 +1052,9 @@ mod test {
         assert!(router.lookup_route(&Method::DELETE, "/".into()).is_err());
         assert!(result.variables.is_empty());
 
-        /*
-         * Now insert a handler one level deeper.  Verify that all the previous
-         * handlers behave as we expect, and that we have one handler at the new
-         * path, whichever name we use for it.
-         */
+        // Now insert a handler one level deeper.  Verify that all the previous
+        // handlers behave as we expect, and that we have one handler at the new
+        // path, whichever name we use for it.
         assert!(router.lookup_route(&Method::GET, "/foo".into()).is_err());
         router.insert(new_endpoint(
             new_handler_named("h3"),
@@ -1155,10 +1089,8 @@ mod test {
 
     #[test]
     fn test_embedded_non_variable() {
-        /*
-         * This isn't an important use case today, but we'd like to know if we
-         * change the behavior, intentionally or otherwise.
-         */
+        // This isn't an important use case today, but we'd like to know if we
+        // change the behavior, intentionally or otherwise.
         let mut router = HttpRouter::new();
         assert!(router
             .lookup_route(&Method::GET, "/not{a}variable".into())
@@ -1183,9 +1115,7 @@ mod test {
 
     #[test]
     fn test_variables_basic() {
-        /*
-         * Basic test using a variable.
-         */
+        // Basic test using a variable.
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(
             new_handler_named("h5"),
@@ -1227,7 +1157,7 @@ mod test {
             *result.variables.get("project_id").unwrap(),
             VariableValue::String("p12345".to_string())
         );
-        /* Trick question! */
+        // Trick question!
         let result = router
             .lookup_route(&Method::GET, "/projects/{project_id}".into())
             .unwrap();
@@ -1240,9 +1170,7 @@ mod test {
 
     #[test]
     fn test_variables_multi() {
-        /*
-         * Exercise a case with multiple variables.
-         */
+        // Exercise a case with multiple variables.
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(
             new_handler_named("h6"),
@@ -1277,10 +1205,8 @@ mod test {
 
     #[test]
     fn test_empty_variable() {
-        /*
-         * Exercise a case where a broken implementation might erroneously
-         * assign a variable to the empty string.
-         */
+        // Exercise a case where a broken implementation might erroneously
+        // assign a variable to the empty string.
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(
             new_handler_named("h7"),

@@ -1,8 +1,6 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Automated testing facilities.  These are intended for use both by this crate
- * and dependents of this crate.
- */
+//! Automated testing facilities.  These are intended for use both by this crate
+//! and dependents of this crate.
 
 use camino::Utf8PathBuf;
 use chrono::DateTime;
@@ -72,23 +70,19 @@ const ALLOWED_HEADERS: [AllowedHeader<'static>; 8] = [
     AllowedHeader::new(TEST_HEADER_2),
 ];
 
-/**
- * ClientTestContext encapsulates several facilities associated with using an
- * HTTP client for testing.
- */
+/// ClientTestContext encapsulates several facilities associated with using an
+/// HTTP client for testing.
 pub struct ClientTestContext {
-    /** actual bind address of the HTTP server under test */
+    /// actual bind address of the HTTP server under test
     pub bind_address: SocketAddr,
-    /** HTTP client, used for making requests against the test server */
+    /// HTTP client, used for making requests against the test server
     pub client: Client<HttpConnector>,
-    /** logger for the test suite HTTP client */
+    /// logger for the test suite HTTP client
     pub client_log: Logger,
 }
 
 impl ClientTestContext {
-    /**
-     * Set up a `ClientTestContext` for running tests against an API server.
-     */
+    /// Set up a `ClientTestContext` for running tests against an API server.
     pub fn new(server_addr: SocketAddr, log: Logger) -> ClientTestContext {
         ClientTestContext {
             bind_address: server_addr,
@@ -97,12 +91,10 @@ impl ClientTestContext {
         }
     }
 
-    /**
-     * Given the path for an API endpoint (e.g., "/projects"), return a Uri that
-     * we can use to invoke this endpoint from the client.  This essentially
-     * appends the path to a base URL constructed from the server's IP address
-     * and port.
-     */
+    /// Given the path for an API endpoint (e.g., "/projects"), return a Uri that
+    /// we can use to invoke this endpoint from the client.  This essentially
+    /// appends the path to a base URL constructed from the server's IP address
+    /// and port.
     pub fn url(&self, path: &str) -> Uri {
         Uri::builder()
             .scheme("http")
@@ -112,18 +104,16 @@ impl ClientTestContext {
             .expect("attempted to construct invalid URI")
     }
 
-    /**
-     * Execute an HTTP request against the test server and perform basic
-     * validation of the result, including:
-     *
-     * - the expected status code
-     * - the expected Date header (within reason)
-     * - for error responses: the expected body content
-     * - header names are in allowed list
-     * - any other semantics that can be verified in general
-     *
-     * The body will be JSON encoded.
-     */
+    /// Execute an HTTP request against the test server and perform basic
+    /// validation of the result, including:
+    ///
+    /// - the expected status code
+    /// - the expected Date header (within reason)
+    /// - for error responses: the expected body content
+    /// - header names are in allowed list
+    /// - any other semantics that can be verified in general
+    ///
+    /// The body will be JSON encoded.
     pub async fn make_request<RequestBodyType: Serialize + Debug>(
         &self,
         method: Method,
@@ -139,11 +129,9 @@ impl ClientTestContext {
         self.make_request_with_body(method, path, body, expected_status).await
     }
 
-    /**
-     * Execute an HTTP request against the test server and perform basic
-     * validation of the result like [`make_request`], but with a content
-     * type of "application/x-www-form-urlencoded".
-     */
+    /// Execute an HTTP request against the test server and perform basic
+    /// validation of the result like [`make_request`], but with a content
+    /// type of "application/x-www-form-urlencoded".
     pub async fn make_request_url_encoded<
         RequestBodyType: Serialize + Debug,
     >(
@@ -182,9 +170,7 @@ impl ClientTestContext {
         .await
     }
 
-    /**
-     * Fetches a resource for which we expect to get an error response.
-     */
+    /// Fetches a resource for which we expect to get an error response.
     pub async fn make_request_error(
         &self,
         method: Method,
@@ -196,11 +182,9 @@ impl ClientTestContext {
             .unwrap_err()
     }
 
-    /**
-     * Fetches a resource for which we expect to get an error response.
-     * TODO-cleanup the make_request_error* interfaces are slightly different
-     * than the non-error ones (and probably a bit more ergonomic).
-     */
+    /// Fetches a resource for which we expect to get an error response.
+    /// TODO-cleanup the make_request_error* interfaces are slightly different
+    /// than the non-error ones (and probably a bit more ergonomic).
     pub async fn make_request_error_body<T: Serialize + Debug>(
         &self,
         method: Method,
@@ -264,17 +248,15 @@ impl ClientTestContext {
             .await
             .expect("failed to make request to server");
 
-        /* Check that we got the expected response code. */
+        // Check that we got the expected response code.
         let status = response.status();
         info!(self.client_log, "client received response"; "status" => ?status);
         assert_eq!(expected_status, status);
 
-        /*
-         * Check that we didn't have any unexpected headers.  This could be more
-         * efficient by putting the allowed headers into a BTree or Hash, but
-         * right now the structure is tiny and it's convenient to have it
-         * statically-defined above.
-         */
+        // Check that we didn't have any unexpected headers.  This could be more
+        // efficient by putting the allowed headers into a BTree or Hash, but
+        // right now the structure is tiny and it's convenient to have it
+        // statically-defined above.
         let headers = response.headers();
         for (header_name, header_value) in headers {
             let mut okay = false;
@@ -300,18 +282,16 @@ impl ClientTestContext {
             }
         }
 
-        /*
-         * Sanity check the Date header in the response.  Note that this
-         * assertion will fail spuriously in the unlikely event that the system
-         * clock is adjusted backwards in between when we sent the request and
-         * when we received the response, but we consider that case unlikely
-         * enough to be worth doing this check anyway.  (We'll try to check for
-         * the clock reset condition, too, but we cannot catch all cases that
-         * would cause the Date header check to be incorrect.)
-         *
-         * Note that the Date header typically only has precision down to one
-         * second, so we don't want to try to do a more precise comparison.
-         */
+        // Sanity check the Date header in the response.  Note that this
+        // assertion will fail spuriously in the unlikely event that the system
+        // clock is adjusted backwards in between when we sent the request and
+        // when we received the response, but we consider that case unlikely
+        // enough to be worth doing this check anyway.  (We'll try to check for
+        // the clock reset condition, too, but we cannot catch all cases that
+        // would cause the Date header check to be incorrect.)
+        //
+        // Note that the Date header typically only has precision down to one
+        // second, so we don't want to try to do a more precise comparison.
         let time_after = chrono::offset::Utc::now().timestamp();
         let date_header = headers
             .get(http::header::DATE)
@@ -327,10 +307,8 @@ impl ClientTestContext {
         assert!(time_request.timestamp() >= time_before - 1);
         assert!(time_request.timestamp() <= time_after + 1);
 
-        /*
-         * Validate that we have a request id header.
-         * TODO-coverage check that it's unique among requests we've issued
-         */
+        // Validate that we have a request id header.
+        // TODO-coverage check that it's unique among requests we've issued
         let request_id_header = headers
             .get(crate::HEADER_REQUEST_ID)
             .expect("missing request id header")
@@ -338,10 +316,8 @@ impl ClientTestContext {
             .expect("non-ASCII characters in request id")
             .to_string();
 
-        /*
-         * For "204 No Content" responses, validate that we got no content in
-         * the body.
-         */
+        // For "204 No Content" responses, validate that we got no content in
+        // the body.
         if status == StatusCode::NO_CONTENT {
             let body_bytes = to_bytes(response.body_mut())
                 .await
@@ -349,19 +325,15 @@ impl ClientTestContext {
             assert_eq!(0, body_bytes.len());
         }
 
-        /*
-         * If this was a successful response, there's nothing else to check
-         * here.  Return the response so the caller can validate the content if
-         * they want.
-         */
+        // If this was a successful response, there's nothing else to check
+        // here.  Return the response so the caller can validate the content if
+        // they want.
         if !status.is_client_error() && !status.is_server_error() {
             return Ok(response);
         }
 
-        /*
-         * We got an error.  Parse the response body to make sure it's valid and
-         * then return that.
-         */
+        // We got an error.  Parse the response body to make sure it's valid and
+        // then return that.
         let error_body: HttpErrorResponseBody = read_json(&mut response).await;
         info!(self.client_log, "client error"; "error_body" => ?error_body);
         assert_eq!(error_body.request_id, request_id_header);
@@ -369,87 +341,81 @@ impl ClientTestContext {
     }
 }
 
-/**
- * Constructs a Logger for use by a test suite.  If a file-based logger is
- * requested, the file will be put in a temporary directory and the name will be
- * unique for a given test name and is likely to be unique across multiple runs
- * of this test.  The file will also be deleted if the test succeeds, indicated
- * by invoking [`LogContext::cleanup_successful`].  This way, you can debug a
- * test failure from the failed instance rather than hoping the failure is
- * reproducible.
- *
- * ## Example
- *
- * ```
- * # use dropshot::ConfigLoggingLevel;
- * #
- * # fn my_logging_config() -> ConfigLogging {
- * #     ConfigLogging::StderrTerminal {
- * #         level: ConfigLoggingLevel::Info,
- * #     }
- * # }
- * #
- * # fn some_invariant() -> bool {
- * #     true
- * # }
- * #
- * use dropshot::ConfigLogging;
- * use dropshot::test_util::LogContext;
- *
- * #[macro_use]
- * extern crate slog; /* for the `info!` macro below */
- *
- * # fn main() {
- * let log_config: ConfigLogging = my_logging_config();
- * let logctx = LogContext::new("my_test", &log_config);
- * let log = &logctx.log;
- *
- * /* Run your test.  Use the log like you normally would. */
- * info!(log, "the test is going great");
- * assert!(some_invariant());
- *
- * /* Upon successful completion, invoke `cleanup_successful()`. */
- * logctx.cleanup_successful();
- * # }
- * ```
- *
- * If the test fails (e.g., the `some_invariant()` assertion fails), the log
- * file will be retained.  If the test gets as far as calling
- * `cleanup_successful()`, the log file will be removed.
- *
- * Note that `cleanup_successful()` is not invoked automatically on `drop`
- * because that would remove the file even if the test failed, which isn't what
- * we want.  You have to explicitly call `cleanup_successful`.  Normally, you
- * just do this as one of the last steps in your test.  This pattern ensures
- * that the log file sticks around if the test fails, but is removed if the test
- * succeeds.
- */
+/// Constructs a Logger for use by a test suite.  If a file-based logger is
+/// requested, the file will be put in a temporary directory and the name will be
+/// unique for a given test name and is likely to be unique across multiple runs
+/// of this test.  The file will also be deleted if the test succeeds, indicated
+/// by invoking [`LogContext::cleanup_successful`].  This way, you can debug a
+/// test failure from the failed instance rather than hoping the failure is
+/// reproducible.
+///
+/// ## Example
+///
+/// ```
+/// # use dropshot::ConfigLoggingLevel;
+/// #
+/// # fn my_logging_config() -> ConfigLogging {
+/// #     ConfigLogging::StderrTerminal {
+/// #         level: ConfigLoggingLevel::Info,
+/// #     }
+/// # }
+/// #
+/// # fn some_invariant() -> bool {
+/// #     true
+/// # }
+/// #
+/// use dropshot::ConfigLogging;
+/// use dropshot::test_util::LogContext;
+///
+/// #[macro_use]
+/// extern crate slog; /* for the `info!` macro below */
+///
+/// # fn main() {
+/// let log_config: ConfigLogging = my_logging_config();
+/// let logctx = LogContext::new("my_test", &log_config);
+/// let log = &logctx.log;
+///
+/// /* Run your test.  Use the log like you normally would. */
+/// info!(log, "the test is going great");
+/// assert!(some_invariant());
+///
+/// /* Upon successful completion, invoke `cleanup_successful()`. */
+/// logctx.cleanup_successful();
+/// # }
+/// ```
+///
+/// If the test fails (e.g., the `some_invariant()` assertion fails), the log
+/// file will be retained.  If the test gets as far as calling
+/// `cleanup_successful()`, the log file will be removed.
+///
+/// Note that `cleanup_successful()` is not invoked automatically on `drop`
+/// because that would remove the file even if the test failed, which isn't what
+/// we want.  You have to explicitly call `cleanup_successful`.  Normally, you
+/// just do this as one of the last steps in your test.  This pattern ensures
+/// that the log file sticks around if the test fails, but is removed if the test
+/// succeeds.
 pub struct LogContext {
-    /** general-purpose logger */
+    /// general-purpose logger
     pub log: Logger,
     log_path: Option<Utf8PathBuf>,
 }
 
 impl LogContext {
-    /**
-     * Sets up a LogContext.  If `initial_config_logging` specifies a file-based
-     * log (i.e., [`ConfigLogging::File`]), then the requested path _must_ be
-     * the string `"UNUSED"` and it will be replaced with a file name (in a
-     * temporary directory) containing `test_name` and other information to make
-     * the filename likely to be unique across multiple runs (e.g., process id).
-     */
+    /// Sets up a LogContext.  If `initial_config_logging` specifies a file-based
+    /// log (i.e., [`ConfigLogging::File`]), then the requested path _must_ be
+    /// the string `"UNUSED"` and it will be replaced with a file name (in a
+    /// temporary directory) containing `test_name` and other information to make
+    /// the filename likely to be unique across multiple runs (e.g., process id).
     pub fn new(
         test_name: &str,
         initial_config_logging: &ConfigLogging,
     ) -> LogContext {
-        /*
-         * See above.  If the caller requested a file path, assert that the path
-         * matches our sentinel (just to improve debuggability -- otherwise
-         * people might be pretty confused about where the logs went).  Then
-         * override the path with one uniquely generated for this test.
-         * TODO-developer allow keeping the logs in successful cases with an
-         * environment variable or other flag.
-         */
+        // See above.  If the caller requested a file path, assert that the path
+        // matches our sentinel (just to improve debuggability -- otherwise
+        // people might be pretty confused about where the logs went).  Then
+        // override the path with one uniquely generated for this test.
+        // TODO-developer allow keeping the logs in successful cases with an
+        // environment variable or other flag.
         let (log_path, log_config) = match initial_config_logging {
             ConfigLogging::File { level, path: dummy_path, if_exists } => {
                 assert_eq!(
@@ -477,9 +443,7 @@ impl LogContext {
         LogContext { log, log_path }
     }
 
-    /**
-     * Removes the log file, if this was a file-based logger.
-     */
+    /// Removes the log file, if this was a file-based logger.
     pub fn cleanup_successful(self) {
         if let Some(ref log_path) = self.log_path {
             fs::remove_file(log_path).unwrap();
@@ -487,11 +451,9 @@ impl LogContext {
     }
 }
 
-/**
- * TestContext is used to manage a matched server and client for the common
- * test-case pattern of setting up a logger, server, and client and tearing them
- * all down at the end.
- */
+/// TestContext is used to manage a matched server and client for the common
+/// test-case pattern of setting up a logger, server, and client and tearing them
+/// all down at the end.
 pub struct TestContext<Context: ServerContext> {
     pub client_testctx: ClientTestContext,
     pub server: HttpServer<Context>,
@@ -500,15 +462,13 @@ pub struct TestContext<Context: ServerContext> {
 }
 
 impl<Context: ServerContext> TestContext<Context> {
-    /**
-     * Instantiate a TestContext by creating a new Dropshot server with `api`,
-     * `private`, `config_dropshot`, and `log`, and then creating a
-     * `ClientTestContext` with whatever address the server wound up bound to.
-     *
-     * This interfaces requires that `config_dropshot.bind_address.port()` be
-     * `0` to allow the server to bind to any available port.  This is necessary
-     * in order for it to be used concurrently by many tests.
-     */
+    /// Instantiate a TestContext by creating a new Dropshot server with `api`,
+    /// `private`, `config_dropshot`, and `log`, and then creating a
+    /// `ClientTestContext` with whatever address the server wound up bound to.
+    ///
+    /// This interfaces requires that `config_dropshot.bind_address.port()` be
+    /// `0` to allow the server to bind to any available port.  This is necessary
+    /// in order for it to be used concurrently by many tests.
     pub fn new(
         api: ApiDescription<Context>,
         private: Context,
@@ -522,9 +482,7 @@ impl<Context: ServerContext> TestContext<Context> {
             "test suite only supports binding on port 0 (any available port)"
         );
 
-        /*
-         * Set up the server itself.
-         */
+        // Set up the server itself.
         let server =
             HttpServerStarter::new(&config_dropshot, api, private, &log)
                 .unwrap()
@@ -537,11 +495,9 @@ impl<Context: ServerContext> TestContext<Context> {
         TestContext { client_testctx, server, log, log_context }
     }
 
-    /**
-     * Requests a graceful shutdown of the server, waits for that to complete,
-     * and cleans up the associated log context (if any).
-     */
-    /* TODO-cleanup: is there an async analog to Drop? */
+    /// Requests a graceful shutdown of the server, waits for that to complete,
+    /// and cleans up the associated log context (if any).
+    // TODO-cleanup: is there an async analog to Drop?
     pub async fn teardown(self) {
         self.server.close().await.expect("server stopped with an error");
         if let Some(log_context) = self.log_context {
@@ -550,12 +506,10 @@ impl<Context: ServerContext> TestContext<Context> {
     }
 }
 
-/**
- * Given a Hyper Response whose body is expected to represent newline-separated
- * JSON, each line of which is expected to be parseable via Serde as type T,
- * asynchronously read the body of the response and parse it accordingly,
- * returning a vector of T.
- */
+/// Given a Hyper Response whose body is expected to represent newline-separated
+/// JSON, each line of which is expected to be parseable via Serde as type T,
+/// asynchronously read the body of the response and parse it accordingly,
+/// returning a vector of T.
 pub async fn read_ndjson<T: DeserializeOwned>(
     response: &mut Response<Body>,
 ) -> Vec<T> {
@@ -569,12 +523,10 @@ pub async fn read_ndjson<T: DeserializeOwned>(
     let body_string = String::from_utf8(body_bytes.as_ref().into())
         .expect("response contained non-UTF-8 bytes");
 
-    /*
-     * TODO-cleanup: Consider using serde_json::StreamDeserializer or maybe
-     * implementing an NDJSON-based Serde type?
-     * TODO-correctness: If we don't do that, this should split on (\r?\n)+ to
-     * be NDJSON-compatible.
-     */
+    // TODO-cleanup: Consider using serde_json::StreamDeserializer or maybe
+    // implementing an NDJSON-based Serde type?
+    // TODO-correctness: If we don't do that, this should split on (\r?\n)+ to
+    // be NDJSON-compatible.
     body_string
         .split('\n')
         .filter(|line| !line.is_empty())
@@ -585,11 +537,9 @@ pub async fn read_ndjson<T: DeserializeOwned>(
         .collect::<Vec<T>>()
 }
 
-/**
- * Given a Hyper response whose body is expected to be a JSON object that should
- * be parseable via Serde as type T, asynchronously read the body of the
- * response and parse it, returning an instance of T.
- */
+/// Given a Hyper response whose body is expected to be a JSON object that should
+/// be parseable via Serde as type T, asynchronously read the body of the
+/// response and parse it, returning an instance of T.
 pub async fn read_json<T: DeserializeOwned>(
     response: &mut Response<Body>,
 ) -> T {
@@ -604,10 +554,8 @@ pub async fn read_json<T: DeserializeOwned>(
         .expect("failed to parse server body as expected type")
 }
 
-/**
- * Given a Hyper Response whose body is expected to be a UTF-8-encoded string,
- * asynchronously read the body.
- */
+/// Given a Hyper Response whose body is expected to be a UTF-8-encoded string,
+/// asynchronously read the body.
 pub async fn read_string(response: &mut Response<Body>) -> String {
     let body_bytes =
         to_bytes(response.body_mut()).await.expect("error reading body");
@@ -615,9 +563,7 @@ pub async fn read_string(response: &mut Response<Body>) -> String {
         .expect("response contained non-UTF-8 bytes")
 }
 
-/**
- * Fetches a single resource from the API.
- */
+/// Fetches a single resource from the API.
 pub async fn object_get<T: DeserializeOwned>(
     client: &ClientTestContext,
     object_url: &str,
@@ -634,9 +580,7 @@ pub async fn object_get<T: DeserializeOwned>(
     read_json::<T>(&mut response).await
 }
 
-/**
- * Fetches a list of resources from the API.
- */
+/// Fetches a list of resources from the API.
 pub async fn objects_list<T: DeserializeOwned>(
     client: &ClientTestContext,
     list_url: &str,
@@ -653,9 +597,7 @@ pub async fn objects_list<T: DeserializeOwned>(
     read_ndjson::<T>(&mut response).await
 }
 
-/**
- * Fetches a page of resources from the API.
- */
+/// Fetches a page of resources from the API.
 pub async fn objects_list_page<ItemType>(
     client: &ClientTestContext,
     list_url: &str,
@@ -676,9 +618,7 @@ where
     read_json::<ResultsPage<ItemType>>(&mut response).await
 }
 
-/**
- * Issues an HTTP POST to the specified collection URL to create an object.
- */
+/// Issues an HTTP POST to the specified collection URL to create an object.
 pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
     client: &ClientTestContext,
     collection_url: &str,
@@ -696,9 +636,7 @@ pub async fn objects_post<S: Serialize + Debug, T: DeserializeOwned>(
     read_json::<T>(&mut response).await
 }
 
-/**
- * Issues an HTTP PUT to the specified collection URL to update an object.
- */
+/// Issues an HTTP PUT to the specified collection URL to update an object.
 pub async fn object_put<S: Serialize + Debug, T: DeserializeOwned>(
     client: &ClientTestContext,
     object_url: &str,
@@ -711,9 +649,7 @@ pub async fn object_put<S: Serialize + Debug, T: DeserializeOwned>(
         .unwrap();
 }
 
-/**
- * Issues an HTTP DELETE to the specified object URL to delete an object.
- */
+/// Issues an HTTP DELETE to the specified object URL to delete an object.
 pub async fn object_delete(client: &ClientTestContext, object_url: &str) {
     client
         .make_request_no_body(
@@ -725,9 +661,7 @@ pub async fn object_delete(client: &ClientTestContext, object_url: &str) {
         .unwrap();
 }
 
-/**
- * Iterate a paginated collection.
- */
+/// Iterate a paginated collection.
 pub async fn iter_collection<T: Clone + DeserializeOwned>(
     client: &ClientTestContext,
     collection_url: &str,
@@ -760,10 +694,8 @@ pub async fn iter_collection<T: Clone + DeserializeOwned>(
 
 static TEST_SUITE_LOGGER_ID: AtomicU32 = AtomicU32::new(0);
 
-/**
- * Returns a unique path name in a temporary directory that includes the given
- * `test_name`.
- */
+/// Returns a unique path name in a temporary directory that includes the given
+/// `test_name`.
 pub fn log_file_for_test(test_name: &str) -> Utf8PathBuf {
     let arg0 = {
         let arg0path = Utf8PathBuf::from(std::env::args().next().unwrap());
@@ -778,11 +710,9 @@ pub fn log_file_for_test(test_name: &str) -> Utf8PathBuf {
     pathbuf
 }
 
-/**
- * Load an object of type `T` (usually a hunk of configuration) from the string
- * `contents`.  `label` is used as an identifying string in a log message.  It
- * should be unique for each test.
- */
+/// Load an object of type `T` (usually a hunk of configuration) from the string
+/// `contents`.  `label` is used as an identifying string in a log message.  It
+/// should be unique for each test.
 pub fn read_config<T: DeserializeOwned + Debug>(
     label: &str,
     contents: &str,
@@ -792,14 +722,10 @@ pub fn read_config<T: DeserializeOwned + Debug>(
     result
 }
 
-/*
- * Bunyan testing facilities
- */
+// Bunyan testing facilities
 
-/**
- * Represents a Bunyan log record.  This form does not support any non-standard
- * fields.  "level" is not yet supported because we don't (yet) need it.
- */
+/// Represents a Bunyan log record.  This form does not support any non-standard
+/// fields.  "level" is not yet supported because we don't (yet) need it.
 #[derive(Deserialize)]
 pub struct BunyanLogRecord {
     pub time: DateTime<Utc>,
@@ -810,9 +736,7 @@ pub struct BunyanLogRecord {
     pub v: usize,
 }
 
-/**
- * Read a file containing a Bunyan-format log, returning an array of records.
- */
+/// Read a file containing a Bunyan-format log, returning an array of records.
 pub fn read_bunyan_log(logpath: &Path) -> Vec<BunyanLogRecord> {
     let log_contents = fs::read_to_string(logpath).unwrap();
     log_contents
@@ -822,9 +746,7 @@ pub fn read_bunyan_log(logpath: &Path) -> Vec<BunyanLogRecord> {
         .collect::<Vec<BunyanLogRecord>>()
 }
 
-/**
- * Analogous to a BunyanLogRecord, but where all fields are optional.
- */
+/// Analogous to a BunyanLogRecord, but where all fields are optional.
 pub struct BunyanLogRecordSpec {
     pub name: Option<String>,
     pub hostname: Option<String>,
@@ -832,11 +754,9 @@ pub struct BunyanLogRecordSpec {
     pub v: Option<usize>,
 }
 
-/**
- * Verify that the key fields of the log records emitted by `iter` match the
- * corresponding values in `expected`.  Fields that are `None` in `expected`
- * will not be checked.
- */
+/// Verify that the key fields of the log records emitted by `iter` match the
+/// corresponding values in `expected`.  Fields that are `None` in `expected`
+/// will not be checked.
 pub fn verify_bunyan_records<'a, 'b, I>(
     iter: I,
     expected: &'a BunyanLogRecordSpec,
@@ -859,11 +779,9 @@ pub fn verify_bunyan_records<'a, 'b, I>(
     }
 }
 
-/**
- * Verify that the Bunyan records emitted by `iter` are chronologically
- * sequential and after `maybe_time_before` and before `maybe_time_after`, if
- * those latter two parameters are specified.
- */
+/// Verify that the Bunyan records emitted by `iter` are chronologically
+/// sequential and after `maybe_time_before` and before `maybe_time_after`, if
+/// those latter two parameters are specified.
 pub fn verify_bunyan_records_sequential<'a, 'b, I>(
     iter: I,
     maybe_time_before: Option<&'a DateTime<Utc>>,
@@ -912,9 +830,7 @@ mod test {
         }
     }
 
-    /*
-     * Tests various cases where verify_bunyan_records() should not panic.
-     */
+    // Tests various cases where verify_bunyan_records() should not panic.
     #[test]
     fn test_bunyan_easy_cases() {
         let t1: DateTime<Utc> =
@@ -929,7 +845,7 @@ mod test {
             v: 1,
         };
 
-        /* Test case: nothing to check. */
+        // Test case: nothing to check.
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -942,7 +858,7 @@ mod test {
             },
         );
 
-        /* Test case: check name, no problem. */
+        // Test case: check name, no problem.
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -955,7 +871,7 @@ mod test {
             },
         );
 
-        /* Test case: check hostname, no problem. */
+        // Test case: check hostname, no problem.
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -968,7 +884,7 @@ mod test {
             },
         );
 
-        /* Test case: check pid, no problem. */
+        // Test case: check pid, no problem.
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -981,7 +897,7 @@ mod test {
             },
         );
 
-        /* Test case: check hostname, no problem. */
+        // Test case: check hostname, no problem.
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -994,7 +910,7 @@ mod test {
             },
         );
 
-        /* Test case: check all, no problem. */
+        // Test case: check all, no problem.
         let records: Vec<&BunyanLogRecord> = vec![&r1];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -1007,7 +923,7 @@ mod test {
             },
         );
 
-        /* Test case: check multiple records, no problem. */
+        // Test case: check multiple records, no problem.
         let records: Vec<&BunyanLogRecord> = vec![&r1, &r2];
         let iter = records.iter().map(|x| *x);
         verify_bunyan_records(
@@ -1021,9 +937,7 @@ mod test {
         );
     }
 
-    /*
-     * Test cases exercising violations of each of the fields.
-     */
+    // Test cases exercising violations of each of the fields.
 
     #[test]
     #[should_panic(expected = "assertion failed")]
@@ -1093,10 +1007,8 @@ mod test {
         );
     }
 
-    /*
-     * These cases exercise 0, 1, and 2 records with every valid combination
-     * of lower and upper bounds.
-     */
+    // These cases exercise 0, 1, and 2 records with every valid combination
+    // of lower and upper bounds.
     #[test]
     fn test_bunyan_seq_easy_cases() {
         let t1: DateTime<Utc> =
@@ -1145,9 +1057,7 @@ mod test {
         verify_bunyan_records_sequential(v2.iter(), Some(&t1), Some(&t2));
     }
 
-    /*
-     * Test case: no records, but the bounds themselves violate the constraint.
-     */
+    // Test case: no records, but the bounds themselves violate the constraint.
     #[test]
     #[should_panic(expected = "assertion failed: should_be_before")]
     fn test_bunyan_seq_bounds_bad() {
@@ -1159,9 +1069,7 @@ mod test {
         verify_bunyan_records_sequential(v0.iter(), Some(&t2), Some(&t1));
     }
 
-    /*
-     * Test case: sole record appears before early bound.
-     */
+    // Test case: sole record appears before early bound.
     #[test]
     #[should_panic(expected = "assertion failed: should_be_before")]
     fn test_bunyan_seq_lower_violated() {
@@ -1180,9 +1088,7 @@ mod test {
         verify_bunyan_records_sequential(v1.iter(), Some(&t2), None);
     }
 
-    /*
-     * Test case: sole record appears after late bound.
-     */
+    // Test case: sole record appears after late bound.
     #[test]
     #[should_panic(expected = "assertion failed: should_be_before")]
     fn test_bunyan_seq_upper_violated() {
@@ -1201,9 +1107,7 @@ mod test {
         verify_bunyan_records_sequential(v1.iter(), None, Some(&t1));
     }
 
-    /*
-     * Test case: two records out of order.
-     */
+    // Test case: two records out of order.
     #[test]
     #[should_panic(expected = "assertion failed: should_be_before")]
     fn test_bunyan_seq_bad_order() {

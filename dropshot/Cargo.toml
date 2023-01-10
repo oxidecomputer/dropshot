@@ -12,7 +12,7 @@ categories = ["network-programming", "web-programming::http-server"]
 
 [dependencies]
 async-stream = "0.3.3"
-async-trait = "0.1.60"
+async-trait = "0.1.61"
 base64 = "0.21.0"
 bytes = "1"
 camino = { version = "1.1.1", features = ["serde1"] }
@@ -82,7 +82,7 @@ libc = "0.2.139"
 mime_guess = "2.0.4"
 subprocess = "0.2.9"
 tempfile = "3.3"
-trybuild = "1.0.73"
+trybuild = "1.0.75"
 # Used by the https examples and tests
 pem = "1.1"
 rcgen = "0.10.0"

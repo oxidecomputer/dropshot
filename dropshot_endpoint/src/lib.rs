@@ -4,10 +4,8 @@
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
 //! Spec (OAS) v3 document that describes the API.
 
-/*
- * Clippy's style advice is definitely valuable, but not worth the trouble for
- * automated enforcement.
- */
+// Clippy's style advice is definitely valuable, but not worth the trouble for
+// automated enforcement.
 #![allow(clippy::style)]
 
 use quote::format_ident;
@@ -1524,11 +1522,9 @@ mod tests {
 
     #[test]
     fn test_extract_summary_description() {
-        /**
-         * Javadoc summary
-         * Maybe there's another name for these...
-         * ... but Java is the first place I saw these types of comments.
-         */
+        /// Javadoc summary
+        /// Maybe there's another name for these...
+        /// ... but Java is the first place I saw these types of comments.
         #[derive(Schema)]
         struct JavadocComments;
         assert_eq!(
@@ -1543,11 +1539,9 @@ mod tests {
             )
         );
 
-        /**
-         * Javadoc summary
-         *
-         * Skip that blank.
-         */
+        /// Javadoc summary
+        ///
+        /// Skip that blank.
         #[derive(Schema)]
         struct JavadocCommentsWithABlank;
         assert_eq!(
@@ -1558,7 +1552,7 @@ mod tests {
             )
         );
 
-        /** Terse Javadoc summary */
+        /// Terse Javadoc summary
         #[derive(Schema)]
         struct JavadocCommentsTerse;
         assert_eq!(
@@ -1604,9 +1598,7 @@ mod tests {
             (Some("Just a Rustdoc summary".to_string()), None)
         );
 
-        /**
-         * Just a Javadoc summary
-         */
+        /// Just a Javadoc summary
         #[derive(Schema)]
         struct JustTheJavadocSummary;
         assert_eq!(

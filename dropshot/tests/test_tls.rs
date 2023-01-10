@@ -1,8 +1,6 @@
 // Copyright 2022 Oxide Computer Company
-/*!
- * Test cases for TLS support. This validates various behaviors of our TLS mode,
- * including certificate loading and supported modes.
- */
+//! Test cases for TLS support. This validates various behaviors of our TLS mode,
+//! including certificate loading and supported modes.
 
 use dropshot::{ConfigDropshot, ConfigTls, HttpResponseOk, HttpServerStarter};
 use slog::{o, Logger};
@@ -337,12 +335,10 @@ pub struct TlsCheckArgs {
     tls: bool,
 }
 
-/*
- * The same handler is used for both an HTTP and HTTPS server.
- * Make sure that we can distinguish between the two.
- * The intended version is determined by a query parameter
- * that varies between both tests.
- */
+// The same handler is used for both an HTTP and HTTPS server.
+// Make sure that we can distinguish between the two.
+// The intended version is determined by a query parameter
+// that varies between both tests.
 #[dropshot::endpoint {
     method = GET,
     path = "/",

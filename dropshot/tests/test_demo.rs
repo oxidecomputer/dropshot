@@ -1,19 +1,17 @@
 // Copyright 2020 Oxide Computer Company
-/*!
- * Test cases for the "demo" handlers.  These handlers exercise various
- * supported configurations of the HTTP handler interface.  We exercise them
- * here to make sure that even if these aren't used at a given point, they still
- * work.
- *
- * Note that the purpose is mainly to exercise the various possible function
- * signatures that can be used to implement handler functions.  We don't need to
- * exercises very many cases (or error cases) of each one because the handlers
- * themselves are not important, but we need to exercise enough to validate that
- * the generic JSON and query parsing handles error cases.
- *
- * TODO-hardening: add test cases that exceed limits (e.g., query string length,
- * JSON body length)
- */
+//! Test cases for the "demo" handlers.  These handlers exercise various
+//! supported configurations of the HTTP handler interface.  We exercise them
+//! here to make sure that even if these aren't used at a given point, they still
+//! work.
+//!
+//! Note that the purpose is mainly to exercise the various possible function
+//! signatures that can be used to implement handler functions.  We don't need to
+//! exercises very many cases (or error cases) of each one because the handlers
+//! themselves are not important, but we need to exercise enough to validate that
+//! the generic JSON and query parsing handles error cases.
+//!
+//! TODO-hardening: add test cases that exceed limits (e.g., query string length,
+//! JSON body length)
 
 use dropshot::channel;
 use dropshot::endpoint;
@@ -80,10 +78,8 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_307_temporary_redirect).unwrap();
     api.register(demo_handler_websocket).unwrap();
 
-    /*
-     * We don't need to exhaustively test these cases, as they're tested by unit
-     * tests.
-     */
+    // We don't need to exhaustively test these cases, as they're tested by unit
+    // tests.
     let error = api.register(demo_handler_path_param_impossible).unwrap_err();
     assert_eq!(
         error,
@@ -94,10 +90,8 @@ fn demo_api() -> ApiDescription<usize> {
     api
 }
 
-/*
- * The "demo1" handler consumes neither query nor JSON body parameters.  Here we
- * test that such handlers work.  There are no error cases for us to induce.
- */
+// The "demo1" handler consumes neither query nor JSON body parameters.  Here we
+// test that such handlers work.  There are no error cases for us to induce.
 #[tokio::test]
 async fn test_demo1() {
     let api = demo_api();
@@ -121,19 +115,17 @@ async fn test_demo1() {
     testctx.teardown().await;
 }
 
-/*
- * The "demo2query" handler consumes only query arguments.  Here we make sure
- * such handlers work and also exercise various error cases associated with bad
- * query string parsing.
- * TODO-hardening there are a lot more to check here, particularly around
- * encoded values.
- */
+// The "demo2query" handler consumes only query arguments.  Here we make sure
+// such handlers work and also exercise various error cases associated with bad
+// query string parsing.
+// TODO-hardening there are a lot more to check here, particularly around
+// encoded values.
 #[tokio::test]
 async fn test_demo2query() {
     let api = demo_api();
     let testctx = common::test_setup("demo2query", api);
 
-    /* Test case: optional field missing */
+    // Test case: optional field missing
     let mut response = testctx
         .client_testctx
         .make_request(
@@ -148,7 +140,7 @@ async fn test_demo2query() {
     assert_eq!(json.test1, "foo");
     assert_eq!(json.test2, None);
 
-    /* Test case: both fields specified */
+    // Test case: both fields specified
     let mut response = testctx
         .client_testctx
         .make_request(
@@ -163,7 +155,7 @@ async fn test_demo2query() {
     assert_eq!(json.test1, "foo");
     assert_eq!(json.test2, Some(10));
 
-    /* Test case: required field missing */
+    // Test case: required field missing
     let error = testctx
         .client_testctx
         .make_request(
@@ -179,7 +171,7 @@ async fn test_demo2query() {
         "unable to parse query string: missing field `test1`"
     );
 
-    /* Test case: typed field has bad value */
+    // Test case: typed field has bad value
     let error = testctx
         .client_testctx
         .make_request(
@@ -195,7 +187,7 @@ async fn test_demo2query() {
         "unable to parse query string: invalid digit found in string"
     );
 
-    /* Test case: duplicated field name */
+    // Test case: duplicated field name
     let error = testctx
         .client_testctx
         .make_request(
@@ -214,17 +206,15 @@ async fn test_demo2query() {
     testctx.teardown().await;
 }
 
-/*
- * The "demo2json" handler consumes only a JSON object.  Here we make sure such
- * handlers work and also exercise various error cases associated with bad JSON
- * handling.
- */
+// The "demo2json" handler consumes only a JSON object.  Here we make sure such
+// handlers work and also exercise various error cases associated with bad JSON
+// handling.
 #[tokio::test]
 async fn test_demo2json() {
     let api = demo_api();
     let testctx = common::test_setup("demo2json", api);
 
-    /* Test case: optional field */
+    // Test case: optional field
     let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
     let mut response = testctx
         .client_testctx
@@ -240,7 +230,7 @@ async fn test_demo2json() {
     assert_eq!(json.test1, "bar");
     assert_eq!(json.test2, None);
 
-    /* Test case: both fields populated */
+    // Test case: both fields populated
     let input = DemoJsonBody { test1: "bar".to_string(), test2: Some(15) };
     let mut response = testctx
         .client_testctx
@@ -256,7 +246,7 @@ async fn test_demo2json() {
     assert_eq!(json.test1, "bar");
     assert_eq!(json.test2, Some(15));
 
-    /* Test case: no input specified */
+    // Test case: no input specified
     let error = testctx
         .client_testctx
         .make_request(
@@ -269,7 +259,7 @@ async fn test_demo2json() {
         .expect_err("expected failure");
     assert!(error.message.starts_with("unable to parse JSON body"));
 
-    /* Test case: invalid JSON */
+    // Test case: invalid JSON
     let error = testctx
         .client_testctx
         .make_request_with_body(
@@ -282,7 +272,7 @@ async fn test_demo2json() {
         .expect_err("expected failure");
     assert!(error.message.starts_with("unable to parse JSON body"));
 
-    /* Test case: bad type */
+    // Test case: bad type
     let json_bad_type = "{ \"test1\": \"oops\", \"test2\": \"oops\" }";
     let error = testctx
         .client_testctx
@@ -301,16 +291,14 @@ async fn test_demo2json() {
     testctx.teardown().await;
 }
 
-/*
- * Handlers may also accept form/URL-encoded bodies. Here we test such
- * bodies with both valid and invalid encodings.
- */
+// Handlers may also accept form/URL-encoded bodies. Here we test such
+// bodies with both valid and invalid encodings.
 #[tokio::test]
 async fn test_demo2urlencoded() {
     let api = demo_api();
     let testctx = common::test_setup("demo2urlencoded", api);
 
-    /* Test case: optional field */
+    // Test case: optional field
     let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
     let mut response = testctx
         .client_testctx
@@ -326,7 +314,7 @@ async fn test_demo2urlencoded() {
     assert_eq!(json.test1, "bar");
     assert_eq!(json.test2, None);
 
-    /* Test case: both fields populated */
+    // Test case: both fields populated
     let input = DemoJsonBody { test1: "baz".to_string(), test2: Some(20) };
     let mut response = testctx
         .client_testctx
@@ -342,7 +330,7 @@ async fn test_demo2urlencoded() {
     assert_eq!(json.test1, "baz");
     assert_eq!(json.test2, Some(20));
 
-    /* Error case: wrong content type for endpoint */
+    // Error case: wrong content type for endpoint
     let input = DemoJsonBody { test1: "qux".to_string(), test2: Some(30) };
     let error = testctx
         .client_testctx
@@ -359,7 +347,7 @@ async fn test_demo2urlencoded() {
          got \"application/json\""
     ));
 
-    /* Error case: invalid encoding */
+    // Error case: invalid encoding
     let error = testctx
         .client_testctx
         .make_request_with_body_url_encoded(
@@ -372,7 +360,7 @@ async fn test_demo2urlencoded() {
         .expect_err("expected failure");
     assert!(error.message.starts_with("unable to parse URL-encoded body"));
 
-    /* Error case: bad type */
+    // Error case: bad type
     let error = testctx
         .client_testctx
         .make_request_with_body_url_encoded(
@@ -388,18 +376,16 @@ async fn test_demo2urlencoded() {
     ));
 }
 
-/*
- * The "demo3" handler takes both query arguments and a JSON body.  This test
- * makes sure that both sets of parameters are received by the handler function
- * and at least one error case from each of those sources is exercised.  We
- * don't need exhaustively re-test the query and JSON error handling paths.
- */
+// The "demo3" handler takes both query arguments and a JSON body.  This test
+// makes sure that both sets of parameters are received by the handler function
+// and at least one error case from each of those sources is exercised.  We
+// don't need exhaustively re-test the query and JSON error handling paths.
 #[tokio::test]
 async fn test_demo3json() {
     let api = demo_api();
     let testctx = common::test_setup("demo3json", api);
 
-    /* Test case: everything filled in. */
+    // Test case: everything filled in.
     let json_input = DemoJsonBody { test1: "bart".to_string(), test2: Some(0) };
 
     let mut response = testctx
@@ -418,7 +404,7 @@ async fn test_demo3json() {
     assert_eq!(json.query.test1, "martin");
     assert_eq!(json.query.test2.unwrap(), 2);
 
-    /* Test case: error parsing query */
+    // Test case: error parsing query
     let json_input = DemoJsonBody { test1: "bart".to_string(), test2: Some(0) };
     let error = testctx
         .client_testctx
@@ -435,7 +421,7 @@ async fn test_demo3json() {
         "unable to parse query string: missing field `test1`"
     );
 
-    /* Test case: error parsing body */
+    // Test case: error parsing body
     let error = testctx
         .client_testctx
         .make_request_with_body(
@@ -451,26 +437,22 @@ async fn test_demo3json() {
     testctx.teardown().await;
 }
 
-/*
- * The "demo_path_param_string" handler takes just a single string path
- * parameter.
- */
+// The "demo_path_param_string" handler takes just a single string path
+// parameter.
 #[tokio::test]
 async fn test_demo_path_param_string() {
     let api = demo_api();
     let testctx = common::test_setup("demo_path_param_string", api);
 
-    /*
-     * Simple error cases.  All of these should produce 404 "Not Found" errors.
-     */
+    // Simple error cases.  All of these should produce 404 "Not Found" errors.
     let bad_paths = vec![
-        /* missing path parameter (won't match route) */
+        // missing path parameter (won't match route)
         "/testing/demo_path_string",
-        /* missing path parameter (won't match route) */
+        // missing path parameter (won't match route)
         "/testing/demo_path_string/",
-        /* missing path parameter (won't match route) */
+        // missing path parameter (won't match route)
         "/testing/demo_path_string//",
-        /* extra path segment (won't match route) */
+        // extra path segment (won't match route)
         "/testing/demo_path_string/okay/then",
     ];
 
@@ -488,9 +470,7 @@ async fn test_demo_path_param_string() {
         assert_eq!(error.message, "Not Found");
     }
 
-    /*
-     * Success cases (use the path parameter).
-     */
+    // Success cases (use the path parameter).
     let okay_paths = vec![
         ("/testing/demo_path_string/okay", "okay"),
         ("/testing/demo_path_string/okay/", "okay"),
@@ -526,18 +506,14 @@ async fn test_demo_path_param_string() {
     testctx.teardown().await;
 }
 
-/*
- * The "demo_path_param_uuid" handler takes just a single uuid path parameter.
- */
+// The "demo_path_param_uuid" handler takes just a single uuid path parameter.
 #[tokio::test]
 async fn test_demo_path_param_uuid() {
     let api = demo_api();
     let testctx = common::test_setup("demo_path_param_uuid", api);
 
-    /*
-     * Error case: not a valid uuid.  The other error cases are the same as for
-     * the string-valued path parameter and they're tested above.
-     */
+    // Error case: not a valid uuid.  The other error cases are the same as for
+    // the string-valued path parameter and they're tested above.
     let error = testctx
         .client_testctx
         .make_request_with_body(
@@ -550,9 +526,7 @@ async fn test_demo_path_param_uuid() {
         .unwrap_err();
     assert!(error.message.starts_with("bad parameter in URL path:"));
 
-    /*
-     * Success case (use the Uuid)
-     */
+    // Success case (use the Uuid)
     let uuid_str = "e7de8ccc-8938-43fa-8404-a040a0836ee4";
     let valid_path = format!("/testing/demo_path_uuid/{}", uuid_str);
     let mut response = testctx
@@ -571,18 +545,14 @@ async fn test_demo_path_param_uuid() {
     testctx.teardown().await;
 }
 
-/*
- * The "demo_path_param_u32" handler takes just a single u32 path parameter.
- */
+// The "demo_path_param_u32" handler takes just a single u32 path parameter.
 #[tokio::test]
 async fn test_demo_path_param_u32() {
     let api = demo_api();
     let testctx = common::test_setup("demo_path_param_u32", api);
 
-    /*
-     * Error case: not a valid u32.  Other error cases are the same as for the
-     * string-valued path parameter and they're tested above.
-     */
+    // Error case: not a valid u32.  Other error cases are the same as for the
+    // string-valued path parameter and they're tested above.
     let error = testctx
         .client_testctx
         .make_request_with_body(
@@ -595,9 +565,7 @@ async fn test_demo_path_param_u32() {
         .unwrap_err();
     assert!(error.message.starts_with("bad parameter in URL path:"));
 
-    /*
-     * Success case (use the number)
-     */
+    // Success case (use the number)
     let u32_str = "37";
     let valid_path = format!("/testing/demo_path_u32/{}", u32_str);
     let mut response = testctx
@@ -616,16 +584,14 @@ async fn test_demo_path_param_u32() {
     testctx.teardown().await;
 }
 
-/*
- * Test `UntypedBody`.
- */
+// Test `UntypedBody`.
 #[tokio::test]
 async fn test_untyped_body() {
     let api = demo_api();
     let testctx = common::test_setup("test_untyped_body", api);
     let client = &testctx.client_testctx;
 
-    /* Error case: body too large. */
+    // Error case: body too large.
     let big_body = vec![0u8; 1025];
     let error = client
         .make_request_with_body(
@@ -641,7 +607,7 @@ async fn test_untyped_body() {
         "request body exceeded maximum size of 1024 bytes"
     );
 
-    /* Error case: invalid UTF-8, when parsing as a UTF-8 string. */
+    // Error case: invalid UTF-8, when parsing as a UTF-8 string.
     let bad_body = vec![0x80u8; 1];
     let error = client
         .make_request_with_body(
@@ -658,7 +624,7 @@ async fn test_untyped_body() {
          bytes from index 0"
     );
 
-    /* Success case: invalid UTF-8, when not parsing. */
+    // Success case: invalid UTF-8, when not parsing.
     let mut response = client
         .make_request_with_body(
             Method::PUT,
@@ -672,7 +638,7 @@ async fn test_untyped_body() {
     assert_eq!(json.nbytes, 1);
     assert_eq!(json.as_utf8, None);
 
-    /* Success case: empty body */
+    // Success case: empty body
     let mut response = client
         .make_request_with_body(
             Method::PUT,
@@ -686,7 +652,7 @@ async fn test_untyped_body() {
     assert_eq!(json.nbytes, 0);
     assert_eq!(json.as_utf8, Some(String::from("")));
 
-    /* Success case: non-empty content */
+    // Success case: non-empty content
     let body: Vec<u8> = Vec::from(&b"t\xce\xbcv"[..]);
     let mut response = client
         .make_request_with_body(
@@ -704,9 +670,7 @@ async fn test_untyped_body() {
     testctx.teardown().await;
 }
 
-/*
- * Test delete request
- */
+// Test delete request
 #[tokio::test]
 async fn test_delete_request() {
     let api = demo_api();
@@ -718,9 +682,7 @@ async fn test_delete_request() {
     testctx.teardown().await;
 }
 
-/*
- * Test response headers
- */
+// Test response headers
 #[tokio::test]
 async fn test_header_request() {
     let api = demo_api();
@@ -753,9 +715,7 @@ async fn test_header_request() {
     assert_eq!(headers, vec!["hi", "howdy"]);
 }
 
-/*
- * Test 302 "Found" response with an invalid header value
- */
+// Test 302 "Found" response with an invalid header value
 #[tokio::test]
 async fn test_302_bogus() {
     let api = demo_api();
@@ -771,9 +731,7 @@ async fn test_302_bogus() {
     assert_eq!(error.message, "Internal Server Error");
 }
 
-/*
- * Test 302 "Found" response
- */
+// Test 302 "Found" response
 #[tokio::test]
 async fn test_302_found() {
     let api = demo_api();
@@ -798,9 +756,7 @@ async fn test_302_found() {
     assert_eq!(read_string(&mut response).await, "");
 }
 
-/*
- * Test 303 "See Other" response
- */
+// Test 303 "See Other" response
 #[tokio::test]
 async fn test_303_see_other() {
     let api = demo_api();
@@ -825,9 +781,7 @@ async fn test_303_see_other() {
     assert_eq!(read_string(&mut response).await, "");
 }
 
-/*
- * Test 307 "Temporary Redirect" response
- */
+// Test 307 "Temporary Redirect" response
 #[tokio::test]
 async fn test_307_temporary_redirect() {
     let api = demo_api();
@@ -852,10 +806,8 @@ async fn test_307_temporary_redirect() {
     assert_eq!(read_string(&mut response).await, "");
 }
 
-/*
- * The "test_demo_websocket" handler upgrades to a websocket and exchanges
- * greetings with the client.
- */
+// The "test_demo_websocket" handler upgrades to a websocket and exchanges
+// greetings with the client.
 #[tokio::test]
 async fn test_demo_websocket() {
     let api = demo_api();
@@ -874,9 +826,7 @@ async fn test_demo_websocket() {
     testctx.teardown().await;
 }
 
-/*
- * Demo handler functions
- */
+// Demo handler functions
 
 type RequestCtx = Arc<RequestContext<usize>>;
 

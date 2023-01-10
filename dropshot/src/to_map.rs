@@ -7,9 +7,7 @@ use serde::{
     Serialize, Serializer,
 };
 
-/**
- * Serialize an instance of T into a `BTreeMap<String, String>`.
- */
+/// Serialize an instance of T into a `BTreeMap<String, String>`.
 pub(crate) fn to_map<T>(input: &T) -> Result<BTreeMap<String, String>, MapError>
 where
     T: Serialize,
@@ -174,9 +172,7 @@ impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
     }
 }
 
-/**
- * Used to serialize structs for `MapSerializer`.
- */
+/// Used to serialize structs for `MapSerializer`.
 struct MapSerializeStruct {
     output: BTreeMap<String, String>,
 }
@@ -204,11 +200,9 @@ impl SerializeStruct for MapSerializeStruct {
     }
 }
 
-/**
- * A trivial `Serializer` used to extract a `String`. One could imagine
- * extending this to convert other scalars into strings, but for now we'll just
- * work with strings.
- */
+/// A trivial `Serializer` used to extract a `String`. One could imagine
+/// extending this to convert other scalars into strings, but for now we'll just
+/// work with strings.
 struct StringSerializer;
 impl<'a> Serializer for &'a mut StringSerializer {
     type Ok = String;
