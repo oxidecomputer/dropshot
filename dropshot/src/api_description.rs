@@ -11,7 +11,7 @@ use crate::router::PathSegment;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
-use crate::Extractor;
+use crate::extractor::RequestExtractor;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
@@ -56,7 +56,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
     ) -> Self
     where
         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-        FuncParams: Extractor + 'static,
+        FuncParams: RequestExtractor + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
     {
         let body_content_type =
@@ -280,7 +280,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         self.validate_tags(&e)?;
         self.validate_path_parameters(&e)?;
-        self.validate_body_parameters(&e)?;
         self.validate_named_parameters(&e)?;
 
         self.router.insert(e);
@@ -374,32 +373,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         Ok(())
     }
 
-    /// Validate that we have a single body parameter.
-    fn validate_body_parameters(
-        &self,
-        e: &ApiEndpoint<Context>,
-    ) -> Result<(), String> {
-        // Explicitly disallow any attempt to consume the body twice.
-        let nbodyextractors = e
-            .parameters
-            .iter()
-            .filter(|p| match p.metadata {
-                ApiEndpointParameterMetadata::Body(..) => true,
-                _ => false,
-            })
-            .count();
-        if nbodyextractors > 1 {
-            return Err(format!(
-                "only one body extractor can be used in a handler (this \
-                 function has {})",
-                nbodyextractors
-            ));
-        }
-
-        Ok(())
-    }
-
-    /// Validate that named parameters have appropriate types and their aren't
+    /// Validate that named parameters have appropriate types and there are no
     /// duplicates. Parameters must have scalar types except in the case of the
     /// received for a wildcard path which must be an array of String.
     fn validate_named_parameters(
@@ -1566,8 +1540,6 @@ mod test {
     use crate::Query;
     use crate::TagConfig;
     use crate::TagDetails;
-    use crate::TypedBody;
-    use crate::UntypedBody;
     use crate::CONTENT_TYPE_JSON;
     use http::Method;
     use hyper::Body;
@@ -1717,31 +1689,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_two_bodies() {
-        #[derive(Deserialize, JsonSchema)]
-        struct AStruct {}
-
-        #[endpoint {
-            method = PUT,
-            path = "/testing/two_bodies"
-        }]
-        async fn test_twobodies_handler(
-            _: Arc<RequestContext<()>>,
-            _: UntypedBody,
-            _: TypedBody<AStruct>,
-        ) -> Result<Response<Body>, HttpError> {
-            unimplemented!();
-        }
-
-        let mut api = ApiDescription::new();
-        let error = api.register(test_twobodies_handler).unwrap_err();
-        assert_eq!(
-            error,
-            "only one body extractor can be used in a handler (this function \
-             has 2)"
-        );
-    }
+    // XXX-dap TODO-coverage need a test for trying to use two
+    // ExclusiveExtractors
 
     #[test]
     fn test_dup_names() {

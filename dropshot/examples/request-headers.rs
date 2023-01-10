@@ -4,8 +4,8 @@
 //!
 //! The headers accessed here will not be recorded as inputs in the OpenAPI
 //! spec.  This is not currently supported out-of-the-box with Dropshot, but it
-//! could be done by implementing you're own `Extractor` that pulls the headers
-//! out, similar to what's done here.
+//! could be done by implementing you're own `SharedExtractor` that pulls the
+//! headers out, similar to what's done here.
 //!
 //! This example is based on the "basic.rs" one.  See that one for more detailed
 //! comments on the common code.
