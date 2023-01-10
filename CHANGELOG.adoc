@@ -24,6 +24,10 @@ https://github.com/oxidecomputer/dropshot/compare/v0.8.0\...HEAD[Full list of co
 //   now: no other change.  future: exclusive one will get a hyper::Request
 // exclusive extractors must appear last in the argument list
 
+// XXX-dap TODO more updates for RawRequest extractor
+// also update crate-level docs and other places we talk about TypedBody, etc.
+// maybe add an example?
+
 * https://github.com/oxidecomputer/dropshot/pull/504[#504] Dropshot allows TLS configuration to be supplied either by path or as bytes. For compatibility, the `AsFile` variant of `ConfigTls` contains the `cert_file` and `key_file` fields, and may be used similarly to the old variant.
 * https://github.com/oxidecomputer/dropshot/pull/502[#502] Dropshot exposes a `refresh_tls` method to update the TLS certificates being used by a running server. If you previously tried to access `DropshotState.tls`, you can access the `DropshotState.using_tls()` method instead.
 * https://github.com/oxidecomputer/dropshot/pull/540[#540] `ConfigDropshot` now uses a [`camino::Utf8PathBuf`](https://docs.rs/camino/1.1.1/camino/struct.Utf8PathBuf.html) for its file path. There is no change to the configuration format itself, just its representation in Rust.

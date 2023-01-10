@@ -49,11 +49,9 @@ use crate::schema_util::ReferenceVisitor;
 use crate::to_map::to_map;
 
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use http::HeaderMap;
 use http::StatusCode;
 use hyper::Body;
-use hyper::Request;
 use hyper::Response;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -73,19 +71,10 @@ use std::sync::Arc;
 pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
-// TODO-cleanup What's the right way to package up "request"?  The only time we
-// need it to be mutable is when we're reading the body (e.g., as part of the
-// JSON extractor).  In order to support that, we wrap it in something that
-// supports interior mutability.  It also needs to be thread-safe, since we're
-// using async/await.  That brings us to Arc<Mutex<...>>, but it seems like
-// overkill since it will only really be used by one thread at a time (at all,
-// let alone mutably) and there will never be contention on the Mutex.
 #[derive(Debug)]
 pub struct RequestContext<Context: ServerContext> {
     /// shared server state
     pub server: Arc<DropshotState<Context>>,
-    /// HTTP request details
-    pub request: Arc<Mutex<Request<Body>>>,
     /// HTTP request routing variables
     pub path_variables: VariableSet,
     /// expected request body mime type
@@ -94,6 +83,48 @@ pub struct RequestContext<Context: ServerContext> {
     pub request_id: String,
     /// logger for this specific request
     pub log: Logger,
+
+    /// basic request information (method, URI, etc.)
+    pub request: RequestHeader,
+}
+
+// This is deliberately as close to compatible with `hyper::Request` as
+// reasonable.
+#[derive(Debug)]
+pub struct RequestHeader {
+    method: http::Method,
+    uri: http::Uri,
+    version: http::Version,
+    headers: http::HeaderMap<http::HeaderValue>,
+}
+
+impl<B> From<&hyper::Request<B>> for RequestHeader {
+    fn from(request: &hyper::Request<B>) -> Self {
+        RequestHeader {
+            method: request.method().clone(),
+            uri: request.uri().clone(),
+            version: request.version().clone(),
+            headers: request.headers().clone(),
+        }
+    }
+}
+
+impl RequestHeader {
+    pub fn method(&self) -> &http::Method {
+        &self.method
+    }
+
+    pub fn uri(&self) -> &http::Uri {
+        &self.uri
+    }
+
+    pub fn version(&self) -> &http::Version {
+        &self.version
+    }
+
+    pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
+        &self.headers
+    }
 }
 
 impl<Context: ServerContext> RequestContext<Context> {
@@ -304,6 +335,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> HttpHandlerResult;
 }
 
@@ -366,6 +398,7 @@ where
     async fn handle_request(
         &self,
         rqctx_raw: RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> HttpHandlerResult {
         // This is where the magic happens: in the code below, `funcparams` has
         // type `FuncParams`, which is a tuple type describing the extractor
@@ -384,7 +417,8 @@ where
         // actual handler function.  From this point down, all of this is
         // resolved statically.
         let rqctx = Arc::new(rqctx_raw);
-        let funcparams = RequestExtractor::from_request(&rqctx).await?;
+        let funcparams =
+            RequestExtractor::from_request(&rqctx, request).await?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }

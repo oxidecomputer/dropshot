@@ -27,6 +27,7 @@ pub trait ExclusiveExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> Result<Self, HttpError>;
 
     fn metadata(
@@ -57,6 +58,7 @@ pub trait SharedExtractor: Send + Sync + Sized {
 impl<S: SharedExtractor> ExclusiveExtractor for S {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        _request: hyper::Request<hyper::Body>,
     ) -> Result<Self, HttpError> {
         <S as SharedExtractor>::from_request(rqctx).await
     }
@@ -90,6 +92,7 @@ pub trait RequestExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> Result<Self, HttpError>;
 
     fn metadata(
@@ -102,6 +105,7 @@ pub trait RequestExtractor: Send + Sync + Sized {
 impl RequestExtractor for () {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
+        _request: hyper::Request<hyper::Body>,
     ) -> Result<Self, HttpError> {
         Ok(())
     }
@@ -121,8 +125,9 @@ impl RequestExtractor for () {
 impl<X: ExclusiveExtractor + 'static> RequestExtractor for (X,) {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> Result<Self, HttpError> {
-        Ok((X::from_request(rqctx).await?,))
+        Ok((X::from_request(rqctx, request).await?,))
     }
 
     fn metadata(
@@ -151,12 +156,14 @@ macro_rules! impl_rqextractor_for_tuple {
         RequestExtractor
         for ($($S,)+ X)
     {
-        async fn from_request<Context: ServerContext>(rqctx: &RequestContext<Context>)
-            -> Result<( $($S,)+ X ), HttpError>
+        async fn from_request<Context: ServerContext>(
+            rqctx: &RequestContext<Context>,
+            request: hyper::Request<hyper::Body>
+        ) -> Result<( $($S,)+ X ), HttpError>
         {
             futures::try_join!(
                 $($S::from_request(rqctx),)+
-                X::from_request(rqctx)
+                X::from_request(rqctx, request)
             )
         }
 

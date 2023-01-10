@@ -23,8 +23,6 @@ use crate::RequestContext;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use hyper::Body;
-use hyper::Request;
 use schemars::schema::InstanceType;
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
@@ -33,6 +31,7 @@ use std::fmt::Debug;
 
 mod common;
 
+use crate::RequestHeader;
 pub use common::ExclusiveExtractor;
 pub use common::ExtractorMetadata;
 pub use common::RequestExtractor;
@@ -61,7 +60,7 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
 /// Given an HTTP request, pull out the query string and attempt to deserialize
 /// it as an instance of `QueryType`.
 fn http_request_load_query<QueryType>(
-    request: &Request<Body>,
+    request: &RequestHeader,
 ) -> Result<Query<QueryType>, HttpError>
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,
@@ -91,8 +90,7 @@ where
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
     ) -> Result<Query<QueryType>, HttpError> {
-        let request = rqctx.request.lock().await;
-        http_request_load_query(&request)
+        http_request_load_query(&rqctx.request)
     }
 
     fn metadata(
@@ -226,12 +224,12 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
 /// to the content type, and deserialize it to an instance of `BodyType`.
 async fn http_request_load_body<Context: ServerContext, BodyType>(
     rqctx: &RequestContext<Context>,
+    mut request: hyper::Request<hyper::Body>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let server = &rqctx.server;
-    let mut request = rqctx.request.lock().await;
     let body = http_read_body(
         request.body_mut(),
         server.config.request_body_max_bytes,
@@ -302,8 +300,9 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
-        http_request_load_body(rqctx).await
+        http_request_load_body(rqctx, request).await
     }
 
     fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
@@ -355,9 +354,9 @@ impl UntypedBody {
 impl ExclusiveExtractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        mut request: hyper::Request<hyper::Body>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
-        let mut request = rqctx.request.lock().await;
         let body_bytes = http_read_body(
             request.body_mut(),
             server.config.request_body_max_bytes,
@@ -386,6 +385,40 @@ impl ExclusiveExtractor for UntypedBody {
                 },
                 vec![],
             )],
+            extension_mode: ExtensionMode::None,
+        }
+    }
+}
+
+// RawRequest: extractor for the raw underlying hyper::Request
+
+/// `RawRequest` is an extractor providing access to the raw underlying
+/// [`hyper::Request`].
+#[derive(Debug)]
+pub struct RawRequest {
+    request: hyper::Request<hyper::Body>,
+}
+
+impl RawRequest {
+    pub fn into_inner(self) -> hyper::Request<hyper::Body> {
+        self.request
+    }
+}
+
+#[async_trait]
+impl ExclusiveExtractor for RawRequest {
+    async fn from_request<Context: ServerContext>(
+        _rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
+    ) -> Result<RawRequest, HttpError> {
+        Ok(RawRequest { request })
+    }
+
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
+        ExtractorMetadata {
+            parameters: vec![],
             extension_mode: ExtensionMode::None,
         }
     }

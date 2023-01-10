@@ -38,6 +38,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
+use crate::RequestHeader;
 use slog::Logger;
 
 // TODO Replace this with something else?
@@ -770,13 +771,14 @@ async fn http_request_handle<C: ServerContext>(
         server.router.lookup_route(&method, uri.path().into())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request: Arc::new(Mutex::new(request)),
+        request: RequestHeader::from(&request),
         path_variables: lookup_result.variables,
         body_content_type: lookup_result.body_content_type,
         request_id: request_id.to_string(),
         log: request_log,
     };
-    let mut response = lookup_result.handler.handle_request(rqctx).await?;
+    let mut response =
+        lookup_result.handler.handle_request(rqctx, request).await?;
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),
