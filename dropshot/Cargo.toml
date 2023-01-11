@@ -61,7 +61,7 @@ version = "1.19"
 features = [ "full" ]
 
 [dependencies.usdt]
-version = "0.3.4"
+version = "0.3.5"
 optional = true
 default-features = false
 
@@ -109,4 +109,4 @@ features = [ "max_level_trace", "release_max_level_debug" ]
 version_check = "0.9.4"
 
 [features]
-usdt-probes = ["usdt/asm"]
+usdt-probes = [ "usdt/asm" ]

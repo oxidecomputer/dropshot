@@ -541,7 +541,7 @@
 // Clippy's style advice is definitely valuable, but not worth the trouble for
 // automated enforcement.
 #![allow(clippy::style)]
-// The `usdt` crate may requires nightly, enabled if our consumer is enabling
+// The `usdt` crate may require nightly, enabled if our consumer is enabling
 // DTrace probes.
 #![cfg_attr(all(feature = "usdt-probes", usdt_need_asm), feature(asm))]
 #![cfg_attr(
