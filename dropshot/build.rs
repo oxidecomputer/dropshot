@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,14 @@
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    if version_check::is_min_version("1.59").unwrap_or(false) {
-        println!("cargo:rustc-cfg=usdt_stable_asm");
+    if !version_check::is_min_version("1.59").unwrap_or(false) {
+        println!("cargo:rustc-cfg=usdt_need_asm");
     }
 
-    // Once asm_sym is stablilized, add an additional check so that those
-    // building on macos can use the stable toolchain with any hassle.
-    //
-    // A matching rust-cfg option named `usdt_stable_asm_sym` seems appropriate.
+    #[cfg(target_os = "macos")]
+    if version_check::supports_feature("asm_sym").unwrap_or(false)
+        && !version_check::is_min_version("1.67").unwrap_or(false)
+    {
+        println!("cargo:rustc-cfg=usdt_need_asm_sym");
+    }
 }
