@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Interface for implementing HTTP endpoint handler functions.
 //!
 //! For information about supported endpoint function signatures, argument types,

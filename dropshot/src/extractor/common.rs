@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
 // XXX-dap TODO-cleanup should the metadata into a separate, shared trait?
 
