@@ -70,21 +70,27 @@ impl<S: SharedExtractor> ExclusiveExtractor for S {
 
 /// Top-level extractor for a given request
 ///
-/// During request handling, we wind up needing to call a function with a
-/// variable number of arguments whose types are all extractors (either
-/// `SharedExtractor` or `ExclusiveExtractor`).  We achieve this with a separate
-/// type called `RequestExtractor` that looks just like `ExclusiveExtractor`.
-/// We can impl this trait on a tuple of any number of types that themselves
-/// impl `SharedExtractor` or `ExclusiveExtractor` by delegating to each type's
-/// extractor implementation.  There may be at most one `ExclusiveExtractor` in
-/// the tuple.  We require it to be the last argument just to avoid having to
-/// define the power set of impls.
+/// During request handling, we must find and invoke the appropriate
+/// consumer-defined handler function.  While each of these functions takes a
+/// fixed number of arguments, different handler functions may take a different
+/// number of arguments.  The arguments that can vary between handler functions
+/// are all extractors, meaning that they impl `SharedExtractor` or
+/// `ExclusiveExtractor`.
 ///
-/// In practice, `RequestExtractor` is identical to `ExclusiveExtractor`.  But
-/// we use them in different ways.  `RequestExtractor` is private, only
-/// implemented on tuple types, and only used to kick off extraction.
-/// `ExclusiveExtractor` can be consumer-defined and would generally not be
-/// implemented on tuple types.
+/// This trait helps us invoke various handler functions uniformly, despite them
+/// accepting different arguments.  To achieve this, we impl this trait for all
+/// supported _tuples_ of argument types, which is essentially 0 or more
+/// `SharedExtractor`s followed by at most one `ExclusiveExtractor`.  This impl
+/// essentially does the same thing as any other extractor, and it does it by
+/// delegating to the impls of each tuple member.
+///
+/// In practice, the trait `RequestExtractor` is identical to
+/// `ExclusiveExtractor` and we could use `ExclusiveExtractor` directly.  But
+/// it's clearer to use distinct types, since they're used differently.  To
+/// summarize: `RequestExtractor` is private, only implemented on tuple types,
+/// and only used to kick off extraction from the top level.
+/// `ExclusiveExtractor` s public, implementing types can be consumer-defined,
+/// and it would generally not be implemented on tuple types.
 #[async_trait]
 pub trait RequestExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
