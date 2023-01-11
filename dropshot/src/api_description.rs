@@ -1201,9 +1201,6 @@ mod test {
         api.register(test_badpath_handler).unwrap();
     }
 
-    // XXX-dap TODO-coverage need a test for trying to use two
-    // ExclusiveExtractors
-
     #[test]
     fn test_dup_names() {
         #[derive(Deserialize, JsonSchema)]
