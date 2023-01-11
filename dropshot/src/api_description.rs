@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Describes the endpoints and handler functions in your API
 
 use crate::handler::HttpHandlerFunc;

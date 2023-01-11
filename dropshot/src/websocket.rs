@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Implements websocket upgrades as an Extractor for use in API route handler
 //! parameters to indicate that the given endpoint is meant to be upgraded to
 //! a websocket.
