@@ -1,5 +1,5 @@
 error[E0277]: the trait bound `TypedBody<Stuff>: SharedExtractor` is not satisfied
-  --> tests/fail/bad_endpoint3c.rs:28:14
+  --> tests/fail/bad_endpoint18.rs:28:14
    |
 28 |     _param1: TypedBody<Stuff>,
    |              ^^^^^^^^^^^^^^^^ the trait `SharedExtractor` is not implemented for `TypedBody<Stuff>`
@@ -8,7 +8,7 @@ error[E0277]: the trait bound `TypedBody<Stuff>: SharedExtractor` is not satisfi
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
 note: required by a bound in `need_shared_extractor`
-  --> tests/fail/bad_endpoint3c.rs:22:1
+  --> tests/fail/bad_endpoint18.rs:22:1
    |
 22 | / #[endpoint {
 23 | |     method = GET,
@@ -21,7 +21,7 @@ note: required by a bound in `need_shared_extractor`
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(Arc<RequestContext<()>>, TypedBody<Stuff>, dropshot::Query<Stuff>) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<exclusive_extractor_not_last> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::exclusive_extractor_not_last}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
-  --> tests/fail/bad_endpoint3c.rs:26:10
+  --> tests/fail/bad_endpoint18.rs:26:10
    |
 22 | / #[endpoint {
 23 | |     method = GET,
