@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
 //! This package defines macro attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
