@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2022 Oxide Computer Company
 
 //! Detailed end-user documentation for pagination lives in the Dropshot top-
 //! level block comment.  Here we discuss some of the design choices.
