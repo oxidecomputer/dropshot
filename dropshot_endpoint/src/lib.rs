@@ -171,7 +171,7 @@ fn do_channel(
     } = from_tokenstream(&attr)?;
     match protocol {
         ChannelProtocol::WEBSOCKETS => {
-            // here we construct a wrapper function and mutate the arguments a bit
+            // Here we construct a wrapper function and mutate the arguments a bit
             // for the outer layer: we replace WebsocketConnection, which is not
             // an extractor, with WebsocketUpgrade, which is.  We also move it
             // to the end.
