@@ -12,6 +12,7 @@ use crate::{
     RequestContext, ServerContext,
 };
 use async_trait::async_trait;
+use base64::Engine;
 use http::header;
 use http::Response;
 use http::StatusCode;
@@ -67,7 +68,8 @@ struct WebsocketUpgradeInner {
     ws_log: Logger,
 }
 
-// Borrowed from tungstenite-0.17.3 (rather than taking a whole dependency for this one function)
+// Originally copied from tungstenite-0.17.3 (rather than taking a whole
+// dependency for this one function).
 fn derive_accept_key(request_key: &[u8]) -> String {
     // ... field is constructed by concatenating /key/ ...
     // ... with the string "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" (RFC 6455)
@@ -75,7 +77,7 @@ fn derive_accept_key(request_key: &[u8]) -> String {
     let mut sha1 = Sha1::default();
     sha1.update(request_key);
     sha1.update(WS_GUID);
-    base64::encode(&sha1.finalize())
+    base64::engine::general_purpose::STANDARD.encode(&sha1.finalize())
 }
 
 /// This `Extractor` implementation constructs an instance of `WebsocketUpgrade`
