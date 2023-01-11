@@ -235,7 +235,7 @@ mod tests {
         JsonSchema,
     };
 
-    use crate::handler::schema2struct;
+    use crate::schema_util::schema2struct;
 
     use super::type_resolve;
 

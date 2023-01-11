@@ -15,7 +15,7 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
              (T0, T1, T2, T3, T4, T5)
            and $N others
 note: required by a bound in `dropshot::Query`
-  --> src/handler.rs
+  --> src/extractor/mod.rs
    |
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `dropshot::Query`
@@ -38,7 +38,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
            and $N others
    = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
-  --> src/handler.rs
+  --> src/extractor/mod.rs
    |
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                             ^^^^^^^^^^^^^^^^ required by this bound in `dropshot::Query`
