@@ -433,12 +433,12 @@ fn do_endpoint_inner(
         .inputs
         .iter()
         .enumerate()
-        .filter_map(|(index, arg)| {
+        .map(|(index, arg)| {
             match arg {
                 syn::FnArg::Receiver(_) => {
                     // The compiler failure here is already comprehensible.
                     arg_is_receiver = true;
-                    Some(quote! {})
+                    quote! {}
                 }
                 syn::FnArg::Typed(pat) => {
                     let span = pat.ty.span();
@@ -448,15 +448,38 @@ fn do_endpoint_inner(
                         // The first parameter must be an Arc<RequestContext<T>>
                         // and fortunately we already have a trait that we can
                         // use to validate this type.
-                        Some(quote_spanned! { span=>
+                        quote_spanned! { span=>
                             const _: fn() = || {
                                 struct NeedRequestContext(<#ty as #dropshot::RequestContextArgument>::Context);
                             };
-                        })
+                        }
+                    } else if index < ast.sig.inputs.len() - 1 {
+                        // Subsequent parameters aside from the last one must
+                        // impl SharedExtractor.
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                fn need_shared_extractor<T>()
+                                where
+                                    T: ?Sized + #dropshot::SharedExtractor,
+                                {
+                                }
+                                need_shared_extractor::<#ty>();
+                            };
+                        }
                     } else {
-                        // XXX-dap the remaining stuff must together impl
-                        // `RequestExtractor`
-                        None
+                        // The final parameter must impl ExclusiveExtractor.
+                        // (It's okay if it's another SharedExtractor.  Those
+                        // impl ExclusiveExtractor, too.)
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                fn need_exclusive_extractor<T>()
+                                where
+                                    T: ?Sized + #dropshot::ExclusiveExtractor,
+                                {
+                                }
+                                need_exclusive_extractor::<#ty>();
+                            };
+                        }
                     }
                 }
             }
@@ -936,6 +959,14 @@ mod tests {
                 struct NeedRequestContext(<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
+                fn need_exclusive_extractor<T>()
+                where
+                    T: ?Sized + dropshot::ExclusiveExtractor,
+                {
+                }
+                need_exclusive_extractor::<Query<Q> >();
+            };
+            const _: fn() = || {
                 trait ResultTrait {
                     type T;
                     type E;
@@ -1032,6 +1063,14 @@ mod tests {
         let expected = quote! {
             const _: fn() = || {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+            };
+            const _: fn() = || {
+                fn need_exclusive_extractor<T>()
+                where
+                    T: ?Sized + dropshot::ExclusiveExtractor,
+                {
+                }
+                need_exclusive_extractor::<Query<Q> >();
             };
             const _: fn() = || {
                 trait ResultTrait {
