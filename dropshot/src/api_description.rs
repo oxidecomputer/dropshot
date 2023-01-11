@@ -1,6 +1,7 @@
 // Copyright 2023 Oxide Computer Company
 //! Describes the endpoints and handler functions in your API
 
+use crate::extractor::RequestExtractor;
 use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
 use crate::handler::HttpRouteHandler;
@@ -12,7 +13,6 @@ use crate::schema_util::j2oas_schema;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
-use crate::extractor::RequestExtractor;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_OCTET_STREAM;
