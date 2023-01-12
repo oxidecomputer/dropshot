@@ -110,6 +110,12 @@ impl<B> From<&hyper::Request<B>> for RequestHeader {
     }
 }
 
+impl<B> From<hyper::Request<B>> for RequestHeader {
+    fn from(request: hyper::Request<B>) -> Self {
+        Self::from(&request)
+    }
+}
+
 impl RequestHeader {
     pub fn method(&self) -> &http::Method {
         &self.method
