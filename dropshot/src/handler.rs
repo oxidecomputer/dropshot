@@ -85,23 +85,22 @@ pub struct RequestContext<Context: ServerContext> {
     pub log: Logger,
 
     /// basic request information (method, URI, etc.)
-    pub request: RequestHeader,
+    pub request: RequestInfo,
 }
 
 // This is deliberately as close to compatible with `hyper::Request` as
 // reasonable.
-// XXX-dap TODO This could use a better name.
 #[derive(Debug)]
-pub struct RequestHeader {
+pub struct RequestInfo {
     method: http::Method,
     uri: http::Uri,
     version: http::Version,
     headers: http::HeaderMap<http::HeaderValue>,
 }
 
-impl<B> From<&hyper::Request<B>> for RequestHeader {
+impl<B> From<&hyper::Request<B>> for RequestInfo {
     fn from(request: &hyper::Request<B>) -> Self {
-        RequestHeader {
+        RequestInfo {
             method: request.method().clone(),
             uri: request.uri().clone(),
             version: request.version().clone(),
@@ -110,7 +109,7 @@ impl<B> From<&hyper::Request<B>> for RequestHeader {
     }
 }
 
-impl RequestHeader {
+impl RequestInfo {
     pub fn method(&self) -> &http::Method {
         &self.method
     }

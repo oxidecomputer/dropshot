@@ -6,9 +6,9 @@
 //!
 //! Note that the purpose is mainly to exercise the various possible function
 //! signatures that can be used to implement handler functions.  We don't need to
-//! exercises very many cases (or error cases) of each one because the handlers
-//! themselves are not important, but we need to exercise enough to validate that
-//! the generic JSON and query parsing handles error cases.
+//! exercise very many cases (or error cases) of each one because the handlers
+//! themselves are not important, but we need to exercise enough to validate
+//! that the generic JSON and query parsing handles error cases.
 //!
 //! TODO-hardening: add test cases that exceed limits (e.g., query string length,
 //! JSON body length)
@@ -34,6 +34,7 @@ use dropshot::HttpResponseTemporaryRedirect;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Path;
 use dropshot::Query;
+use dropshot::RawRequest;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
 use dropshot::UntypedBody;
@@ -70,6 +71,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_uuid).unwrap();
     api.register(demo_handler_path_param_u32).unwrap();
     api.register(demo_handler_untyped_body).unwrap();
+    api.register(demo_handler_raw_request).unwrap();
     api.register(demo_handler_delete).unwrap();
     api.register(demo_handler_headers).unwrap();
     api.register(demo_handler_302_bogus).unwrap();
@@ -670,6 +672,32 @@ async fn test_untyped_body() {
     testctx.teardown().await;
 }
 
+// Test `RawRequest`.
+#[tokio::test]
+async fn test_raw_request() {
+    let api = demo_api();
+    let testctx = common::test_setup("tet_raw_request", api);
+    let client = &testctx.client_testctx;
+
+    // Success case
+    let body = "you may know what you need but to get what you want \
+        better see that you keep what you have";
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/raw_request",
+            body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoRaw = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 90);
+    assert_eq!(json.method, "PUT");
+
+    testctx.teardown().await;
+}
+
 // Test delete request
 #[tokio::test]
 async fn test_delete_request() {
@@ -977,6 +1005,32 @@ async fn demo_handler_untyped_body(
     };
 
     Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct DemoRaw {
+    pub nbytes: usize,
+    pub method: String,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/testing/raw_request"
+}]
+async fn demo_handler_raw_request(
+    _rqctx: Arc<RequestContext<usize>>,
+    raw_request: RawRequest,
+) -> Result<HttpResponseOk<DemoRaw>, HttpError> {
+    let request = raw_request.into_inner();
+
+    let (parts, body) = request.into_parts();
+    // This is not generally a good pattern because it allows untrusted
+    // consumers to use up all memory.  This is just a narrow test.
+    let whole_body = hyper::body::to_bytes(body).await.unwrap();
+    Ok(HttpResponseOk(DemoRaw {
+        nbytes: whole_body.len(),
+        method: parts.method.to_string(),
+    }))
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

@@ -31,7 +31,7 @@ use std::fmt::Debug;
 
 mod common;
 
-use crate::RequestHeader;
+use crate::RequestInfo;
 pub use common::ExclusiveExtractor;
 pub use common::ExtractorMetadata;
 pub use common::RequestExtractor;
@@ -58,7 +58,7 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
 /// Given an HTTP request, pull out the query string and attempt to deserialize
 /// it as an instance of `QueryType`.
 fn http_request_load_query<QueryType>(
-    request: &RequestHeader,
+    request: &RequestInfo,
 ) -> Result<Query<QueryType>, HttpError>
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,

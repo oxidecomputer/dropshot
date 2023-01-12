@@ -297,7 +297,7 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, RequestHeader,
+        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
         WebsocketUpgrade,
     };
     use http::Request;
@@ -332,7 +332,7 @@ mod tests {
                 ),
                 tls_acceptor: None,
             }),
-            request: RequestHeader::from(&request),
+            request: RequestInfo::from(&request),
             path_variables: Default::default(),
             body_content_type: Default::default(),
             request_id: "".to_string(),
