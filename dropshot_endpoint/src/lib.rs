@@ -220,12 +220,19 @@ fn do_channel(
                 ));
             }
 
-            // XXX-dap TODO-cleanup This is a gross way to do it.
-            let mut input_pairs =
-                sig.inputs.clone().into_pairs().collect::<Vec<_>>();
-            let second_pair = input_pairs.remove(1);
-            input_pairs.push(second_pair);
-            sig.inputs = input_pairs.into_iter().collect();
+            // Historically, we required that the `WebsocketConnection` argument
+            // be first after the `RequestContext`.  However, we also require
+            // that any exclusive extractor (which includes the
+            // `WebsocketUpgrade` argument that we put in its place) appears
+            // last.  We replaced the type above, but now we need to put it in
+            // the right spot.
+            sig.inputs = {
+                let mut input_pairs =
+                    sig.inputs.clone().into_pairs().collect::<Vec<_>>();
+                let second_pair = input_pairs.remove(1);
+                input_pairs.push(second_pair);
+                input_pairs.into_iter().collect()
+            };
 
             sig.output =
                 syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))?;
@@ -424,8 +431,8 @@ fn do_endpoint_inner(
     // When the user attaches this proc macro to a function with the wrong type
     // signature, the resulting errors can be deeply inscrutable. To attempt to
     // make failures easier to understand, we inject code that asserts the types
-    // of the various parameters. We do this by calling a dummy function that
-    // requires a type that satisfies the trait Extractor.
+    // of the various parameters. We do this by calling dummy functions that
+    // require a type that satisfies SharedExtractor or ExclusiveExtractor.
     let mut arg_types = Vec::new();
     let mut arg_is_receiver = false;
     let param_checks = ast

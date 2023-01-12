@@ -1,7 +1,5 @@
 // Copyright 2023 Oxide Computer Company
 
-// XXX-dap TODO-cleanup should the metadata into a separate, shared trait?
-
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
 use crate::error::HttpError;
@@ -138,16 +136,16 @@ impl<X: ExclusiveExtractor + 'static> RequestExtractor for (X,) {
     }
 }
 
-// XXX-dap TODO-doc update comment based on the change that uses the fact that
-// SharedExtractor impls ExclusiveExtractor such that the last item in the
-// tuple *must* be an exclusive extractor
 /// Defines implementations of `RequestExtractor` for tuples of one or more
 /// `SharedExtractor` followed by an `ExclusiveExtractor`
 ///
 /// As an example, `impl_rqextractor_for_tuple!(S1, S2)` defines an impl of
 /// `RequestExtractor` for tuple `(S1, S2, X)` where `S1: SharedExtractor`,
-/// `S2: SharedExtractor`, and `X: ExclusiveExtractor`, as well as a similar
-/// impl for just `(S1, S2)`.
+/// `S2: SharedExtractor`, and `X: ExclusiveExtractor`.  Note that any
+/// `SharedExtractor` also impls `ExclusiveExtractor`, so it's not necessary to
+/// impl this separately for `(S1, S2, S3)` (and indeed that would not be
+/// possible, since it would overlap with the definition for `(S1, S2, X)`, even
+/// if `SharedExtractor` did not impl `ExclusiveExtractor`).
 macro_rules! impl_rqextractor_for_tuple {
     ($( $S:ident),+) => {
 

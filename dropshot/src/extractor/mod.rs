@@ -1,6 +1,6 @@
 // Copyright 2023 Oxide Computer Company
 
-//! Extractor trait
+//! Extractor-related traits
 //!
 //! See top-level crate documentation for details
 
@@ -37,8 +37,6 @@ pub use common::ExclusiveExtractor;
 pub use common::ExtractorMetadata;
 pub use common::RequestExtractor;
 pub use common::SharedExtractor;
-
-// XXX-dap move these definitions to separate files?
 
 // Query: query string extractor
 
