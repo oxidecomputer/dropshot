@@ -33,10 +33,10 @@ After this change, the `hyper::Request` is passed as a separate argument to `Exc
 **What you need to do:**
 +
 1. If you have a request handler that accesses `rqctx.request`, it's typically doing `let request = rqctx.request.lock().await`.
-a. If that code is only accessing the HTTP method, URI, headers, or version, then you can replace that with `let request = &rqctx.request`.  (That object has methods compatible with `http::Request` for accessing the method, URI, headers, and verison.)
+a. If that code is only accessing the HTTP method, URI, headers, or version, then _you can skip this step_.  However, it's recommended that you replace that with `let request = &rqctx.request`.  (That object has methods compatible with `http::Request` for accessing the method, URI, headers, and version.)
 b. If that code is accessing other parts of the request (e.g., reading the body or doing a protocol upgrade), then you must instead add a `raw_request: RawRequest` argument to your endpoint function.  Then you can use `let request = raw_request.into_inner()`.
 2. If you have an extractor that access `rqctx.request`, then it too is typically doing something like `let request = rqctx.request.lock().await`.
-a. If that code is only accessing the HTTP method, URI, headers, or version, then just like above you can replace that with `let request = &rqctx.request`.  This can be done from a `SharedExtractor` or an `ExclusiveExtractor`.
+a. If that code is only accessing the HTTP method, URI, headers, or version, then just like above _you can skip this step_, but it's recommended that you replace that with `let request = &rqctx.request`.  This can be done from a `SharedExtractor` or an `ExclusiveExtractor`.
 b. If that code is accessing other parts of the request (e.g., reading the body or doing a protocol upgrade), then this extractor must impl `ExclusiveExtractor` (not `SharedExtractor`).  With `ExclusiveExtractor`, the `hyper::Request` is available as an argument to `from_request()`.
 +
 * https://github.com/oxidecomputer/dropshot/pull/504[#504] Dropshot now allows TLS configuration to be supplied either by path or as bytes. For compatibility, the `AsFile` variant of `ConfigTls` contains the `cert_file` and `key_file` fields, and may be used similarly to the old variant.

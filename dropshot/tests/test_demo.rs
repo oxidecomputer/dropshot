@@ -79,6 +79,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_303_see_other).unwrap();
     api.register(demo_handler_307_temporary_redirect).unwrap();
     api.register(demo_handler_websocket).unwrap();
+    api.register(demo_handler_request_compat).unwrap();
 
     // We don't need to exhaustively test these cases, as they're tested by unit
     // tests.
@@ -854,6 +855,25 @@ async fn test_demo_websocket() {
     testctx.teardown().await;
 }
 
+#[tokio::test]
+async fn test_request_compat() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_request_compat", api);
+    let mut response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/request_compat",
+            None as Option<()>,
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: String = read_json(&mut response).await;
+    assert_eq!(json, "dummy");
+    testctx.teardown().await;
+}
+
 // Demo handler functions
 
 type RequestCtx = Arc<RequestContext<usize>>;
@@ -1135,6 +1155,22 @@ async fn demo_handler_websocket(
     let msg = ws_stream.next().await.unwrap().unwrap();
     slog::info!(rqctx.log, "{}", msg);
     Ok(())
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/request_compat",
+}]
+async fn demo_handler_request_compat(
+    rqctx: RequestCtx,
+) -> Result<Response<Body>, HttpError> {
+    // Verifies that RequestInfo.lock() does what we expect.
+    #[allow(deprecated)]
+    let request = rqctx.request.lock().await;
+    let headers = request.headers();
+    let header_value = headers.get("server").and_then(|v| v.to_str().ok());
+    let value = header_value.unwrap_or("dummy");
+    http_echo(&value)
 }
 
 fn http_echo<T: Serialize>(t: &T) -> Result<Response<Body>, HttpError> {

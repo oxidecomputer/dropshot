@@ -125,6 +125,38 @@ impl RequestInfo {
     pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
         &self.headers
     }
+
+    /// Returns a reference to the `RequestInfo` itself
+    ///
+    /// This is provided for source compatibility.  In previous versions of
+    /// Dropshot, `RequestContext.request` was an
+    /// `Arc<Mutex<hyper::Request<hyper::Body>>>`.  Now, it's just
+    /// `RequestInfo`, which provides many of the same functions as
+    /// `hyper::Request` does.  Consumers _should_ just use `rqctx.request`
+    /// instead of this function.
+    ///
+    /// For example, in previous versions of Dropshot, you might have:
+    ///
+    /// ```ignore
+    /// let request = rqctx.request.lock().await;
+    /// let headers = request.headers();
+    /// ```
+    ///
+    /// Now, you would do this:
+    ///
+    /// ```ignore
+    /// let headers = rqctx.request.headers();
+    /// ```
+    ///
+    /// This function allows the older code to continue to work.
+    #[deprecated(
+        since = "0.9.0",
+        note = "use `rqctx.request` directly instead of \
+            `rqctx.request.lock().await`"
+    )]
+    pub async fn lock(&self) -> &Self {
+        self
+    }
 }
 
 impl<Context: ServerContext> RequestContext<Context> {
