@@ -3,27 +3,27 @@
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct RequestInfo {
-    id: String,
-    local_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
-    method: String,
-    path: String,
-    query: Option<String>,
+    pub id: String,
+    pub local_addr: std::net::SocketAddr,
+    pub remote_addr: std::net::SocketAddr,
+    pub method: String,
+    pub path: String,
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct ResponseInfo {
-    id: String,
-    local_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
-    status_code: u16,
-    message: String,
+    pub id: String,
+    pub local_addr: std::net::SocketAddr,
+    pub remote_addr: std::net::SocketAddr,
+    pub status_code: u16,
+    pub message: String,
 }
 
 #[cfg(feature = "usdt-probes")]
 #[usdt::provider(provider = "dropshot")]
 mod probes {
-    use super::{RequestInfo, ResponseInfo};
+    use crate::dtrace::{RequestInfo, ResponseInfo};
     fn request__start(_: &RequestInfo) {}
     fn request__done(_: &ResponseInfo) {}
 }

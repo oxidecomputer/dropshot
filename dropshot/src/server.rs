@@ -737,7 +737,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
             #[cfg(feature = "usdt-probes")]
             probes::request__done!(|| {
-                crate::ResponseInfo {
+                crate::dtrace::ResponseInfo {
                     id: request_id.parse().unwrap(),
                     local_addr,
                     remote_addr,
