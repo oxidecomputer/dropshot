@@ -17,23 +17,30 @@ https://github.com/oxidecomputer/dropshot/compare/v0.8.0\...HEAD[Full list of co
 
 === Breaking Changes
 
-// XXX-dap TODO need update here
-// Extractor -> {Shared,Exclusive}Extractor
-// type signature of from_request() changed
-//   both: accept &RequestContext instead of Arc
-//   now: no other change.  future: exclusive one will get a hyper::Request
-// exclusive extractors must appear last in the argument list
-
 // XXX-dap TODO more updates for RawRequest extractor
 // also update crate-level docs and other places we talk about TypedBody, etc.
 // maybe add an example?
 
-* https://github.com/oxidecomputer/dropshot/pull/504[#504] Dropshot allows TLS configuration to be supplied either by path or as bytes. For compatibility, the `AsFile` variant of `ConfigTls` contains the `cert_file` and `key_file` fields, and may be used similarly to the old variant.
-* https://github.com/oxidecomputer/dropshot/pull/502[#502] Dropshot exposes a `refresh_tls` method to update the TLS certificates being used by a running server. If you previously tried to access `DropshotState.tls`, you can access the `DropshotState.using_tls()` method instead.
+There are a number of breaking changes in this release but we expect they will be easy to manage.  **If you have any trouble updating to this release or want help with it, please do https://github.com/oxidecomputer/dropshot/discussions[start a discussion] or https://github.com/oxidecomputer/dropshot/issues/new[file an issue]!**
+
+* https://github.com/oxidecomputer/dropshot/pull/556[#556] Better type-safety around the use of extractors.  It is now a compile-time error to define an endpoint that accepts two extractors that use the HTTP request body (e.g., to accept both a `TypedBody` and an `UntypedBody`, or two `TypedBody` arguments).  Previously, this would have resulted in a runtime error.  The main change is that the `Extractor` trait has been split into two separate traits: `SharedExtractor` and `ExclusiveExtractor`.  Endpoint functions can still accept 0-3 extractors, but only one can be an `ExclusiveExtractor` and it must be the last one.  The function signatures for `*Extractor::from_request` have also changed.
++
+**What you need to do:**
++
+1. For any endpoint functions that use a `TypedBody` or `UntypedBody` extractor, this extractor must be the last argument to the function.  Otherwise, you will get a compile error about the extractor not impl'ing `SharedExtractor`.
+2. If you have your own type that impls `Extractor`, you will need to change that to either `ExclusiveExtractor` (if the impl needs a `mut` reference to the underlying `hyper::Request`, which is usually because it needs to read the request body) or `SharedExtractor`.  If your extractor only needs to look at the URL or request headers and not the body, it can probably be a `SharedExtractor`.  If it's an exclusive extractor, any function that accepts it must accept it as the last argument to the function.
+3. If you have your own type that impls `Extractor`, you will also need to change the type signature of the `from_request` method to accept a `&RequestContext<T>` instead of `Arc<RequestContext<T>>`.  (This should not be a problem unless your extractor was hanging on to a reference via the Arc.  We don't know a reason this would be useful.  If you were doing this, please reach out.  You can probably instead copy whatever information you need out of the `RequestContext` instead.)
+* https://github.com/oxidecomputer/dropshot/pull/504[#504] Dropshot now allows TLS configuration to be supplied either by path or as bytes. For compatibility, the `AsFile` variant of `ConfigTls` contains the `cert_file` and `key_file` fields, and may be used similarly to the old variant.
+* https://github.com/oxidecomputer/dropshot/pull/502[#502] Dropshot exposes a `refresh_tls` method to update the TLS certificates being used by a running server.
++
+**What you need to do:** If you previously tried to access `DropshotState.tls`, you can access the `DropshotState.using_tls()` method instead.
 * https://github.com/oxidecomputer/dropshot/pull/540[#540] `ConfigDropshot` now uses a [`camino::Utf8PathBuf`](https://docs.rs/camino/1.1.1/camino/struct.Utf8PathBuf.html) for its file path. There is no change to the configuration format itself, just its representation in Rust.
 
 === Other notable Changes
 
+* https://github.com/oxidecomputer/dropshot/pull/522[#522] Dropshot's DTrace
+ probes can now be used with a stable compiler on all platforms. This requires
+ Rust >= 1.59 for most platforms, or >= 1.66 for macOS.
 * https://github.com/oxidecomputer/dropshot/pull/452[#452] Dropshot no longer enables the `slog` cargo features `max_level_trace` and `release_max_level_debug`. Previously, clients were unable to set a release log level of `trace`; now they can. However, clients that did not select their own max log levels will see behavior change from the levels Dropshot was choosing to the default levels of `slog` itself (`debug` for debug builds and `info` for release builds).
 * https://github.com/oxidecomputer/dropshot/pull/451[#451] There are now response types to support 302 ("Found"), 303 ("See Other"), and 307 ("Temporary Redirect") HTTP response codes.  See `HttpResponseFound`, `HttpResponseSeeOther`, and `HttpResponseTemporaryRedirect`.
 * https://github.com/oxidecomputer/dropshot/pull/503[#503] Add an optional `deprecated` field to the `#[endpoint]` macro.

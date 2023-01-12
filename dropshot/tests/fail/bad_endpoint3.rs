@@ -8,6 +8,7 @@ use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use std::sync::Arc;
 
+// Test: final parameter is neither an ExclusiveExtractor nor a SharedExtractor.
 #[endpoint {
     method = GET,
     path = "/test",

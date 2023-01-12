@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
 //!
@@ -216,10 +216,8 @@
 //! ) -> Result<HttpResponse*, HttpError>
 //! ```
 //!
-//! Other than the RequestContext, parameters may appear in any order.
-//!
-//! The `Context` type is caller-provided context which is provided when
-//! the server is created.
+//! The `RequestContext` must appear first.  The `Context` type is
+//! caller-provided context which is provided when the server is created.
 //!
 //! The types `Query`, `Path`, `TypedBody`, and `UntypedBody` are called
 //! **Extractors** because they cause information to be pulled out of the request
@@ -236,10 +234,14 @@
 //!   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
 //! * [`UntypedBody`] extracts the raw bytes of the request body.
 //!
-//! If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
-//! `UntypedBody`, and the corresponding extraction cannot be completed, the
-//! request fails with status code 400 and an error message reflecting a
-//! validation error.
+//! `Query` and `Path` impl `SharedExtractor`.  `TypedBody` and `UntypedBody`
+//! impl `ExclusiveExtractor`.  Your function may accept 0-3 extractors, but
+//! only one can be `ExclusiveExtractor`, and it must be the last one.
+//! Otherwise, the order of extractor arguments does not matter.
+//!
+//! If the handler accepts any extractors and the corresponding extraction
+//! cannot be completed, the request fails with status code 400 and an error
+//! message reflecting the error (usually a validation error).
 //!
 //! As with any serde-deserializable type, you can make fields optional by having
 //! the corresponding property of the type be an `Option`.  Here's an example of
@@ -505,11 +507,12 @@
 //! See the [`RequestInfo`] and [`ResponseInfo`] types for a complete listing
 //! of what's available.
 //!
-//! These probes are implemented via the [`usdt`] crate. They require a nightly
-//! toolchain if built on MacOS (which requires the unstable `asm_sym` feature).
-//! Otherwise a stable compiler >= v1.59 is required in order to present the
-//! necessary features.  Given these constraints, usdt functionality is behind
-//! the feature flag `"usdt-probes"`.
+//! These probes are implemented via the [`usdt`] crate. They may require a
+//! nightly toolchain if built on macOS prior to Rust version 1.66. Otherwise a
+//! stable compiler >= v1.59 is required in order to present the necessary
+//! features. Given these constraints, USDT functionality is behind the feature
+//! flag `"usdt-probes"`, which may become a default feature of this crate in
+//! future releases.
 //!
 //! > *Important:* The probes are internally registered with the DTrace kernel
 //! module, making them visible via `dtrace(1M)`. This is done when an `HttpServer`
@@ -540,15 +543,11 @@
 // Clippy's style advice is definitely valuable, but not worth the trouble for
 // automated enforcement.
 #![allow(clippy::style)]
-// The `usdt` crate requires nightly, enabled if our consumer is enabling
+// The `usdt` crate may require nightly, enabled if our consumer is enabling
 // DTrace probes.
-#![cfg_attr(all(feature = "usdt-probes", not(usdt_stable_asm)), feature(asm))]
+#![cfg_attr(all(feature = "usdt-probes", usdt_need_asm), feature(asm))]
 #![cfg_attr(
-    all(
-        feature = "usdt-probes",
-        target_os = "macos",
-        not(usdt_stable_asm_sym)
-    ),
+    all(feature = "usdt-probes", target_os = "macos", usdt_need_asm_sym),
     feature(asm_sym)
 )]
 
