@@ -14,7 +14,6 @@ use hyper::Body;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 /// Our context is simply the root of the directory we want to serve.
 struct FileServerContext {

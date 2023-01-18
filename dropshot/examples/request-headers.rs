@@ -19,7 +19,6 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

@@ -4,7 +4,6 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 fn main() -> Result<(), String> {
     // Build a description of the API.

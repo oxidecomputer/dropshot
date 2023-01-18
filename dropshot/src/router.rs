@@ -738,7 +738,6 @@ mod test {
     use hyper::Response;
     use serde::Deserialize;
     use std::collections::BTreeMap;
-    use std::sync::Arc;
 
     async fn test_handler(
         _: RequestContext<()>,

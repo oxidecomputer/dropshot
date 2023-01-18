@@ -35,7 +35,6 @@ use std::collections::BTreeMap;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::ops::Bound;
-use std::sync::Arc;
 
 /// Object returned by our paginated endpoint
 ///

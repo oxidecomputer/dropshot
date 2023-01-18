@@ -20,7 +20,6 @@ use serde::Serialize;
 use std::io::Write;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use tempfile::NamedTempFile;
 
 // This function would not be used in a normal application. It is used to

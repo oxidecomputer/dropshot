@@ -5,8 +5,6 @@
 //! documentation generators; Dropshot's tag policies are intended to make
 //! proper tagging innate.
 
-use std::sync::Arc;
-
 use dropshot::{
     endpoint, ApiDescription, ConfigLogging, ConfigLoggingLevel,
     EndpointTagPolicy, HttpError, HttpResponseOk, HttpServerStarter,

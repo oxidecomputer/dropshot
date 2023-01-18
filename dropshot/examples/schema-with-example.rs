@@ -7,7 +7,6 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 // Define 2 structs here - Bar is nested inside Foo and should result in an
 // example that looks like:

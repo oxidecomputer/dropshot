@@ -1114,7 +1114,6 @@ mod test {
     use serde::Deserialize;
     use std::collections::HashSet;
     use std::str::from_utf8;
-    use std::sync::Arc;
 
     use crate as dropshot; // for "endpoint" macro
 

@@ -13,7 +13,6 @@ use http::{Response, StatusCode};
 use hyper::Body;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

@@ -50,7 +50,6 @@ use hyper::Response;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::sync::Arc;
 use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;

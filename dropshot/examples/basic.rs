@@ -17,7 +17,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

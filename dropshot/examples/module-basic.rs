@@ -79,7 +79,6 @@ pub mod routes {
     use dropshot::RequestContext;
     use dropshot::TypedBody;
     use std::sync::atomic::Ordering;
-    use std::sync::Arc;
 
     /// Fetch the current value of the counter.
     /// NOTE: The endpoint macro inherits its module visibility from
