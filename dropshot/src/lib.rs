@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
 //!
@@ -216,10 +216,8 @@
 //! ) -> Result<HttpResponse*, HttpError>
 //! ```
 //!
-//! Other than the RequestContext, parameters may appear in any order.
-//!
-//! The `Context` type is caller-provided context which is provided when
-//! the server is created.
+//! The `RequestContext` must appear first.  The `Context` type is
+//! caller-provided context which is provided when the server is created.
 //!
 //! The types `Query`, `Path`, `TypedBody`, and `UntypedBody` are called
 //! **Extractors** because they cause information to be pulled out of the request
@@ -236,10 +234,14 @@
 //!   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
 //! * [`UntypedBody`] extracts the raw bytes of the request body.
 //!
-//! If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
-//! `UntypedBody`, and the corresponding extraction cannot be completed, the
-//! request fails with status code 400 and an error message reflecting a
-//! validation error.
+//! `Query` and `Path` impl `SharedExtractor`.  `TypedBody` and `UntypedBody`
+//! impl `ExclusiveExtractor`.  Your function may accept 0-3 extractors, but
+//! only one can be `ExclusiveExtractor`, and it must be the last one.
+//! Otherwise, the order of extractor arguments does not matter.
+//!
+//! If the handler accepts any extractors and the corresponding extraction
+//! cannot be completed, the request fails with status code 400 and an error
+//! message reflecting the error (usually a validation error).
 //!
 //! As with any serde-deserializable type, you can make fields optional by having
 //! the corresponding property of the type be an `Option`.  Here's an example of
@@ -626,10 +628,11 @@ pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
-pub use extractor::Extractor;
+pub use extractor::ExclusiveExtractor;
 pub use extractor::ExtractorMetadata;
 pub use extractor::Path;
 pub use extractor::Query;
+pub use extractor::SharedExtractor;
 pub use extractor::TypedBody;
 pub use extractor::UntypedBody;
 pub use handler::http_response_found;

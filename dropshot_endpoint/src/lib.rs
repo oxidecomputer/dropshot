@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
 //! This package defines macro attributes associated with HTTP handlers. These
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
@@ -139,7 +139,7 @@ fn do_endpoint(
 ///
 /// The first argument still must be an `Arc<RequestContext<_>>`.
 ///
-/// The second argument passed to the handler function must be a
+/// The last argument passed to the handler function must be a
 /// [`dropshot::WebsocketConnection`].
 ///
 /// The function must return a [`dropshot::WebsocketChannelResult`] (which is
@@ -171,7 +171,7 @@ fn do_channel(
     } = from_tokenstream(&attr)?;
     match protocol {
         ChannelProtocol::WEBSOCKETS => {
-            // here we construct a wrapper function and mutate the arguments a bit
+            // Here we construct a wrapper function and mutate the arguments a bit
             // for the outer layer: we replace WebsocketConnection, which is not
             // an extractor, with WebsocketUpgrade, which is.
             let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
@@ -189,7 +189,7 @@ fn do_channel(
                     }
                 })
                 .collect();
-            let found = sig.inputs.iter_mut().nth(1).and_then(|arg| {
+            let found = sig.inputs.iter_mut().last().and_then(|arg| {
                 if let syn::FnArg::Typed(syn::PatType { pat, ty, .. }) = arg {
                     if let syn::Pat::Ident(syn::PatIdent {
                         ident,
@@ -215,7 +215,7 @@ fn do_channel(
             if found.is_none() {
                 return Err(Error::new_spanned(
                     &attr,
-                    "An argument of type dropshot::WebsocketConnection must be provided immediately following Arc<RequestContext<T>>.",
+                    "An argument of type dropshot::WebsocketConnection must be provided last.",
                 ));
             }
 
@@ -416,8 +416,8 @@ fn do_endpoint_inner(
     // When the user attaches this proc macro to a function with the wrong type
     // signature, the resulting errors can be deeply inscrutable. To attempt to
     // make failures easier to understand, we inject code that asserts the types
-    // of the various parameters. We do this by calling a dummy function that
-    // requires a type that satisfies the trait Extractor.
+    // of the various parameters. We do this by calling dummy functions that
+    // require a type that satisfies SharedExtractor or ExclusiveExtractor.
     let mut arg_types = Vec::new();
     let mut arg_is_receiver = false;
     let param_checks = ast
@@ -445,16 +445,31 @@ fn do_endpoint_inner(
                                 struct NeedRequestContext(<#ty as #dropshot::RequestContextArgument>::Context);
                             };
                         }
-                    } else {
-                        // Subsequent parameters must implement Extractor.
+                    } else if index < ast.sig.inputs.len() - 1 {
+                        // Subsequent parameters aside from the last one must
+                        // impl SharedExtractor.
                         quote_spanned! { span=>
                             const _: fn() = || {
-                                fn need_extractor<T>()
+                                fn need_shared_extractor<T>()
                                 where
-                                    T: ?Sized + #dropshot::Extractor,
+                                    T: ?Sized + #dropshot::SharedExtractor,
                                 {
                                 }
-                                need_extractor::<#ty>();
+                                need_shared_extractor::<#ty>();
+                            };
+                        }
+                    } else {
+                        // The final parameter must impl ExclusiveExtractor.
+                        // (It's okay if it's another SharedExtractor.  Those
+                        // impl ExclusiveExtractor, too.)
+                        quote_spanned! { span=>
+                            const _: fn() = || {
+                                fn need_exclusive_extractor<T>()
+                                where
+                                    T: ?Sized + #dropshot::ExclusiveExtractor,
+                                {
+                                }
+                                need_exclusive_extractor::<#ty>();
                             };
                         }
                     }
@@ -936,12 +951,12 @@ mod tests {
                 struct NeedRequestContext(<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
-                fn need_extractor<T>()
+                fn need_exclusive_extractor<T>()
                 where
-                    T: ?Sized + dropshot::Extractor,
+                    T: ?Sized + dropshot::ExclusiveExtractor,
                 {
                 }
-                need_extractor::<Query<Q> >();
+                need_exclusive_extractor::<Query<Q> >();
             };
             const _: fn() = || {
                 trait ResultTrait {
@@ -1042,12 +1057,12 @@ mod tests {
                 struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
-                fn need_extractor<T>()
+                fn need_exclusive_extractor<T>()
                 where
-                    T: ?Sized + dropshot::Extractor,
+                    T: ?Sized + dropshot::ExclusiveExtractor,
                 {
                 }
-                need_extractor::<Query<Q> >();
+                need_exclusive_extractor::<Query<Q> >();
             };
             const _: fn() = || {
                 trait ResultTrait {

@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Test cases for the "demo" handlers.  These handlers exercise various
 //! supported configurations of the HTTP handler interface.  We exercise them
 //! here to make sure that even if these aren't used at a given point, they still
@@ -966,8 +966,8 @@ pub struct DemoUntypedQuery {
 }]
 async fn demo_handler_untyped_body(
     _rqctx: Arc<RequestContext<usize>>,
-    body: UntypedBody,
     query: Query<DemoUntypedQuery>,
+    body: UntypedBody,
 ) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
     let nbytes = body.as_bytes().len();
     let as_utf8 = if query.into_inner().parse_str.unwrap_or(false) {

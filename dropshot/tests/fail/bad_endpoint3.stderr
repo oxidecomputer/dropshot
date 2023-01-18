@@ -1,41 +1,35 @@
-error[E0277]: the trait bound `String: Extractor` is not satisfied
-  --> tests/fail/bad_endpoint3.rs:17:12
+error[E0277]: the trait bound `String: SharedExtractor` is not satisfied
+  --> tests/fail/bad_endpoint3.rs:18:12
    |
-17 |     param: String,
-   |            ^^^^^^ the trait `Extractor` is not implemented for `String`
+18 |     param: String,
+   |            ^^^^^^ the trait `SharedExtractor` is not implemented for `String`
    |
-   = help: the following other types implement trait `Extractor`:
-             ()
-             (T1, T2)
-             (T1, T2, T3)
-             (T1,)
-             TypedBody<BodyType>
-             UntypedBody
-             WebsocketUpgrade
+   = help: the following other types implement trait `SharedExtractor`:
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
-note: required by a bound in `need_extractor`
-  --> tests/fail/bad_endpoint3.rs:11:1
+   = note: required for `String` to implement `ExclusiveExtractor`
+note: required by a bound in `need_exclusive_extractor`
+  --> tests/fail/bad_endpoint3.rs:12:1
    |
-11 | / #[endpoint {
-12 | |     method = GET,
-13 | |     path = "/test",
-14 | | }]
-   | |__^ required by this bound in `need_extractor`
+12 | / #[endpoint {
+13 | |     method = GET,
+14 | |     path = "/test",
+15 | | }]
+   | |__^ required by this bound in `need_exclusive_extractor`
 ...
-17 |       param: String,
+18 |       param: String,
    |              ------ required by a bound in this
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(Arc<RequestContext<()>>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
-  --> tests/fail/bad_endpoint3.rs:15:10
+  --> tests/fail/bad_endpoint3.rs:16:10
    |
-11 | / #[endpoint {
-12 | |     method = GET,
-13 | |     path = "/test",
-14 | | }]
+12 | / #[endpoint {
+13 | |     method = GET,
+14 | |     path = "/test",
+15 | | }]
    | |__- required by a bound introduced by this call
-15 |   async fn bad_endpoint(
+16 |   async fn bad_endpoint(
    |            ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(Arc<RequestContext<()>>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<bad_endpoint> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_endpoint}`
    |
 note: required by a bound in `ApiEndpoint::<Context>::new`

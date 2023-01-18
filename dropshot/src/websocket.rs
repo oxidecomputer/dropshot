@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Implements websocket upgrades as an Extractor for use in API route handler
 //! parameters to indicate that the given endpoint is meant to be upgraded to
 //! a websocket.
@@ -8,8 +8,8 @@
 
 use crate::api_description::ExtensionMode;
 use crate::{
-    ApiEndpointBodyContentType, Extractor, ExtractorMetadata, HttpError,
-    RequestContext, ServerContext,
+    ApiEndpointBodyContentType, ExclusiveExtractor, ExtractorMetadata,
+    HttpError, RequestContext, ServerContext,
 };
 use async_trait::async_trait;
 use base64::Engine;
@@ -23,10 +23,10 @@ use serde_json::json;
 use sha1::{Digest, Sha1};
 use slog::Logger;
 use std::future::Future;
-use std::sync::Arc;
 
-/// WebsocketUpgrade is an Extractor used to upgrade and handle an HTTP request
-/// as a websocket when present in a Dropshot endpoint's function arguments.
+/// WebsocketUpgrade is an ExclusiveExtractor used to upgrade and handle an HTTP
+/// request as a websocket when present in a Dropshot endpoint's function
+/// arguments.
 ///
 /// The consumer of this must call [WebsocketUpgrade::handle] for the connection
 /// to be upgraded. (This is done for you by `#[channel]`.)
@@ -44,7 +44,7 @@ pub type WebsocketChannelResult =
 /// [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
 pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 
-/// The upgraded connection passed as the second argument to the websocket
+/// The upgraded connection passed as the last argument to the websocket
 /// handler function. [`WebsocketConnection::into_inner`] can be used to
 /// access the raw upgraded connection, for passing to any implementation
 /// of the websockets protocol.
@@ -80,13 +80,13 @@ fn derive_accept_key(request_key: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(&sha1.finalize())
 }
 
-/// This `Extractor` implementation constructs an instance of `WebsocketUpgrade`
-/// from an HTTP request, and returns an error if the given request does not
-/// contain websocket upgrade headers.
+/// This `ExclusiveExtractor` implementation constructs an instance of
+/// `WebsocketUpgrade` from an HTTP request, and returns an error if the given
+/// request does not contain websocket upgrade headers.
 #[async_trait]
-impl Extractor for WebsocketUpgrade {
+impl ExclusiveExtractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
-        rqctx: Arc<RequestContext<Context>>,
+        rqctx: &RequestContext<Context>,
     ) -> Result<Self, HttpError> {
         let request = &mut *rqctx.request.lock().await;
 
@@ -192,8 +192,8 @@ impl WebsocketUpgrade {
     /// #[dropshot::endpoint { method = GET, path = "/my/ws/endpoint/{id}" }]
     /// async fn my_ws_endpoint(
     ///     rqctx: std::sync::Arc<dropshot::RequestContext<()>>,
-    ///     websock: dropshot::WebsocketUpgrade,
     ///     id: dropshot::Path<String>,
+    ///     websock: dropshot::WebsocketUpgrade,
     /// ) -> dropshot::WebsocketEndpointResult {
     ///     let logger = rqctx.log.new(slog::o!());
     ///     websock.handle(move |upgraded| async move {
@@ -297,7 +297,9 @@ impl JsonSchema for WebsocketUpgrade {
 mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
-    use crate::{Extractor, HttpError, RequestContext, WebsocketUpgrade};
+    use crate::{
+        ExclusiveExtractor, HttpError, RequestContext, WebsocketUpgrade,
+    };
     use futures::lock::Mutex;
     use http::Request;
     use hyper::Body;
@@ -308,7 +310,7 @@ mod tests {
 
     async fn ws_upg_from_mock_rqctx() -> Result<WebsocketUpgrade, HttpError> {
         let log = slog::Logger::root(slog::Discard, slog::o!()).new(slog::o!());
-        let fut = WebsocketUpgrade::from_request(Arc::new(RequestContext {
+        let rqctx = RequestContext {
             server: Arc::new(DropshotState {
                 private: (),
                 config: ServerConfig {
@@ -340,7 +342,8 @@ mod tests {
             body_content_type: Default::default(),
             request_id: "".to_string(),
             log: log.clone(),
-        }));
+        };
+        let fut = WebsocketUpgrade::from_request(&rqctx);
         tokio::time::timeout(Duration::from_secs(1), fut)
             .await
             .expect("Deadlocked in WebsocketUpgrade constructor")
