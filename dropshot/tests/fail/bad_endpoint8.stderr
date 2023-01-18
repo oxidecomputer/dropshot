@@ -5,6 +5,7 @@ error: Endpoint handlers must have the following signature:
                [path_params: Path<P>,]
                [body_param: TypedBody<J>,]
                [body_param: UntypedBody<J>,]
+               [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
   --> tests/fail/bad_endpoint8.rs:19:1
    |

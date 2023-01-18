@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Interface for implementing HTTP endpoint handler functions.
 //!
 //! For information about supported endpoint function signatures, argument types,
@@ -85,23 +85,22 @@ pub struct RequestContext<Context: ServerContext> {
     pub log: Logger,
 
     /// basic request information (method, URI, etc.)
-    pub request: RequestHeader,
+    pub request: RequestInfo,
 }
 
 // This is deliberately as close to compatible with `hyper::Request` as
 // reasonable.
-// XXX-dap TODO This could use a better name.
 #[derive(Debug)]
-pub struct RequestHeader {
+pub struct RequestInfo {
     method: http::Method,
     uri: http::Uri,
     version: http::Version,
     headers: http::HeaderMap<http::HeaderValue>,
 }
 
-impl<B> From<&hyper::Request<B>> for RequestHeader {
+impl<B> From<&hyper::Request<B>> for RequestInfo {
     fn from(request: &hyper::Request<B>) -> Self {
-        RequestHeader {
+        RequestInfo {
             method: request.method().clone(),
             uri: request.uri().clone(),
             version: request.version().clone(),
@@ -110,13 +109,13 @@ impl<B> From<&hyper::Request<B>> for RequestHeader {
     }
 }
 
-impl<B> From<hyper::Request<B>> for RequestHeader {
+impl<B> From<hyper::Request<B>> for RequestInfo {
     fn from(request: hyper::Request<B>) -> Self {
         Self::from(&request)
     }
 }
 
-impl RequestHeader {
+impl RequestInfo {
     pub fn method(&self) -> &http::Method {
         &self.method
     }
@@ -131,6 +130,38 @@ impl RequestHeader {
 
     pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
         &self.headers
+    }
+
+    /// Returns a reference to the `RequestInfo` itself
+    ///
+    /// This is provided for source compatibility.  In previous versions of
+    /// Dropshot, `RequestContext.request` was an
+    /// `Arc<Mutex<hyper::Request<hyper::Body>>>`.  Now, it's just
+    /// `RequestInfo`, which provides many of the same functions as
+    /// `hyper::Request` does.  Consumers _should_ just use `rqctx.request`
+    /// instead of this function.
+    ///
+    /// For example, in previous versions of Dropshot, you might have:
+    ///
+    /// ```ignore
+    /// let request = rqctx.request.lock().await;
+    /// let headers = request.headers();
+    /// ```
+    ///
+    /// Now, you would do this:
+    ///
+    /// ```ignore
+    /// let headers = rqctx.request.headers();
+    /// ```
+    ///
+    /// This function allows the older code to continue to work.
+    #[deprecated(
+        since = "0.9.0",
+        note = "use `rqctx.request` directly instead of \
+            `rqctx.request.lock().await`"
+    )]
+    pub async fn lock(&self) -> &Self {
+        self
     }
 }
 

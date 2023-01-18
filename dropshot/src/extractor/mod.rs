@@ -1,6 +1,6 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
-//! Extractor trait
+//! Extractor-related traits
 //!
 //! See top-level crate documentation for details
 
@@ -31,13 +31,11 @@ use std::fmt::Debug;
 
 mod common;
 
-use crate::RequestHeader;
+use crate::RequestInfo;
 pub use common::ExclusiveExtractor;
 pub use common::ExtractorMetadata;
 pub use common::RequestExtractor;
 pub use common::SharedExtractor;
-
-// XXX-dap move these definitions to separate files?
 
 // Query: query string extractor
 
@@ -60,7 +58,7 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
 /// Given an HTTP request, pull out the query string and attempt to deserialize
 /// it as an instance of `QueryType`.
 fn http_request_load_query<QueryType>(
-    request: &RequestHeader,
+    request: &RequestInfo,
 ) -> Result<Query<QueryType>, HttpError>
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,

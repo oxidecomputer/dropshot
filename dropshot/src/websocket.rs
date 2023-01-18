@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Implements websocket upgrades as an Extractor for use in API route handler
 //! parameters to indicate that the given endpoint is meant to be upgraded to
 //! a websocket.
@@ -12,6 +12,7 @@ use crate::{
     HttpError, RequestContext, ServerContext,
 };
 use async_trait::async_trait;
+use base64::Engine;
 use http::header;
 use http::Response;
 use http::StatusCode;
@@ -43,7 +44,7 @@ pub type WebsocketChannelResult =
 /// [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
 pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 
-/// The upgraded connection passed as the second argument to the websocket
+/// The upgraded connection passed as the last argument to the websocket
 /// handler function. [`WebsocketConnection::into_inner`] can be used to
 /// access the raw upgraded connection, for passing to any implementation
 /// of the websockets protocol.
@@ -67,7 +68,8 @@ struct WebsocketUpgradeInner {
     ws_log: Logger,
 }
 
-// Borrowed from tungstenite-0.17.3 (rather than taking a whole dependency for this one function)
+// Originally copied from tungstenite-0.17.3 (rather than taking a whole
+// dependency for this one function).
 fn derive_accept_key(request_key: &[u8]) -> String {
     // ... field is constructed by concatenating /key/ ...
     // ... with the string "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" (RFC 6455)
@@ -75,7 +77,7 @@ fn derive_accept_key(request_key: &[u8]) -> String {
     let mut sha1 = Sha1::default();
     sha1.update(request_key);
     sha1.update(WS_GUID);
-    base64::encode(&sha1.finalize())
+    base64::engine::general_purpose::STANDARD.encode(&sha1.finalize())
 }
 
 /// This `ExclusiveExtractor` implementation constructs an instance of
@@ -295,7 +297,7 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, RequestHeader,
+        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
         WebsocketUpgrade,
     };
     use http::Request;
@@ -330,7 +332,7 @@ mod tests {
                 ),
                 tls_acceptor: None,
             }),
-            request: RequestHeader::from(&request),
+            request: RequestInfo::from(&request),
             path_variables: Default::default(),
             body_content_type: Default::default(),
             request_id: "".to_string(),

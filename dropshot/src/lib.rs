@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
 //!
@@ -213,17 +213,16 @@
 //!      [path_params: Path<P>,]
 //!      [body_param: TypedBody<J>,]
 //!      [body_param: UntypedBody<J>,]
+//!      [raw_request: RawRequest,]
 //! ) -> Result<HttpResponse*, HttpError>
 //! ```
 //!
-//! Other than the RequestContext, parameters may appear in any order.
+//! The `RequestContext` must appear first.  The `Context` type is
+//! caller-provided context which is provided when the server is created.
 //!
-//! The `Context` type is caller-provided context which is provided when
-//! the server is created.
-//!
-//! The types `Query`, `Path`, `TypedBody`, and `UntypedBody` are called
-//! **Extractors** because they cause information to be pulled out of the request
-//! and made available to the handler function.
+//! The types `Query`, `Path`, `TypedBody`, `UntypedBody`, and `RawRequest` are
+//! called **Extractors** because they cause information to be pulled out of the
+//! request and made available to the handler function.
 //!
 //! * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
 //!   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
@@ -235,11 +234,18 @@
 //!   body as JSON (or form/url-encoded) and deserializing it into an instance
 //!   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
 //! * [`UntypedBody`] extracts the raw bytes of the request body.
+//! * [`RawRequest`] provides access to the underlying [`hyper::Request`].  The
+//!   hope is that this would generally not be needed.  It can be useful to
+//!   implement functionality not provided by Dropshot.
 //!
-//! If the handler takes a `Query<Q>`, `Path<P>`, `TypedBody<J>`, or
-//! `UntypedBody`, and the corresponding extraction cannot be completed, the
-//! request fails with status code 400 and an error message reflecting a
-//! validation error.
+//! `Query` and `Path` impl `SharedExtractor`.  `TypedBody`, `UntypedBody`, and
+//! `RawRequest` impl `ExclusiveExtractor`.  Your function may accept 0-3
+//! extractors, but only one can be `ExclusiveExtractor`, and it must be the
+//! last one.  Otherwise, the order of extractor arguments does not matter.
+//!
+//! If the handler accepts any extractors and the corresponding extraction
+//! cannot be completed, the request fails with status code 400 and an error
+//! message reflecting the error (usually a validation error).
 //!
 //! As with any serde-deserializable type, you can make fields optional by having
 //! the corresponding property of the type be an `Option`.  Here's an example of
@@ -502,14 +508,15 @@
 //! Dropshot optionally exposes two DTrace probes, `request_start` and
 //! `request_finish`. These provide detailed information about each request,
 //! such as their ID, the local and remote IPs, and the response information.
-//! See the [`RequestInfo`] and [`ResponseInfo`] types for a complete listing
-//! of what's available.
+//! See the dropshot::dtrace::RequestInfo` and `dropshot::dtrace::ResponseInfo`
+//! types for a complete listing of what's available.
 //!
-//! These probes are implemented via the [`usdt`] crate. They require a nightly
-//! toolchain if built on MacOS (which requires the unstable `asm_sym` feature).
-//! Otherwise a stable compiler >= v1.59 is required in order to present the
-//! necessary features.  Given these constraints, usdt functionality is behind
-//! the feature flag `"usdt-probes"`.
+//! These probes are implemented via the [`usdt`] crate. They may require a
+//! nightly toolchain if built on macOS prior to Rust version 1.66. Otherwise a
+//! stable compiler >= v1.59 is required in order to present the necessary
+//! features. Given these constraints, USDT functionality is behind the feature
+//! flag `"usdt-probes"`, which may become a default feature of this crate in
+//! future releases.
 //!
 //! > *Important:* The probes are internally registered with the DTrace kernel
 //! module, making them visible via `dtrace(1M)`. This is done when an `HttpServer`
@@ -540,57 +547,17 @@
 // Clippy's style advice is definitely valuable, but not worth the trouble for
 // automated enforcement.
 #![allow(clippy::style)]
-// The `usdt` crate requires nightly, enabled if our consumer is enabling
+// The `usdt` crate may require nightly, enabled if our consumer is enabling
 // DTrace probes.
-#![cfg_attr(all(feature = "usdt-probes", not(usdt_stable_asm)), feature(asm))]
+#![cfg_attr(all(feature = "usdt-probes", usdt_need_asm), feature(asm))]
 #![cfg_attr(
-    all(
-        feature = "usdt-probes",
-        target_os = "macos",
-        not(usdt_stable_asm_sym)
-    ),
+    all(feature = "usdt-probes", target_os = "macos", usdt_need_asm_sym),
     feature(asm_sym)
 )]
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub(crate) struct RequestInfo {
-    id: String,
-    local_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
-    method: String,
-    path: String,
-    query: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub(crate) struct ResponseInfo {
-    id: String,
-    local_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
-    status_code: u16,
-    message: String,
-}
-
-#[cfg(feature = "usdt-probes")]
-#[usdt::provider(provider = "dropshot")]
-mod probes {
-    use crate::{RequestInfo, ResponseInfo};
-    fn request__start(_: &RequestInfo) {}
-    fn request__done(_: &ResponseInfo) {}
-}
-
-/// The result of registering a server's DTrace USDT probes.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ProbeRegistration {
-    /// The probes are explicitly disabled at compile time.
-    Disabled,
-
-    /// Probes were successfully registered.
-    Succeeded,
-
-    /// Registration failed, with an error message explaining the cause.
-    Failed(String),
-}
+// The macro used to define DTrace probes needs to be defined before anything
+// that might use it.
+mod dtrace;
 
 mod api_description;
 mod config;
@@ -627,6 +594,7 @@ pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
+pub use dtrace::ProbeRegistration;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
 pub use extractor::ExclusiveExtractor;
@@ -654,7 +622,7 @@ pub use handler::HttpResponseTemporaryRedirect;
 pub use handler::HttpResponseUpdatedNoContent;
 pub use handler::NoHeaders;
 pub use handler::RequestContext;
-pub use handler::RequestHeader;
+pub use handler::RequestInfo;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_NDJSON;
 pub use http_util::CONTENT_TYPE_OCTET_STREAM;

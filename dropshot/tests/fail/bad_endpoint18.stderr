@@ -1,0 +1,19 @@
+error[E0277]: the trait bound `Arc<RequestContext<()>>: RequestContextArgument` is not satisfied
+  --> tests/fail/bad_endpoint18.rs:27:13
+   |
+27 |     _rqctx: Arc<RequestContext<()>>,
+   |             ^^^ the trait `RequestContextArgument` is not implemented for `Arc<RequestContext<()>>`
+   |
+   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+
+error[E0277]: the trait bound `Arc<RequestContext<()>>: RequestContextArgument` is not satisfied
+  --> tests/fail/bad_endpoint18.rs:22:1
+   |
+22 | / #[endpoint {
+23 | |     method = GET,
+24 | |     path = "/test",
+25 | | }]
+   | |__^ the trait `RequestContextArgument` is not implemented for `Arc<RequestContext<()>>`
+   |
+   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+   = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)

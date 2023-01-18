@@ -1,6 +1,4 @@
-// Copyright 2022 Oxide Computer Company
-
-// XXX-dap TODO-cleanup should the metadata into a separate, shared trait?
+// Copyright 2023 Oxide Computer Company
 
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
@@ -72,21 +70,27 @@ impl<S: SharedExtractor> ExclusiveExtractor for S {
 
 /// Top-level extractor for a given request
 ///
-/// During request handling, we wind up needing to call a function with a
-/// variable number of arguments whose types are all extractors (either
-/// `SharedExtractor` or `ExclusiveExtractor`).  We achieve this with a separate
-/// type called `RequestExtractor` that looks just like `ExclusiveExtractor`.
-/// We can impl this trait on a tuple of any number of types that themselves
-/// impl `SharedExtractor` or `ExclusiveExtractor` by delegating to each type's
-/// extractor implementation.  There may be at most one `ExclusiveExtractor` in
-/// the tuple.  We require it to be the last argument just to avoid having to
-/// define the power set of impls.
+/// During request handling, we must find and invoke the appropriate
+/// consumer-defined handler function.  While each of these functions takes a
+/// fixed number of arguments, different handler functions may take a different
+/// number of arguments.  The arguments that can vary between handler functions
+/// are all extractors, meaning that they impl `SharedExtractor` or
+/// `ExclusiveExtractor`.
 ///
-/// In practice, `RequestExtractor` is identical to `ExclusiveExtractor`.  But
-/// we use them in different ways.  `RequestExtractor` is private, only
-/// implemented on tuple types, and only used to kick off extraction.
-/// `ExclusiveExtractor` can be consumer-defined and would generally not be
-/// implemented on tuple types.
+/// This trait helps us invoke various handler functions uniformly, despite them
+/// accepting different arguments.  To achieve this, we impl this trait for all
+/// supported _tuples_ of argument types, which is essentially 0 or more
+/// `SharedExtractor`s followed by at most one `ExclusiveExtractor`.  This impl
+/// essentially does the same thing as any other extractor, and it does it by
+/// delegating to the impls of each tuple member.
+///
+/// In practice, the trait `RequestExtractor` is identical to
+/// `ExclusiveExtractor` and we could use `ExclusiveExtractor` directly.  But
+/// it's clearer to use distinct types, since they're used differently.  To
+/// summarize: `RequestExtractor` is private, only implemented on tuple types,
+/// and only used to kick off extraction from the top level.
+/// `ExclusiveExtractor` s public, implementing types can be consumer-defined,
+/// and it would generally not be implemented on tuple types.
 #[async_trait]
 pub trait RequestExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
@@ -137,16 +141,16 @@ impl<X: ExclusiveExtractor + 'static> RequestExtractor for (X,) {
     }
 }
 
-// XXX-dap TODO-doc update comment based on the change that uses the fact that
-// SharedExtractor impls ExclusiveExtractor such that the last item in the
-// tuple *must* be an exclusive extractor
 /// Defines implementations of `RequestExtractor` for tuples of one or more
 /// `SharedExtractor` followed by an `ExclusiveExtractor`
 ///
 /// As an example, `impl_rqextractor_for_tuple!(S1, S2)` defines an impl of
 /// `RequestExtractor` for tuple `(S1, S2, X)` where `S1: SharedExtractor`,
-/// `S2: SharedExtractor`, and `X: ExclusiveExtractor`, as well as a similar
-/// impl for just `(S1, S2)`.
+/// `S2: SharedExtractor`, and `X: ExclusiveExtractor`.  Note that any
+/// `SharedExtractor` also impls `ExclusiveExtractor`, so it's not necessary to
+/// impl this separately for `(S1, S2, S3)` (and indeed that would not be
+/// possible, since it would overlap with the definition for `(S1, S2, X)`, even
+/// if `SharedExtractor` did not impl `ExclusiveExtractor`).
 macro_rules! impl_rqextractor_for_tuple {
     ($( $S:ident),+) => {
 

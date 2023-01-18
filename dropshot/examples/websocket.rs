@@ -62,8 +62,8 @@ struct QueryParams {
 }]
 async fn example_api_websocket_counter(
     _rqctx: RequestContext<()>,
-    upgraded: WebsocketConnection,
     qp: Query<QueryParams>,
+    upgraded: WebsocketConnection,
 ) -> dropshot::WebsocketChannelResult {
     let mut ws = tokio_tungstenite::WebSocketStream::from_raw_socket(
         upgraded.into_inner(),
