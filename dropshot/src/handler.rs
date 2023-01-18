@@ -124,8 +124,8 @@ impl RequestInfo {
         &self.uri
     }
 
-    pub fn version(&self) -> &http::Version {
-        &self.version
+    pub fn version(&self) -> http::Version {
+        self.version
     }
 
     pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
