@@ -44,7 +44,7 @@ pub type WebsocketChannelResult =
 /// [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
 pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 
-/// The upgraded connection passed as the second argument to the websocket
+/// The upgraded connection passed as the last argument to the websocket
 /// handler function. [`WebsocketConnection::into_inner`] can be used to
 /// access the raw upgraded connection, for passing to any implementation
 /// of the websockets protocol.

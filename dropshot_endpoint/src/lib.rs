@@ -140,7 +140,7 @@ fn do_endpoint(
 ///
 /// The first argument still must be an `Arc<RequestContext<_>>`.
 ///
-/// The second argument passed to the handler function must be a
+/// The last argument passed to the handler function must be a
 /// [`dropshot::WebsocketConnection`].
 ///
 /// The function must return a [`dropshot::WebsocketChannelResult`] (which is
@@ -174,8 +174,7 @@ fn do_channel(
         ChannelProtocol::WEBSOCKETS => {
             // Here we construct a wrapper function and mutate the arguments a bit
             // for the outer layer: we replace WebsocketConnection, which is not
-            // an extractor, with WebsocketUpgrade, which is.  We also move it
-            // to the end.
+            // an extractor, with WebsocketUpgrade, which is.
             let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
                 syn::parse2(item)?;
 
@@ -191,7 +190,7 @@ fn do_channel(
                     }
                 })
                 .collect();
-            let found = sig.inputs.iter_mut().nth(1).and_then(|arg| {
+            let found = sig.inputs.iter_mut().last().and_then(|arg| {
                 if let syn::FnArg::Typed(syn::PatType { pat, ty, .. }) = arg {
                     if let syn::Pat::Ident(syn::PatIdent {
                         ident,
@@ -217,23 +216,9 @@ fn do_channel(
             if found.is_none() {
                 return Err(Error::new_spanned(
                     &attr,
-                    "An argument of type dropshot::WebsocketConnection must be provided immediately following Arc<RequestContext<T>>.",
+                    "An argument of type dropshot::WebsocketConnection must be provided last.",
                 ));
             }
-
-            // Historically, we required that the `WebsocketConnection` argument
-            // be first after the `RequestContext`.  However, we also require
-            // that any exclusive extractor (which includes the
-            // `WebsocketUpgrade` argument that we put in its place) appears
-            // last.  We replaced the type above, but now we need to put it in
-            // the right spot.
-            sig.inputs = {
-                let mut input_pairs =
-                    sig.inputs.clone().into_pairs().collect::<Vec<_>>();
-                let second_pair = input_pairs.remove(1);
-                input_pairs.push(second_pair);
-                input_pairs.into_iter().collect()
-            };
 
             sig.output =
                 syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))?;
