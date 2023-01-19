@@ -14,7 +14,7 @@ cargo --version
 rustc --version
 
 banner build
-ptime -m cargo build --locked --all-targets --verbose
+ptime -m cargo build --all-features --locked --all-targets --verbose
 
 banner test
-ptime -m cargo test --locked --verbose
+ptime -m cargo test --all-features --locked --verbose
