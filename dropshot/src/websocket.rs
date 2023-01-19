@@ -87,9 +87,8 @@ fn derive_accept_key(request_key: &[u8]) -> String {
 impl ExclusiveExtractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
     ) -> Result<Self, HttpError> {
-        let request = &mut *rqctx.request.lock().await;
-
         if !request
             .headers()
             .get(header::CONNECTION)
@@ -298,9 +297,9 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, WebsocketUpgrade,
+        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
+        WebsocketUpgrade,
     };
-    use futures::lock::Mutex;
     use http::Request;
     use hyper::Body;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
@@ -310,6 +309,13 @@ mod tests {
 
     async fn ws_upg_from_mock_rqctx() -> Result<WebsocketUpgrade, HttpError> {
         let log = slog::Logger::root(slog::Discard, slog::o!()).new(slog::o!());
+        let request = Request::builder()
+            .header(http::header::CONNECTION, "Upgrade")
+            .header(http::header::UPGRADE, "websocket")
+            .header(http::header::SEC_WEBSOCKET_VERSION, "13")
+            .header(http::header::SEC_WEBSOCKET_KEY, "aGFjayB0aGUgcGxhbmV0IQ==")
+            .body(Body::empty())
+            .unwrap();
         let rqctx = RequestContext {
             server: Arc::new(DropshotState {
                 private: (),
@@ -326,24 +332,13 @@ mod tests {
                 ),
                 tls_acceptor: None,
             }),
-            request: Arc::new(Mutex::new(
-                Request::builder()
-                    .header(http::header::CONNECTION, "Upgrade")
-                    .header(http::header::UPGRADE, "websocket")
-                    .header(http::header::SEC_WEBSOCKET_VERSION, "13")
-                    .header(
-                        http::header::SEC_WEBSOCKET_KEY,
-                        "aGFjayB0aGUgcGxhbmV0IQ==",
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )),
+            request: RequestInfo::from(&request),
             path_variables: Default::default(),
             body_content_type: Default::default(),
             request_id: "".to_string(),
             log: log.clone(),
         };
-        let fut = WebsocketUpgrade::from_request(&rqctx);
+        let fut = WebsocketUpgrade::from_request(&rqctx, request);
         tokio::time::timeout(Duration::from_secs(1), fut)
             .await
             .expect("Deadlocked in WebsocketUpgrade constructor")

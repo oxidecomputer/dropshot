@@ -1,13 +1,13 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
 use super::config::{ConfigDropshot, ConfigTls};
+#[cfg(feature = "usdt-probes")]
+use super::dtrace::probes;
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
-#[cfg(feature = "usdt-probes")]
-use super::probes;
 use super::router::HttpRouter;
 use super::ProbeRegistration;
 
@@ -38,6 +38,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
+use crate::RequestInfo;
 use slog::Logger;
 
 // TODO Replace this with something else?
@@ -678,7 +679,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     #[cfg(feature = "usdt-probes")]
     probes::request__start!(|| {
         let uri = request.uri();
-        crate::RequestInfo {
+        crate::dtrace::RequestInfo {
             id: request_id.clone(),
             local_addr: server.local_addr,
             remote_addr,
@@ -709,7 +710,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
             #[cfg(feature = "usdt-probes")]
             probes::request__done!(|| {
-                crate::ResponseInfo {
+                crate::dtrace::ResponseInfo {
                     id: request_id.clone(),
                     local_addr,
                     remote_addr,
@@ -736,7 +737,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
             #[cfg(feature = "usdt-probes")]
             probes::request__done!(|| {
-                crate::ResponseInfo {
+                crate::dtrace::ResponseInfo {
                     id: request_id.parse().unwrap(),
                     local_addr,
                     remote_addr,
@@ -770,13 +771,14 @@ async fn http_request_handle<C: ServerContext>(
         server.router.lookup_route(&method, uri.path().into())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request: Arc::new(Mutex::new(request)),
+        request: RequestInfo::from(&request),
         path_variables: lookup_result.variables,
         body_content_type: lookup_result.body_content_type,
         request_id: request_id.to_string(),
         log: request_log,
     };
-    let mut response = lookup_result.handler.handle_request(rqctx).await?;
+    let mut response =
+        lookup_result.handler.handle_request(rqctx, request).await?;
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),

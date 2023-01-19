@@ -86,6 +86,7 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody<J>,]
+        [raw_request: RawRequest,]
     ) -> Result<HttpResponse*, HttpError>";
 
 /// This attribute transforms a handler function into a Dropshot endpoint
