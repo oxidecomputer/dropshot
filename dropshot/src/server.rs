@@ -538,7 +538,7 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
     }
 }
 
-type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
+pub type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
 
 /// A running Dropshot HTTP server.
 ///
@@ -597,9 +597,7 @@ impl<C: ServerContext> HttpServer<C> {
     /// the shutdown to happen.
     ///
     /// To trigger a shutdown, Call [HttpServer::close] (which also awaits shutdown).
-    pub fn wait_for_shutdown(
-        &self,
-    ) -> impl FusedFuture<Output = Result<(), String>> {
+    pub fn wait_for_shutdown(&self) -> SharedBoxFuture<Result<(), String>> {
         self.join_future.clone()
     }
 
