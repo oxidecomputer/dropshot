@@ -637,6 +637,7 @@ pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
 pub use server::ServerContext;
+pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};
 pub use websocket::WebsocketChannelResult;
 pub use websocket::WebsocketConnection;
