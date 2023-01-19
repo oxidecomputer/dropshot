@@ -10,7 +10,6 @@ use dropshot::TypedBody;
 use dropshot::UntypedBody;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[allow(dead_code)]
 #[derive(Deserialize, JsonSchema)]
@@ -27,7 +26,7 @@ struct Stuff {
     path = "/test",
 }]
 async fn two_exclusive_extractors(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _param1: TypedBody<Stuff>,
     _param2: UntypedBody,
 ) -> Result<HttpResponseOk<()>, HttpError> {

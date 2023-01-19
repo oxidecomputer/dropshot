@@ -10,7 +10,6 @@ use dropshot::TypedBody;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[allow(dead_code)]
 #[derive(Deserialize, JsonSchema)]
@@ -24,7 +23,7 @@ struct Stuff {
     path = "/test",
 }]
 async fn exclusive_extractor_not_last(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _param1: TypedBody<Stuff>,
     _param2: Query<Stuff>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
