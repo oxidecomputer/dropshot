@@ -103,7 +103,7 @@ impl<B> From<&hyper::Request<B>> for RequestInfo {
         RequestInfo {
             method: request.method().clone(),
             uri: request.uri().clone(),
-            version: request.version().clone(),
+            version: request.version(),
             headers: request.headers().clone(),
         }
     }
