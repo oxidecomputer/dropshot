@@ -51,7 +51,7 @@ b. If that code is accessing other parts of the request (e.g., reading the body 
 * https://github.com/oxidecomputer/dropshot/pull/502[#502] Dropshot exposes a `refresh_tls` method to update the TLS certificates being used by a running server.
 +
 **What you need to do:** If you previously tried to access `DropshotState.tls`, you can access the `DropshotState.using_tls()` method instead.
-* https://github.com/oxidecomputer/dropshot/pull/540[#540] `ConfigDropshot` now uses a [`camino::Utf8PathBuf`](https://docs.rs/camino/1.1.1/camino/struct.Utf8PathBuf.html) for its file path. There is no change to the configuration format itself, just its representation in Rust.
+* https://github.com/oxidecomputer/dropshot/pull/540[#540] `ConfigDropshot` now uses a https://docs.rs/camino/1.1.1/camino/struct.Utf8PathBuf.html[`camino::Utf8PathBuf`] for its file path. There is no change to the configuration format itself, just its representation in Rust.
 
 We realize this was a lot of breaking changes.  We expect that most of these will affect few people (there don't seem to be a lot of custom extractor impls out there).  The rest are pretty mechanical.  We hope the result will be a safer, easier to use API.
 
