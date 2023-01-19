@@ -142,7 +142,7 @@ pub fn tls_key_to_buffer(
             contents: cert.0.clone(),
         });
         cert_writer
-            .write(encoded_cert.as_bytes())
+            .write_all(encoded_cert.as_bytes())
             .expect("failed to serialize cert");
     }
     drop(cert_writer);
@@ -153,7 +153,9 @@ pub fn tls_key_to_buffer(
         tag: "PRIVATE KEY".to_string(),
         contents: key.0.clone(),
     });
-    key_writer.write(encoded_key.as_bytes()).expect("failed to serialize key");
+    key_writer
+        .write_all(encoded_key.as_bytes())
+        .expect("failed to serialize key");
     drop(key_writer);
 
     (serialized_certs, serialized_key)
@@ -169,8 +171,8 @@ pub fn tls_key_to_file(
 
     let (certs, key) = tls_key_to_buffer(certs, key);
 
-    cert_file.write(certs.as_slice()).expect("Failed to write certs");
-    key_file.write(key.as_slice()).expect("Failed to write key");
+    cert_file.write_all(certs.as_slice()).expect("Failed to write certs");
+    key_file.write_all(key.as_slice()).expect("Failed to write key");
 
     (cert_file, key_file)
 }
