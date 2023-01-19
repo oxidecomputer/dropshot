@@ -27,7 +27,7 @@ pub fn test_setup(
 
     let logctx = create_log_context(test_name);
     let log = logctx.log.new(o!());
-    TestContext::new(api, 0 as usize, &config_dropshot, Some(logctx), log)
+    TestContext::new(api, 0_usize, &config_dropshot, Some(logctx), log)
 }
 
 pub fn create_log_context(test_name: &str) -> LogContext {

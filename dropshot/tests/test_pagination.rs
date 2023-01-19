@@ -614,7 +614,7 @@ async fn api_dictionary(
 ) -> Result<HttpResponseOk<ResultsPage<DictionaryWord>>, HttpError> {
     let pag_params = query.into_inner();
     let limit = rqctx.page_limit(&pag_params)?.get() as usize;
-    let dictionary: &BTreeSet<String> = &*WORD_LIST;
+    let dictionary: &BTreeSet<String> = &WORD_LIST;
 
     let (bound, scan_params) = match &pag_params.page {
         WhichPage::First(scan) => (Bound::Unbounded, scan),
@@ -782,7 +782,9 @@ struct ExampleContext {
 
 impl ExampleContext {
     fn cleanup_successful(&mut self) {
-        self.logctx.take().map(|l| l.cleanup_successful());
+        if let Some(l) = self.logctx.take() {
+            l.cleanup_successful()
+        }
     }
 }
 
