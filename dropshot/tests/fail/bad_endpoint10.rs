@@ -12,7 +12,7 @@ use std::sync::Arc;
     path = "/test",
 }]
 async fn bad_error_type(
-    _: Arc<RequestContext<()>>,
+    _: RequestContext<()>,
 ) -> Result<HttpResponseOk<()>, String> {
     Ok(HttpResponseOk(()))
 }

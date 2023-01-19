@@ -21,7 +21,7 @@ struct PathParams {
     path = "/assets/{stuff:.*}",
 }]
 async fn must_be_unpublished(
-    _: Arc<RequestContext<()>>,
+    _: RequestContext<()>,
     _: Path<PathParams>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     panic!()

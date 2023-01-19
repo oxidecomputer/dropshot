@@ -4,7 +4,7 @@ error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgum
 25 |     _params: Query<QueryParams>,
    |              ^^^^^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
    |
-   = help: the trait `RequestContextArgument` is implemented for `Arc<RequestContext<T>>`
+   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
 
 error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgument` is not satisfied
   --> tests/fail/bad_endpoint9.rs:20:1
@@ -15,5 +15,5 @@ error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgum
 23 | | }]
    | |__^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
    |
-   = help: the trait `RequestContextArgument` is implemented for `Arc<RequestContext<T>>`
+   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -5,8 +5,6 @@
 //! documentation generators; Dropshot's tag policies are intended to make
 //! proper tagging innate.
 
-use std::sync::Arc;
-
 use dropshot::{
     endpoint, ApiDescription, ConfigLogging, ConfigLoggingLevel,
     EndpointTagPolicy, HttpError, HttpResponseOk, HttpServerStarter,
@@ -19,7 +17,7 @@ use dropshot::{
     tags = ["simpsons"],
 }]
 async fn get_homerism(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     unimplemented!()
 }
@@ -30,7 +28,7 @@ async fn get_homerism(
     tags = ["simpsons"],
 }]
 async fn get_barneyism(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     unimplemented!()
 }
@@ -41,7 +39,7 @@ async fn get_barneyism(
     tags = ["futurama"],
 }]
 async fn get_fryism(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     unimplemented!()
 }

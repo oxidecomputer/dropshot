@@ -35,7 +35,6 @@ use std::collections::BTreeMap;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::ops::Bound;
-use std::sync::Arc;
 
 /// Object returned by our paginated endpoint
 ///
@@ -69,7 +68,7 @@ struct ProjectPage {
     path = "/projects"
 }]
 async fn example_list_projects(
-    rqctx: Arc<RequestContext<BTreeMap<String, Project>>>,
+    rqctx: RequestContext<BTreeMap<String, Project>>,
     query: Query<PaginationParams<EmptyScanParams, ProjectPage>>,
 ) -> Result<HttpResponseOk<ResultsPage<Project>>, HttpError> {
     let pag_params = query.into_inner();

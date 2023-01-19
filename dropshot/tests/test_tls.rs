@@ -344,7 +344,7 @@ pub struct TlsCheckArgs {
     path = "/",
 }]
 async fn tls_check_handler(
-    rqctx: Arc<dropshot::RequestContext<usize>>,
+    rqctx: dropshot::RequestContext<usize>,
     query: dropshot::Query<TlsCheckArgs>,
 ) -> Result<HttpResponseOk<()>, dropshot::HttpError> {
     if rqctx.server.using_tls() != query.into_inner().tls {

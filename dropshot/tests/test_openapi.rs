@@ -12,7 +12,7 @@ use dropshot::{
 use hyper::Body;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Cursor, str::from_utf8, sync::Arc};
+use std::{collections::HashMap, io::Cursor, str::from_utf8};
 
 #[endpoint {
     method = GET,
@@ -24,7 +24,7 @@ use std::{collections::HashMap, io::Cursor, str::from_utf8, sync::Arc};
 /// This is a multi-
 /// line comment.
 async fn handler1(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }
@@ -48,7 +48,7 @@ struct QueryArgs {
 /// This is a multi-
 /// line comment.
 async fn handler2(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _query: Query<QueryArgs>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     Ok(HttpResponseUpdatedNoContent())
@@ -66,7 +66,7 @@ struct PathArgs {
     tags = ["it"],
 }]
 async fn handler3(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _path: Path<PathArgs>,
 ) -> Result<HttpResponseDeleted, HttpError> {
     Ok(HttpResponseDeleted())
@@ -109,7 +109,7 @@ struct Response {}
     tags = ["it"],
 }]
 async fn handler4(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
@@ -121,7 +121,7 @@ async fn handler4(
     tags = [ "person", "woman", "man", "camera", "tv"]
 }]
 async fn handler5(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _path: Path<PathArgs>,
     _query: Query<QueryArgs>,
     _body: TypedBody<BodyParam>,
@@ -152,7 +152,7 @@ struct ExamplePageSelector {
     tags = ["it"],
 }]
 async fn handler6(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _query: Query<PaginationParams<ExampleScanParams, ExamplePageSelector>>,
 ) -> Result<HttpResponseOk<ResultsPage<ResponseItem>>, HttpError> {
     unimplemented!();
@@ -164,7 +164,7 @@ async fn handler6(
     tags = ["it"],
 }]
 async fn handler7(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _dump: UntypedBody,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
@@ -193,7 +193,7 @@ struct NeverDuplicatedResponseNextLevel {
     tags = ["it"],
 }]
 async fn handler8(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
@@ -204,7 +204,7 @@ async fn handler8(
     tags = ["it"],
 }]
 async fn handler9(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedResponseTopLevel>, HttpError> {
     unimplemented!();
 }
@@ -229,7 +229,7 @@ struct NeverDuplicatedBodyNextLevel {
     tags = ["it"],
 }]
 async fn handler10(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
@@ -241,7 +241,7 @@ async fn handler10(
     tags = ["it"],
 }]
 async fn handler11(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _b: TypedBody<NeverDuplicatedBodyTopLevel>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
@@ -268,7 +268,7 @@ struct NeverDuplicatedNext {
     tags = ["it"],
 }]
 async fn handler12(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _b: TypedBody<NeverDuplicatedTop>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     unimplemented!();
@@ -280,7 +280,7 @@ async fn handler12(
     tags = ["it"],
 }]
 async fn handler13(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
     unimplemented!();
 }
@@ -297,7 +297,7 @@ struct AllPath {
     unpublished = true,
 }]
 async fn handler14(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _path: Path<AllPath>,
 ) -> Result<HttpResponseOk<NeverDuplicatedTop>, HttpError> {
     unimplemented!();
@@ -309,7 +309,7 @@ async fn handler14(
     tags = ["it"],
 }]
 async fn handler15(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!();
 }
@@ -320,7 +320,7 @@ async fn handler15(
     tags = ["it"],
 }]
 async fn handler16(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<http::Response<Body>, HttpError> {
     unimplemented!();
 }
@@ -344,7 +344,7 @@ struct Foo(String);
     tags = ["it"],
 }]
 async fn handler17(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<
     HttpResponseHeaders<HttpResponseUpdatedNoContent, SomeHeaders>,
     HttpError,
@@ -358,7 +358,7 @@ async fn handler17(
     tags = ["it"],
 }]
 async fn handler18(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<FreeformBody>, HttpError> {
     let (_, body) = Body::channel();
     Ok(HttpResponseOk(body.into()))
@@ -396,7 +396,7 @@ fn example_nested_object_with_example() -> NestedObjectWithExample {
     tags = ["it"],
 }]
 async fn handler19(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<ObjectWithExample>, HttpError> {
     Ok(HttpResponseOk(example_object_with_example()))
 }
@@ -408,7 +408,7 @@ async fn handler19(
     tags = ["it"]
 }]
 async fn handler20(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _body: TypedBody<BodyParam>,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
@@ -420,7 +420,7 @@ async fn handler20(
     tags = [ "it"],
 }]
 async fn handler21(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseFound, HttpError> {
     Ok(http_response_found(String::from("/path1")).unwrap())
 }
@@ -431,7 +431,7 @@ async fn handler21(
     tags = [ "it"],
 }]
 async fn handler22(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseSeeOther, HttpError> {
     Ok(http_response_see_other(String::from("/path2")).unwrap())
 }
@@ -442,7 +442,7 @@ async fn handler22(
     tags = [ "it"],
 }]
 async fn handler23(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseTemporaryRedirect, HttpError> {
     Ok(http_response_temporary_redirect(String::from("/path3")).unwrap())
 }
@@ -454,7 +454,7 @@ async fn handler23(
     deprecated = true,
 }]
 async fn handler24(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseTemporaryRedirect, HttpError> {
     unimplemented!()
 }

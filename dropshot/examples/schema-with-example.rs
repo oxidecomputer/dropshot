@@ -7,7 +7,6 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 // Define 2 structs here - Bar is nested inside Foo and should result in an
 // example that looks like:
@@ -66,7 +65,7 @@ fn main() -> Result<(), String> {
 }]
 /// Get a foo
 async fn get_foo(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<Foo>, HttpError> {
     let foo = foo_example();
     Ok(HttpResponseOk(foo))

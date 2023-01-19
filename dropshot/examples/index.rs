@@ -13,7 +13,6 @@ use http::{Response, StatusCode};
 use hyper::Body;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -66,7 +65,7 @@ struct AllPath {
     unpublished = true,
 }]
 async fn index(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     path: Path<AllPath>,
 ) -> Result<Response<Body>, HttpError> {
     Ok(Response::builder()

@@ -9,7 +9,6 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[allow(dead_code)]
 #[derive(Deserialize, JsonSchema)]
@@ -23,7 +22,7 @@ struct QueryParams {
     path = "/test",
 }]
 async fn non_extractor_as_last_argument(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     _param1: String,
     _param2: Query<QueryParams>,
 ) -> Result<HttpResponseOk<()>, HttpError> {

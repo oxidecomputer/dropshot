@@ -190,7 +190,7 @@ impl WebsocketUpgrade {
     /// ```
     /// #[dropshot::endpoint { method = GET, path = "/my/ws/endpoint/{id}" }]
     /// async fn my_ws_endpoint(
-    ///     rqctx: std::sync::Arc<dropshot::RequestContext<()>>,
+    ///     rqctx: dropshot::RequestContext<()>,
     ///     id: dropshot::Path<String>,
     ///     websock: dropshot::WebsocketUpgrade,
     /// ) -> dropshot::WebsocketEndpointResult {

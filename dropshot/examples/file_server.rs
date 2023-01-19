@@ -14,7 +14,6 @@ use hyper::Body;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 /// Our context is simply the root of the directory we want to serve.
 struct FileServerContext {
@@ -76,7 +75,7 @@ struct AllPath {
     unpublished = true,
 }]
 async fn static_content(
-    rqctx: Arc<RequestContext<FileServerContext>>,
+    rqctx: RequestContext<FileServerContext>,
     path: Path<AllPath>,
 ) -> Result<Response<Body>, HttpError> {
     let path = path.into_inner().path;

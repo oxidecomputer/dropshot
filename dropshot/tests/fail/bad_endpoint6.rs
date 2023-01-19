@@ -8,7 +8,6 @@ use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
 use serde::Serialize;
-use std::sync::Arc;
 
 #[derive(JsonSchema, Serialize)]
 #[allow(dead_code)]
@@ -22,7 +21,7 @@ struct Ret {
     path = "/test",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<Ret>, HttpError> {
     // Validate that compiler errors show up with useful context and aren't
     // obscured by the macro.

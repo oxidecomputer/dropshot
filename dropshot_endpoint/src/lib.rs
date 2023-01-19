@@ -81,7 +81,7 @@ struct ChannelMetadata {
 const DROPSHOT: &str = "dropshot";
 const USAGE: &str = "Endpoint handlers must have the following signature:
     async fn(
-        rqctx: std::sync::Arc<dropshot::RequestContext<MyContext>>,
+        rqctx: dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
@@ -138,7 +138,7 @@ fn do_endpoint(
 /// that is spawned asynchronously and given the upgraded connection of
 /// the given `protocol` (i.e. `WEBSOCKETS`).
 ///
-/// The first argument still must be an `Arc<RequestContext<_>>`.
+/// The first argument still must be a `RequestContext<_>`.
 ///
 /// The last argument passed to the handler function must be a
 /// [`dropshot::WebsocketConnection`].
@@ -438,7 +438,7 @@ fn do_endpoint_inner(
                     let ty = pat.ty.as_ref().into_token_stream();
                     arg_types.push(ty.clone());
                     if index == 0 {
-                        // The first parameter must be an Arc<RequestContext<T>>
+                        // The first parameter must be a RequestContext<T>
                         // and fortunately we already have a trait that we can
                         // use to validate this type.
                         quote_spanned! { span=>
@@ -757,7 +757,7 @@ mod tests {
             },
             quote! {
                 pub async fn handler_xyz(
-                    _rqctx: Arc<RequestContext<()>>,
+                    _rqctx: RequestContext<()>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
                 }
@@ -766,7 +766,7 @@ mod tests {
         .unwrap();
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 trait ResultTrait {
@@ -809,19 +809,19 @@ mod tests {
 
             impl From<handler_xyz>
                 for dropshot::ApiEndpoint<
-                    <Arc<RequestContext<()>
-                > as dropshot::RequestContextArgument>::Context>
+                    <RequestContext<()>
+                as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
                     pub async fn handler_xyz(
-                        _rqctx: Arc<RequestContext<()>>,
+                        _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                        fn check_future_bounds(arg0: RequestContext<()>) {
                             future_endpoint_must_be_send(handler_xyz(arg0));
                         }
                     };
@@ -849,7 +849,7 @@ mod tests {
                 path = "/a/b/c"
             },
             quote! {
-                pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) ->
+                pub async fn handler_xyz(_rqctx: dropshot::RequestContext<()>) ->
                 std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
                 {
                     Ok(())
@@ -858,7 +858,7 @@ mod tests {
         ).unwrap();
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 trait ResultTrait {
@@ -899,9 +899,9 @@ mod tests {
             #[doc = "API Endpoint: handler_xyz"]
             pub const handler_xyz: handler_xyz = handler_xyz {};
 
-            impl From<handler_xyz> for dropshot::ApiEndpoint< <std::sync::Arc<dropshot::RequestContext<()> > as dropshot::RequestContextArgument>::Context> {
+            impl From<handler_xyz> for dropshot::ApiEndpoint< <dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
-                    pub async fn handler_xyz(_rqctx: std::sync::Arc<dropshot::RequestContext<()>>) ->
+                    pub async fn handler_xyz(_rqctx: dropshot::RequestContext<()>) ->
                         std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
                     {
                         Ok(())
@@ -909,7 +909,7 @@ mod tests {
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: std::sync::Arc< dropshot::RequestContext<()> >) {
+                        fn check_future_bounds(arg0: dropshot::RequestContext<()>) {
                             future_endpoint_must_be_send(handler_xyz(arg0));
                         }
                     };
@@ -938,7 +938,7 @@ mod tests {
             },
             quote! {
                 async fn handler_xyz(
-                    _rqctx: Arc<RequestContext<std::i32>>,
+                    _rqctx: RequestContext<std::i32>,
                     q: Query<Q>,
                 ) -> Result<HttpResponseOk<()>, HttpError>
                 {
@@ -949,7 +949,7 @@ mod tests {
         .unwrap();
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<RequestContext<std::i32> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 fn need_exclusive_extractor<T>()
@@ -1000,12 +1000,12 @@ mod tests {
 
             impl From<handler_xyz>
                 for dropshot::ApiEndpoint<
-                    <Arc<RequestContext<std::i32> > as dropshot::RequestContextArgument>::Context
+                    <RequestContext<std::i32> as dropshot::RequestContextArgument>::Context
                 >
             {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(
-                        _rqctx: Arc<RequestContext<std::i32>>,
+                        _rqctx: RequestContext<std::i32>,
                         q: Query<Q>,
                     ) ->
                         Result<HttpResponseOk<()>, HttpError>
@@ -1015,7 +1015,7 @@ mod tests {
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: Arc< RequestContext<std::i32> >, arg1: Query<Q>) {
+                        fn check_future_bounds(arg0: RequestContext<std::i32>, arg1: Query<Q>) {
                             future_endpoint_must_be_send(handler_xyz(arg0, arg1));
                         }
                     };
@@ -1044,7 +1044,7 @@ mod tests {
             },
             quote! {
                 pub(crate) async fn handler_xyz(
-                    _rqctx: Arc<RequestContext<()>>,
+                    _rqctx: RequestContext<()>,
                     q: Query<Q>,
                 ) -> Result<HttpResponseOk<()>, HttpError>
                 {
@@ -1055,7 +1055,7 @@ mod tests {
         .unwrap();
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 fn need_exclusive_extractor<T>()
@@ -1106,12 +1106,12 @@ mod tests {
 
             impl From<handler_xyz>
                 for dropshot::ApiEndpoint<
-                    <Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context
+                    <RequestContext<()> as dropshot::RequestContextArgument>::Context
                 >
             {
                 fn from(_: handler_xyz) -> Self {
                     pub(crate) async fn handler_xyz(
-                        _rqctx: Arc<RequestContext<()>>,
+                        _rqctx: RequestContext<()>,
                         q: Query<Q>,
                     ) ->
                         Result<HttpResponseOk<()>, HttpError>
@@ -1121,7 +1121,7 @@ mod tests {
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: Arc< RequestContext<()> >, arg1: Query<Q>) {
+                        fn check_future_bounds(arg0: RequestContext<()>, arg1: Query<Q>) {
                             future_endpoint_must_be_send(handler_xyz(arg0, arg1));
                         }
                     };
@@ -1151,7 +1151,7 @@ mod tests {
             },
             quote! {
                 async fn handler_xyz(
-                    _rqctx: Arc<RequestContext<()>>,
+                    _rqctx: RequestContext<()>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
                 }
@@ -1160,7 +1160,7 @@ mod tests {
         .unwrap();
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 trait ResultTrait {
@@ -1203,19 +1203,19 @@ mod tests {
 
             impl From<handler_xyz>
                 for dropshot::ApiEndpoint<
-                    <Arc<RequestContext<()>
-                > as dropshot::RequestContextArgument>::Context>
+                    <RequestContext<()>
+                as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
                     async fn handler_xyz(
-                        _rqctx: Arc<RequestContext<()>>,
+                        _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                        fn check_future_bounds(arg0: RequestContext<()>) {
                             future_endpoint_must_be_send(handler_xyz(arg0));
                         }
                     };
@@ -1247,7 +1247,7 @@ mod tests {
             quote! {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
-                    _rqctx: Arc<RequestContext<()>>,
+                    _rqctx: RequestContext<()>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
                 }
@@ -1256,7 +1256,7 @@ mod tests {
         .unwrap();
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 trait ResultTrait {
@@ -1299,20 +1299,20 @@ mod tests {
 
             impl From<handler_xyz>
                 for dropshot::ApiEndpoint<
-                    <Arc<RequestContext<()>
-                > as dropshot::RequestContextArgument>::Context>
+                    <RequestContext<()>
+                as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
                     #[doc = r#" handle "xyz" requests "#]
                     async fn handler_xyz(
-                        _rqctx: Arc<RequestContext<()>>,
+                        _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                        fn check_future_bounds(arg0: RequestContext<()>) {
                             future_endpoint_must_be_send(handler_xyz(arg0));
                         }
                     };
@@ -1389,7 +1389,7 @@ mod tests {
                 path = "/a/b/c",
             },
             quote! {
-                fn handler_xyz(_rqctx: Arc<RequestContext>) {}
+                fn handler_xyz(_rqctx: RequestContext) {}
             },
         )
         .unwrap();
@@ -1451,7 +1451,7 @@ mod tests {
             },
             quote! {
                 pub async fn handler_xyz(
-                    _rqctx: Arc<RequestContext<()>>,
+                    _rqctx: RequestContext<()>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
                 }
@@ -1461,7 +1461,7 @@ mod tests {
 
         let expected = quote! {
             const _: fn() = || {
-                struct NeedRequestContext(<Arc<RequestContext<()> > as dropshot::RequestContextArgument>::Context) ;
+                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
             };
             const _: fn() = || {
                 trait ResultTrait {
@@ -1504,19 +1504,19 @@ mod tests {
 
             impl From<handler_xyz>
                 for dropshot::ApiEndpoint<
-                    <Arc<RequestContext<()>
-                > as dropshot::RequestContextArgument>::Context>
+                    <RequestContext<()>
+                as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
                     pub async fn handler_xyz(
-                        _rqctx: Arc<RequestContext<()>>,
+                        _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
                         Ok(())
                     }
 
                     const _: fn() = || {
                         fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: Arc< RequestContext<()> >) {
+                        fn check_future_bounds(arg0: RequestContext<()>) {
                             future_endpoint_must_be_send(handler_xyz(arg0));
                         }
                     };

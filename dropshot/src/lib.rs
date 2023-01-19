@@ -138,7 +138,7 @@
 //!     path = "/projects/project1",
 //! }]
 //! async fn myapi_projects_get_project(
-//!     rqctx: Arc<RequestContext<()>>,
+//!     rqctx: RequestContext<()>,
 //! ) -> Result<HttpResponseOk<Project>, HttpError>
 //! {
 //!    let project = Project { name: String::from("project1") };
@@ -208,7 +208,7 @@
 //!
 //! ```ignore
 //! async fn f(
-//!      rqctx: Arc<RequestContext<Context>>,
+//!      rqctx: RequestContext<Context>,
 //!      [query_params: Query<Q>,]
 //!      [path_params: Path<P>,]
 //!      [body_param: TypedBody<J>,]
@@ -273,7 +273,7 @@
 //! struct MyContext {}
 //!
 //! async fn myapi_projects_get(
-//!     rqctx: Arc<RequestContext<MyContext>>,
+//!     rqctx: RequestContext<MyContext>,
 //!     query: Query<MyQueryArgs>)
 //!     -> Result<Response<Body>, HttpError>
 //! {
@@ -488,7 +488,7 @@
 //!     path = "/list_stuff"
 //! }]
 //! async fn my_list_api(
-//!     rqctx: Arc<RequestContext<()>>,
+//!     rqctx: RequestContext<()>,
 //!     pag_params: Query<PaginationParams<MyScanParams, MyPageSelector>>,
 //!     extra_params: Query<MyExtraQueryParams>,
 //! ) -> Result<HttpResponseOk<ResultsPage<String>>, HttpError>

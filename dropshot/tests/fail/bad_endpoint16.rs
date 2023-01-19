@@ -14,7 +14,7 @@ use std::sync::Arc;
     content_type = "foo/bar",
 }]
 async fn bad_endpoint(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }

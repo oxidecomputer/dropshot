@@ -4,7 +4,6 @@ use dropshot::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 fn main() -> Result<(), String> {
     // Build a description of the API.
@@ -71,7 +70,7 @@ struct PathParams {
 }]
 /// Get the pet with the specified ID
 async fn get_pet_by_id(
-    rqctx: Arc<RequestContext<()>>,
+    rqctx: RequestContext<()>,
     path_params: Path<PathParams>,
 ) -> Result<HttpResponseOk<Pet>, HttpError> {
     let pet = Pet {
@@ -94,7 +93,7 @@ async fn get_pet_by_id(
 }]
 /// Add a new pet to the store
 async fn update_pet_with_form(
-    rqctx: Arc<RequestContext<()>>,
+    rqctx: RequestContext<()>,
     body: TypedBody<Pet>,
 ) -> Result<HttpResponseOk<()>, HttpError> {
     unimplemented!()
@@ -125,7 +124,7 @@ struct FindByTagsPageSelector {
 }]
 /// Find pets by tags
 async fn find_pets_by_tags(
-    rqctx: Arc<RequestContext<()>>,
+    rqctx: RequestContext<()>,
     query: Query<
         PaginationParams<FindByTagsScanParams, FindByTagsPageSelector>,
     >,

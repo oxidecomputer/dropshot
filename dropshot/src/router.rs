@@ -738,10 +738,9 @@ mod test {
     use hyper::Response;
     use serde::Deserialize;
     use std::collections::BTreeMap;
-    use std::sync::Arc;
 
     async fn test_handler(
-        _: Arc<RequestContext<()>>,
+        _: RequestContext<()>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
     }

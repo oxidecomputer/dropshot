@@ -13,7 +13,7 @@ note: required by a bound in `validate_result_error_type`
 16 | ) -> Result<HttpResponseOk<()>, String> {
    |      ^^^^^^ required by this bound in `validate_result_error_type`
 
-error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future<Output = Result<HttpResponseOk<()>, String>> {<impl From<bad_error_type> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_error_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(RequestContext<()>) -> impl Future<Output = Result<HttpResponseOk<()>, String>> {<impl From<bad_error_type> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::bad_error_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_endpoint10.rs:14:10
    |
 10 | / #[endpoint {
@@ -22,7 +22,7 @@ error[E0277]: the trait bound `fn(Arc<RequestContext<()>>) -> impl Future<Output
 13 | | }]
    | |__- required by a bound introduced by this call
 14 |   async fn bad_error_type(
-   |            ^^^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(Arc<RequestContext<()>>) -> impl Future<Output = Result<HttpResponseOk<()>, String>> {<impl From<bad_error_type> for ApiEndpoint<<Arc<RequestContext<()>> as RequestContextArgument>::Context>>::from::bad_error_type}`
+   |            ^^^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>) -> impl Future<Output = Result<HttpResponseOk<()>, String>> {<impl From<bad_error_type> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::bad_error_type}`
    |
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs

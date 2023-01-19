@@ -13,7 +13,6 @@ use dropshot::WebsocketConnection;
 use futures::SinkExt;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
 use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -61,7 +60,7 @@ struct QueryParams {
     path = "/counter",
 }]
 async fn example_api_websocket_counter(
-    _rqctx: Arc<RequestContext<()>>,
+    _rqctx: RequestContext<()>,
     qp: Query<QueryParams>,
     upgraded: WebsocketConnection,
 ) -> dropshot::WebsocketChannelResult {

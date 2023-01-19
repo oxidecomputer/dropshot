@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-  --> tests/fail/bad_endpoint7.rs:25:13
+  --> tests/fail/bad_endpoint7.rs:24:13
    |
-25 | ) -> Result<HttpResponseOk<Ret>, HttpError> {
+24 | ) -> Result<HttpResponseOk<Ret>, HttpError> {
    |             ^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = help: the following other types implement trait `serde::ser::Serialize`:
