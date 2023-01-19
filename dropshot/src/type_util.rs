@@ -249,7 +249,7 @@ mod tests {
         });
 
         let mut dependencies = IndexMap::new();
-        dependencies.insert("Selfie".to_string(), schema.clone());
+        dependencies.insert("Selfie".to_string(), schema);
         let schema_ref = &dependencies[0];
 
         type_resolve(schema_ref, &dependencies);

@@ -350,7 +350,10 @@ mod tests {
         ws_upg_from_mock_rqctx()
             .await
             .unwrap()
-            .handle(move |_upgrade| async move { Ok(send.send(()).unwrap()) })
+            .handle(move |_upgrade| async move {
+                send.send(()).unwrap();
+                Ok(())
+            })
             .unwrap();
         // note: not a real connection, so we don't get our future's Ok, but we *do* spawn the task
         let _ = tokio::time::timeout(Duration::from_secs(1), recv)

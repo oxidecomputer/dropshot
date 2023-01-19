@@ -821,7 +821,7 @@ mod test {
         let t1: DateTime<Utc> =
             DateTime::parse_from_rfc3339(T1_STR).unwrap().into();
         BunyanLogRecord {
-            time: t1.into(),
+            time: t1,
             name: "n1".to_string(),
             hostname: "h1".to_string(),
             pid: 1,
@@ -837,7 +837,7 @@ mod test {
             DateTime::parse_from_rfc3339(T1_STR).unwrap().into();
         let r1 = make_dummy_record();
         let r2 = BunyanLogRecord {
-            time: t1.into(),
+            time: t1,
             name: "n1".to_string(),
             hostname: "h2".to_string(),
             pid: 1,
@@ -1017,7 +1017,7 @@ mod test {
             DateTime::parse_from_rfc3339(T2_STR).unwrap().into();
         let v0: Vec<BunyanLogRecord> = vec![];
         let v1: Vec<BunyanLogRecord> = vec![BunyanLogRecord {
-            time: t1.into(),
+            time: t1,
             name: "dummy_name".to_string(),
             hostname: "dummy_hostname".to_string(),
             pid: 123,
@@ -1026,7 +1026,7 @@ mod test {
         }];
         let v2: Vec<BunyanLogRecord> = vec![
             BunyanLogRecord {
-                time: t1.into(),
+                time: t1,
                 name: "dummy_name".to_string(),
                 hostname: "dummy_hostname".to_string(),
                 pid: 123,
@@ -1034,7 +1034,7 @@ mod test {
                 v: 0,
             },
             BunyanLogRecord {
-                time: t2.into(),
+                time: t2,
                 name: "dummy_name".to_string(),
                 hostname: "dummy_hostname".to_string(),
                 pid: 123,
@@ -1078,7 +1078,7 @@ mod test {
         let t2: DateTime<Utc> =
             DateTime::parse_from_rfc3339(T2_STR).unwrap().into();
         let v1: Vec<BunyanLogRecord> = vec![BunyanLogRecord {
-            time: t1.into(),
+            time: t1,
             name: "dummy_name".to_string(),
             hostname: "dummy_hostname".to_string(),
             pid: 123,
@@ -1097,7 +1097,7 @@ mod test {
         let t2: DateTime<Utc> =
             DateTime::parse_from_rfc3339(T2_STR).unwrap().into();
         let v1: Vec<BunyanLogRecord> = vec![BunyanLogRecord {
-            time: t2.into(),
+            time: t2,
             name: "dummy_name".to_string(),
             hostname: "dummy_hostname".to_string(),
             pid: 123,
@@ -1117,7 +1117,7 @@ mod test {
             DateTime::parse_from_rfc3339(T2_STR).unwrap().into();
         let v2: Vec<BunyanLogRecord> = vec![
             BunyanLogRecord {
-                time: t2.into(),
+                time: t2,
                 name: "dummy_name".to_string(),
                 hostname: "dummy_hostname".to_string(),
                 pid: 123,
@@ -1125,7 +1125,7 @@ mod test {
                 v: 0,
             },
             BunyanLogRecord {
-                time: t1.into(),
+                time: t1,
                 name: "dummy_name".to_string(),
                 hostname: "dummy_hostname".to_string(),
                 pid: 123,
