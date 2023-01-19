@@ -538,7 +538,24 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
     }
 }
 
-pub type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
+type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
+
+/// Future returned by [`Server::wait_for_shutdown()`].
+pub struct ShutdownWaitFuture(SharedBoxFuture<Result<(), String>>);
+
+impl Future for ShutdownWaitFuture {
+    type Output = Result<(), String>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.get_mut().0).poll(cx)
+    }
+}
+
+impl FusedFuture for ShutdownWaitFuture {
+    fn is_terminated(&self) -> bool {
+        self.0.is_terminated()
+    }
+}
 
 /// A running Dropshot HTTP server.
 ///
@@ -597,8 +614,8 @@ impl<C: ServerContext> HttpServer<C> {
     /// the shutdown to happen.
     ///
     /// To trigger a shutdown, Call [HttpServer::close] (which also awaits shutdown).
-    pub fn wait_for_shutdown(&self) -> SharedBoxFuture<Result<(), String>> {
-        self.join_future.clone()
+    pub fn wait_for_shutdown(&self) -> ShutdownWaitFuture {
+        ShutdownWaitFuture(self.join_future.clone())
     }
 
     /// Signals the currently running server to stop and waits for it to exit.
