@@ -289,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "dropshot"
-version = "0.9.0"
+version = "0.9.1-dev"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "dropshot_endpoint"
-version = "0.9.0"
+version = "0.9.1-dev"
 dependencies = [
  "proc-macro2",
  "quote",
