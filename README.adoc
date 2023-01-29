@@ -51,9 +51,9 @@ include:
 |Specifies the maximum number of bytes allowed in a request body. Larger requests will receive a 400 error. Defaults to 1024.
 
 |`tls.type`
-|`"AsFile", "AsBytes"`
+|`"AsFile"
 |No
-|Specifies if and how TLS certificate and key information is provided.
+|Specifies if and how TLS certificate and key information is provided.  Valid values include "AsFile" and "AsBytes".
 
 |`tls.cert_file`
 |`"/path/to/cert.pem"`
