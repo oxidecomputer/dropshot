@@ -73,6 +73,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
+name = "basic-toml"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e819b667739967cd44d308b8c7b71305d8bb0729ac44a248aa08f33d01950b4"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1726,17 +1735,17 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
 name = "trybuild"
-version = "1.0.76"
+version = "1.0.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ed2c57956f91546d4d33614265a85d55c8e1ab91484853a10335894786d7db6"
+checksum = "a44da5a6f2164c8e14d3bbc0657d69c5966af9f5f6930d4f600b1f5c4a673413"
 dependencies = [
+ "basic-toml",
  "glob",
  "once_cell",
  "serde",
  "serde_derive",
  "serde_json",
  "termcolor",
- "toml",
 ]
 
 [[package]]
