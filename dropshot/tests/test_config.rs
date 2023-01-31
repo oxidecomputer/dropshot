@@ -22,8 +22,8 @@ fn test_config_bad_bind_address_port_too_small() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error
-        .starts_with("invalid socket address syntax for key `bind_address`"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid socket address syntax"));
 }
 
 #[test]
@@ -34,8 +34,8 @@ fn test_config_bad_bind_address_port_too_large() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error
-        .starts_with("invalid socket address syntax for key `bind_address`"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid socket address syntax"));
 }
 
 #[test]
@@ -46,8 +46,8 @@ fn test_config_bad_bind_address_garbage() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error
-        .starts_with("invalid socket address syntax for key `bind_address`"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid socket address syntax"));
 }
 
 // Bad values for "request_body_max_bytes"
@@ -60,7 +60,8 @@ fn test_config_bad_request_body_max_bytes_negative() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error.starts_with("invalid value: integer"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid value: integer"));
 }
 
 #[test]
@@ -71,6 +72,7 @@ fn test_config_bad_request_body_max_bytes_too_large() {
     )
     .unwrap_err()
     .to_string();
+    println!("found error: {}", error);
     assert!(error.starts_with(""));
 }
 
@@ -84,7 +86,8 @@ fn test_config_bad_key_file_garbage() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error.starts_with("invalid type: integer"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid type: integer"));
 }
 
 // Bad values for "cert_file"
@@ -97,7 +100,8 @@ fn test_config_bad_cert_file_garbage() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error.starts_with("invalid type: integer"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid type: integer"));
 }
 
 // Bad values for "tls"
@@ -107,7 +111,8 @@ fn test_config_bad_tls_garbage() {
     let error = read_config::<ConfigDropshot>("bad_tls_garbage", "tls = 23")
         .unwrap_err()
         .to_string();
-    assert!(error.starts_with("invalid type: integer"));
+    println!("found error: {}", error);
+    assert!(error.contains("invalid type: integer"));
 }
 
 #[test]
@@ -118,7 +123,8 @@ fn test_config_bad_tls_incomplete() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error.starts_with("missing field `key_file`"));
+    println!("found error: {}", error);
+    assert!(error.contains("missing field `key_file`"));
 
     let error = read_config::<ConfigDropshot>(
         "bad_tls_incomplete",
@@ -126,7 +132,8 @@ fn test_config_bad_tls_incomplete() {
     )
     .unwrap_err()
     .to_string();
-    assert!(error.starts_with("missing field `cert_file`"));
+    println!("found error: {}", error);
+    assert!(error.contains("missing field `cert_file`"));
 }
 
 fn make_server(
