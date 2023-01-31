@@ -197,9 +197,9 @@ mod test {
         let error = read_config::<ConfigLogging>("bad_log_mode", bad_config)
             .unwrap_err()
             .to_string();
-        assert!(error.starts_with(
-            "unknown variant `bonkers`, expected `stderr-terminal` or `file` \
-             for key `mode`"
+        println!("error: {}", error);
+        assert!(error.contains(
+            "unknown variant `bonkers`, expected `stderr-terminal` or `file`"
         ));
     }
 
@@ -211,12 +211,11 @@ mod test {
     #[test]
     fn test_config_bad_terminal_no_level() {
         let bad_config = r##" mode = "stderr-terminal" "##;
-        assert_eq!(
+        let error =
             read_config::<ConfigLogging>("bad_terminal_no_level", bad_config)
                 .unwrap_err()
-                .to_string(),
-            "missing field `level`"
-        );
+                .to_string();
+        assert_eq!(error.trim_end(), "missing field `level`");
     }
 
     #[test]
@@ -225,10 +224,12 @@ mod test {
             mode = "stderr-terminal"
             level = "everything"
             "##;
-        assert_eq!(
+        let error =
             read_config::<ConfigLogging>("bad_terminal_bad_level", bad_config)
                 .unwrap_err()
-                .to_string(),
+                .to_string();
+        assert_eq!(
+            error.trim_end(),
             "unknown variant `everything`, expected one of `trace`, `debug`, \
              `info`, `warn`, `error`, `critical`"
         );
@@ -266,7 +267,7 @@ mod test {
             read_config::<ConfigLogging>("bad_file_no_file", bad_config)
                 .unwrap_err()
                 .to_string();
-        assert_eq!(error, "missing field `path`");
+        assert_eq!(error.trim_end(), "missing field `path`");
     }
 
     #[test]
@@ -279,7 +280,7 @@ mod test {
             read_config::<ConfigLogging>("bad_file_no_level", bad_config)
                 .unwrap_err()
                 .to_string();
-        assert_eq!(error, "missing field `level`");
+        assert_eq!(error.trim_end(), "missing field `level`");
     }
 
     /// `LogTest` and `LogTestCleanup` are used for the tests that create various
