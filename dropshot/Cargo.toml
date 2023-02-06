@@ -16,7 +16,7 @@ async-trait = "0.1.64"
 base64 = "0.21.0"
 bytes = "1"
 camino = { version = "1.1.2", features = ["serde1"] }
-futures = "0.3.25"
+futures = "0.3.26"
 hostname = "0.3.0"
 http = "0.2.8"
 indexmap = "1.9.2"
