@@ -420,10 +420,20 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 ApiEndpointParameterMetadata::Path(ref name) => {
                     match path_segments.get(name) {
                         Some(SegmentOrWildcard::Segment) => {
-                            type_is_scalar(name, schema, dependencies)?;
+                            type_is_scalar(
+                                &e.operation_id,
+                                name,
+                                schema,
+                                dependencies,
+                            )?;
                         }
                         Some(SegmentOrWildcard::Wildcard) => {
-                            type_is_string_enum(name, schema, dependencies)?;
+                            type_is_string_enum(
+                                &e.operation_id,
+                                name,
+                                schema,
+                                dependencies,
+                            )?;
                         }
                         None => {
                             panic!("all path variables should be accounted for")
@@ -438,7 +448,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             name
                         ));
                     }
-                    type_is_scalar(name, schema, dependencies)?;
+                    type_is_scalar(
+                        &e.operation_id,
+                        name,
+                        schema,
+                        dependencies,
+                    )?;
                 }
                 _ => (),
             }

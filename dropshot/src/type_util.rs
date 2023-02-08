@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
 //! Utility functions for working with JsonSchema types.
 
@@ -12,35 +12,48 @@ use schemars::schema::{
 /// Returns true iff the input schema is a boolean, floating-point number,
 /// string or integer.
 pub fn type_is_scalar(
-    name: &String,
+    operation_id: &str,
+    name: &str,
     schema: &Schema,
     dependencies: &IndexMap<String, Schema>,
 ) -> Result<(), String> {
-    type_is_scalar_common(name, schema, dependencies, |instance_type| {
-        matches!(
-            instance_type,
-            InstanceType::Boolean
-                | InstanceType::Number
-                | InstanceType::String
-                | InstanceType::Integer
-        )
-    })
+    type_is_scalar_common(
+        operation_id,
+        name,
+        schema,
+        dependencies,
+        |instance_type| {
+            matches!(
+                instance_type,
+                InstanceType::Boolean
+                    | InstanceType::Number
+                    | InstanceType::String
+                    | InstanceType::Integer
+            )
+        },
+    )
 }
 
 /// Returns true iff the input schema is a string.
 pub fn type_is_string(
-    name: &String,
+    operation_id: &str,
+    name: &str,
     schema: &Schema,
     dependencies: &IndexMap<String, Schema>,
 ) -> Result<(), String> {
-    type_is_scalar_common(name, schema, dependencies, |instance_type| {
-        matches!(instance_type, InstanceType::String)
-    })
+    type_is_scalar_common(
+        operation_id,
+        name,
+        schema,
+        dependencies,
+        |instance_type| matches!(instance_type, InstanceType::String),
+    )
 }
 
 /// Helper function for scalar types.
 fn type_is_scalar_common(
-    name: &String,
+    operation_id: &str,
+    name: &str,
     schema: &Schema,
     dependencies: &IndexMap<String, Schema>,
     type_check: fn(&InstanceType) -> bool,
@@ -75,6 +88,7 @@ fn type_is_scalar_common(
             reference: None,
             ..
         }) if type_is_scalar_subschemas(
+            operation_id,
             name,
             subschemas,
             dependencies,
@@ -84,7 +98,10 @@ fn type_is_scalar_common(
             Ok(())
         }
 
-        _ => Err(format!("the parameter '{}' must have a scalar type", name)),
+        _ => Err(format!(
+            "for endpoint {} the parameter '{}' must have a scalar type",
+            operation_id, name
+        )),
     }
 }
 
@@ -93,7 +110,8 @@ fn type_is_scalar_common(
 /// only if there is a lone subschema which we check recursively. For `oneOf`
 /// subschemas, we check that each subschema is scalar.
 fn type_is_scalar_subschemas(
-    name: &String,
+    operation_id: &str,
+    name: &str,
     subschemas: &SubschemaValidation,
     dependencies: &IndexMap<String, Schema>,
     type_check: fn(&InstanceType) -> bool,
@@ -117,6 +135,7 @@ fn type_is_scalar_subschemas(
             then_schema: None,
             else_schema: None,
         } if subs.len() == 1 => type_is_scalar_common(
+            operation_id,
             name,
             subs.first().unwrap(),
             dependencies,
@@ -133,8 +152,14 @@ fn type_is_scalar_subschemas(
             then_schema: None,
             else_schema: None,
         } => subs.iter().all(|schema| {
-            type_is_scalar_common(name, schema, dependencies, type_check)
-                .is_ok()
+            type_is_scalar_common(
+                operation_id,
+                name,
+                schema,
+                dependencies,
+                type_check,
+            )
+            .is_ok()
         }),
 
         _ => false,
@@ -142,7 +167,8 @@ fn type_is_scalar_subschemas(
 }
 
 pub fn type_is_string_enum(
-    name: &String,
+    operation_id: &str,
+    name: &str,
     schema: &Schema,
     dependencies: &IndexMap<String, Schema>,
 ) -> Result<(), String> {
@@ -171,14 +197,18 @@ pub fn type_is_string_enum(
                         Some(schemars::schema::SingleOrVec::Single(item_schema)),
                     additional_items: None,
                     ..
-                } => type_is_string(name, item_schema, dependencies).map_err(
-                    |_| {
-                        format!(
-                            "the parameter '{}' must be an array of strings",
-                            name
-                        )
-                    },
-                ),
+                } => type_is_string(
+                    operation_id,
+                    name,
+                    item_schema,
+                    dependencies,
+                )
+                .map_err(|_| {
+                    format!(
+                        "the parameter '{}' must be an array of strings",
+                        name
+                    )
+                }),
                 _ => {
                     panic!("the parameter '{}' has an invalid array type", name)
                 }
