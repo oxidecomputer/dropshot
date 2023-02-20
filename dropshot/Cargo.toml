@@ -11,7 +11,7 @@ keywords = ["rest", "openapi", "async"]
 categories = ["network-programming", "web-programming::http-server"]
 
 [dependencies]
-async-stream = "0.3.3"
+async-stream = "0.3.4"
 async-trait = "0.1.64"
 base64 = "0.21.0"
 bytes = "1"
