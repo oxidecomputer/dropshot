@@ -279,11 +279,21 @@ impl<Context: ServerContext> ApiDescription<Context> {
     {
         let e = endpoint.into();
 
-        self.validate_tags(&e)?;
-        self.validate_path_parameters(&e)?;
-        self.validate_named_parameters(&e)?;
+        // manually outline, see https://matklad.github.io/2021/09/04/fast-rust-builds.html#Keeping-Instantiations-In-Check
+        fn _register<C: ServerContext>(
+            s: &mut ApiDescription<C>,
+            e: ApiEndpoint<C>,
+        ) -> Result<(), String> {
+            s.validate_tags(&e)?;
+            s.validate_path_parameters(&e)?;
+            s.validate_named_parameters(&e)?;
 
-        self.router.insert(e);
+            s.router.insert(e);
+
+            Ok(())
+        }
+
+        _register(self, e)?;
 
         Ok(())
     }
