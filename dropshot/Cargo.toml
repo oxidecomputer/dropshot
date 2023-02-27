@@ -81,7 +81,7 @@ lazy_static = "1.4.0"
 libc = "0.2.139"
 mime_guess = "2.0.4"
 subprocess = "0.2.9"
-tempfile = "3.3"
+tempfile = "3.4"
 trybuild = "1.0.77"
 # Used by the https examples and tests
 pem = "1.1"
