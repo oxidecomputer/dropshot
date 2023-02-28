@@ -81,20 +81,28 @@ where
     let expected_content_type = rqctx.body_content_type.clone();
 
     use ApiEndpointBodyContentType::*;
-    let content: BodyType = match (expected_content_type, body_content_type) {
-        (Json, Json) => serde_json::from_slice(&body).map_err(|e| {
-            HttpError::for_bad_request(
-                None,
-                format!("unable to parse JSON body: {}", e),
-            )
-        })?,
-        (UrlEncoded, UrlEncoded) => serde_urlencoded::from_bytes(&body)
-            .map_err(|e| {
+
+    let content = match (expected_content_type, body_content_type) {
+        (Json, Json) => {
+            let jd = &mut serde_json::Deserializer::from_slice(&body);
+            serde_path_to_error::deserialize(jd).map_err(|e| {
+                HttpError::for_bad_request(
+                    None,
+                    format!("unable to parse JSON body: {}", e),
+                )
+            })?
+        }
+        (UrlEncoded, UrlEncoded) => {
+            let ud = serde_urlencoded::Deserializer::new(
+                form_urlencoded::parse(&body),
+            );
+            serde_path_to_error::deserialize(ud).map_err(|e| {
                 HttpError::for_bad_request(
                     None,
                     format!("unable to parse URL-encoded body: {}", e),
                 )
-            })?,
+            })?
+        }
         (expected, requested) => {
             return Err(HttpError::for_bad_request(
                 None,
