@@ -24,9 +24,12 @@ error[E0412]: cannot find type `S` in this scope
   --> tests/fail/bad_endpoint13.rs:19:23
    |
 19 |     _: RequestContext<S>,
-   |                      -^ not found in this scope
-   |                      |
-   |                      help: you might be missing a type parameter: `<S>`
+   |                       ^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+19 |     _: RequestContext<S><S>,
+   |                      +++
 
 error[E0412]: cannot find type `S` in this scope
   --> tests/fail/bad_endpoint13.rs:19:23

@@ -17,5 +17,11 @@ error[E0277]: the trait bound `String: HttpCodedResponse` is not satisfied
 note: required for `Result<String, HttpError>` to implement `ResultTrait`
   --> tests/fail/bad_endpoint12.rs:15:6
    |
-15 | ) -> Result<String, HttpError> {
-   |      ^^^^^^
+9  | / #[endpoint {
+10 | |     method = GET,
+11 | |     path = "/test",
+12 | | }]
+   | |__- unsatisfied trait bound introduced here
+...
+15 |   ) -> Result<String, HttpError> {
+   |        ^^^^^^
