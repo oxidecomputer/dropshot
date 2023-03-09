@@ -1105,17 +1105,12 @@ pub struct TagExternalDocs {
 }
 
 /// Dropshot/Progenitor features used by endpoints which are not a part of the base OpenAPI spec.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum ExtensionMode {
+    #[default]
     None,
     Paginated,
     Websocket,
-}
-
-impl Default for ExtensionMode {
-    fn default() -> Self {
-        ExtensionMode::None
-    }
 }
 
 #[cfg(test)]
