@@ -64,6 +64,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_args_1).unwrap();
     api.register(demo_handler_args_2query).unwrap();
     api.register(demo_handler_args_2json).unwrap();
+    api.register(demo_handler_args_2json_nested).unwrap();
     api.register(demo_handler_args_2urlencoded).unwrap();
     api.register(demo_handler_args_3).unwrap();
     api.register(demo_handler_path_param_string).unwrap();
@@ -259,7 +260,11 @@ async fn test_demo2json() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse JSON body"));
+    assert!(
+        error.message.starts_with("unable to parse JSON body"),
+        "{}",
+        error.message,
+    );
 
     // Test case: invalid JSON
     let error = testctx
@@ -272,7 +277,11 @@ async fn test_demo2json() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse JSON body"));
+    assert!(
+        error.message.starts_with("unable to parse JSON body"),
+        "{}",
+        error.message,
+    );
 
     // Test case: bad type
     let json_bad_type = "{ \"test1\": \"oops\", \"test2\": \"oops\" }";
@@ -287,8 +296,29 @@ async fn test_demo2json() {
         .await
         .expect_err("expected failure");
     assert!(error.message.starts_with(
-        "unable to parse JSON body: invalid type: string \"oops\", expected u32"
-    ));
+        "unable to parse JSON body: test2: invalid type: string \"oops\", expected u32"),
+        "{}",
+        error.message,
+    );
+
+    // Test case: bad nested json
+    let json_bad_type =
+        "{ \"nest\": { \"test1\": \"oops\", \"test2\": \"oops\" } }";
+    let error = testctx
+        .client_testctx
+        .make_request_with_body(
+            Method::GET,
+            "/testing/demo2json/nested",
+            json_bad_type.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .expect_err("expected failure");
+    assert!(error.message.starts_with(
+        "unable to parse JSON body: nest.test2: invalid type: string \"oops\", expected u32"),
+        "{}",
+        error.message,
+    );
 
     testctx.teardown().await;
 }
@@ -344,10 +374,14 @@ async fn test_demo2urlencoded() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with(
-        "expected content type \"application/x-www-form-urlencoded\", \
+    assert!(
+        error.message.starts_with(
+            "expected content type \"application/x-www-form-urlencoded\", \
          got \"application/json\""
-    ));
+        ),
+        "{}",
+        error.message,
+    );
 
     // Error case: invalid encoding
     let error = testctx
@@ -360,7 +394,11 @@ async fn test_demo2urlencoded() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with("unable to parse URL-encoded body"));
+    assert!(
+        error.message.starts_with("unable to parse URL-encoded body"),
+        "{}",
+        error.message,
+    );
 
     // Error case: bad type
     let error = testctx
@@ -373,9 +411,14 @@ async fn test_demo2urlencoded() {
         )
         .await
         .expect_err("expected failure");
-    assert!(error.message.starts_with(
-        "unable to parse URL-encoded body: invalid digit found in string"
-    ));
+    assert!(
+        error.message.starts_with(
+            "unable to parse URL-encoded body: \
+            test2: invalid digit found in string"
+        ),
+        "{}",
+        error.message,
+    );
 }
 
 // The "demo3" handler takes both query arguments and a JSON body.  This test
@@ -434,7 +477,11 @@ async fn test_demo3json() {
         )
         .await
         .expect_err("expected error");
-    assert!(error.message.starts_with("unable to parse JSON body"));
+    assert!(
+        error.message.starts_with("unable to parse JSON body"),
+        "{}",
+        error.message,
+    );
 
     testctx.teardown().await;
 }
@@ -526,7 +573,11 @@ async fn test_demo_path_param_uuid() {
         )
         .await
         .unwrap_err();
-    assert!(error.message.starts_with("bad parameter in URL path:"));
+    assert!(
+        error.message.starts_with("bad parameter in URL path:"),
+        "{}",
+        error.message,
+    );
 
     // Success case (use the Uuid)
     let uuid_str = "e7de8ccc-8938-43fa-8404-a040a0836ee4";
@@ -565,7 +616,11 @@ async fn test_demo_path_param_u32() {
         )
         .await
         .unwrap_err();
-    assert!(error.message.starts_with("bad parameter in URL path:"));
+    assert!(
+        error.message.starts_with("bad parameter in URL path:"),
+        "{}",
+        error.message,
+    );
 
     // Success case (use the number)
     let u32_str = "37";
@@ -915,6 +970,21 @@ pub struct DemoJsonBody {
 async fn demo_handler_args_2json(
     _rqctx: RequestCtx,
     json: TypedBody<DemoJsonBody>,
+) -> Result<Response<Body>, HttpError> {
+    http_echo(&json.into_inner())
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DemoJsonNestedBody {
+    pub nest: DemoJsonBody,
+}
+#[endpoint {
+    method = GET,
+    path = "/testing/demo2json/nested",
+}]
+async fn demo_handler_args_2json_nested(
+    _rqctx: RequestCtx,
+    json: TypedBody<DemoJsonNestedBody>,
 ) -> Result<Response<Body>, HttpError> {
     http_echo(&json.into_inner())
 }
