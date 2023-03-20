@@ -407,7 +407,7 @@ fn do_endpoint_inner(
         }
         None => {
             errors.push(Error::new(
-                ast.sig.paren_token.span,
+                ast.sig.paren_token.span.join(),
                 "Endpoint requires arguments",
             ));
             quote! { () }
@@ -668,12 +668,14 @@ fn extract_doc_from_attrs(
     let doc = syn::Ident::new("doc", proc_macro2::Span::call_site());
 
     let mut lines = attrs.iter().flat_map(|attr| {
-        if let Ok(meta) = attr.parse_meta() {
-            if let syn::Meta::NameValue(nv) = meta {
-                if nv.path.is_ident(&doc) {
-                    if let syn::Lit::Str(s) = nv.lit {
-                        return normalize_comment_string(s.value());
-                    }
+        if let syn::Meta::NameValue(nv) = &attr.meta {
+            if nv.path.is_ident(&doc) {
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(s),
+                    ..
+                }) = &nv.value
+                {
+                    return normalize_comment_string(s.value());
                 }
             }
         }
