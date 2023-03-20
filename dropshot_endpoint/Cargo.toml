@@ -24,4 +24,4 @@ version = "1.0"
 features = [ "parsing", "printing" ]
 
 [dev-dependencies]
-schema = "0.0.1"
+schema = "0.1.0"
