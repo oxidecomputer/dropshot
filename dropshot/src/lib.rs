@@ -191,6 +191,9 @@
 //!
 //!     // Optional fields
 //!     tags = [ "all", "your", "OpenAPI", "tags" ],
+//!     // An optional limit for the request body size that overrides the
+//!     // default server config.
+//!     request_body_max_bytes = 1048576,
 //! }]
 //! ```
 //!
@@ -212,7 +215,8 @@
 //!      [query_params: Query<Q>,]
 //!      [path_params: Path<P>,]
 //!      [body_param: TypedBody<J>,]
-//!      [body_param: UntypedBody<J>,]
+//!      [body_param: UntypedBody,]
+//!      [body_param: StreamingBody,]
 //!      [raw_request: RawRequest,]
 //! ) -> Result<HttpResponse*, HttpError>
 //! ```
@@ -234,14 +238,17 @@
 //!   body as JSON (or form/url-encoded) and deserializing it into an instance
 //!   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
 //! * [`UntypedBody`] extracts the raw bytes of the request body.
+//! * [`StreamingBody`] provides the raw bytes of the request body as a
+//!   [`Stream`](futures::Stream) of [`Bytes`](bytes::Bytes) chunks.
 //! * [`RawRequest`] provides access to the underlying [`hyper::Request`].  The
 //!   hope is that this would generally not be needed.  It can be useful to
 //!   implement functionality not provided by Dropshot.
 //!
-//! `Query` and `Path` impl `SharedExtractor`.  `TypedBody`, `UntypedBody`, and
-//! `RawRequest` impl `ExclusiveExtractor`.  Your function may accept 0-3
-//! extractors, but only one can be `ExclusiveExtractor`, and it must be the
-//! last one.  Otherwise, the order of extractor arguments does not matter.
+//! `Query` and `Path` impl `SharedExtractor`.  `TypedBody`, `UntypedBody`,
+//! `StreamingBody`, and `RawRequest` impl `ExclusiveExtractor`.  Your function
+//! may accept 0-3 extractors, but only one can be `ExclusiveExtractor`, and it
+//! must be the last one.  Otherwise, the order of extractor arguments does not
+//! matter.
 //!
 //! If the handler accepts any extractors and the corresponding extraction
 //! cannot be completed, the request fails with status code 400 and an error
@@ -603,6 +610,7 @@ pub use extractor::Path;
 pub use extractor::Query;
 pub use extractor::RawRequest;
 pub use extractor::SharedExtractor;
+pub use extractor::StreamingBody;
 pub use extractor::TypedBody;
 pub use extractor::UntypedBody;
 pub use handler::http_response_found;

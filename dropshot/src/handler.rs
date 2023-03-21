@@ -72,6 +72,7 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct RequestContext<Context: ServerContext> {
     /// shared server state
     pub server: Arc<DropshotState<Context>>,
@@ -79,6 +80,10 @@ pub struct RequestContext<Context: ServerContext> {
     pub path_variables: VariableSet,
     /// expected request body mime type
     pub body_content_type: ApiEndpointBodyContentType,
+    /// Maximum request body size: typically the same as
+    /// [`server.config.request_body_max_bytes`], but can be overridden for an
+    /// individual request
+    pub request_body_max_bytes: usize,
     /// unique id assigned to this request
     pub request_id: String,
     /// logger for this specific request

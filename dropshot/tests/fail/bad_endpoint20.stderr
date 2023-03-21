@@ -1,0 +1,5 @@
+error: expected u64, but found `true`
+  --> tests/fail/bad_endpoint20.rs:13:30
+   |
+13 |     request_body_max_bytes = true,
+   |                              ^^^^
