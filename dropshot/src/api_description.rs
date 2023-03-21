@@ -31,6 +31,7 @@ use std::collections::HashSet;
 /// provided explicitly--as well as parameters and a description which can be
 /// inferred from function parameter types and doc comments (respectively).
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ApiEndpoint<Context: ServerContext> {
     pub operation_id: String,
     pub handler: Box<dyn RouteHandler<Context>>,
@@ -38,6 +39,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub path: String,
     pub parameters: Vec<ApiEndpointParameter>,
     pub body_content_type: ApiEndpointBodyContentType,
+    pub request_body_max_bytes: Option<usize>,
     pub response: ApiEndpointResponse,
     pub summary: Option<String>,
     pub description: Option<String>,
@@ -72,6 +74,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             path: path.to_string(),
             parameters: func_parameters.parameters,
             body_content_type,
+            request_body_max_bytes: None,
             response,
             summary: None,
             description: None,
@@ -89,6 +92,11 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
 
     pub fn description<T: ToString>(mut self, description: T) -> Self {
         self.description.replace(description.to_string());
+        self
+    }
+
+    pub fn request_body_max_bytes(mut self, max_bytes: usize) -> Self {
+        self.request_body_max_bytes = Some(max_bytes);
         self
     }
 

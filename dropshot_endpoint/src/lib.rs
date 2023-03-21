@@ -55,6 +55,8 @@ struct EndpointMetadata {
     unpublished: bool,
     #[serde(default)]
     deprecated: bool,
+    #[serde(default)]
+    request_body_max_bytes: Option<usize>,
     content_type: Option<String>,
     _dropshot_crate: Option<String>,
 }
@@ -85,7 +87,8 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
-        [body_param: UntypedBody<J>,]
+        [body_param: UntypedBody,]
+        [body_param: StreamingBody,]
         [raw_request: RawRequest,]
     ) -> Result<HttpResponse*, HttpError>";
 
@@ -241,6 +244,7 @@ fn do_channel(
                 tags,
                 unpublished,
                 deprecated,
+                request_body_max_bytes: None,
                 content_type: Some("application/json".to_string()),
                 _dropshot_crate,
             };
@@ -386,6 +390,15 @@ fn do_endpoint_inner(
     } else {
         quote! {}
     };
+
+    let request_body_max_bytes =
+        if let Some(max_bytes) = metadata.request_body_max_bytes {
+            quote! {
+                .request_body_max_bytes(#max_bytes)
+            }
+        } else {
+            quote! {}
+        };
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
@@ -590,6 +603,7 @@ fn do_endpoint_inner(
             #(#tags)*
             #visible
             #deprecated
+            #request_body_max_bytes
         }
     } else {
         quote! {

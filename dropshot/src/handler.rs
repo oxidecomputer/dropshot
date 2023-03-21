@@ -79,6 +79,10 @@ pub struct RequestContext<Context: ServerContext> {
     pub path_variables: VariableSet,
     /// expected request body mime type
     pub body_content_type: ApiEndpointBodyContentType,
+    /// Maximum request body size: typically the same as
+    /// [`server.config.request_body_max_bytes`], but can be overridden for an
+    /// individual request
+    pub request_body_max_bytes: usize,
     /// unique id assigned to this request
     pub request_id: String,
     /// logger for this specific request

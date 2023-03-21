@@ -1,0 +1,5 @@
+error: expected u64, but found `MAX_REQUEST_BYTES`
+  --> tests/fail/bad_endpoint21.rs:17:30
+   |
+17 |     request_body_max_bytes = MAX_REQUEST_BYTES,
+   |                              ^^^^^^^^^^^^^^^^^

@@ -335,6 +335,7 @@ mod tests {
             request: RequestInfo::from(&request),
             path_variables: Default::default(),
             body_content_type: Default::default(),
+            request_body_max_bytes: 0,
             request_id: "".to_string(),
             log: log.clone(),
         };

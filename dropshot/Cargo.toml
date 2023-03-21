@@ -76,6 +76,7 @@ version = "0.8.12"
 features = [ "uuid1" ]
 
 [dev-dependencies]
+buf-list = "1.0.0"
 expectorate = "1.0.6"
 hyper-rustls = "0.23.2"
 hyper-staticfile = "0.9"
@@ -84,6 +85,7 @@ libc = "0.2.140"
 mime_guess = "2.0.4"
 subprocess = "0.2.9"
 tempfile = "3.4"
+tokio-util = { version = "0.7.7", features = ["codec"] }
 trybuild = "1.0.79"
 # Used by the https examples and tests
 pem = "1.1"
@@ -111,4 +113,4 @@ features = [ "max_level_trace", "release_max_level_debug" ]
 version_check = "0.9.4"
 
 [features]
-usdt-probes = [ "usdt/asm" ]
+usdt-probes = ["usdt/asm"]
