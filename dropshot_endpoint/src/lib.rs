@@ -55,6 +55,8 @@ struct EndpointMetadata {
     unpublished: bool,
     #[serde(default)]
     deprecated: bool,
+    #[serde(default)]
+    request_body_max_bytes: Option<usize>,
     content_type: Option<String>,
     _dropshot_crate: Option<String>,
 }
@@ -242,6 +244,7 @@ fn do_channel(
                 tags,
                 unpublished,
                 deprecated,
+                request_body_max_bytes: None,
                 content_type: Some("application/json".to_string()),
                 _dropshot_crate,
             };
@@ -387,6 +390,13 @@ fn do_endpoint_inner(
     } else {
         quote! {}
     };
+
+    let request_body_max_bytes =
+        metadata.request_body_max_bytes.map(|max_bytes| {
+            quote! {
+                .request_body_max_bytes(#max_bytes)
+            }
+        });
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
@@ -591,6 +601,7 @@ fn do_endpoint_inner(
             #(#tags)*
             #visible
             #deprecated
+            #request_body_max_bytes
         }
     } else {
         quote! {

@@ -789,6 +789,9 @@ async fn http_request_handle<C: ServerContext>(
         request: RequestInfo::from(&request),
         path_variables: lookup_result.variables,
         body_content_type: lookup_result.body_content_type,
+        request_body_max_bytes: lookup_result
+            .request_body_max_bytes
+            .unwrap_or(server.config.request_body_max_bytes),
         request_id: request_id.to_string(),
         log: request_log,
     };

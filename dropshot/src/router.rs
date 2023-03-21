@@ -207,10 +207,12 @@ impl MapValue for VariableValue {
 /// corresponding values in the actual path, and the expected body
 /// content type.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct RouterLookupResult<'a, Context: ServerContext> {
     pub handler: &'a dyn RouteHandler<Context>,
     pub variables: VariableSet,
     pub body_content_type: ApiEndpointBodyContentType,
+    pub request_body_max_bytes: Option<usize>,
 }
 
 impl<Context: ServerContext> HttpRouterNode<Context> {
@@ -483,6 +485,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 handler: &*handler.handler,
                 variables,
                 body_content_type: handler.body_content_type.clone(),
+                request_body_max_bytes: handler.request_body_max_bytes,
             })
             .ok_or_else(|| {
                 HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
@@ -766,6 +769,7 @@ mod test {
             parameters: vec![],
             body_content_type: ApiEndpointBodyContentType::default(),
             response: ApiEndpointResponse::default(),
+            request_body_max_bytes: None,
             summary: None,
             description: None,
             tags: vec![],

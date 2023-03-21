@@ -191,6 +191,9 @@
 //!
 //!     // Optional fields
 //!     tags = [ "all", "your", "OpenAPI", "tags" ],
+//!     // An optional limit for the request body size that overrides the
+//!     // default server config.
+//!     request_body_max_bytes = 1048576,
 //! }]
 //! ```
 //!
