@@ -365,27 +365,17 @@ fn do_endpoint_inner(
         .tags
         .iter()
         .map(|tag| {
-            quote! {
-                .tag(#tag)
-            }
+            quote! { .tag(#tag) }
         })
         .collect::<Vec<_>>();
 
-    let visible = if metadata.unpublished {
-        quote! {
-            .visible(false)
-        }
-    } else {
-        quote! {}
-    };
+    let visible = metadata.unpublished.then(|| {
+        quote! { .visible(false) }
+    });
 
-    let deprecated = if metadata.deprecated {
-        quote! {
-            .deprecated(true)
-        }
-    } else {
-        quote! {}
-    };
+    let deprecated = metadata.deprecated.then(|| {
+        quote! { .deprecated(true) }
+    });
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
@@ -492,7 +482,10 @@ fn do_endpoint_inner(
             quote! { #argname }
         })
         .collect::<Vec<_>>();
-    let impl_checks = if !arg_is_receiver {
+
+    // If we have a `self` arg, this check would introduce even more confusing
+    // error messages, so we only include it if there is no receiver.
+    let impl_checks = (!arg_is_receiver).then(||
         quote! {
             const _: fn() = || {
                 fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
@@ -501,11 +494,7 @@ fn do_endpoint_inner(
                 }
             };
         }
-    } else {
-        // If we have a `self` arg, our `future_is_send` check will introduce
-        // even more confusing error messages, so omit it entirely.
-        quote! {}
-    };
+    );
 
     let ret_check = match &ast.sig.output {
         syn::ReturnType::Default => {
