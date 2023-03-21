@@ -1,7 +1,6 @@
 // Copyright 2020 Oxide Computer Company
 //! General-purpose HTTP-related facilities
 
-use bytes::BufMut;
 use bytes::Bytes;
 use hyper::body::HttpBody;
 use serde::de::DeserializeOwned;
@@ -20,56 +19,6 @@ pub const CONTENT_TYPE_JSON: &str = "application/json";
 pub const CONTENT_TYPE_NDJSON: &str = "application/x-ndjson";
 /// MIME type for form/urlencoded data
 pub const CONTENT_TYPE_URL_ENCODED: &str = "application/x-www-form-urlencoded";
-
-/// Reads the rest of the body from the request up to the given number of bytes.
-/// If the body fits within the specified cap, a buffer is returned with all the
-/// bytes read.  If not, an error is returned.
-pub async fn http_read_body<T>(
-    body: &mut T,
-    cap: usize,
-) -> Result<Bytes, HttpError>
-where
-    T: HttpBody<Data = Bytes, Error = hyper::Error> + std::marker::Unpin,
-{
-    // This looks a lot like the implementation of hyper::body::to_bytes(), but
-    // applies the requested cap.  We've skipped the optimization for the
-    // 1-buffer case for now, as it seems likely this implementation will change
-    // anyway.
-    // TODO should this use some Stream interface instead?
-    // TODO why does this look so different in type signature (Data=Bytes,
-    // std::marker::Unpin, &mut T)
-    // TODO Error type shouldn't have to be hyper Error -- Into<ApiError> should
-    // work too?
-    // TODO do we need to use saturating_add() here?
-    let mut parts = std::vec::Vec::new();
-    let mut nbytesread: usize = 0;
-    while let Some(maybebuf) = body.data().await {
-        let buf = maybebuf?;
-        let bufsize = buf.len();
-
-        if nbytesread + bufsize > cap {
-            http_dump_body(body).await?;
-            // TODO-correctness check status code
-            return Err(HttpError::for_bad_request(
-                None,
-                format!("request body exceeded maximum size of {} bytes", cap),
-            ));
-        }
-
-        nbytesread += bufsize;
-        parts.put(buf);
-    }
-
-    // Read the trailers as well, even though we're not going to do anything
-    // with them.
-    body.trailers().await?;
-    // TODO-correctness why does the is_end_stream() assertion fail and the next
-    // one panic?
-    // assert!(body.is_end_stream());
-    // assert!(body.data().await.is_none());
-    // assert!(body.trailers().await?.is_none());
-    Ok(parts.into())
-}
 
 /// Reads the rest of the body from the request, dropping all the bytes.  This is
 /// useful after encountering error conditions.
