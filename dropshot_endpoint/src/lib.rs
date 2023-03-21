@@ -392,13 +392,11 @@ fn do_endpoint_inner(
     };
 
     let request_body_max_bytes =
-        if let Some(max_bytes) = metadata.request_body_max_bytes {
+        metadata.request_body_max_bytes.map(|max_bytes| {
             quote! {
                 .request_body_max_bytes(#max_bytes)
             }
-        } else {
-            quote! {}
-        };
+        });
 
     let dropshot = get_crate(metadata._dropshot_crate);
 
