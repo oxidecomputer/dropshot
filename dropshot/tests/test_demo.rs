@@ -36,6 +36,7 @@ use dropshot::Path;
 use dropshot::Query;
 use dropshot::RawRequest;
 use dropshot::RequestContext;
+use dropshot::StreamingBody;
 use dropshot::TypedBody;
 use dropshot::UntypedBody;
 use dropshot::WebsocketChannelResult;
@@ -43,6 +44,7 @@ use dropshot::WebsocketConnection;
 use dropshot::CONTENT_TYPE_JSON;
 use futures::stream::StreamExt;
 use futures::SinkExt;
+use futures::TryStreamExt;
 use http::StatusCode;
 use hyper::Body;
 use hyper::Method;
@@ -71,6 +73,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_uuid).unwrap();
     api.register(demo_handler_path_param_u32).unwrap();
     api.register(demo_handler_untyped_body).unwrap();
+    api.register(demo_handler_streaming_body).unwrap();
     api.register(demo_handler_raw_request).unwrap();
     api.register(demo_handler_delete).unwrap();
     api.register(demo_handler_headers).unwrap();
@@ -727,6 +730,57 @@ async fn test_untyped_body() {
     testctx.teardown().await;
 }
 
+// Test `StreamingBody`.
+#[tokio::test]
+async fn test_streaming_body() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_streaming_body", api);
+    let client = &testctx.client_testctx;
+
+    // Success case: empty body
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/streaming_body",
+            "".into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoStreaming = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 0);
+
+    // Success case: non-empty content
+    let body = vec![0u8; 1024];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/streaming_body",
+            body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoStreaming = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 1024);
+
+    // Error case: body too large.
+    let big_body = vec![0u8; 1025];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/untyped_body",
+            big_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 1024 bytes"
+    );
+}
+
 // Test `RawRequest`.
 #[tokio::test]
 async fn test_raw_request() {
@@ -1094,6 +1148,26 @@ async fn demo_handler_untyped_body(
     };
 
     Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct DemoStreaming {
+    pub nbytes: usize,
+}
+#[endpoint {
+    method = PUT,
+    path = "/testing/streaming_body"
+}]
+async fn demo_handler_streaming_body(
+    _rqctx: RequestContext<usize>,
+    body: StreamingBody,
+) -> Result<HttpResponseOk<DemoStreaming>, HttpError> {
+    let nbytes = body
+        .into_stream()
+        .try_fold(0, |acc, v| futures::future::ok(acc + v.len()))
+        .await?;
+
+    Ok(HttpResponseOk(DemoStreaming { nbytes }))
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
