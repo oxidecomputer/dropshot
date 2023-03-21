@@ -207,6 +207,7 @@ impl MapValue for VariableValue {
 /// corresponding values in the actual path, and the expected body
 /// content type.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct RouterLookupResult<'a, Context: ServerContext> {
     pub handler: &'a dyn RouteHandler<Context>,
     pub variables: VariableSet,

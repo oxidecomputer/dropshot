@@ -72,6 +72,7 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct RequestContext<Context: ServerContext> {
     /// shared server state
     pub server: Arc<DropshotState<Context>>,
