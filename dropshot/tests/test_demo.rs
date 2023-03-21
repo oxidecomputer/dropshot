@@ -734,7 +734,7 @@ async fn test_untyped_body() {
 #[tokio::test]
 async fn test_streaming_body() {
     let api = demo_api();
-    let testctx = common::test_setup("test_untyped_body", api);
+    let testctx = common::test_setup("test_streaming_body", api);
     let client = &testctx.client_testctx;
 
     // Success case: empty body
