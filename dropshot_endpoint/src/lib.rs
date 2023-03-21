@@ -85,7 +85,8 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
-        [body_param: UntypedBody<J>,]
+        [body_param: UntypedBody,]
+        [body_param: StreamingBody,]
         [raw_request: RawRequest,]
     ) -> Result<HttpResponse*, HttpError>";
 
