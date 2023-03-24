@@ -76,6 +76,7 @@ version = "0.8.12"
 features = [ "uuid1" ]
 
 [dev-dependencies]
+buf-list = "1.0.0"
 expectorate = "1.0.6"
 hyper-rustls = "0.23.2"
 hyper-staticfile = "0.9"
@@ -111,4 +112,4 @@ features = [ "max_level_trace", "release_max_level_debug" ]
 version_check = "0.9.4"
 
 [features]
-usdt-probes = [ "usdt/asm" ]
+usdt-probes = ["usdt/asm"]
