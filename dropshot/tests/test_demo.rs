@@ -769,7 +769,7 @@ async fn test_streaming_body() {
     let error = client
         .make_request_with_body(
             Method::PUT,
-            "/testing/untyped_body",
+            "/testing/streaming_body",
             big_body.into(),
             StatusCode::BAD_REQUEST,
         )
