@@ -231,26 +231,6 @@ impl StreamingBody {
         Self { body, cap }
     }
 
-    /// Converts `self` into a [`BytesMut`], buffering the entire response in memory.
-    ///
-    /// If payloads are expected to be large, consider using [`Self::into_stream`] to
-    /// avoid buffering in memory if possible.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`HttpError`] if any of the following cases occur:
-    ///
-    /// * A network error occurred.
-    /// * `request_body_max_bytes` was exceeded for this request.
-    pub async fn into_bytes_mut(self) -> Result<BytesMut, HttpError> {
-        self.into_stream()
-            .try_fold(BytesMut::new(), |mut out, chunk| {
-                out.put(chunk);
-                futures::future::ok(out)
-            })
-            .await
-    }
-
     /// Converts `self` into a stream.
     ///
     /// The `Stream` produces values of type `Result<Bytes, HttpError>`.
@@ -266,9 +246,7 @@ impl StreamingBody {
     ///
     /// Buffer a `StreamingBody` in-memory, into a
     /// [`BufList`](https://docs.rs/buf-list/latest/buf_list/struct.BufList.html)
-    /// (a segmented list of [`Bytes`] chunks). This is similar to
-    /// [`Self::into_bytes_mut`], except it avoids copying memory into a single
-    /// large allocation.
+    /// (a segmented list of [`Bytes`] chunks).
     ///
     /// ```
     /// use buf_list::BufList;
@@ -325,42 +303,6 @@ impl StreamingBody {
     /// #    assert_eq!(writer, &b"foobar"[..]);
     /// # }
     /// ```
-    ///
-    /// ---
-    ///
-    /// An alternative way to write data to an `AsyncWrite`, using
-    /// `tokio-util`'s
-    /// [codecs](https://docs.rs/tokio-util/latest/tokio_util/codec/index.html):
-    ///
-    /// ```
-    /// use bytes::Bytes;
-    /// use dropshot::{HttpError, StreamingBody};
-    /// use futures::{prelude::*, SinkExt};
-    /// use tokio::io::AsyncWrite;
-    /// use tokio_util::codec::{BytesCodec, FramedWrite};
-    ///
-    /// async fn write_all_sink<W: AsyncWrite + Unpin>(
-    ///     body: StreamingBody,
-    ///     writer: &mut W,
-    /// ) -> Result<(), HttpError> {
-    ///     let stream = body.into_stream();
-    ///     // This type annotation is required for Rust to compile this code.
-    ///     let sink = SinkExt::<Bytes>::sink_map_err(
-    ///         FramedWrite::new(writer, BytesCodec::new()),
-    ///         |error| HttpError::for_unavail(None, format!("write failed: {error}")),
-    ///     );
-    ///
-    ///     stream.forward(sink).await
-    /// }
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() {
-    /// #    let body = StreamingBody::__from_bytes(Bytes::from("foobar"));
-    /// #    let mut writer = vec![];
-    /// #    write_all_sink(body, &mut writer).await.unwrap();
-    /// #    assert_eq!(writer, &b"foobar"[..]);
-    /// # }
-    /// ```
     pub fn into_stream(
         mut self,
     ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send {
@@ -387,6 +329,18 @@ impl StreamingBody {
             // with them.
             self.body.trailers().await?;
         }
+    }
+
+    /// Converts `self` into a [`BytesMut`], buffering the entire response in
+    /// memory. Not public API because most users of this should use
+    /// `UntypedBody` instead.
+    async fn into_bytes_mut(self) -> Result<BytesMut, HttpError> {
+        self.into_stream()
+            .try_fold(BytesMut::new(), |mut out, chunk| {
+                out.put(chunk);
+                futures::future::ok(out)
+            })
+            .await
     }
 }
 

@@ -85,7 +85,6 @@ libc = "0.2.140"
 mime_guess = "2.0.4"
 subprocess = "0.2.9"
 tempfile = "3.4"
-tokio-util = { version = "0.7.7", features = ["codec"] }
 trybuild = "1.0.79"
 # Used by the https examples and tests
 pem = "1.1"
