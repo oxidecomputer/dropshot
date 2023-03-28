@@ -137,10 +137,10 @@ pub fn tls_key_to_buffer(
     let mut serialized_certs = vec![];
     let mut cert_writer = std::io::BufWriter::new(&mut serialized_certs);
     for cert in certs {
-        let encoded_cert = pem::encode(&pem::Pem {
-            tag: "CERTIFICATE".to_string(),
-            contents: cert.0.clone(),
-        });
+        let encoded_cert = pem::encode(&pem::Pem::new(
+            "CERTIFICATE".to_string(),
+            cert.0.clone(),
+        ));
         cert_writer
             .write_all(encoded_cert.as_bytes())
             .expect("failed to serialize cert");
@@ -149,10 +149,8 @@ pub fn tls_key_to_buffer(
 
     let mut serialized_key = vec![];
     let mut key_writer = std::io::BufWriter::new(&mut serialized_key);
-    let encoded_key = pem::encode(&pem::Pem {
-        tag: "PRIVATE KEY".to_string(),
-        contents: key.0.clone(),
-    });
+    let encoded_key =
+        pem::encode(&pem::Pem::new("PRIVATE KEY".to_string(), key.0.clone()));
     key_writer
         .write_all(encoded_key.as_bytes())
         .expect("failed to serialize key");
