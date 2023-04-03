@@ -448,7 +448,7 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             .with_safe_default_kx_groups()
             .with_safe_default_protocol_versions()
             .unwrap()
-            .with_client_cert_verifier(rustls::server::NoClientAuth::new())
+            .with_client_cert_verifier(rustls::server::NoClientAuth::boxed())
             .with_single_cert(certs, private_key)
             .expect("bad certificate/key");
         cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
