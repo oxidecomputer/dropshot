@@ -1,6 +1,7 @@
-// Copyright 2022 Oxide Computer Company
-//! Test cases for TLS support. This validates various behaviors of our TLS mode,
-//! including certificate loading and supported modes.
+// Copyright 2023 Oxide Computer Company
+
+//! Test cases for TLS support. This validates various behaviors of our TLS
+//! mode, including certificate loading and supported modes.
 
 use dropshot::{ConfigDropshot, ConfigTls, HttpResponseOk, HttpServerStarter};
 use slog::{o, Logger};
@@ -172,11 +173,11 @@ async fn test_tls_only() {
     let https_client = make_https_client(make_pki_verifier(&certs));
     https_client.request(https_request).await.unwrap();
 
-    // Send an HTTP request, it should fail due to incomplete message, since
+    // Send an HTTP request, it should fail due to parse error, since
     // the server and client are speaking different protocols
     let http_client = hyper::Client::builder().build_http();
     let error = http_client.request(http_request).await.unwrap_err();
-    assert!(error.is_incomplete_message());
+    assert!(error.is_parse());
 
     // Make an HTTPS request again, to make sure the HTTP client didn't
     // interfere with HTTPS request processing
@@ -230,20 +231,20 @@ async fn test_tls_refresh_certificates() {
             > {
                 // Verify we're seeing the right cert chain from the server
                 if *end_entity != certs[0] {
-                    return Err(rustls::Error::InvalidCertificateData(
-                        "Invalid end cert".to_string(),
+                    return Err(rustls::Error::InvalidCertificate(
+                        rustls::CertificateError::BadEncoding,
                     ));
                 }
                 if intermediates != &certs[1..3] {
-                    return Err(rustls::Error::InvalidCertificateData(
-                        "Invalid intermediates".to_string(),
+                    return Err(rustls::Error::InvalidCertificate(
+                        rustls::CertificateError::BadEncoding,
                     ));
                 }
                 if *server_name
                     != rustls::ServerName::try_from("localhost").unwrap()
                 {
-                    return Err(rustls::Error::InvalidCertificateData(
-                        "Invalid name".to_string(),
+                    return Err(rustls::Error::InvalidCertificate(
+                        rustls::CertificateError::BadEncoding,
                     ));
                 }
                 Ok(rustls::client::ServerCertVerified::assertion())
@@ -314,7 +315,9 @@ async fn test_tls_aborted_negotiation() {
         // Tracking to ensure this method was invoked
         verifier_called_clone.fetch_add(1, Ordering::SeqCst);
 
-        Err(rustls::Error::InvalidCertificateData("test error".to_string()))
+        Err(rustls::Error::InvalidCertificate(
+            rustls::CertificateError::BadEncoding,
+        ))
     };
     let client =
         make_https_client(CertificateVerifier(Box::new(cert_verifier)));

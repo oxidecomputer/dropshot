@@ -1,4 +1,5 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
+
 //! Tests for configuration file.
 
 use dropshot::test_util::read_config;
