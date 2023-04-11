@@ -76,7 +76,7 @@ version = "0.8.12"
 features = [ "uuid1" ]
 
 [dev-dependencies]
-buf-list = "1.0.0"
+buf-list = "1.0.3"
 expectorate = "1.0.6"
 hyper-rustls = "0.24.0"
 hyper-staticfile = "0.9"
