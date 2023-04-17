@@ -332,7 +332,7 @@ dependencies = [
  "mime_guess",
  "openapiv3",
  "paste",
- "pem 2.0.0",
+ "pem 2.0.1",
  "percent-encoding",
  "proc-macro2",
  "rcgen",
@@ -1000,9 +1000,9 @@ dependencies = [
 
 [[package]]
 name = "pem"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31687a56a7298a78519d971a1dfeee8e08d8e6bf9407b9233c985538c79e1123"
+checksum = "6b13fe415cdf3c8e44518e18a7c95a13431d9bdf6d15367d82b23c377fdd441a"
 dependencies = [
  "base64 0.21.0",
  "serde",
