@@ -714,6 +714,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         request,
         &request_id,
         request_log.new(o!()),
+        remote_addr,
     )
     .await;
 
@@ -773,6 +774,7 @@ async fn http_request_handle<C: ServerContext>(
     request: Request<Body>,
     request_id: &str,
     request_log: Logger,
+    remote_addr: std::net::SocketAddr,
 ) -> Result<Response<Body>, HttpError> {
     // TODO-hardening: is it correct to (and do we correctly) read the entire
     // request body even if we decide it's too large and are going to send a 400
@@ -786,7 +788,7 @@ async fn http_request_handle<C: ServerContext>(
         server.router.lookup_route(&method, uri.path().into())?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request: RequestInfo::from(&request),
+        request: RequestInfo::new(&request, remote_addr),
         path_variables: lookup_result.variables,
         body_content_type: lookup_result.body_content_type,
         request_id: request_id.to_string(),

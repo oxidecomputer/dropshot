@@ -316,6 +316,8 @@ mod tests {
             .header(http::header::SEC_WEBSOCKET_KEY, "aGFjayB0aGUgcGxhbmV0IQ==")
             .body(Body::empty())
             .unwrap();
+        let remote_addr =
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 12345);
         let rqctx = RequestContext {
             server: Arc::new(DropshotState {
                 private: (),
@@ -332,7 +334,7 @@ mod tests {
                 ),
                 tls_acceptor: None,
             }),
-            request: RequestInfo::from(&request),
+            request: RequestInfo::new(&request, remote_addr),
             path_variables: Default::default(),
             body_content_type: Default::default(),
             request_id: "".to_string(),
