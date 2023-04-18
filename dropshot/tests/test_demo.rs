@@ -83,6 +83,7 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_307_temporary_redirect).unwrap();
     api.register(demo_handler_websocket).unwrap();
     api.register(demo_handler_request_compat).unwrap();
+    api.register(demo_handler_request_addresses).unwrap();
 
     // We don't need to exhaustively test these cases, as they're tested by unit
     // tests.
@@ -982,6 +983,35 @@ async fn test_request_compat() {
     testctx.teardown().await;
 }
 
+#[tokio::test]
+async fn test_request_remote_addr() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_request_remote_addr", api);
+    let laddr = testctx.server.local_addr();
+    let mut response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/request_addresses",
+            None as Option<()>,
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: Vec<String> = read_json(&mut response).await;
+    assert_eq!(json.len(), 4);
+    // Confirm the local address and port seen from inside the server matches
+    // the one that we got from the test context:
+    assert_eq!(json[0], laddr.ip().to_string());
+    assert_eq!(json[1], laddr.port().to_string());
+    // There does not appear to be an easy way to determine which port was
+    // used for the outbound request we make here, but we at least know that
+    // it must not be the same as the server listen port:
+    assert_eq!(json[2], laddr.ip().to_string());
+    assert_ne!(json[3], laddr.port().to_string());
+    testctx.teardown().await;
+}
+
 // Demo handler functions
 
 type RequestCtx = RequestContext<usize>;
@@ -1314,6 +1344,23 @@ async fn demo_handler_request_compat(
     let header_value = headers.get("server").and_then(|v| v.to_str().ok());
     let value = header_value.unwrap_or("dummy");
     http_echo(&value)
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/request_addresses",
+}]
+async fn demo_handler_request_addresses(
+    rqctx: RequestCtx,
+) -> Result<Response<Body>, HttpError> {
+    let laddr = rqctx.server.local_addr;
+    let raddr = rqctx.request.remote_addr();
+    http_echo(&vec![
+        laddr.ip().to_string(),
+        laddr.port().to_string(),
+        raddr.ip().to_string(),
+        raddr.port().to_string(),
+    ])
 }
 
 fn http_echo<T: Serialize>(t: &T) -> Result<Response<Body>, HttpError> {

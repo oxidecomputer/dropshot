@@ -96,22 +96,21 @@ pub struct RequestInfo {
     uri: http::Uri,
     version: http::Version,
     headers: http::HeaderMap<http::HeaderValue>,
+    remote_addr: std::net::SocketAddr,
 }
 
-impl<B> From<&hyper::Request<B>> for RequestInfo {
-    fn from(request: &hyper::Request<B>) -> Self {
+impl RequestInfo {
+    pub(crate) fn new<B>(
+        request: &hyper::Request<B>,
+        remote_addr: std::net::SocketAddr,
+    ) -> Self {
         RequestInfo {
             method: request.method().clone(),
             uri: request.uri().clone(),
             version: request.version(),
             headers: request.headers().clone(),
+            remote_addr,
         }
-    }
-}
-
-impl<B> From<hyper::Request<B>> for RequestInfo {
-    fn from(request: hyper::Request<B>) -> Self {
-        Self::from(&request)
     }
 }
 
@@ -130,6 +129,10 @@ impl RequestInfo {
 
     pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
         &self.headers
+    }
+
+    pub fn remote_addr(&self) -> std::net::SocketAddr {
+        self.remote_addr
     }
 
     /// Returns a reference to the `RequestInfo` itself
