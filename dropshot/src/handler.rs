@@ -131,8 +131,8 @@ impl RequestInfo {
         &self.headers
     }
 
-    pub fn remote_addr(&self) -> &std::net::SocketAddr {
-        &self.remote_addr
+    pub fn remote_addr(&self) -> std::net::SocketAddr {
+        self.remote_addr
     }
 
     /// Returns a reference to the `RequestInfo` itself
