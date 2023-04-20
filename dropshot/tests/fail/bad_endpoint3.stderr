@@ -18,7 +18,7 @@ note: required by a bound in `need_exclusive_extractor`
    | |__^ required by this bound in `need_exclusive_extractor`
 ...
 18 |       param: String,
-   |              ------ required by a bound in this
+   |              ------ required by a bound in this function
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(RequestContext<()>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<bad_endpoint> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
