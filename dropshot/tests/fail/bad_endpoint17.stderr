@@ -17,7 +17,7 @@ note: required by a bound in `need_shared_extractor`
    | |__^ required by this bound in `need_shared_extractor`
 ...
 30 |       _param1: TypedBody<Stuff>,
-   |                --------- required by a bound in this
+   |                --------- required by a bound in this function
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(RequestContext<()>, TypedBody<Stuff>, UntypedBody) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<two_exclusive_extractors> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::two_exclusive_extractors}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied

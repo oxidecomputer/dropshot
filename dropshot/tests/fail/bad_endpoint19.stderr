@@ -17,7 +17,7 @@ note: required by a bound in `need_shared_extractor`
    | |__^ required by this bound in `need_shared_extractor`
 ...
 26 |       _param1: String,
-   |                ------ required by a bound in this
+   |                ------ required by a bound in this function
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(RequestContext<()>, std::string::String, dropshot::Query<QueryParams>) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl From<non_extractor_as_last_argument> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::non_extractor_as_last_argument}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
