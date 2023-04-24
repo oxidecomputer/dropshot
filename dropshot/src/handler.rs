@@ -89,7 +89,7 @@ pub struct RequestContext<Context: ServerContext> {
 }
 
 // This is deliberately as close to compatible with `hyper::Request` as
-// reasonable.
+// reasonable with the addition of the remote address.
 #[derive(Debug)]
 pub struct RequestInfo {
     method: http::Method,
@@ -100,7 +100,7 @@ pub struct RequestInfo {
 }
 
 impl RequestInfo {
-    pub(crate) fn new<B>(
+    pub fn new<B>(
         request: &hyper::Request<B>,
         remote_addr: std::net::SocketAddr,
     ) -> Self {
