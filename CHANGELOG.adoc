@@ -15,7 +15,9 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.9.0\...HEAD[Full list of commits]
 
-* https://github.com/oxidecomputer/dropshot/pull/651[#651]  The address of the remote peer is now available to request handlers via the `RequestInfo` struct.
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/651[#651]  The address of the remote peer is now available to request handlers via the `RequestInfo` struct. With this change we've removed the related `From<hyper::Request<B>>` implementation; instead use `RequestInfo::new<B>(&hyper::Request<B>, std::net::SocketAddr)`.
 
 == 0.9.0 (released 2023-01-20)
 
