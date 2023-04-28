@@ -392,7 +392,7 @@
 //!
 //! ```json
 //! {
-//!     "page_token": "abc123...",
+//!     "next_page": "abc123...",
 //!     "items": [
 //!         {
 //!             "name": "aardvark",
@@ -413,7 +413,7 @@
 //! The page token `"abc123..."` is an opaque token to the client, but typically
 //! encodes the scan parameters and the value of the last item seen
 //! (`"name=badger"`).  The client knows it has completed the scan when it
-//! receives a response with no `page_token` in it.
+//! receives a response with no `next_page` in it.
 //!
 //! Our API endpoint can also support scanning in reverse order.  In this case,
 //! when the client makes the first request, it should fetch
@@ -507,7 +507,27 @@
 //! this ought to work, but it currently doesn't due to serde_urlencoded#33,
 //! which is really serde#1183.
 //!
-//! ### DTrace probes
+//! Note that any parameters defined by `MyScanParams` are effectively encoded
+//! into the page token and need not be supplied invocations when `page_token`
+//! is specified. That is not the case for required parameters defined by
+//! `MyExtraQueryParams`--those must be supplied on each invocation.
+//!
+//! ### OpenAPI extension
+//!
+//! In generated OpenAPI documents, Dropshot adds the `x-dropshot-paginated`
+//! extension to paginated operations. The value is currently a structure
+//! with this format:
+//! ```json
+//! {
+//!     "required": [ .. ]
+//! }
+//! ```
+//!
+//! The string values in the `required` array are the names of those query
+//! parameters that are mandatory if `page_token` is not specified (when
+//! fetching the first page of data).
+//!
+//! ## DTrace probes
 //!
 //! Dropshot optionally exposes two DTrace probes, `request_start` and
 //! `request_finish`. These provide detailed information about each request,
@@ -515,7 +535,7 @@
 //! See the dropshot::dtrace::RequestInfo` and `dropshot::dtrace::ResponseInfo`
 //! types for a complete listing of what's available.
 //!
-//! These probes are implemented via the [`usdt`] crate. They may require a
+//! These probes are implemented via the `usdt` crate. They may require a
 //! nightly toolchain if built on macOS prior to Rust version 1.66. Otherwise a
 //! stable compiler >= v1.59 is required in order to present the necessary
 //! features. Given these constraints, USDT functionality is behind the feature

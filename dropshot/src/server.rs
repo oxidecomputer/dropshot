@@ -540,7 +540,7 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
 
 type SharedBoxFuture<T> = Shared<Pin<Box<dyn Future<Output = T> + Send>>>;
 
-/// Future returned by [`Server::wait_for_shutdown()`].
+/// Future returned by [`HttpServer::wait_for_shutdown()`].
 pub struct ShutdownWaitFuture(SharedBoxFuture<Result<(), String>>);
 
 impl Future for ShutdownWaitFuture {

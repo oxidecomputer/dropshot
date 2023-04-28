@@ -209,6 +209,13 @@
         "parameters": [
           {
             "in": "query",
+            "name": "a_mandatory_string",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "a_number",
             "schema": {
               "type": "integer",
@@ -255,7 +262,11 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "x-dropshot-pagination": true
+        "x-dropshot-pagination": {
+          "required": [
+            "a_mandatory_string"
+          ]
+        }
       }
     },
     "/playing/a/bit/nicer": {

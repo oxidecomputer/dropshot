@@ -134,7 +134,7 @@ fn do_endpoint(
     do_endpoint_inner(metadata, attr, item)
 }
 
-/// As with [`endpoint`], this attribute turns a handler function into a
+/// As with [`macro@endpoint`], this attribute turns a handler function into a
 /// Dropshot endpoint, but first wraps the handler function in such a way
 /// that is spawned asynchronously and given the upgraded connection of
 /// the given `protocol` (i.e. `WEBSOCKETS`).

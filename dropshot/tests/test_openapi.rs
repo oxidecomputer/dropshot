@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
 use dropshot::{
     endpoint, http_response_found, http_response_see_other,
@@ -138,6 +138,7 @@ struct ResponseItem {
 struct ExampleScanParams {
     #[serde(default)]
     a_number: u16,
+    a_mandatory_string: String,
 }
 
 #[derive(Deserialize, JsonSchema, Serialize)]

@@ -670,12 +670,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 })
                 .next();
 
-            match endpoint.extension_mode {
+            match &endpoint.extension_mode {
                 ExtensionMode::None => {}
-                ExtensionMode::Paginated => {
+                ExtensionMode::Paginated(first_page_schema) => {
                     operation.extensions.insert(
                         crate::pagination::PAGINATION_EXTENSION.to_string(),
-                        serde_json::json! {true},
+                        first_page_schema.clone(),
                     );
                 }
                 ExtensionMode::Websocket => {
@@ -1105,11 +1105,11 @@ pub struct TagExternalDocs {
 }
 
 /// Dropshot/Progenitor features used by endpoints which are not a part of the base OpenAPI spec.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum ExtensionMode {
     #[default]
     None,
-    Paginated,
+    Paginated(serde_json::Value),
     Websocket,
 }
 

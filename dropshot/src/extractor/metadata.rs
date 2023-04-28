@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 
 /// Convenience function to generate parameter metadata from types implementing
 /// `JsonSchema` for use with `Query` and `Path` `Extractors`.
-pub fn get_metadata<ParamType>(
+pub(crate) fn get_metadata<ParamType>(
     loc: &ApiEndpointParameterLocation,
 ) -> ExtractorMetadata
 where
@@ -29,16 +29,17 @@ where
 
     let extension_mode = match schema_extensions(&schema) {
         Some(extensions) => {
-            let paginated = extensions
-                .get(&PAGINATION_PARAM_SENTINEL.to_string())
-                .is_some();
+            let paginated =
+                extensions.get(&PAGINATION_PARAM_SENTINEL.to_string());
             let websocket =
-                extensions.get(&WEBSOCKET_PARAM_SENTINEL.to_string()).is_some();
+                extensions.get(&WEBSOCKET_PARAM_SENTINEL.to_string());
             match (paginated, websocket) {
-                (false, false) => ExtensionMode::None,
-                (false, true) => ExtensionMode::Websocket,
-                (true, false) => ExtensionMode::Paginated,
-                (true, true) => panic!(
+                (None, None) => ExtensionMode::None,
+                (None, Some(_)) => ExtensionMode::Websocket,
+                (Some(first_page_schema), None) => {
+                    ExtensionMode::Paginated(first_page_schema.clone())
+                }
+                (Some(_), Some(_)) => panic!(
                     "Cannot use websocket and pagination in the same endpoint!"
                 ),
             }
@@ -184,6 +185,14 @@ mod test {
             ("page_token", false),
         ];
 
-        compare(params, ExtensionMode::Paginated, expected);
+        compare(
+            params,
+            ExtensionMode::Paginated(serde_json::json!(
+                {
+                    "required": ["bar", "foo"]
+                }
+            )),
+            expected,
+        );
     }
 }
