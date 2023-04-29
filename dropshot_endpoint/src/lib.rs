@@ -142,11 +142,13 @@ fn do_endpoint(
 /// The first argument still must be a `RequestContext<_>`.
 ///
 /// The last argument passed to the handler function must be a
-/// [`dropshot::WebsocketConnection`].
+/// [`WebsocketConnection`](../dropshot/struct.WebsocketConnection.html).
 ///
-/// The function must return a [`dropshot::WebsocketChannelResult`] (which is
-/// a general-purpose `Result<(), Box<dyn Error + Send + Sync + 'static>>`).
-/// Returned error values will be written to the RequestContext's log.
+/// The function must return a
+/// [`WebsocketChannelResult`](dropshot/type.WebsocketChannelResult.html)
+/// (which is a general-purpose `Result<(), Box<dyn Error + Send + Sync +
+/// 'static>>`). Returned error values will be written to the RequestContext's
+/// log.
 ///
 /// ```ignore
 /// #[dropshot::channel { protocol = WEBSOCKETS, path = "/my/ws/channel/{id}" }]
