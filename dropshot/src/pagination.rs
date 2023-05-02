@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 
 //! Detailed end-user documentation for pagination lives in the Dropshot top-
 //! level block comment.  Here we discuss some of the design choices.
@@ -106,7 +106,6 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
-use serde_json::json;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::num::NonZeroU32;
@@ -231,6 +230,11 @@ pub(crate) const PAGINATION_PARAM_SENTINEL: &str =
     "x-dropshot-pagination-param";
 pub(crate) const PAGINATION_EXTENSION: &str = "x-dropshot-pagination";
 
+#[derive(Serialize)]
+struct PaginationParamSentinelValue {
+    required: schemars::Set<String>,
+}
+
 impl<ScanParams, PageSelector> JsonSchema
     for PaginationParams<ScanParams, PageSelector>
 where
@@ -244,17 +248,33 @@ where
     fn json_schema(
         gen: &mut schemars::gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
-        // We use `SchemaPaginationParams to generate an intuitive schema and
+        // We use `SchemaPaginationParams` to generate an intuitive schema and
         // we use the JSON schema extensions mechanism to communicate the fact
         // that this is a pagination parameter. We'll later use this to tag
         // its associated operation as paginated.
+        //
+        // Because `SchemaPaginationParams` wraps `ScanParams` in an `Option`
+        // all properties become optional. The value of our sentinel is the
+        // set of properties that normally *would* be required.
+        //
         // TODO we would ideally like to verify that both parameters *and*
         // response structure are properly configured for pagination.
         let mut schema = SchemaPaginationParams::<ScanParams>::json_schema(gen)
             .into_object();
-        schema
-            .extensions
-            .insert(PAGINATION_PARAM_SENTINEL.to_string(), json!(true));
+        let first_page_schema = ScanParams::json_schema(gen);
+        let Some(first_page_object) = first_page_schema.into_object().object
+        else {
+            panic!("ScanParams must be an object");
+        };
+
+        let value = PaginationParamSentinelValue {
+            required: first_page_object.required,
+        };
+
+        schema.extensions.insert(
+            PAGINATION_PARAM_SENTINEL.to_string(),
+            serde_json::to_value(value).unwrap(),
+        );
         schemars::schema::Schema::Object(schema)
     }
 }
@@ -793,7 +813,11 @@ mod test {
                 .extensions
                 .get(&(PAGINATION_PARAM_SENTINEL.to_string()))
                 .unwrap(),
-            json!(true)
+            json!({
+                "required": [
+                    "name"
+                ]
+            })
         );
     }
 }

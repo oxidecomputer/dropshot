@@ -63,7 +63,11 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "x-dropshot-pagination": true
+        "x-dropshot-pagination": {
+          "required": [
+            "garbage_goes_in"
+          ]
+        }
       }
     }
   },

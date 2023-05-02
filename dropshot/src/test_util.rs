@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2023 Oxide Computer Company
 //! Automated testing facilities.  These are intended for use both by this crate
 //! and dependents of this crate.
 
@@ -130,8 +130,8 @@ impl ClientTestContext {
     }
 
     /// Execute an HTTP request against the test server and perform basic
-    /// validation of the result like [`make_request`], but with a content
-    /// type of "application/x-www-form-urlencoded".
+    /// validation of the result like [`ClientTestContext::make_request`], but
+    /// with a content type of "application/x-www-form-urlencoded".
     pub async fn make_request_url_encoded<
         RequestBodyType: Serialize + Debug,
     >(

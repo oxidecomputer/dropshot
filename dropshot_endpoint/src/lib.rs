@@ -134,7 +134,7 @@ fn do_endpoint(
     do_endpoint_inner(metadata, attr, item)
 }
 
-/// As with [`endpoint`], this attribute turns a handler function into a
+/// As with [`macro@endpoint`], this attribute turns a handler function into a
 /// Dropshot endpoint, but first wraps the handler function in such a way
 /// that is spawned asynchronously and given the upgraded connection of
 /// the given `protocol` (i.e. `WEBSOCKETS`).
@@ -142,11 +142,13 @@ fn do_endpoint(
 /// The first argument still must be a `RequestContext<_>`.
 ///
 /// The last argument passed to the handler function must be a
-/// [`dropshot::WebsocketConnection`].
+/// [`WebsocketConnection`](../dropshot/struct.WebsocketConnection.html).
 ///
-/// The function must return a [`dropshot::WebsocketChannelResult`] (which is
-/// a general-purpose `Result<(), Box<dyn Error + Send + Sync + 'static>>`).
-/// Returned error values will be written to the RequestContext's log.
+/// The function must return a
+/// [`WebsocketChannelResult`](dropshot/type.WebsocketChannelResult.html)
+/// (which is a general-purpose `Result<(), Box<dyn Error + Send + Sync +
+/// 'static>>`). Returned error values will be written to the RequestContext's
+/// log.
 ///
 /// ```ignore
 /// #[dropshot::channel { protocol = WEBSOCKETS, path = "/my/ws/channel/{id}" }]
