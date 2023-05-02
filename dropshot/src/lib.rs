@@ -508,7 +508,7 @@
 //! which is really serde#1183.
 //!
 //! Note that any parameters defined by `MyScanParams` are effectively encoded
-//! into the page token and need not be supplied invocations when `page_token`
+//! into the page token and need not be supplied with invocations when `page_token`
 //! is specified. That is not the case for required parameters defined by
 //! `MyExtraQueryParams`--those must be supplied on each invocation.
 //!
