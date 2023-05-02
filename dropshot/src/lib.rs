@@ -514,7 +514,7 @@
 //!
 //! ### OpenAPI extension
 //!
-//! In generated OpenAPI documents, Dropshot adds the `x-dropshot-paginated`
+//! In generated OpenAPI documents, Dropshot adds the `x-dropshot-pagination`
 //! extension to paginated operations. The value is currently a structure
 //! with this format:
 //! ```json
