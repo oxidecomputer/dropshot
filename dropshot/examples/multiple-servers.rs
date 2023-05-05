@@ -68,6 +68,7 @@
 //! process will also note the shutdown of server B.
 
 use dropshot::endpoint;
+use dropshot::tracing::Noop;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -167,7 +168,7 @@ impl Drop for MultiServerContext {
 
 /// Context shared by all running servers.
 struct SharedMultiServerContext {
-    servers: Mutex<HashMap<String, HttpServer<MultiServerContext>>>,
+    servers: Mutex<HashMap<String, HttpServer<MultiServerContext, Noop>>>,
     started_server_shutdown_handles: mpsc::Sender<ServerShutdownFuture>,
 }
 
@@ -218,10 +219,15 @@ impl SharedMultiServerContext {
             name: name.to_string(),
             log: log.clone(),
         };
-        let server =
-            HttpServerStarter::new(&config_dropshot, api, context, &log)
-                .map_err(|error| format!("failed to create server: {}", error))?
-                .start();
+        let server = HttpServerStarter::new(
+            &config_dropshot,
+            api,
+            context,
+            &log,
+            Noop::default(),
+        )
+        .map_err(|error| format!("failed to create server: {}", error))?
+        .start();
         let shutdown_handle = server.wait_for_shutdown();
 
         slot.insert(server);

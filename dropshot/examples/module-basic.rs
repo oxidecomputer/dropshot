@@ -1,6 +1,7 @@
 // Copyright 2020 Oxide Computer Company
 //! Example use of Dropshot.
 
+use dropshot::tracing::Noop;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -35,10 +36,15 @@ async fn main() -> Result<(), String> {
     let api_context = ExampleContext::new();
 
     // Set up the server.
-    let server =
-        HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-            .map_err(|error| format!("failed to create server: {}", error))?
-            .start();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        api,
+        api_context,
+        &log,
+        Noop::default(),
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
 
     // Wait for the server to stop.  Note that there's not any code to shut down
     // this server, so we should never get past this point.

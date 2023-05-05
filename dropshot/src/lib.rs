@@ -596,6 +596,7 @@ mod router;
 mod schema_util;
 mod server;
 mod to_map;
+pub mod tracing;
 mod type_util;
 mod websocket;
 

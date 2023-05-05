@@ -34,6 +34,7 @@ use crate::http_util::CONTENT_TYPE_URL_ENCODED;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
 use crate::server::{HttpServer, HttpServerStarter, ServerContext};
+use crate::tracing;
 
 enum AllowedValue<'a> {
     Any,
@@ -456,7 +457,7 @@ impl LogContext {
 /// all down at the end.
 pub struct TestContext<Context: ServerContext> {
     pub client_testctx: ClientTestContext,
-    pub server: HttpServer<Context>,
+    pub server: HttpServer<Context, tracing::Noop>,
     pub log: Logger,
     log_context: Option<LogContext>,
 }
@@ -475,7 +476,7 @@ impl<Context: ServerContext> TestContext<Context> {
         config_dropshot: &ConfigDropshot,
         log_context: Option<LogContext>,
         log: Logger,
-    ) -> TestContext<Context> {
+    ) -> Self {
         assert_eq!(
             0,
             config_dropshot.bind_address.port(),
@@ -483,10 +484,15 @@ impl<Context: ServerContext> TestContext<Context> {
         );
 
         // Set up the server itself.
-        let server =
-            HttpServerStarter::new(&config_dropshot, api, private, &log)
-                .unwrap()
-                .start();
+        let server = HttpServerStarter::new(
+            &config_dropshot,
+            api,
+            private,
+            &log,
+            tracing::Noop::default(),
+        )
+        .unwrap()
+        .start();
 
         let server_addr = server.local_addr();
         let client_log = log.new(o!("http_client" => "dropshot test suite"));

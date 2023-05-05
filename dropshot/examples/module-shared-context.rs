@@ -3,6 +3,7 @@
 //! a custom context object that outlives endpoint functions.
 
 use dropshot::endpoint;
+use dropshot::tracing::Noop;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -47,6 +48,7 @@ async fn main() -> Result<(), String> {
         api,
         api_context.clone(),
         &log,
+        Noop::default(),
     )
     .map_err(|error| format!("failed to create server: {}", error))?
     .start();

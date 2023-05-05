@@ -3,13 +3,11 @@
 
 use super::api_description::ApiDescription;
 use super::config::{ConfigDropshot, ConfigTls};
-#[cfg(feature = "usdt-probes")]
-use super::dtrace::probes;
 use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
-use super::ProbeRegistration;
+use super::tracing::Tracing;
 
 use async_stream::stream;
 use futures::future::{
@@ -88,19 +86,21 @@ pub struct ServerConfig {
 
 /// A thin wrapper around a Hyper Server object that exposes some interfaces that
 /// we find useful.
-pub struct HttpServerStarter<C: ServerContext> {
+pub struct HttpServerStarter<C: ServerContext, Tr: Tracing> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
-    wrapped: WrappedHttpServerStarter<C>,
+    wrapped: WrappedHttpServerStarter<C, Tr>,
+    tracing: Tr,
 }
 
-impl<C: ServerContext> HttpServerStarter<C> {
+impl<C: ServerContext, Tr: Tracing> HttpServerStarter<C, Tr> {
     pub fn new(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<HttpServerStarter<C>, GenericError> {
+        tracing: Tr,
+    ) -> Result<HttpServerStarter<C, Tr>, GenericError> {
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
@@ -117,11 +117,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         api,
                         private,
                         log,
+                        tracing.clone(),
                     )?;
                 HttpServerStarter {
                     app_state,
                     local_addr,
                     wrapped: WrappedHttpServerStarter::Https(starter),
+                    tracing,
                 }
             }
             None => {
@@ -132,11 +134,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         api,
                         private,
                         log,
+                        tracing.clone(),
                     )?;
                 HttpServerStarter {
                     app_state,
                     local_addr,
                     wrapped: WrappedHttpServerStarter::Http(starter),
+                    tracing,
                 }
             }
         };
@@ -151,7 +155,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         Ok(starter)
     }
 
-    pub fn start(self) -> HttpServer<C> {
+    pub fn start(self) -> HttpServer<C, Tr> {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let log_close = self.app_state.log.new(o!());
         let join_handle = match self.wrapped {
@@ -166,32 +170,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         });
         info!(self.app_state.log, "listening");
 
-        #[cfg(feature = "usdt-probes")]
-        let probe_registration = match usdt::register_probes() {
-            Ok(_) => {
-                debug!(
-                    self.app_state.log,
-                    "successfully registered DTrace USDT probes"
-                );
-                ProbeRegistration::Succeeded
-            }
-            Err(e) => {
-                let msg = e.to_string();
-                error!(
-                    self.app_state.log,
-                    "failed to register DTrace USDT probes: {}", msg
-                );
-                ProbeRegistration::Failed(msg)
-            }
-        };
-        #[cfg(not(feature = "usdt-probes"))]
-        let probe_registration = {
-            debug!(
-                self.app_state.log,
-                "DTrace USDT probes compiled out, not registering"
-            );
-            ProbeRegistration::Disabled
-        };
+        let probe_registration = self.tracing.register();
 
         HttpServer {
             probe_registration,
@@ -203,19 +182,19 @@ impl<C: ServerContext> HttpServerStarter<C> {
     }
 }
 
-enum WrappedHttpServerStarter<C: ServerContext> {
-    Http(InnerHttpServerStarter<C>),
-    Https(InnerHttpsServerStarter<C>),
+enum WrappedHttpServerStarter<C: ServerContext, Tr: Tracing> {
+    Http(InnerHttpServerStarter<C, Tr>),
+    Https(InnerHttpsServerStarter<C, Tr>),
 }
 
-struct InnerHttpServerStarter<C: ServerContext>(
-    Server<AddrIncoming, ServerConnectionHandler<C>>,
+struct InnerHttpServerStarter<C: ServerContext, Tr: Tracing>(
+    Server<AddrIncoming, ServerConnectionHandler<C, Tr>>,
 );
 
-type InnerHttpServerStarterNewReturn<C> =
-    (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
+type InnerHttpServerStarterNewReturn<C, Tr> =
+    (InnerHttpServerStarter<C, Tr>, Arc<DropshotState<C>>, SocketAddr);
 
-impl<C: ServerContext> InnerHttpServerStarter<C> {
+impl<C: ServerContext, Tr: Tracing> InnerHttpServerStarter<C, Tr> {
     /// Begins execution of the underlying Http server.
     fn start(
         self,
@@ -244,7 +223,8 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
+        tracing: Tr,
+    ) -> Result<InnerHttpServerStarterNewReturn<C, Tr>, hyper::Error> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
 
@@ -258,7 +238,8 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             tls_acceptor: None,
         });
 
-        let make_service = ServerConnectionHandler::new(app_state.clone());
+        let make_service =
+            ServerConnectionHandler::new(app_state.clone(), tracing);
         let builder = hyper::Server::builder(incoming);
         let server = builder.serve(make_service);
         Ok((InnerHttpServerStarter(server), app_state, local_addr))
@@ -428,8 +409,8 @@ impl hyper::server::accept::Accept for HttpsAcceptor {
     }
 }
 
-struct InnerHttpsServerStarter<C: ServerContext>(
-    Server<HttpsAcceptor, ServerConnectionHandler<C>>,
+struct InnerHttpsServerStarter<C: ServerContext, Tr: Tracing>(
+    Server<HttpsAcceptor, ServerConnectionHandler<C, Tr>>,
 );
 
 /// Create a TLS configuration from the Dropshot config structure.
@@ -456,10 +437,10 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
     }
 }
 
-type InnerHttpsServerStarterNewReturn<C> =
-    (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
+type InnerHttpsServerStarterNewReturn<C, Tr> =
+    (InnerHttpsServerStarter<C, Tr>, Arc<DropshotState<C>>, SocketAddr);
 
-impl<C: ServerContext> InnerHttpsServerStarter<C> {
+impl<C: ServerContext, Tr: Tracing> InnerHttpsServerStarter<C, Tr> {
     /// Begins execution of the underlying Http server.
     fn start(
         self,
@@ -482,7 +463,8 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
-    ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
+        tracing: Tr,
+    ) -> Result<InnerHttpsServerStarterNewReturn<C, Tr>, GenericError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             // Unwrap is safe here because we cannot enter this code path
             // without a TLS configuration
@@ -512,15 +494,18 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             tls_acceptor: Some(acceptor),
         });
 
-        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
+        let make_service =
+            ServerConnectionHandler::new(Arc::clone(&app_state), tracing);
         let server = Server::builder(https_acceptor).serve(make_service);
 
         Ok((InnerHttpsServerStarter(server), app_state, local_addr))
     }
 }
 
-impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
-    type Response = ServerRequestHandler<C>;
+impl<C: ServerContext, Tr: Tracing> Service<&TlsConn>
+    for ServerConnectionHandler<C, Tr>
+{
+    type Response = ServerRequestHandler<C, Tr>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -534,7 +519,8 @@ impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
     fn call(&mut self, conn: &TlsConn) -> Self::Future {
         let server = Arc::clone(&self.server);
         let remote_addr = conn.remote_addr();
-        Box::pin(http_connection_handle(server, remote_addr))
+        let tracing = self.tracing.clone();
+        Box::pin(http_connection_handle(server, remote_addr, tracing))
     }
 }
 
@@ -561,8 +547,8 @@ impl FusedFuture for ShutdownWaitFuture {
 ///
 /// The generic traits represent the following:
 /// - C: Caller-supplied server context
-pub struct HttpServer<C: ServerContext> {
-    probe_registration: ProbeRegistration,
+pub struct HttpServer<C: ServerContext, Tr: Tracing> {
+    probe_registration: Tr::Registration,
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     closer: CloseHandle,
@@ -574,7 +560,7 @@ struct CloseHandle {
     close_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl<C: ServerContext> HttpServer<C> {
+impl<C: ServerContext, Tr: Tracing> HttpServer<C, Tr> {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -601,10 +587,10 @@ impl<C: ServerContext> HttpServer<C> {
         Ok(())
     }
 
-    /// Return the result of registering the server's DTrace USDT probes.
+    /// Return the result of registering the server's tracing probes.
     ///
-    /// See [`ProbeRegistration`] for details.
-    pub fn probe_registration(&self) -> &ProbeRegistration {
+    /// See [`Tracing`] for details.
+    pub fn probe_registration(&self) -> &Tr::Registration {
         &self.probe_registration
     }
 
@@ -642,7 +628,7 @@ impl Drop for CloseHandle {
     }
 }
 
-impl<C: ServerContext> Future for HttpServer<C> {
+impl<C: ServerContext, Tr: Tracing> Future for HttpServer<C, Tr> {
     type Output = Result<(), String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -652,7 +638,7 @@ impl<C: ServerContext> Future for HttpServer<C> {
     }
 }
 
-impl<C: ServerContext> FusedFuture for HttpServer<C> {
+impl<C: ServerContext, Tr: Tracing> FusedFuture for HttpServer<C, Tr> {
     fn is_terminated(&self) -> bool {
         self.join_future.is_terminated()
     }
@@ -662,22 +648,24 @@ impl<C: ServerContext> FusedFuture for HttpServer<C> {
 /// This is invoked by Hyper when a new connection is accepted.  This function
 /// must return a Hyper Service object that will handle requests for this
 /// connection.
-async fn http_connection_handle<C: ServerContext>(
+async fn http_connection_handle<C: ServerContext, Tr: Tracing>(
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
-) -> Result<ServerRequestHandler<C>, GenericError> {
+    tracing: Tr,
+) -> Result<ServerRequestHandler<C, Tr>, GenericError> {
     info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
-    Ok(ServerRequestHandler::new(server, remote_addr))
+    Ok(ServerRequestHandler::new(server, remote_addr, tracing))
 }
 
 /// Initial entry point for handling a new request to the HTTP server.  This is
 /// invoked by Hyper when a new request is received.  This function returns a
 /// Result that either represents a valid HTTP response or an error (which will
 /// also get turned into an HTTP response).
-async fn http_request_handle_wrap<C: ServerContext>(
+async fn http_request_handle_wrap<C: ServerContext, Tr: Tracing>(
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
     request: Request<Body>,
+    tracing: Tr,
 ) -> Result<Response<Body>, GenericError> {
     // This extra level of indirection makes error handling much more
     // straightforward, since the request handling code can simply return early
@@ -691,22 +679,18 @@ async fn http_request_handle_wrap<C: ServerContext>(
         "uri" => format!("{}", request.uri()),
     ));
     trace!(request_log, "incoming request");
-    #[cfg(feature = "usdt-probes")]
-    probes::request__start!(|| {
-        let uri = request.uri();
-        crate::dtrace::RequestInfo {
-            id: request_id.clone(),
-            local_addr: server.local_addr,
-            remote_addr,
-            method: request.method().to_string(),
-            path: uri.path().to_string(),
-            query: uri.query().map(|x| x.to_string()),
-        }
+    let uri = request.uri();
+    tracing.request_start(&crate::dtrace::RequestInfo {
+        id: request_id.clone(),
+        local_addr: server.local_addr,
+        remote_addr,
+        method: request.method().to_string(),
+        path: uri.path().to_string(),
+        query: uri.query().map(|x| x.to_string()),
     });
 
     // Copy local address to report later during the finish probe, as the
     // server is passed by value to the request handler function.
-    #[cfg(feature = "usdt-probes")]
     let local_addr = server.local_addr;
 
     let maybe_response = http_request_handle(
@@ -724,15 +708,12 @@ async fn http_request_handle_wrap<C: ServerContext>(
             let message_internal = error.internal_message.clone();
             let r = error.into_response(&request_id);
 
-            #[cfg(feature = "usdt-probes")]
-            probes::request__done!(|| {
-                crate::dtrace::ResponseInfo {
-                    id: request_id.clone(),
-                    local_addr,
-                    remote_addr,
-                    status_code: r.status().as_u16(),
-                    message: message_external.clone(),
-                }
+            tracing.request_done(&crate::dtrace::ResponseInfo {
+                id: request_id.clone(),
+                local_addr,
+                remote_addr,
+                status_code: r.status().as_u16(),
+                message: message_external.clone(),
             });
 
             // TODO-debug: add request and response headers here
@@ -751,15 +732,12 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 "response_code" => response.status().as_str().to_string()
             );
 
-            #[cfg(feature = "usdt-probes")]
-            probes::request__done!(|| {
-                crate::dtrace::ResponseInfo {
-                    id: request_id.parse().unwrap(),
-                    local_addr,
-                    remote_addr,
-                    status_code: response.status().as_u16(),
-                    message: "".to_string(),
-                }
+            tracing.request_done(&crate::dtrace::ResponseInfo {
+                id: request_id.parse().unwrap(),
+                local_addr,
+                remote_addr,
+                status_code: response.status().as_u16(),
+                message: "".to_string(),
             });
 
             response
@@ -817,27 +795,30 @@ fn generate_request_id() -> String {
 /// state object as an additional argument.  We could use `make_service_fn` here
 /// using a closure to capture the state object, but the resulting code is a bit
 /// simpler without it.
-pub struct ServerConnectionHandler<C: ServerContext> {
+pub struct ServerConnectionHandler<C: ServerContext, Tr: Tracing> {
     /// backend state that will be made available to the connection handler
     server: Arc<DropshotState<C>>,
+    tracing: Tr,
 }
 
-impl<C: ServerContext> ServerConnectionHandler<C> {
+impl<C: ServerContext, Tr: Tracing> ServerConnectionHandler<C, Tr> {
     /// Create an ServerConnectionHandler with the given state object that
     /// will be made available to the handler.
-    fn new(server: Arc<DropshotState<C>>) -> Self {
-        ServerConnectionHandler { server }
+    fn new(server: Arc<DropshotState<C>>, tracing: Tr) -> Self {
+        ServerConnectionHandler { server, tracing }
     }
 }
 
-impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
+impl<C: ServerContext, Tr: Tracing> Service<&AddrStream>
+    for ServerConnectionHandler<C, Tr>
+{
     // Recall that a Service in this context is just something that takes a
     // request (which could be anything) and produces a response (which could be
     // anything).  This being a connection handler, the request type is an
     // AddrStream (which wraps a TCP connection) and the response type is
     // another Service: one that accepts HTTP requests and produces HTTP
     // responses.
-    type Response = ServerRequestHandler<T>;
+    type Response = ServerRequestHandler<C, Tr>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -859,7 +840,8 @@ impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
         // address and any other per-connection state that we want to keep.
         let server = Arc::clone(&self.server);
         let remote_addr = conn.remote_addr();
-        Box::pin(http_connection_handle(server, remote_addr))
+        let tracing = self.tracing.clone();
+        Box::pin(http_connection_handle(server, remote_addr, tracing))
     }
 }
 
@@ -868,21 +850,28 @@ impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
 /// the backend server state object.  We could use `service_fn` here using a
 /// closure to capture the server state object, but the resulting code is a bit
 /// simpler without all that.
-pub struct ServerRequestHandler<C: ServerContext> {
+pub struct ServerRequestHandler<C: ServerContext, Tr: Tracing> {
     /// backend state that will be made available to the request handler
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
+    tracing: Tr,
 }
 
-impl<C: ServerContext> ServerRequestHandler<C> {
+impl<C: ServerContext, Tr: Tracing> ServerRequestHandler<C, Tr> {
     /// Create a ServerRequestHandler object with the given state object that
     /// will be provided to the handler function.
-    fn new(server: Arc<DropshotState<C>>, remote_addr: SocketAddr) -> Self {
-        ServerRequestHandler { server, remote_addr }
+    fn new(
+        server: Arc<DropshotState<C>>,
+        remote_addr: SocketAddr,
+        tracing: Tr,
+    ) -> Self {
+        ServerRequestHandler { server, remote_addr, tracing }
     }
 }
 
-impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
+impl<C: ServerContext, Tr: Tracing> Service<Request<Body>>
+    for ServerRequestHandler<C, Tr>
+{
     type Response = Response<Body>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -900,6 +889,7 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
             Arc::clone(&self.server),
             self.remote_addr,
             req,
+            self.tracing.clone(),
         ))
     }
 }
@@ -939,6 +929,7 @@ mod test {
     // Referring to the current crate as "dropshot::" instead of "crate::"
     // helps the endpoint macro with module lookup.
     use crate as dropshot;
+    use crate::tracing::Noop;
     use dropshot::endpoint;
     use dropshot::test_util::ClientTestContext;
     use dropshot::test_util::LogContext;
@@ -972,7 +963,7 @@ mod test {
         }
     }
 
-    fn create_test_server() -> (HttpServer<i32>, TestConfig) {
+    fn create_test_server() -> (HttpServer<i32, Noop>, TestConfig) {
         let config_dropshot = ConfigDropshot::default();
 
         let mut api = ApiDescription::new();
@@ -983,9 +974,15 @@ mod test {
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
-        let server = HttpServerStarter::new(&config_dropshot, api, 0, log)
-            .unwrap()
-            .start();
+        let server = HttpServerStarter::new(
+            &config_dropshot,
+            api,
+            0,
+            log,
+            Noop::default(),
+        )
+        .unwrap()
+        .start();
 
         (server, TestConfig { log_context })
     }

@@ -6,7 +6,7 @@
 //! proper tagging innate.
 
 use dropshot::{
-    endpoint, ApiDescription, ConfigLogging, ConfigLoggingLevel,
+    endpoint, tracing::Noop, ApiDescription, ConfigLogging, ConfigLoggingLevel,
     EndpointTagPolicy, HttpError, HttpResponseOk, HttpServerStarter,
     RequestContext, TagConfig, TagDetails, TagExternalDocs,
 };
@@ -99,9 +99,15 @@ async fn main() -> Result<(), String> {
     api.register(get_fryism).unwrap();
 
     // Set up the server.
-    let server = HttpServerStarter::new(&config_dropshot, api, (), &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        api,
+        (),
+        &log,
+        Noop::default(),
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
 
     // Wait for the server to stop.  Note that there's not any code to shut down
     // this server, so we should never get past this point.

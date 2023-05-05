@@ -3,6 +3,7 @@
 //! An example that demonstrates server shutdown (and waiting for shutdown).
 
 use dropshot::endpoint;
+use dropshot::tracing::Noop;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -33,10 +34,15 @@ async fn main() -> Result<(), String> {
     let api_context = Arc::new(ExampleContext::new());
 
     // Set up the server.
-    let server =
-        HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-            .map_err(|error| format!("failed to create server: {}", error))?
-            .start();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        api,
+        api_context,
+        &log,
+        Noop::default(),
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
     let shutdown = server.wait_for_shutdown();
 
     tokio::task::spawn(async move {

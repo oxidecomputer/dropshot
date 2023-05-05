@@ -15,6 +15,7 @@
 //! next page token from the response as a query parameter, too.
 
 use dropshot::endpoint;
+use dropshot::tracing::Noop;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -128,8 +129,14 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
-    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        api,
+        ctx,
+        &log,
+        Noop::default(),
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
     server.await
 }

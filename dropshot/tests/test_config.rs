@@ -3,6 +3,7 @@
 //! Tests for configuration file.
 
 use dropshot::test_util::read_config;
+use dropshot::tracing::{self, Noop};
 use dropshot::{ConfigDropshot, ConfigTls};
 use dropshot::{HttpServer, HttpServerStarter};
 use slog::o;
@@ -140,9 +141,15 @@ fn test_config_bad_tls_incomplete() {
 fn make_server(
     config: &ConfigDropshot,
     log: &Logger,
-) -> HttpServerStarter<i32> {
-    HttpServerStarter::new(&config, dropshot::ApiDescription::new(), 0, log)
-        .unwrap()
+) -> HttpServerStarter<i32, tracing::Noop> {
+    HttpServerStarter::new(
+        &config,
+        dropshot::ApiDescription::new(),
+        0,
+        log,
+        tracing::Noop::default(),
+    )
+    .unwrap()
 }
 
 fn make_config(
@@ -167,7 +174,7 @@ where
     C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
 {
     fn make_client(&self) -> hyper::Client<C>;
-    fn make_server(&self, bind_port: u16) -> HttpServer<i32>;
+    fn make_server(&self, bind_port: u16) -> HttpServer<i32, Noop>;
     fn make_uri(&self, bind_port: u16) -> hyper::Uri;
 
     fn log(&self) -> &slog::Logger;
@@ -242,7 +249,7 @@ async fn test_config_bind_address_http() {
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
             format!("http://localhost:{}/", bind_port).parse().unwrap()
         }
-        fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
+        fn make_server(&self, bind_port: u16) -> HttpServer<i32, Noop> {
             let tls = None;
             let config = make_config("127.0.0.1", bind_port, tls);
             make_server(&config, &self.log).start()
@@ -302,7 +309,7 @@ async fn test_config_bind_address_https() {
             format!("https://localhost:{}/", bind_port).parse().unwrap()
         }
 
-        fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
+        fn make_server(&self, bind_port: u16) -> HttpServer<i32, Noop> {
             let tls = Some(ConfigTls::AsFile {
                 cert_file: self.cert_file.path().to_path_buf(),
                 key_file: self.key_file.path().to_path_buf(),
@@ -373,7 +380,7 @@ async fn test_config_bind_address_https_buffer() {
             format!("https://localhost:{}/", bind_port).parse().unwrap()
         }
 
-        fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
+        fn make_server(&self, bind_port: u16) -> HttpServer<i32, Noop> {
             let tls = Some(ConfigTls::AsBytes {
                 certs: self.serialized_certs.clone(),
                 key: self.serialized_key.clone(),

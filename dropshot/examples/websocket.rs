@@ -2,6 +2,7 @@
 //! Example use of Dropshot with a websocket endpoint.
 
 use dropshot::channel;
+use dropshot::tracing::Noop;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -37,9 +38,15 @@ async fn main() -> Result<(), String> {
     api.register(example_api_websocket_counter).unwrap();
 
     // Set up the server.
-    let server = HttpServerStarter::new(&config_dropshot, api, (), &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        api,
+        (),
+        &log,
+        Noop::default(),
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
 
     // Wait for the server to stop.  Note that there's not any code to shut down
     // this server, so we should never get past this point.

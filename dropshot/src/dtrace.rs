@@ -2,7 +2,7 @@
 //! DTrace probes and support
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub(crate) struct RequestInfo {
+pub struct RequestInfo {
     pub id: String,
     pub local_addr: std::net::SocketAddr,
     pub remote_addr: std::net::SocketAddr,
@@ -12,7 +12,7 @@ pub(crate) struct RequestInfo {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub(crate) struct ResponseInfo {
+pub struct ResponseInfo {
     pub id: String,
     pub local_addr: std::net::SocketAddr,
     pub remote_addr: std::net::SocketAddr,

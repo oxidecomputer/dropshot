@@ -3,7 +3,9 @@
 //! Test cases for TLS support. This validates various behaviors of our TLS
 //! mode, including certificate loading and supported modes.
 
-use dropshot::{ConfigDropshot, ConfigTls, HttpResponseOk, HttpServerStarter};
+use dropshot::{
+    tracing, ConfigDropshot, ConfigTls, HttpResponseOk, HttpServerStarter,
+};
 use slog::{o, Logger};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -68,7 +70,7 @@ fn make_server(
     log: &Logger,
     cert_file: &Path,
     key_file: &Path,
-) -> HttpServerStarter<i32> {
+) -> HttpServerStarter<i32, tracing::Noop> {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
@@ -77,8 +79,14 @@ fn make_server(
             key_file: key_file.to_path_buf(),
         }),
     };
-    HttpServerStarter::new(&config, dropshot::ApiDescription::new(), 0, log)
-        .unwrap()
+    HttpServerStarter::new(
+        &config,
+        dropshot::ApiDescription::new(),
+        0,
+        log,
+        tracing::Noop::default(),
+    )
+    .unwrap()
 }
 
 fn make_pki_verifier(
@@ -378,7 +386,10 @@ async fn test_server_is_https() {
     };
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
-    let server = HttpServerStarter::new(&config, api, 0, &log).unwrap().start();
+    let server =
+        HttpServerStarter::new(&config, api, 0, &log, tracing::Noop::default())
+            .unwrap()
+            .start();
     let port = server.local_addr().port();
 
     let https_client = make_https_client(make_pki_verifier(&certs));
