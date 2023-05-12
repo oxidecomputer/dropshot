@@ -40,7 +40,8 @@ toml = "0.7.3"
 
 [dependencies.chrono]
 version = "0.4.24"
-features = [ "serde" ]
+features = [ "serde", "std", "clock" ]
+default-features = false
 
 [dependencies.dropshot_endpoint]
 version = "^0.9.1-dev"
