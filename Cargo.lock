@@ -179,12 +179,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e3c5919066adf22df73762e50cffcde3a758f2a848b113b586d1f86728b673b"
 dependencies = [
  "iana-time-zone",
- "js-sys",
  "num-integer",
  "num-traits",
  "serde",
- "time 0.1.43",
- "wasm-bindgen",
  "winapi",
 ]
 
@@ -1141,7 +1138,7 @@ checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
 dependencies = [
  "pem 1.1.1",
  "ring",
- "time 0.3.7",
+ "time",
  "yasna",
 ]
 
@@ -1531,7 +1528,7 @@ dependencies = [
  "hostname",
  "slog",
  "slog-json",
- "time 0.3.7",
+ "time",
 ]
 
 [[package]]
@@ -1543,7 +1540,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slog",
- "time 0.3.7",
+ "time",
 ]
 
 [[package]]
@@ -1556,7 +1553,7 @@ dependencies = [
  "slog",
  "term",
  "thread_local",
- "time 0.3.7",
+ "time",
 ]
 
 [[package]]
@@ -1702,16 +1699,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5516c27b78311c50bf42c071425c560ac799b11c30b31f87e3081965fe5e0180"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "time"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -2353,7 +2340,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
 dependencies = [
- "time 0.3.7",
+ "time",
 ]
 
 [[package]]
