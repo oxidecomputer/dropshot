@@ -69,7 +69,6 @@
 //!             &ConfigDropshot {
 //!                 bind_address: "127.0.0.1:0".parse().unwrap(),
 //!                 request_body_max_bytes: 1024,
-//!                 tls: None,
 //!             },
 //!             api,
 //!             Arc::new(()),
@@ -618,6 +617,7 @@ pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
+pub use config::RawTlsConfig;
 pub use dtrace::ProbeRegistration;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
