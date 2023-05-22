@@ -118,7 +118,8 @@ where
     <T as slog::Drain>::Err: std::fmt::Debug,
 {
     let level_drain = slog::LevelFilter(drain, Level::from(level)).fuse();
-    let async_drain = slog_async::Async::new(level_drain).build().fuse();
+    let async_drain =
+        slog_async::Async::new(level_drain).chan_size(1024).build().fuse();
     slog::Logger::root(async_drain, o!())
 }
 
