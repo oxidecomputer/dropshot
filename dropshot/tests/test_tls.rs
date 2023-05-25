@@ -72,13 +72,19 @@ fn make_server(
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        tls: Some(ConfigTls::AsFile {
-            cert_file: cert_file.to_path_buf(),
-            key_file: key_file.to_path_buf(),
-        }),
     };
-    HttpServerStarter::new(&config, dropshot::ApiDescription::new(), 0, log)
-        .unwrap()
+    let config_tls = Some(ConfigTls::AsFile {
+        cert_file: cert_file.to_path_buf(),
+        key_file: key_file.to_path_buf(),
+    });
+    HttpServerStarter::new_with_tls(
+        &config,
+        dropshot::ApiDescription::new(),
+        0,
+        log,
+        config_tls,
+    )
+    .unwrap()
 }
 
 fn make_pki_verifier(
@@ -371,14 +377,17 @@ async fn test_server_is_https() {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        tls: Some(ConfigTls::AsFile {
-            cert_file: cert_file.path().to_path_buf(),
-            key_file: key_file.path().to_path_buf(),
-        }),
     };
+    let config_tls = Some(ConfigTls::AsFile {
+        cert_file: cert_file.path().to_path_buf(),
+        key_file: key_file.path().to_path_buf(),
+    });
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
-    let server = HttpServerStarter::new(&config, api, 0, &log).unwrap().start();
+    let server =
+        HttpServerStarter::new_with_tls(&config, api, 0, &log, config_tls)
+            .unwrap()
+            .start();
     let port = server.local_addr().port();
 
     let https_client = make_https_client(make_pki_verifier(&certs));

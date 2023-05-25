@@ -77,86 +77,28 @@ fn test_config_bad_request_body_max_bytes_too_large() {
     assert!(error.starts_with(""));
 }
 
-// Bad values for "key_file"
-
-#[test]
-fn test_config_bad_key_file_garbage() {
-    let error = read_config::<ConfigDropshot>(
-        "bad_key_file_garbage",
-        "[tls]\ntype = 'AsFile'\ncert_file = ''\nkey_file = 23",
-    )
-    .unwrap_err()
-    .to_string();
-    println!("found error: {}", error);
-    assert!(error.contains("invalid type: integer"));
-}
-
-// Bad values for "cert_file"
-
-#[test]
-fn test_config_bad_cert_file_garbage() {
-    let error = read_config::<ConfigDropshot>(
-        "bad_cert_file_garbage",
-        "[tls]\ntype = 'AsFile'\ncert_file = 23\nkey_file=''",
-    )
-    .unwrap_err()
-    .to_string();
-    println!("found error: {}", error);
-    assert!(error.contains("invalid type: integer"));
-}
-
-// Bad values for "tls"
-
-#[test]
-fn test_config_bad_tls_garbage() {
-    let error = read_config::<ConfigDropshot>("bad_tls_garbage", "tls = 23")
-        .unwrap_err()
-        .to_string();
-    println!("found error: {}", error);
-    assert!(error.contains("invalid type: integer"));
-}
-
-#[test]
-fn test_config_bad_tls_incomplete() {
-    let error = read_config::<ConfigDropshot>(
-        "bad_tls_incomplete",
-        "[tls]\ntype = 'AsFile'\ncert_file = ''",
-    )
-    .unwrap_err()
-    .to_string();
-    println!("found error: {}", error);
-    assert!(error.contains("missing field `key_file`"));
-
-    let error = read_config::<ConfigDropshot>(
-        "bad_tls_incomplete",
-        "[tls]\ntype = 'AsFile'\nkey_file = ''",
-    )
-    .unwrap_err()
-    .to_string();
-    println!("found error: {}", error);
-    assert!(error.contains("missing field `cert_file`"));
-}
-
 fn make_server(
     config: &ConfigDropshot,
     log: &Logger,
+    tls: Option<ConfigTls>,
 ) -> HttpServerStarter<i32> {
-    HttpServerStarter::new(&config, dropshot::ApiDescription::new(), 0, log)
-        .unwrap()
+    HttpServerStarter::new_with_tls(
+        &config,
+        dropshot::ApiDescription::new(),
+        0,
+        log,
+        tls,
+    )
+    .unwrap()
 }
 
-fn make_config(
-    bind_ip_str: &str,
-    bind_port: u16,
-    tls: Option<ConfigTls>,
-) -> ConfigDropshot {
+fn make_config(bind_ip_str: &str, bind_port: u16) -> ConfigDropshot {
     ConfigDropshot {
         bind_address: std::net::SocketAddr::new(
             std::net::IpAddr::from_str(bind_ip_str).unwrap(),
             bind_port,
         ),
         request_body_max_bytes: 1024,
-        tls,
     }
 }
 
@@ -243,9 +185,8 @@ async fn test_config_bind_address_http() {
             format!("http://localhost:{}/", bind_port).parse().unwrap()
         }
         fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
-            let tls = None;
-            let config = make_config("127.0.0.1", bind_port, tls);
-            make_server(&config, &self.log).start()
+            let config = make_config("127.0.0.1", bind_port);
+            make_server(&config, &self.log, None).start()
         }
 
         fn log(&self) -> &slog::Logger {
@@ -307,8 +248,8 @@ async fn test_config_bind_address_https() {
                 cert_file: self.cert_file.path().to_path_buf(),
                 key_file: self.key_file.path().to_path_buf(),
             });
-            let config = make_config("127.0.0.1", bind_port, tls);
-            make_server(&config, &self.log).start()
+            let config = make_config("127.0.0.1", bind_port);
+            make_server(&config, &self.log, tls).start()
         }
 
         fn log(&self) -> &Logger {
@@ -378,8 +319,8 @@ async fn test_config_bind_address_https_buffer() {
                 certs: self.serialized_certs.clone(),
                 key: self.serialized_key.clone(),
             });
-            let config = make_config("127.0.0.1", bind_port, tls);
-            make_server(&config, &self.log).start()
+            let config = make_config("127.0.0.1", bind_port);
+            make_server(&config, &self.log, tls).start()
         }
 
         fn log(&self) -> &Logger {

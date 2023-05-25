@@ -62,13 +62,11 @@ async fn main() -> Result<(), String> {
     // port.
     //
     // In addition, we'll make this an HTTPS server.
-    let config_dropshot = ConfigDropshot {
-        tls: Some(ConfigTls::AsFile {
-            cert_file: cert_file.path().to_path_buf(),
-            key_file: key_file.path().to_path_buf(),
-        }),
-        ..Default::default()
-    };
+    let config_dropshot = ConfigDropshot::default();
+    let config_tls = Some(ConfigTls::AsFile {
+        cert_file: cert_file.path().to_path_buf(),
+        key_file: key_file.path().to_path_buf(),
+    });
 
     // For simplicity, we'll configure an "info"-level logger that writes to
     // stderr assuming that it's a terminal.
@@ -87,10 +85,15 @@ async fn main() -> Result<(), String> {
     let api_context = ExampleContext::new();
 
     // Set up the server.
-    let server =
-        HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-            .map_err(|error| format!("failed to create server: {}", error))?
-            .start();
+    let server = HttpServerStarter::new_with_tls(
+        &config_dropshot,
+        api,
+        api_context,
+        &log,
+        config_tls,
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
 
     // Wait for the server to stop.  Note that there's not any code to shut down
     // this server, so we should never get past this point.

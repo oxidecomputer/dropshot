@@ -86,8 +86,6 @@ pub struct ServerConfig {
     pub page_default_nitems: NonZeroU32,
 }
 
-/// A thin wrapper around a Hyper Server object that exposes some interfaces that
-/// we find useful.
 pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
@@ -101,6 +99,16 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, GenericError> {
+        Self::new_with_tls(config, api, private, log, None)
+    }
+
+    pub fn new_with_tls(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+        tls: Option<ConfigTls>,
+    ) -> Result<HttpServerStarter<C>, GenericError> {
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
@@ -108,8 +116,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_default_nitems: NonZeroU32::new(100).unwrap(),
         };
 
-        let starter = match config.tls {
-            Some(_) => {
+        let starter = match &tls {
+            Some(tls) => {
                 let (starter, app_state, local_addr) =
                     InnerHttpsServerStarter::new(
                         config,
@@ -117,6 +125,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         api,
                         private,
                         log,
+                        tls,
                     )?;
                 HttpServerStarter {
                     app_state,
@@ -232,12 +241,10 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         tokio::spawn(async { graceful.await })
     }
 
-    /// Set up an HTTP server bound on the specified address that runs registered
-    /// handlers.  You must invoke `start()` on the returned instance of
-    /// `HttpServerStarter` (and await the result) to actually start the server.
-    ///
-    /// TODO-cleanup We should be able to take a reference to the ApiDescription.
-    /// We currently can't because we need to hang onto the router.
+    /// Set up an HTTP server bound on the specified address that runs
+    /// registered handlers.  You must invoke `start()` on the returned instance
+    /// of `HttpServerStarter` (and await the result) to actually start the
+    /// server.
     fn new(
         config: &ConfigDropshot,
         server_config: ServerConfig,
@@ -248,7 +255,6 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
 
-        // TODO-cleanup too many Arcs?
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
@@ -433,17 +439,67 @@ struct InnerHttpsServerStarter<C: ServerContext>(
 );
 
 /// Create a TLS configuration from the Dropshot config structure.
-// Eventually we may want to change the APIs to allow users to pass
-// a rustls::ServerConfig themselves
 impl TryFrom<&ConfigTls> for rustls::ServerConfig {
     type Error = std::io::Error;
 
     fn try_from(config: &ConfigTls) -> std::io::Result<Self> {
-        let certs = load_certs(&config)?;
-        let private_key = load_private_key(&config)?;
+        let (mut cert_reader, mut key_reader): (
+            Box<dyn std::io::BufRead>,
+            Box<dyn std::io::BufRead>,
+        ) = match config {
+            ConfigTls::Dynamic(raw) => {
+                return Ok(raw.clone());
+            }
+            ConfigTls::AsBytes { certs, key } => (
+                Box::new(std::io::BufReader::new(certs.as_slice())),
+                Box::new(std::io::BufReader::new(key.as_slice())),
+            ),
+            ConfigTls::AsFile { cert_file, key_file } => {
+                let certfile = Box::new(std::io::BufReader::new(
+                    std::fs::File::open(cert_file).map_err(|e| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!(
+                                "failed to open {}: {}",
+                                cert_file.display(),
+                                e
+                            ),
+                        )
+                    })?,
+                ));
+                let keyfile = Box::new(std::io::BufReader::new(
+                    std::fs::File::open(key_file).map_err(|e| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!(
+                                "failed to open {}: {}",
+                                key_file.display(),
+                                e
+                            ),
+                        )
+                    })?,
+                ));
+                (certfile, keyfile)
+            }
+        };
+
+        let certs = rustls_pemfile::certs(&mut cert_reader)
+            .map_err(|err| {
+                io_error(format!("failed to load certificate: {err}"))
+            })
+            .map(|mut chain| {
+                chain.drain(..).map(rustls::Certificate).collect()
+            })?;
+        let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
+            .map_err(|err| {
+                io_error(format!("failed to load private key: {err}"))
+            })?;
+        if keys.len() != 1 {
+            return Err(io_error("expected a single private key".into()));
+        }
+        let private_key = rustls::PrivateKey(keys.into_iter().next().unwrap());
+
         let mut cfg = rustls::ServerConfig::builder()
-            // TODO: We may want to expose protocol configuration in our
-            // config
             .with_safe_default_cipher_suites()
             .with_safe_default_kx_groups()
             .with_safe_default_protocol_versions()
@@ -482,11 +538,10 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
+        tls: &ConfigTls,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
-            // Unwrap is safe here because we cannot enter this code path
-            // without a TLS configuration
-            rustls::ServerConfig::try_from(config.tls.as_ref().unwrap())?,
+            rustls::ServerConfig::try_from(tls)?,
         ))));
 
         let tcp = {
@@ -613,7 +668,8 @@ impl<C: ServerContext> HttpServer<C> {
     /// This function does not cause the server to shut down. It just waits for
     /// the shutdown to happen.
     ///
-    /// To trigger a shutdown, Call [HttpServer::close] (which also awaits shutdown).
+    /// To trigger a shutdown, Call [HttpServer::close] (which also awaits
+    /// shutdown).
     pub fn wait_for_shutdown(&self) -> ShutdownWaitFuture {
         ShutdownWaitFuture(self.join_future.clone())
     }
@@ -906,31 +962,6 @@ impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
 
 fn io_error(err: String) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, err)
-}
-
-// Load public certificate from config.
-fn load_certs(config: &ConfigTls) -> std::io::Result<Vec<rustls::Certificate>> {
-    let mut reader = config.cert_reader()?;
-
-    // Load and return certificate.
-    rustls_pemfile::certs(&mut reader)
-        .map_err(|err| io_error(format!("failed to load certificate: {err}")))
-        .map(|mut chain| chain.drain(..).map(rustls::Certificate).collect())
-}
-
-// Load private key from config.
-fn load_private_key(config: &ConfigTls) -> std::io::Result<rustls::PrivateKey> {
-    let mut reader = config.key_reader()?;
-
-    // Load and return a single private key.
-    let keys =
-        rustls_pemfile::pkcs8_private_keys(&mut reader).map_err(|err| {
-            io_error(format!("failed to load private key: {err}"))
-        })?;
-    if keys.len() != 1 {
-        return Err(io_error("expected a single private key".into()));
-    }
-    Ok(rustls::PrivateKey(keys[0].clone()))
 }
 
 #[cfg(test)]
