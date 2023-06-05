@@ -238,7 +238,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             info!(log_close, "received request to begin graceful shutdown");
         });
 
-        tokio::spawn(async { graceful.await })
+        tokio::spawn(graceful)
     }
 
     /// Set up an HTTP server bound on the specified address that runs
@@ -529,7 +529,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             info!(log_close, "received request to begin graceful shutdown");
         });
 
-        tokio::spawn(async { graceful.await })
+        tokio::spawn(graceful)
     }
 
     fn new(
