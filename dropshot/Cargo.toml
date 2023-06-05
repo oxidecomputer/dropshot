@@ -39,7 +39,7 @@ tokio-rustls = "0.24.0"
 toml = "0.7.4"
 
 [dependencies.chrono]
-version = "0.4.24"
+version = "0.4.26"
 features = [ "serde", "std", "clock" ]
 default-features = false
 
