@@ -14,6 +14,7 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// `HttpRouter` is a simple data structure for routing incoming HTTP requests to
 /// specific handler functions based on the request method and URI path.  For
@@ -207,8 +208,8 @@ impl MapValue for VariableValue {
 /// corresponding values in the actual path, and the expected body
 /// content type.
 #[derive(Debug)]
-pub struct RouterLookupResult<'a, Context: ServerContext> {
-    pub handler: &'a dyn RouteHandler<Context>,
+pub struct RouterLookupResult<Context: ServerContext> {
+    pub handler: Arc<dyn RouteHandler<Context>>,
     pub variables: VariableSet,
     pub body_content_type: ApiEndpointBodyContentType,
 }
@@ -401,11 +402,11 @@ impl<Context: ServerContext> HttpRouter<Context> {
     /// of variables assigned based on the request path as part of the lookup.
     /// On failure, this returns an `HttpError` appropriate for the failure
     /// mode.
-    pub fn lookup_route<'a, 'b>(
-        &'a self,
-        method: &'b Method,
-        path: InputPath<'b>,
-    ) -> Result<RouterLookupResult<'a, Context>, HttpError> {
+    pub fn lookup_route(
+        &self,
+        method: &Method,
+        path: InputPath<'_>,
+    ) -> Result<RouterLookupResult<Context>, HttpError> {
         let all_segments = input_path_to_segments(&path).map_err(|_| {
             HttpError::for_bad_request(
                 None,
@@ -480,7 +481,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         node.methods
             .get(&methodname)
             .map(|handler| RouterLookupResult {
-                handler: &*handler.handler,
+                handler: Arc::clone(&handler.handler),
                 variables,
                 body_content_type: handler.body_content_type.clone(),
             })
@@ -738,6 +739,7 @@ mod test {
     use hyper::Response;
     use serde::Deserialize;
     use std::collections::BTreeMap;
+    use std::sync::Arc;
 
     async fn test_handler(
         _: RequestContext<()>,
@@ -745,16 +747,16 @@ mod test {
         panic!("test handler is not supposed to run");
     }
 
-    fn new_handler() -> Box<dyn RouteHandler<()>> {
+    fn new_handler() -> Arc<dyn RouteHandler<()>> {
         HttpRouteHandler::new(test_handler)
     }
 
-    fn new_handler_named(name: &str) -> Box<dyn RouteHandler<()>> {
+    fn new_handler_named(name: &str) -> Arc<dyn RouteHandler<()>> {
         HttpRouteHandler::new_with_name(test_handler, name)
     }
 
     fn new_endpoint(
-        handler: Box<dyn RouteHandler<()>>,
+        handler: Arc<dyn RouteHandler<()>>,
         method: Method,
         path: &str,
     ) -> ApiEndpoint<()> {

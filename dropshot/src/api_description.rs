@@ -25,6 +25,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /// ApiEndpoint represents a single API endpoint associated with an
 /// ApiDescription. It has a handler, HTTP method (e.g. GET, POST), and a path--
@@ -33,7 +34,7 @@ use std::collections::HashSet;
 #[derive(Debug)]
 pub struct ApiEndpoint<Context: ServerContext> {
     pub operation_id: String,
-    pub handler: Box<dyn RouteHandler<Context>>,
+    pub handler: Arc<dyn RouteHandler<Context>>,
     pub method: Method,
     pub path: String,
     pub parameters: Vec<ApiEndpointParameter>,

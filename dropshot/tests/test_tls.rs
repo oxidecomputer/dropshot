@@ -3,7 +3,10 @@
 //! Test cases for TLS support. This validates various behaviors of our TLS
 //! mode, including certificate loading and supported modes.
 
-use dropshot::{ConfigDropshot, ConfigTls, HttpResponseOk, HttpServerStarter};
+use dropshot::{
+    ConfigDropshot, ConfigTls, HandlerDisposition, HttpResponseOk,
+    HttpServerStarter,
+};
 use slog::{o, Logger};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -72,6 +75,7 @@ fn make_server(
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
+        default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.to_path_buf(),
@@ -377,6 +381,7 @@ async fn test_server_is_https() {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
+        default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),

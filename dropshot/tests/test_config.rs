@@ -3,7 +3,7 @@
 //! Tests for configuration file.
 
 use dropshot::test_util::read_config;
-use dropshot::{ConfigDropshot, ConfigTls};
+use dropshot::{ConfigDropshot, ConfigTls, HandlerDisposition};
 use dropshot::{HttpServer, HttpServerStarter};
 use slog::o;
 use slog::Logger;
@@ -99,6 +99,7 @@ fn make_config(bind_ip_str: &str, bind_port: u16) -> ConfigDropshot {
             bind_port,
         ),
         request_body_max_bytes: 1024,
+        default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
     }
 }
 

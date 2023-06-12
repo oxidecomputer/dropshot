@@ -617,6 +617,7 @@ pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
+pub use config::HandlerDisposition;
 pub use config::RawTlsConfig;
 pub use dtrace::ProbeRegistration;
 pub use error::HttpError;

@@ -35,9 +35,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::io::ReadBuf;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
+use crate::config::HandlerDisposition;
 use crate::RequestInfo;
 use slog::Logger;
 
@@ -84,6 +86,9 @@ pub struct ServerConfig {
     pub page_max_nitems: NonZeroU32,
     /// default size for a page of results
     pub page_default_nitems: NonZeroU32,
+    /// Default behavior for HTTP handler functions with respect to clients
+    /// disconnecting early.
+    pub default_handler_disposition: HandlerDisposition,
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
@@ -114,6 +119,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             request_body_max_bytes: config.request_body_max_bytes,
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
+            default_handler_disposition: config.default_handler_disposition,
         };
 
         let starter = match &tls {
@@ -850,8 +856,30 @@ async fn http_request_handle<C: ServerContext>(
         request_id: request_id.to_string(),
         log: request_log,
     };
-    let mut response =
-        lookup_result.handler.handle_request(rqctx, request).await?;
+    let handler = lookup_result.handler;
+
+    let mut response = match server.config.default_handler_disposition {
+        HandlerDisposition::CancelOnDisconnect => {
+            // For CancelOnDisconnect, we run the request handler directly: if
+            // the client disconnects, we will be cancelled, and therefore this
+            // future will too.
+            handler.handle_request(rqctx, request).await?
+        }
+        HandlerDisposition::DetachFromClient => {
+            // Spawn the handler so if we're cancelled, the handler still runs
+            // to completion.
+            let (tx, rx) = oneshot::channel();
+            tokio::spawn(async move {
+                let result = handler.handle_request(rqctx, request).await;
+
+                // Ignore errors from `send()`: if it fails, it's because the
+                // outer `http_request_handle` future was cancelled while
+                // waiting for this result.
+                _ = tx.send(result);
+            });
+            rx.await.unwrap()?
+        }
+    };
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),
