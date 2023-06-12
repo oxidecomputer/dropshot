@@ -3,12 +3,20 @@
 //! Tests for configuration file.
 
 use dropshot::test_util::read_config;
-use dropshot::{ConfigDropshot, ConfigTls, HandlerDisposition};
+use dropshot::{
+    ConfigDropshot, ConfigTls, HandlerDisposition, HttpError, HttpResponseOk,
+    RequestContext,
+};
 use dropshot::{HttpServer, HttpServerStarter};
+use futures::StreamExt;
 use slog::o;
 use slog::Logger;
+use std::mem;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tempfile::NamedTempFile;
+use tokio::sync::mpsc;
 
 pub mod common;
 use common::create_log_context;
@@ -77,29 +85,35 @@ fn test_config_bad_request_body_max_bytes_too_large() {
     assert!(error.starts_with(""));
 }
 
-fn make_server(
+fn make_server<T: Send + Sync + 'static>(
+    context: T,
     config: &ConfigDropshot,
     log: &Logger,
     tls: Option<ConfigTls>,
-) -> HttpServerStarter<i32> {
+    api_description: Option<dropshot::ApiDescription<T>>,
+) -> HttpServerStarter<T> {
     HttpServerStarter::new_with_tls(
-        &config,
-        dropshot::ApiDescription::new(),
-        0,
+        config,
+        api_description.unwrap_or_else(dropshot::ApiDescription::new),
+        context,
         log,
         tls,
     )
     .unwrap()
 }
 
-fn make_config(bind_ip_str: &str, bind_port: u16) -> ConfigDropshot {
+fn make_config(
+    bind_ip_str: &str,
+    bind_port: u16,
+    default_handler_disposition: HandlerDisposition,
+) -> ConfigDropshot {
     ConfigDropshot {
         bind_address: std::net::SocketAddr::new(
             std::net::IpAddr::from_str(bind_ip_str).unwrap(),
             bind_port,
         ),
         request_body_max_bytes: 1024,
-        default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
+        default_handler_disposition,
     }
 }
 
@@ -109,8 +123,10 @@ trait TestConfigBindServer<C>
 where
     C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
 {
+    type Context: Send + Sync + 'static;
+
     fn make_client(&self) -> hyper::Client<C>;
-    fn make_server(&self, bind_port: u16) -> HttpServer<i32>;
+    fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context>;
     fn make_uri(&self, bind_port: u16) -> hyper::Uri;
 
     fn log(&self) -> &slog::Logger;
@@ -176,6 +192,8 @@ async fn test_config_bind_address_http() {
     impl TestConfigBindServer<hyper::client::connect::HttpConnector>
         for ConfigBindServerHttp
     {
+        type Context = i32;
+
         fn make_client(
             &self,
         ) -> hyper::Client<hyper::client::connect::HttpConnector> {
@@ -186,8 +204,12 @@ async fn test_config_bind_address_http() {
             format!("http://localhost:{}/", bind_port).parse().unwrap()
         }
         fn make_server(&self, bind_port: u16) -> HttpServer<i32> {
-            let config = make_config("127.0.0.1", bind_port);
-            make_server(&config, &self.log, None).start()
+            let config = make_config(
+                "127.0.0.1",
+                bind_port,
+                HandlerDisposition::CancelOnDisconnect,
+            );
+            make_server(0, &config, &self.log, None, None).start()
         }
 
         fn log(&self) -> &slog::Logger {
@@ -217,6 +239,8 @@ async fn test_config_bind_address_https() {
             hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
         > for ConfigBindServerHttps
     {
+        type Context = i32;
+
         fn make_client(
             &self,
         ) -> hyper::Client<
@@ -249,8 +273,12 @@ async fn test_config_bind_address_https() {
                 cert_file: self.cert_file.path().to_path_buf(),
                 key_file: self.key_file.path().to_path_buf(),
             });
-            let config = make_config("127.0.0.1", bind_port);
-            make_server(&config, &self.log, tls).start()
+            let config = make_config(
+                "127.0.0.1",
+                bind_port,
+                HandlerDisposition::CancelOnDisconnect,
+            );
+            make_server(0, &config, &self.log, tls, None).start()
         }
 
         fn log(&self) -> &Logger {
@@ -288,6 +316,8 @@ async fn test_config_bind_address_https_buffer() {
             hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
         > for ConfigBindServerHttps
     {
+        type Context = i32;
+
         fn make_client(
             &self,
         ) -> hyper::Client<
@@ -320,8 +350,12 @@ async fn test_config_bind_address_https_buffer() {
                 certs: self.serialized_certs.clone(),
                 key: self.serialized_key.clone(),
             });
-            let config = make_config("127.0.0.1", bind_port);
-            make_server(&config, &self.log, tls).start()
+            let config = make_config(
+                "127.0.0.1",
+                bind_port,
+                HandlerDisposition::CancelOnDisconnect,
+            );
+            make_server(0, &config, &self.log, tls, None).start()
         }
 
         fn log(&self) -> &Logger {
@@ -343,6 +377,364 @@ async fn test_config_bind_address_https_buffer() {
     let bind_port = 12219;
     test_config_bind_server::<_, ConfigBindServerHttps>(test_config, bind_port)
         .await;
+
+    logctx.cleanup_successful();
+}
+
+#[tokio::test]
+async fn test_config_handler_disposition_cancel() {
+    let logctx = create_log_context("config_handler_disposition_cancel");
+    let log = logctx.log.new(o!());
+
+    struct DropCounter {
+        count: Arc<AtomicU64>,
+        tx: mpsc::UnboundedSender<()>,
+    }
+    impl Drop for DropCounter {
+        fn drop(&mut self) {
+            self.count.fetch_add(1, Ordering::SeqCst);
+            self.tx.send(()).unwrap();
+        }
+    }
+
+    struct ServerContext {
+        // Count of how many times `increment_on_drop` has started and then been
+        // dropped.
+        drop_count: Arc<AtomicU64>,
+
+        // Channel on which `DropCounter`'s `drop()` can report it ran.
+        drop_ran_tx: mpsc::UnboundedSender<()>,
+
+        // Channel on which we send a message once `increment_on_drop` is
+        // running.
+        increment_on_drop_tx: mpsc::UnboundedSender<()>,
+
+        // `increment_on_drop` blocks until it receives a message on this
+        // channel; this allows us to control its cancellation without timers.
+        block_until_rx: async_channel::Receiver<()>,
+    }
+
+    #[dropshot::endpoint {
+        method = GET,
+        path = "/",
+    }]
+    async fn increment_on_drop(
+        rqctx: RequestContext<ServerContext>,
+    ) -> Result<HttpResponseOk<u64>, HttpError> {
+        let ctx = rqctx.context();
+
+        // Create a drop handler that will increment our count if we're dropped.
+        let drop_counter = DropCounter {
+            count: Arc::clone(&ctx.drop_count),
+            tx: ctx.drop_ran_tx.clone(),
+        };
+
+        // Notify test that we're running.
+        ctx.increment_on_drop_tx.send(()).unwrap();
+
+        // Block until the test tells us to return.
+        () = ctx.block_until_rx.recv().await.unwrap();
+
+        // We weren't cancelled: mem::forget() drop_counter so its drop impl
+        // doesn't run. This leaks a reference to our drop_count, but we're in a
+        // unit test so won't worry about it.
+        mem::forget(drop_counter);
+
+        Ok(HttpResponseOk(ctx.drop_count.load(Ordering::SeqCst)))
+    }
+
+    struct ConfigBindServerHttp {
+        increment_on_drop_tx: mpsc::UnboundedSender<()>,
+        block_until_rx: async_channel::Receiver<()>,
+        drop_count: Arc<AtomicU64>,
+        drop_ran_tx: mpsc::UnboundedSender<()>,
+        log: slog::Logger,
+    }
+    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+        for ConfigBindServerHttp
+    {
+        type Context = ServerContext;
+
+        fn make_client(
+            &self,
+        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
+            hyper::Client::new()
+        }
+
+        fn make_server(&self, bind_port: u16) -> HttpServer<ServerContext> {
+            let context = ServerContext {
+                drop_count: Arc::clone(&self.drop_count),
+                drop_ran_tx: self.drop_ran_tx.clone(),
+                increment_on_drop_tx: self.increment_on_drop_tx.clone(),
+                block_until_rx: self.block_until_rx.clone(),
+            };
+            let config = make_config(
+                "127.0.0.1",
+                bind_port,
+                HandlerDisposition::CancelOnDisconnect,
+            );
+            let mut api = dropshot::ApiDescription::new();
+            api.register(increment_on_drop).unwrap();
+            make_server(context, &config, &self.log, None, Some(api)).start()
+        }
+        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
+            format!("http://localhost:{}/", bind_port).parse().unwrap()
+        }
+
+        fn log(&self) -> &slog::Logger {
+            &self.log
+        }
+    }
+
+    let (increment_on_drop_tx, mut increment_on_drop_rx) =
+        mpsc::unbounded_channel();
+    let (drop_ran_tx, mut drop_ran_rx) = mpsc::unbounded_channel();
+    let (block_until_tx, block_until_rx) = async_channel::unbounded();
+    let drop_count = Arc::new(AtomicU64::new(0));
+
+    let test_config = ConfigBindServerHttp {
+        increment_on_drop_tx,
+        block_until_rx,
+        drop_count: Arc::clone(&drop_count),
+        drop_ran_tx,
+        log,
+    };
+    let bind_port = 12221;
+
+    // Make sure there is not currently a server running on our expected
+    // port so that when we subsequently create a server and run it we know
+    // we're getting the one we configured.
+    let client = test_config.make_client();
+    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
+    assert!(error.is_connect());
+
+    // Now start a server with our configuration.
+    let server = test_config.make_server(bind_port);
+
+    // Spawn a task to hit our `increment_on_drop` endpoint.
+    let client_task = {
+        let client = test_config.make_client();
+        let uri = test_config.make_uri(bind_port);
+        tokio::spawn(async move { client.get(uri).await.unwrap() })
+    };
+
+    // Wait until the handler receives the request.
+    () = increment_on_drop_rx.recv().await.unwrap();
+
+    // Cancel the client.
+    client_task.abort();
+    let result = client_task.await.unwrap_err();
+    assert!(result.is_cancelled());
+
+    // Wait for `DropCounter::drop()` to run.
+    () = drop_ran_rx.recv().await.unwrap();
+
+    // `drop_count` should have gone up.
+    assert_eq!(drop_count.load(Ordering::SeqCst), 1);
+
+    // We should also be able to fetch the drop count with a client that is not
+    // cancelled.
+    let client_task = {
+        let client = test_config.make_client();
+        let uri = test_config.make_uri(bind_port);
+        tokio::spawn(async move { client.get(uri).await.unwrap() })
+    };
+
+    // Wait until the handler receives the request.
+    () = increment_on_drop_rx.recv().await.unwrap();
+
+    // Release `increment_on_drop` to continue.
+    block_until_tx.send(()).await.unwrap();
+
+    // Wait for the response, which should still be 1.
+    let body = client_task.await.unwrap().into_body().collect::<Vec<_>>().await;
+    let mut data = Vec::new();
+    for result in body {
+        data.extend_from_slice(&result.unwrap());
+    }
+    assert_eq!(data, b"1");
+
+    server.close().await.unwrap();
+
+    logctx.cleanup_successful();
+}
+
+// The setup for this test is identical to
+// `test_config_handler_disposition_cancel`, but we configure the server with a
+// different disposition and have to drive it differently.
+#[tokio::test]
+async fn test_config_handler_disposition_detach() {
+    let logctx = create_log_context("config_handler_disposition_detach");
+    let log = logctx.log.new(o!());
+
+    struct DropCounter {
+        count: Arc<AtomicU64>,
+        tx: mpsc::UnboundedSender<()>,
+    }
+    impl Drop for DropCounter {
+        fn drop(&mut self) {
+            self.count.fetch_add(1, Ordering::SeqCst);
+            self.tx.send(()).unwrap();
+        }
+    }
+
+    struct ServerContext {
+        // Count of how many times `increment_on_drop` has started and then been
+        // dropped.
+        drop_count: Arc<AtomicU64>,
+
+        // Channel on which `DropCounter`'s `drop()` can report it ran.
+        drop_ran_tx: mpsc::UnboundedSender<()>,
+
+        // Channel on which we send a message once `increment_on_drop` is
+        // running.
+        increment_on_drop_tx: mpsc::UnboundedSender<()>,
+
+        // `increment_on_drop` blocks until it receives a message on this
+        // channel; this allows us to control its cancellation without timers.
+        block_until_rx: async_channel::Receiver<()>,
+    }
+
+    #[dropshot::endpoint {
+        method = GET,
+        path = "/",
+    }]
+    async fn increment_on_drop(
+        rqctx: RequestContext<ServerContext>,
+    ) -> Result<HttpResponseOk<u64>, HttpError> {
+        let ctx = rqctx.context();
+
+        // Create a drop handler that will increment our count if we're dropped.
+        let drop_counter = DropCounter {
+            count: Arc::clone(&ctx.drop_count),
+            tx: ctx.drop_ran_tx.clone(),
+        };
+
+        // Notify test that we're running.
+        ctx.increment_on_drop_tx.send(()).unwrap();
+
+        // Block until the test tells us to return.
+        () = ctx.block_until_rx.recv().await.unwrap();
+
+        // We weren't cancelled: mem::forget() drop_counter so its drop impl
+        // doesn't run. This leaks a reference to our drop_count, but we're in a
+        // unit test so won't worry about it.
+        mem::forget(drop_counter);
+
+        Ok(HttpResponseOk(ctx.drop_count.load(Ordering::SeqCst)))
+    }
+
+    struct ConfigBindServerHttp {
+        increment_on_drop_tx: mpsc::UnboundedSender<()>,
+        block_until_rx: async_channel::Receiver<()>,
+        drop_count: Arc<AtomicU64>,
+        drop_ran_tx: mpsc::UnboundedSender<()>,
+        log: slog::Logger,
+    }
+    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+        for ConfigBindServerHttp
+    {
+        type Context = ServerContext;
+
+        fn make_client(
+            &self,
+        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
+            hyper::Client::new()
+        }
+
+        fn make_server(&self, bind_port: u16) -> HttpServer<ServerContext> {
+            let context = ServerContext {
+                drop_count: Arc::clone(&self.drop_count),
+                drop_ran_tx: self.drop_ran_tx.clone(),
+                increment_on_drop_tx: self.increment_on_drop_tx.clone(),
+                block_until_rx: self.block_until_rx.clone(),
+            };
+            let config = make_config(
+                "127.0.0.1",
+                bind_port,
+                HandlerDisposition::DetachFromClient,
+            );
+            let mut api = dropshot::ApiDescription::new();
+            api.register(increment_on_drop).unwrap();
+            make_server(context, &config, &self.log, None, Some(api)).start()
+        }
+        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
+            format!("http://localhost:{}/", bind_port).parse().unwrap()
+        }
+
+        fn log(&self) -> &slog::Logger {
+            &self.log
+        }
+    }
+
+    let (increment_on_drop_tx, mut increment_on_drop_rx) =
+        mpsc::unbounded_channel();
+    let (drop_ran_tx, _drop_ran_rx) = mpsc::unbounded_channel();
+    let (block_until_tx, block_until_rx) = async_channel::unbounded();
+    let drop_count = Arc::new(AtomicU64::new(0));
+
+    let test_config = ConfigBindServerHttp {
+        increment_on_drop_tx,
+        block_until_rx,
+        drop_count: Arc::clone(&drop_count),
+        drop_ran_tx,
+        log,
+    };
+    let bind_port = 12223;
+
+    // Make sure there is not currently a server running on our expected
+    // port so that when we subsequently create a server and run it we know
+    // we're getting the one we configured.
+    let client = test_config.make_client();
+    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
+    assert!(error.is_connect());
+
+    // Now start a server with our configuration.
+    let server = test_config.make_server(bind_port);
+
+    // Spawn a task to hit our `increment_on_drop` endpoint.
+    let client_task = {
+        let client = test_config.make_client();
+        let uri = test_config.make_uri(bind_port);
+        tokio::spawn(async move { client.get(uri).await.unwrap() })
+    };
+
+    // Wait until the handler receives the request.
+    () = increment_on_drop_rx.recv().await.unwrap();
+
+    // Cancel the client.
+    client_task.abort();
+    let result = client_task.await.unwrap_err();
+    assert!(result.is_cancelled());
+
+    // The handler _should still be running_; send it a message to continue. If
+    // the handler was cancelled, this send would hang.
+    block_until_tx.send(()).await.unwrap();
+
+    // Hit the endpoint again without cancelling; it should return a drop count
+    // of 0.
+    // cancelled.
+    let client_task = {
+        let client = test_config.make_client();
+        let uri = test_config.make_uri(bind_port);
+        tokio::spawn(async move { client.get(uri).await.unwrap() })
+    };
+
+    // Wait until the handler receives the request.
+    () = increment_on_drop_rx.recv().await.unwrap();
+
+    // Release `increment_on_drop` to continue.
+    block_until_tx.send(()).await.unwrap();
+
+    // Wait for the response.
+    let body = client_task.await.unwrap().into_body().collect::<Vec<_>>().await;
+    let mut data = Vec::new();
+    for result in body {
+        data.extend_from_slice(&result.unwrap());
+    }
+    assert_eq!(data, b"0");
+
+    server.close().await.unwrap();
 
     logctx.cleanup_successful();
 }
