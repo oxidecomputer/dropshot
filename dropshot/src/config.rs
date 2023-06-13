@@ -106,11 +106,7 @@ impl Default for ConfigDropshot {
         ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
             request_body_max_bytes: 1024,
-            // The default is `CancelOnDisconnect` for compatibility.  This is
-            // arguably a less safe default.  After we've got some operational
-            // experience with `Detached`, we may want to make that the
-            // default.
-            default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+            default_handler_task_mode: HandlerTaskMode::Detached,
         }
     }
 }
