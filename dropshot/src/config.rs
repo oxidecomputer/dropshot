@@ -67,6 +67,7 @@ pub struct ConfigDropshot {
 /// If using `CancelOnDisconnect`, one must be careful that all handlers are
 /// cancel-safe. If you're unsure, we recommend `Detached`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum HandlerTaskMode {
     /// If a client disconnects while the handler is still running, cancel the
     /// future.
