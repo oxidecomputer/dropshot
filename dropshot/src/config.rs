@@ -58,14 +58,14 @@ pub struct ConfigDropshot {
 /// futures.
 ///
 /// The variants are phrased in terms of how the handler interacts with client
-/// disconnection, but they control how the future is run: for `Cancel`, the
-/// future is run directly, and it will be dropped (and thus cancelled) if the
-/// client disconnects; for `Detach`, handler futures will be
-/// `tokio::spawn()`'d, detaching their completion from the behavior of the
-/// client.
+/// disconnection, but they control how the future is run: for
+/// `CancelOnDisconnect`, the future is run directly, and it will be dropped
+/// (and thus cancelled) if the client disconnects; for `Detach`, handler
+/// futures will be `tokio::spawn()`'d, detaching their completion from the
+/// behavior of the client.
 ///
-/// If using `Cancel`, one must be careful that all handlers are cancel-safe.
-/// If you're unsure, we recommend `Detached`.
+/// If using `CancelOnDisconnect`, one must be careful that all handlers are
+/// cancel-safe. If you're unsure, we recommend `Detached`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum HandlerTaskMode {
     /// If a client disconnects while the handler is still running, cancel the
