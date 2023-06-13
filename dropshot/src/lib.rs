@@ -46,6 +46,7 @@
 //! use dropshot::ConfigDropshot;
 //! use dropshot::ConfigLogging;
 //! use dropshot::ConfigLoggingLevel;
+//! use dropshot::HandlerTaskMode;
 //! use dropshot::HttpServerStarter;
 //! use std::sync::Arc;
 //!
@@ -69,6 +70,7 @@
 //!             &ConfigDropshot {
 //!                 bind_address: "127.0.0.1:0".parse().unwrap(),
 //!                 request_body_max_bytes: 1024,
+//!                 default_handler_task_mode: HandlerTaskMode::Detached,
 //!             },
 //!             api,
 //!             Arc::new(()),
