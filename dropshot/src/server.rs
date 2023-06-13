@@ -12,6 +12,7 @@ use super::router::HttpRouter;
 use super::ProbeRegistration;
 
 use async_stream::stream;
+use debug_ignore::DebugIgnore;
 use futures::future::{
     BoxFuture, FusedFuture, FutureExt, Shared, TryFutureExt,
 };
@@ -28,6 +29,7 @@ use hyper::Response;
 use rustls;
 use std::convert::TryFrom;
 use std::future::Future;
+use std::mem;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::panic;
@@ -39,6 +41,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
+use waitgroup::WaitGroup;
 
 use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
@@ -69,6 +72,9 @@ pub struct DropshotState<C: ServerContext> {
     pub local_addr: SocketAddr,
     /// Identifies how to accept TLS connections
     pub(crate) tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
+    /// Worker for the handler_waitgroup associated with this server, allowing
+    /// graceful shutdown to wait for all handlers to complete.
+    pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
 }
 
 impl<C: ServerContext> DropshotState<C> {
@@ -96,6 +102,7 @@ pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     wrapped: WrappedHttpServerStarter<C>,
+    handler_waitgroup: WaitGroup,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
@@ -123,6 +130,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             default_handler_task_mode: config.default_handler_task_mode,
         };
 
+        let handler_waitgroup = WaitGroup::new();
         let starter = match &tls {
             Some(tls) => {
                 let (starter, app_state, local_addr) =
@@ -133,11 +141,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         private,
                         log,
                         tls,
+                        handler_waitgroup.worker(),
                     )?;
                 HttpServerStarter {
                     app_state,
                     local_addr,
                     wrapped: WrappedHttpServerStarter::Https(starter),
+                    handler_waitgroup,
                 }
             }
             None => {
@@ -148,11 +158,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         api,
                         private,
                         log,
+                        handler_waitgroup.worker(),
                     )?;
                 HttpServerStarter {
                     app_state,
                     local_addr,
                     wrapped: WrappedHttpServerStarter::Http(starter),
+                    handler_waitgroup,
                 }
             }
         };
@@ -181,6 +193,15 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 .map_err(|e| format!("server stopped: {e}"))
         });
         info!(self.app_state.log, "listening");
+
+        let handler_waitgroup = self.handler_waitgroup;
+        let join_handle = async move {
+            // After the server shuts down, we also want to wait for any
+            // detached handler futures to complete.
+            () = join_handle.await?;
+            () = handler_waitgroup.wait().await;
+            Ok(())
+        };
 
         #[cfg(feature = "usdt-probes")]
         let probe_registration = match usdt::register_probes() {
@@ -258,6 +279,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
+        handler_waitgroup_worker: waitgroup::Worker,
     ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
@@ -269,6 +291,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
             tls_acceptor: None,
+            handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
@@ -546,6 +569,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         private: C,
         log: &Logger,
         tls: &ConfigTls,
+        handler_waitgroup_worker: waitgroup::Worker,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             rustls::ServerConfig::try_from(tls)?,
@@ -572,6 +596,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             log: logger,
             local_addr,
             tls_acceptor: Some(acceptor),
+            handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
@@ -689,6 +714,14 @@ impl<C: ServerContext> HttpServer<C> {
             .expect("cannot close twice")
             .send(())
             .expect("failed to send close signal");
+
+        // We _must_ explicitly drop our app state before awaiting join_future.
+        // If we are running handlers in `Detached` mode, our `app_state` has a
+        // `waitgroup::Worker` that they all clone, and `join_future` will await
+        // all of them being dropped. That means we must drop our "primary"
+        // clone of it, too!
+        mem::drop(self.app_state);
+
         self.join_future.await
     }
 }
@@ -875,6 +908,7 @@ async fn http_request_handle<C: ServerContext>(
             // to completion.
             let (tx, rx) = oneshot::channel();
             let request_log = rqctx.log.clone();
+            let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
                 let result = handler.handle_request(rqctx, request).await;
@@ -887,6 +921,10 @@ async fn http_request_handle<C: ServerContext>(
                         "client disconnected before response returned"
                     );
                 }
+
+                // Drop our waitgroup worker, allowing graceful shutdown to
+                // complete (if it's waiting on us).
+                mem::drop(worker);
             });
 
             // The only way we can fail to receive on `rx` is if `tx` is
