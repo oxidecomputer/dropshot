@@ -39,7 +39,7 @@ use tokio::sync::oneshot;
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
-use crate::config::HandlerDisposition;
+use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
 use slog::Logger;
 
@@ -88,7 +88,7 @@ pub struct ServerConfig {
     pub page_default_nitems: NonZeroU32,
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
-    pub default_handler_disposition: HandlerDisposition,
+    pub default_handler_task_mode: HandlerTaskMode,
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
@@ -119,7 +119,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             request_body_max_bytes: config.request_body_max_bytes,
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
-            default_handler_disposition: config.default_handler_disposition,
+            default_handler_task_mode: config.default_handler_task_mode,
         };
 
         let starter = match &tls {
@@ -858,14 +858,14 @@ async fn http_request_handle<C: ServerContext>(
     };
     let handler = lookup_result.handler;
 
-    let mut response = match server.config.default_handler_disposition {
-        HandlerDisposition::CancelOnDisconnect => {
+    let mut response = match server.config.default_handler_task_mode {
+        HandlerTaskMode::CancelOnDisconnect => {
             // For CancelOnDisconnect, we run the request handler directly: if
             // the client disconnects, we will be cancelled, and therefore this
             // future will too.
             handler.handle_request(rqctx, request).await?
         }
-        HandlerDisposition::DetachFromClient => {
+        HandlerTaskMode::Detached => {
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();

@@ -4,7 +4,7 @@
 
 use dropshot::test_util::read_config;
 use dropshot::{
-    ConfigDropshot, ConfigTls, HandlerDisposition, HttpError, HttpResponseOk,
+    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpError, HttpResponseOk,
     RequestContext,
 };
 use dropshot::{HttpServer, HttpServerStarter};
@@ -105,7 +105,7 @@ fn make_server<T: Send + Sync + 'static>(
 fn make_config(
     bind_ip_str: &str,
     bind_port: u16,
-    default_handler_disposition: HandlerDisposition,
+    default_handler_task_mode: HandlerTaskMode,
 ) -> ConfigDropshot {
     ConfigDropshot {
         bind_address: std::net::SocketAddr::new(
@@ -113,7 +113,7 @@ fn make_config(
             bind_port,
         ),
         request_body_max_bytes: 1024,
-        default_handler_disposition,
+        default_handler_task_mode,
     }
 }
 
@@ -207,7 +207,7 @@ async fn test_config_bind_address_http() {
             let config = make_config(
                 "127.0.0.1",
                 bind_port,
-                HandlerDisposition::CancelOnDisconnect,
+                HandlerTaskMode::CancelOnDisconnect,
             );
             make_server(0, &config, &self.log, None, None).start()
         }
@@ -276,7 +276,7 @@ async fn test_config_bind_address_https() {
             let config = make_config(
                 "127.0.0.1",
                 bind_port,
-                HandlerDisposition::CancelOnDisconnect,
+                HandlerTaskMode::CancelOnDisconnect,
             );
             make_server(0, &config, &self.log, tls, None).start()
         }
@@ -353,7 +353,7 @@ async fn test_config_bind_address_https_buffer() {
             let config = make_config(
                 "127.0.0.1",
                 bind_port,
-                HandlerDisposition::CancelOnDisconnect,
+                HandlerTaskMode::CancelOnDisconnect,
             );
             make_server(0, &config, &self.log, tls, None).start()
         }
@@ -471,7 +471,7 @@ async fn test_config_handler_disposition_cancel() {
             let config = make_config(
                 "127.0.0.1",
                 bind_port,
-                HandlerDisposition::CancelOnDisconnect,
+                HandlerTaskMode::CancelOnDisconnect,
             );
             let mut api = dropshot::ApiDescription::new();
             api.register(increment_on_drop).unwrap();
@@ -649,11 +649,8 @@ async fn test_config_handler_disposition_detach() {
                 increment_on_drop_tx: self.increment_on_drop_tx.clone(),
                 block_until_rx: self.block_until_rx.clone(),
             };
-            let config = make_config(
-                "127.0.0.1",
-                bind_port,
-                HandlerDisposition::DetachFromClient,
-            );
+            let config =
+                make_config("127.0.0.1", bind_port, HandlerTaskMode::Detached);
             let mut api = dropshot::ApiDescription::new();
             api.register(increment_on_drop).unwrap();
             make_server(context, &config, &self.log, None, Some(api)).start()

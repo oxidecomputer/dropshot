@@ -4,7 +4,7 @@
 //! mode, including certificate loading and supported modes.
 
 use dropshot::{
-    ConfigDropshot, ConfigTls, HandlerDisposition, HttpResponseOk,
+    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk,
     HttpServerStarter,
 };
 use slog::{o, Logger};
@@ -75,7 +75,7 @@ fn make_server(
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
+        default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.to_path_buf(),
@@ -381,7 +381,7 @@ async fn test_server_is_https() {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
-        default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
+        default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),

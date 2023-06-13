@@ -51,7 +51,7 @@ pub struct ConfigDropshot {
     pub request_body_max_bytes: usize,
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
-    pub default_handler_disposition: HandlerDisposition,
+    pub default_handler_task_mode: HandlerTaskMode,
 }
 
 /// Enum specifying options for how a Dropshot server should run its handler
@@ -65,8 +65,9 @@ pub struct ConfigDropshot {
 /// client.
 ///
 /// If using `Cancel`, one must be careful that all handlers are cancel-safe.
+/// If you're unsure, we recommend `Detached`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-pub enum HandlerDisposition {
+pub enum HandlerTaskMode {
     /// If a client disconnects while the handler is still running, cancel the
     /// future.
     CancelOnDisconnect,
@@ -74,7 +75,7 @@ pub enum HandlerDisposition {
     /// If a client disconnects while the handler is still running, continue
     /// running the handler future to completion (i.e., the handler future is
     /// detached from the client connection).
-    DetachFromClient,
+    Detached,
 }
 
 #[derive(Clone, Debug)]
@@ -104,7 +105,11 @@ impl Default for ConfigDropshot {
         ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
             request_body_max_bytes: 1024,
-            default_handler_disposition: HandlerDisposition::CancelOnDisconnect,
+            // The default is `CancelOnDisconnect` for compatibility.  This is
+            // arguably a less safe default.  After we've got some operational
+            // experience with `Detached`, we may want to make that the
+            // default.
+            default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         }
     }
 }
