@@ -8,13 +8,10 @@ use dropshot::{
     RequestContext,
 };
 use dropshot::{HttpServer, HttpServerStarter};
-use futures::StreamExt;
 use slog::o;
 use slog::Logger;
-use std::mem;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU16, Ordering};
 use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
 
@@ -381,355 +378,223 @@ async fn test_config_bind_address_https_buffer() {
     logctx.cleanup_successful();
 }
 
-#[tokio::test]
-async fn test_config_handler_disposition_cancel() {
-    let logctx = create_log_context("config_handler_disposition_cancel");
-    let log = logctx.log.new(o!());
+struct HandlerTaskModeContext {
+    // Our endpoint handler reports that it has started on this channel.
+    endpoint_started_tx: mpsc::UnboundedSender<()>,
 
-    struct DropCounter {
-        count: Arc<AtomicU64>,
-        tx: mpsc::UnboundedSender<()>,
+    // Our endpoint handler waits to proceed until it receives a message on this
+    // channel.
+    release_endpoint_rx: async_channel::Receiver<()>,
+
+    // Our endpoint handler reports how it completed (either normally or
+    // cancelled) on this channel.
+    endpoint_finished_tx: mpsc::UnboundedSender<HandlerCompletionMode>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum HandlerCompletionMode {
+    CompletedNormally,
+    Cancelled,
+}
+
+struct ConfigHandlerTaskModeHttp {
+    // Channels used to construct `HandlerTaskModeContext`.
+    endpoint_started_tx: mpsc::UnboundedSender<()>,
+    release_endpoint_rx: async_channel::Receiver<()>,
+    endpoint_finished_tx: mpsc::UnboundedSender<HandlerCompletionMode>,
+
+    // We bind to port 0 but need to know the port in `make_uri` below, so we
+    // stash the actual port in this atomic.
+    bound_port: AtomicU16,
+    task_mode: HandlerTaskMode,
+
+    log: slog::Logger,
+}
+
+impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+    for ConfigHandlerTaskModeHttp
+{
+    type Context = HandlerTaskModeContext;
+
+    fn make_client(
+        &self,
+    ) -> hyper::Client<hyper::client::connect::HttpConnector> {
+        hyper::Client::new()
     }
-    impl Drop for DropCounter {
-        fn drop(&mut self) {
-            self.count.fetch_add(1, Ordering::SeqCst);
-            self.tx.send(()).unwrap();
+
+    fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context> {
+        struct DropReporter {
+            endpoint_finished_tx:
+                Option<mpsc::UnboundedSender<HandlerCompletionMode>>,
         }
-    }
 
-    struct ServerContext {
-        // Count of how many times `increment_on_drop` has started and then been
-        // dropped.
-        drop_count: Arc<AtomicU64>,
+        impl Drop for DropReporter {
+            fn drop(&mut self) {
+                // If we still have this channel, report that we've been
+                // cancelled. The endpoint should steal it from us before we get
+                // dropped if it completed normally.
+                if let Some(tx) = self.endpoint_finished_tx.take() {
+                    tx.send(HandlerCompletionMode::Cancelled).unwrap();
+                }
+            }
+        }
 
-        // Channel on which `DropCounter`'s `drop()` can report it ran.
-        drop_ran_tx: mpsc::UnboundedSender<()>,
+        #[dropshot::endpoint {
+            method = GET,
+            path = "/",
+        }]
+        async fn track_cancel_endpoint(
+            rqctx: RequestContext<HandlerTaskModeContext>,
+        ) -> Result<HttpResponseOk<()>, HttpError> {
+            let ctx = rqctx.context();
 
-        // Channel on which we send a message once `increment_on_drop` is
-        // running.
-        increment_on_drop_tx: mpsc::UnboundedSender<()>,
+            // Construct a `DropReporter` to report our cancellation, unless we
+            // steal the channel back from it (below).
+            let mut drop_reporter = DropReporter {
+                endpoint_finished_tx: Some(ctx.endpoint_finished_tx.clone()),
+            };
 
-        // `increment_on_drop` blocks until it receives a message on this
-        // channel; this allows us to control its cancellation without timers.
-        block_until_rx: async_channel::Receiver<()>,
-    }
+            // Notify driving test that we've started.
+            ctx.endpoint_started_tx.send(()).unwrap();
 
-    #[dropshot::endpoint {
-        method = GET,
-        path = "/",
-    }]
-    async fn increment_on_drop(
-        rqctx: RequestContext<ServerContext>,
-    ) -> Result<HttpResponseOk<u64>, HttpError> {
-        let ctx = rqctx.context();
+            // Wait until driving test tells us to continue. We may never
+            // continue from this point if it cancels us instead.
+            () = ctx.release_endpoint_rx.recv().await.unwrap();
 
-        // Create a drop handler that will increment our count if we're dropped.
-        let drop_counter = DropCounter {
-            count: Arc::clone(&ctx.drop_count),
-            tx: ctx.drop_ran_tx.clone(),
+            // We were not cancelled: steal the channel back from our drop
+            // reporter to report normal completion.
+            let tx = drop_reporter.endpoint_finished_tx.take().unwrap();
+            tx.send(HandlerCompletionMode::CompletedNormally).unwrap();
+
+            Ok(HttpResponseOk(()))
+        }
+
+        let context = HandlerTaskModeContext {
+            endpoint_started_tx: self.endpoint_started_tx.clone(),
+            release_endpoint_rx: self.release_endpoint_rx.clone(),
+            endpoint_finished_tx: self.endpoint_finished_tx.clone(),
         };
 
-        // Notify test that we're running.
-        ctx.increment_on_drop_tx.send(()).unwrap();
+        let config = make_config("127.0.0.1", bind_port, self.task_mode);
+        let mut api = dropshot::ApiDescription::new();
+        api.register(track_cancel_endpoint).unwrap();
 
-        // Block until the test tells us to return.
-        () = ctx.block_until_rx.recv().await.unwrap();
+        let server =
+            make_server(context, &config, &self.log, None, Some(api)).start();
 
-        // We weren't cancelled: mem::forget() drop_counter so its drop impl
-        // doesn't run. This leaks a reference to our drop_count, but we're in a
-        // unit test so won't worry about it.
-        mem::forget(drop_counter);
+        self.bound_port.store(server.local_addr().port(), Ordering::SeqCst);
 
-        Ok(HttpResponseOk(ctx.drop_count.load(Ordering::SeqCst)))
+        server
     }
 
-    struct ConfigBindServerHttp {
-        increment_on_drop_tx: mpsc::UnboundedSender<()>,
-        block_until_rx: async_channel::Receiver<()>,
-        drop_count: Arc<AtomicU64>,
-        drop_ran_tx: mpsc::UnboundedSender<()>,
-        log: slog::Logger,
-    }
-    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
-        for ConfigBindServerHttp
-    {
-        type Context = ServerContext;
-
-        fn make_client(
-            &self,
-        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
-            hyper::Client::new()
-        }
-
-        fn make_server(&self, bind_port: u16) -> HttpServer<ServerContext> {
-            let context = ServerContext {
-                drop_count: Arc::clone(&self.drop_count),
-                drop_ran_tx: self.drop_ran_tx.clone(),
-                increment_on_drop_tx: self.increment_on_drop_tx.clone(),
-                block_until_rx: self.block_until_rx.clone(),
-            };
-            let config = make_config(
-                "127.0.0.1",
-                bind_port,
-                HandlerTaskMode::CancelOnDisconnect,
-            );
-            let mut api = dropshot::ApiDescription::new();
-            api.register(increment_on_drop).unwrap();
-            make_server(context, &config, &self.log, None, Some(api)).start()
-        }
-        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
-            format!("http://localhost:{}/", bind_port).parse().unwrap()
-        }
-
-        fn log(&self) -> &slog::Logger {
-            &self.log
-        }
+    fn make_uri(&self, _bind_port: u16) -> hyper::Uri {
+        let bind_port = self.bound_port.load(Ordering::SeqCst);
+        format!("http://localhost:{}/", bind_port).parse().unwrap()
     }
 
-    let (increment_on_drop_tx, mut increment_on_drop_rx) =
+    fn log(&self) -> &slog::Logger {
+        &self.log
+    }
+}
+
+#[tokio::test]
+async fn test_config_handler_task_mode_cancel() {
+    let logctx = create_log_context("config_handler_task_mode_cancel");
+    let log = logctx.log.new(o!());
+
+    let (endpoint_started_tx, mut endpoint_started_rx) =
         mpsc::unbounded_channel();
-    let (drop_ran_tx, mut drop_ran_rx) = mpsc::unbounded_channel();
-    let (block_until_tx, block_until_rx) = async_channel::unbounded();
-    let drop_count = Arc::new(AtomicU64::new(0));
+    let (_release_endpoint_tx, release_endpoint_rx) =
+        async_channel::unbounded();
+    let (endpoint_finished_tx, mut endpoint_finished_rx) =
+        mpsc::unbounded_channel();
 
-    let test_config = ConfigBindServerHttp {
-        increment_on_drop_tx,
-        block_until_rx,
-        drop_count: Arc::clone(&drop_count),
-        drop_ran_tx,
+    let test_config = ConfigHandlerTaskModeHttp {
+        endpoint_started_tx,
+        release_endpoint_rx,
+        endpoint_finished_tx,
+        bound_port: AtomicU16::new(0),
+        task_mode: HandlerTaskMode::CancelOnDisconnect,
         log,
     };
-    let bind_port = 12221;
+    let bind_port = 0;
 
-    // Make sure there is not currently a server running on our expected
-    // port so that when we subsequently create a server and run it we know
-    // we're getting the one we configured.
-    let client = test_config.make_client();
-    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    // Now start a server with our configuration.
     let server = test_config.make_server(bind_port);
 
-    // Spawn a task to hit our `increment_on_drop` endpoint.
+    // Spawn a task to hit the test endpoint.
     let client_task = {
         let client = test_config.make_client();
         let uri = test_config.make_uri(bind_port);
         tokio::spawn(async move { client.get(uri).await.unwrap() })
     };
 
-    // Wait until the handler receives the request.
-    () = increment_on_drop_rx.recv().await.unwrap();
+    // Wait until the handler starts running.
+    () = endpoint_started_rx.recv().await.unwrap();
 
-    // Cancel the client.
+    // Cancel the client task.
     client_task.abort();
-    let result = client_task.await.unwrap_err();
-    assert!(result.is_cancelled());
 
-    // Wait for `DropCounter::drop()` to run.
-    () = drop_ran_rx.recv().await.unwrap();
-
-    // `drop_count` should have gone up.
-    assert_eq!(drop_count.load(Ordering::SeqCst), 1);
-
-    // We should also be able to fetch the drop count with a client that is not
-    // cancelled.
-    let client_task = {
-        let client = test_config.make_client();
-        let uri = test_config.make_uri(bind_port);
-        tokio::spawn(async move { client.get(uri).await.unwrap() })
-    };
-
-    // Wait until the handler receives the request.
-    () = increment_on_drop_rx.recv().await.unwrap();
-
-    // Release `increment_on_drop` to continue.
-    block_until_tx.send(()).await.unwrap();
-
-    // Wait for the response, which should still be 1.
-    let body = client_task.await.unwrap().into_body().collect::<Vec<_>>().await;
-    let mut data = Vec::new();
-    for result in body {
-        data.extend_from_slice(&result.unwrap());
+    // Check that the handler was indeed cancelled.
+    match endpoint_finished_rx.recv().await.unwrap() {
+        HandlerCompletionMode::Cancelled => (),
+        HandlerCompletionMode::CompletedNormally => {
+            panic!("handler unexpectedly completed")
+        }
     }
-    assert_eq!(data, b"1");
 
     server.close().await.unwrap();
 
     logctx.cleanup_successful();
 }
 
-// The setup for this test is identical to
-// `test_config_handler_disposition_cancel`, but we configure the server with a
-// different disposition and have to drive it differently.
 #[tokio::test]
-async fn test_config_handler_disposition_detach() {
-    let logctx = create_log_context("config_handler_disposition_detach");
+async fn test_config_handler_task_mode_detached() {
+    let logctx = create_log_context("config_handler_task_mode_detached");
     let log = logctx.log.new(o!());
 
-    struct DropCounter {
-        count: Arc<AtomicU64>,
-        tx: mpsc::UnboundedSender<()>,
-    }
-    impl Drop for DropCounter {
-        fn drop(&mut self) {
-            self.count.fetch_add(1, Ordering::SeqCst);
-            self.tx.send(()).unwrap();
-        }
-    }
-
-    struct ServerContext {
-        // Count of how many times `increment_on_drop` has started and then been
-        // dropped.
-        drop_count: Arc<AtomicU64>,
-
-        // Channel on which `DropCounter`'s `drop()` can report it ran.
-        drop_ran_tx: mpsc::UnboundedSender<()>,
-
-        // Channel on which we send a message once `increment_on_drop` is
-        // running.
-        increment_on_drop_tx: mpsc::UnboundedSender<()>,
-
-        // `increment_on_drop` blocks until it receives a message on this
-        // channel; this allows us to control its cancellation without timers.
-        block_until_rx: async_channel::Receiver<()>,
-    }
-
-    #[dropshot::endpoint {
-        method = GET,
-        path = "/",
-    }]
-    async fn increment_on_drop(
-        rqctx: RequestContext<ServerContext>,
-    ) -> Result<HttpResponseOk<u64>, HttpError> {
-        let ctx = rqctx.context();
-
-        // Create a drop handler that will increment our count if we're dropped.
-        let drop_counter = DropCounter {
-            count: Arc::clone(&ctx.drop_count),
-            tx: ctx.drop_ran_tx.clone(),
-        };
-
-        // Notify test that we're running.
-        ctx.increment_on_drop_tx.send(()).unwrap();
-
-        // Block until the test tells us to return.
-        () = ctx.block_until_rx.recv().await.unwrap();
-
-        // We weren't cancelled: mem::forget() drop_counter so its drop impl
-        // doesn't run. This leaks a reference to our drop_count, but we're in a
-        // unit test so won't worry about it.
-        mem::forget(drop_counter);
-
-        Ok(HttpResponseOk(ctx.drop_count.load(Ordering::SeqCst)))
-    }
-
-    struct ConfigBindServerHttp {
-        increment_on_drop_tx: mpsc::UnboundedSender<()>,
-        block_until_rx: async_channel::Receiver<()>,
-        drop_count: Arc<AtomicU64>,
-        drop_ran_tx: mpsc::UnboundedSender<()>,
-        log: slog::Logger,
-    }
-    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
-        for ConfigBindServerHttp
-    {
-        type Context = ServerContext;
-
-        fn make_client(
-            &self,
-        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
-            hyper::Client::new()
-        }
-
-        fn make_server(&self, bind_port: u16) -> HttpServer<ServerContext> {
-            let context = ServerContext {
-                drop_count: Arc::clone(&self.drop_count),
-                drop_ran_tx: self.drop_ran_tx.clone(),
-                increment_on_drop_tx: self.increment_on_drop_tx.clone(),
-                block_until_rx: self.block_until_rx.clone(),
-            };
-            let config =
-                make_config("127.0.0.1", bind_port, HandlerTaskMode::Detached);
-            let mut api = dropshot::ApiDescription::new();
-            api.register(increment_on_drop).unwrap();
-            make_server(context, &config, &self.log, None, Some(api)).start()
-        }
-        fn make_uri(&self, bind_port: u16) -> hyper::Uri {
-            format!("http://localhost:{}/", bind_port).parse().unwrap()
-        }
-
-        fn log(&self) -> &slog::Logger {
-            &self.log
-        }
-    }
-
-    let (increment_on_drop_tx, mut increment_on_drop_rx) =
+    let (endpoint_started_tx, mut endpoint_started_rx) =
         mpsc::unbounded_channel();
-    let (drop_ran_tx, _drop_ran_rx) = mpsc::unbounded_channel();
-    let (block_until_tx, block_until_rx) = async_channel::unbounded();
-    let drop_count = Arc::new(AtomicU64::new(0));
+    let (release_endpoint_tx, release_endpoint_rx) = async_channel::unbounded();
+    let (endpoint_finished_tx, mut endpoint_finished_rx) =
+        mpsc::unbounded_channel();
 
-    let test_config = ConfigBindServerHttp {
-        increment_on_drop_tx,
-        block_until_rx,
-        drop_count: Arc::clone(&drop_count),
-        drop_ran_tx,
+    let test_config = ConfigHandlerTaskModeHttp {
+        endpoint_started_tx,
+        release_endpoint_rx,
+        endpoint_finished_tx,
+        bound_port: AtomicU16::new(0),
+        task_mode: HandlerTaskMode::Detached,
         log,
     };
-    let bind_port = 12223;
+    let bind_port = 0;
 
-    // Make sure there is not currently a server running on our expected
-    // port so that when we subsequently create a server and run it we know
-    // we're getting the one we configured.
-    let client = test_config.make_client();
-    let error = client.get(test_config.make_uri(bind_port)).await.unwrap_err();
-    assert!(error.is_connect());
-
-    // Now start a server with our configuration.
     let server = test_config.make_server(bind_port);
 
-    // Spawn a task to hit our `increment_on_drop` endpoint.
+    // Spawn a task to hit the test endpoint.
     let client_task = {
         let client = test_config.make_client();
         let uri = test_config.make_uri(bind_port);
         tokio::spawn(async move { client.get(uri).await.unwrap() })
     };
 
-    // Wait until the handler receives the request.
-    () = increment_on_drop_rx.recv().await.unwrap();
+    // Wait until the handler starts running.
+    () = endpoint_started_rx.recv().await.unwrap();
 
-    // Cancel the client.
+    // Cancel the client task.
     client_task.abort();
-    let result = client_task.await.unwrap_err();
-    assert!(result.is_cancelled());
 
-    // The handler _should still be running_; send it a message to continue. If
-    // the handler was cancelled, this send would hang.
-    block_until_tx.send(()).await.unwrap();
+    // Despite cancelling the client task, it should still be running, and it's
+    // waiting for us to release it to continue; do so.
+    release_endpoint_tx.send(()).await.unwrap();
 
-    // Hit the endpoint again without cancelling; it should return a drop count
-    // of 0.
-    // cancelled.
-    let client_task = {
-        let client = test_config.make_client();
-        let uri = test_config.make_uri(bind_port);
-        tokio::spawn(async move { client.get(uri).await.unwrap() })
-    };
-
-    // Wait until the handler receives the request.
-    () = increment_on_drop_rx.recv().await.unwrap();
-
-    // Release `increment_on_drop` to continue.
-    block_until_tx.send(()).await.unwrap();
-
-    // Wait for the response.
-    let body = client_task.await.unwrap().into_body().collect::<Vec<_>>().await;
-    let mut data = Vec::new();
-    for result in body {
-        data.extend_from_slice(&result.unwrap());
+    // Check that the handler indeed completed normally despite the client
+    // disconnect.
+    match endpoint_finished_rx.recv().await.unwrap() {
+        HandlerCompletionMode::CompletedNormally => (),
+        HandlerCompletionMode::Cancelled => {
+            panic!("handler unexpectedly cancelled")
+        }
     }
-    assert_eq!(data, b"0");
 
     server.close().await.unwrap();
 
