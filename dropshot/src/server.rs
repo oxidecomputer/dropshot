@@ -869,15 +869,33 @@ async fn http_request_handle<C: ServerContext>(
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();
+            let request_log = rqctx.log.clone();
             tokio::spawn(async move {
+                let request_log = rqctx.log.clone();
                 let result = handler.handle_request(rqctx, request).await;
 
-                // Ignore errors from `send()`: if it fails, it's because the
-                // outer `http_request_handle` future was cancelled while
-                // waiting for this result.
-                _ = tx.send(result);
+                // If this send fails, our spawning task has been cancelled in
+                // the `rx.await` below; log such a result.
+                if tx.send(result).is_err() {
+                    warn!(
+                        request_log,
+                        "client disconnected before response returned"
+                    );
+                }
             });
-            rx.await.unwrap()?
+
+            // The only way we can fail to receive on `rx` is if `tx` is
+            // dropped before a result is sent, which can only happen if
+            // `handle_request` panics. We will propogate such a panic here,
+            // just as we would have in `CancelOnDisconnect` mode above (where
+            // we call the handler directly).
+            match rx.await {
+                Ok(result) => result?,
+                Err(_) => {
+                    error!(request_log, "handler panicked");
+                    panic!("handler panicked before sending response");
+                }
+            }
         }
     };
     response.headers_mut().insert(
