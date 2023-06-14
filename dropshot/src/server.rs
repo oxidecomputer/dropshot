@@ -30,6 +30,7 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
+use std::panic;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -874,7 +875,7 @@ async fn http_request_handle<C: ServerContext>(
             // to completion.
             let (tx, rx) = oneshot::channel();
             let request_log = rqctx.log.clone();
-            tokio::spawn(async move {
+            let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
                 let result = handler.handle_request(rqctx, request).await;
 
@@ -896,8 +897,16 @@ async fn http_request_handle<C: ServerContext>(
             match rx.await {
                 Ok(result) => result?,
                 Err(_) => {
-                    error!(request_log, "handler panicked");
-                    panic!("handler panicked before sending response");
+                    error!(request_log, "handler panicked; propogating panic");
+
+                    // To get the panic, we now need to await `handler_task`; we
+                    // know it is complete _and_ it failed, because it has
+                    // dropped `tx` without sending us a result, which is only
+                    // possible if it panicked.
+                    let task_err = handler_task.await.expect_err(
+                        "task failed to send result but didn't panic",
+                    );
+                    panic::resume_unwind(task_err.into_panic());
                 }
             }
         }
