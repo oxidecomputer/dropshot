@@ -863,6 +863,10 @@ async fn http_request_handle<C: ServerContext>(
             // For CancelOnDisconnect, we run the request handler directly: if
             // the client disconnects, we will be cancelled, and therefore this
             // future will too.
+            //
+            // TODO-robustness: We should log a warning if we are dropped before
+            // this handler completes; see
+            // https://github.com/oxidecomputer/dropshot/pull/701#pullrequestreview-1480426914.
             handler.handle_request(rqctx, request).await?
         }
         HandlerTaskMode::Detached => {
