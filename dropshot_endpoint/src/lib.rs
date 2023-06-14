@@ -611,6 +611,7 @@ fn do_endpoint_inner(
             for #dropshot::ApiEndpoint< #first_arg >
         {
             fn from(_: #name) -> Self {
+                #[allow(clippy::unused_async)]
                 #item
 
                 // The checks on the implementation require #name to be in
@@ -807,6 +808,7 @@ mod tests {
                 as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     pub async fn handler_xyz(
                         _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -895,6 +897,7 @@ mod tests {
 
             impl From<handler_xyz> for dropshot::ApiEndpoint< <dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context> {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     pub async fn handler_xyz(_rqctx: dropshot::RequestContext<()>) ->
                         std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
                     {
@@ -998,6 +1001,7 @@ mod tests {
                 >
             {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     async fn handler_xyz(
                         _rqctx: RequestContext<std::i32>,
                         q: Query<Q>,
@@ -1104,6 +1108,7 @@ mod tests {
                 >
             {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     pub(crate) async fn handler_xyz(
                         _rqctx: RequestContext<()>,
                         q: Query<Q>,
@@ -1201,6 +1206,7 @@ mod tests {
                 as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     async fn handler_xyz(
                         _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
@@ -1297,6 +1303,7 @@ mod tests {
                 as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     #[doc = r#" handle "xyz" requests "#]
                     async fn handler_xyz(
                         _rqctx: RequestContext<()>,
@@ -1502,6 +1509,7 @@ mod tests {
                 as dropshot::RequestContextArgument>::Context>
             {
                 fn from(_: handler_xyz) -> Self {
+                    #[allow(clippy::unused_async)]
                     pub async fn handler_xyz(
                         _rqctx: RequestContext<()>,
                     ) -> Result<HttpResponseOk<()>, HttpError> {
