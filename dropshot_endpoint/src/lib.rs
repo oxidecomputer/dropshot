@@ -611,6 +611,7 @@ fn do_endpoint_inner(
             for #dropshot::ApiEndpoint< #first_arg >
         {
             fn from(_: #name) -> Self {
+                #[allow(clippy::unused_async)]
                 #item
 
                 // The checks on the implementation require #name to be in
