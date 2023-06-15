@@ -46,6 +46,7 @@
 //! use dropshot::ConfigDropshot;
 //! use dropshot::ConfigLogging;
 //! use dropshot::ConfigLoggingLevel;
+//! use dropshot::HandlerTaskMode;
 //! use dropshot::HttpServerStarter;
 //! use std::sync::Arc;
 //!
@@ -69,6 +70,7 @@
 //!             &ConfigDropshot {
 //!                 bind_address: "127.0.0.1:0".parse().unwrap(),
 //!                 request_body_max_bytes: 1024,
+//!                 default_handler_task_mode: HandlerTaskMode::Detached,
 //!             },
 //!             api,
 //!             Arc::new(()),
@@ -617,6 +619,7 @@ pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
+pub use config::HandlerTaskMode;
 pub use config::RawTlsConfig;
 pub use dtrace::ProbeRegistration;
 pub use error::HttpError;

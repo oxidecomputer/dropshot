@@ -30,14 +30,17 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
+use std::panic;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::io::ReadBuf;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use uuid::Uuid;
 
+use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
 use slog::Logger;
 
@@ -84,6 +87,9 @@ pub struct ServerConfig {
     pub page_max_nitems: NonZeroU32,
     /// default size for a page of results
     pub page_default_nitems: NonZeroU32,
+    /// Default behavior for HTTP handler functions with respect to clients
+    /// disconnecting early.
+    pub default_handler_task_mode: HandlerTaskMode,
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
@@ -114,6 +120,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             request_body_max_bytes: config.request_body_max_bytes,
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
+            default_handler_task_mode: config.default_handler_task_mode,
         };
 
         let starter = match &tls {
@@ -850,8 +857,60 @@ async fn http_request_handle<C: ServerContext>(
         request_id: request_id.to_string(),
         log: request_log,
     };
-    let mut response =
-        lookup_result.handler.handle_request(rqctx, request).await?;
+    let handler = lookup_result.handler;
+
+    let mut response = match server.config.default_handler_task_mode {
+        HandlerTaskMode::CancelOnDisconnect => {
+            // For CancelOnDisconnect, we run the request handler directly: if
+            // the client disconnects, we will be cancelled, and therefore this
+            // future will too.
+            //
+            // TODO-robustness: We should log a warning if we are dropped before
+            // this handler completes; see
+            // https://github.com/oxidecomputer/dropshot/pull/701#pullrequestreview-1480426914.
+            handler.handle_request(rqctx, request).await?
+        }
+        HandlerTaskMode::Detached => {
+            // Spawn the handler so if we're cancelled, the handler still runs
+            // to completion.
+            let (tx, rx) = oneshot::channel();
+            let request_log = rqctx.log.clone();
+            let handler_task = tokio::spawn(async move {
+                let request_log = rqctx.log.clone();
+                let result = handler.handle_request(rqctx, request).await;
+
+                // If this send fails, our spawning task has been cancelled in
+                // the `rx.await` below; log such a result.
+                if tx.send(result).is_err() {
+                    warn!(
+                        request_log,
+                        "client disconnected before response returned"
+                    );
+                }
+            });
+
+            // The only way we can fail to receive on `rx` is if `tx` is
+            // dropped before a result is sent, which can only happen if
+            // `handle_request` panics. We will propogate such a panic here,
+            // just as we would have in `CancelOnDisconnect` mode above (where
+            // we call the handler directly).
+            match rx.await {
+                Ok(result) => result?,
+                Err(_) => {
+                    error!(request_log, "handler panicked; propogating panic");
+
+                    // To get the panic, we now need to await `handler_task`; we
+                    // know it is complete _and_ it failed, because it has
+                    // dropped `tx` without sending us a result, which is only
+                    // possible if it panicked.
+                    let task_err = handler_task.await.expect_err(
+                        "task failed to send result but didn't panic",
+                    );
+                    panic::resume_unwind(task_err.into_panic());
+                }
+            }
+        }
+    };
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),

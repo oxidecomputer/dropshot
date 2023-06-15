@@ -475,7 +475,7 @@ where
     /// Given a function matching one of the supported API handler function
     /// signatures, return a RouteHandler that can be used to respond to HTTP
     /// requests using this function.
-    pub fn new(handler: HandlerType) -> Box<dyn RouteHandler<Context>> {
+    pub fn new(handler: HandlerType) -> Arc<dyn RouteHandler<Context>> {
         HttpRouteHandler::new_with_name(handler, "<unlabeled handler>")
     }
 
@@ -485,8 +485,8 @@ where
     pub fn new_with_name(
         handler: HandlerType,
         label: &str,
-    ) -> Box<dyn RouteHandler<Context>> {
-        Box::new(HttpRouteHandler {
+    ) -> Arc<dyn RouteHandler<Context>> {
+        Arc::new(HttpRouteHandler {
             label: label.to_string(),
             handler,
             phantom: PhantomData,
