@@ -301,12 +301,14 @@ mod tests {
         ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
         WebsocketUpgrade,
     };
+    use debug_ignore::DebugIgnore;
     use http::Request;
     use hyper::Body;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::num::NonZeroU32;
     use std::sync::Arc;
     use std::time::Duration;
+    use waitgroup::WaitGroup;
 
     async fn ws_upg_from_mock_rqctx() -> Result<WebsocketUpgrade, HttpError> {
         let log = slog::Logger::root(slog::Discard, slog::o!()).new(slog::o!());
@@ -336,6 +338,9 @@ mod tests {
                     8080,
                 ),
                 tls_acceptor: None,
+                handler_waitgroup_worker: DebugIgnore(
+                    WaitGroup::new().worker(),
+                ),
             }),
             request: RequestInfo::new(&request, remote_addr),
             path_variables: Default::default(),

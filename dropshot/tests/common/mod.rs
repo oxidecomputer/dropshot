@@ -8,6 +8,8 @@ use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
+use dropshot::HandlerTaskMode;
+use dropshot::ServerContext;
 use slog::o;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -16,6 +18,15 @@ pub fn test_setup(
     test_name: &str,
     api: ApiDescription<usize>,
 ) -> TestContext<usize> {
+    test_setup_with_context(test_name, api, 0_usize, HandlerTaskMode::Detached)
+}
+
+pub fn test_setup_with_context<Context: ServerContext>(
+    test_name: &str,
+    api: ApiDescription<Context>,
+    ctx: Context,
+    default_handler_task_mode: HandlerTaskMode,
+) -> TestContext<Context> {
     // The IP address to which we bind can be any local IP, but we use
     // 127.0.0.1 because we know it's present, it shouldn't expose this server
     // on any external network, and we don't have to go looking for some other
@@ -23,11 +34,12 @@ pub fn test_setup(
     // request any available port.  This is important because we may run
     // multiple concurrent tests, so any fixed port could result in spurious
     // failures due to port conflicts.
-    let config_dropshot: ConfigDropshot = Default::default();
+    let config_dropshot: ConfigDropshot =
+        ConfigDropshot { default_handler_task_mode, ..Default::default() };
 
     let logctx = create_log_context(test_name);
     let log = logctx.log.new(o!());
-    TestContext::new(api, 0_usize, &config_dropshot, Some(logctx), log)
+    TestContext::new(api, ctx, &config_dropshot, Some(logctx), log)
 }
 
 pub fn create_log_context(test_name: &str) -> LogContext {

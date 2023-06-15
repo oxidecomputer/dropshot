@@ -72,6 +72,7 @@ const ALLOWED_HEADERS: [AllowedHeader<'static>; 8] = [
 
 /// ClientTestContext encapsulates several facilities associated with using an
 /// HTTP client for testing.
+#[derive(Clone)]
 pub struct ClientTestContext {
     /// actual bind address of the HTTP server under test
     pub bind_address: SocketAddr,
