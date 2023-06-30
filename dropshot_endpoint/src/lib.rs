@@ -105,7 +105,7 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 ///     // Optional tags for the operation's description
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
 ///     // Specifies the media type used to encode the request body
-///     content_type = { "application/json" | "application/x-www-form-urlencoded" }
+///     content_type = { "application/json" | "application/x-www-form-urlencoded" | "multipart/form-data" }
 ///     // A value of `true` marks the operation as deprecated
 ///     deprecated = { true | false },
 ///     // A value of `true` causes the operation to be omitted from the API description
@@ -283,7 +283,9 @@ fn do_endpoint_inner(
         metadata.content_type.unwrap_or_else(|| "application/json".to_string());
     if !matches!(
         content_type.as_str(),
-        "application/json" | "application/x-www-form-urlencoded"
+        "application/json"
+            | "application/x-www-form-urlencoded"
+            | "multipart/form-data"
     ) {
         return Err(Error::new_spanned(
             &attr,

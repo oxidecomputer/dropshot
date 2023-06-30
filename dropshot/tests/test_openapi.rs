@@ -460,6 +460,19 @@ async fn handler24(
     unimplemented!()
 }
 
+#[endpoint {
+    method = POST,
+    path = "/test/multipart-form-data",
+    content_type = "multipart/form-data",
+    tags = ["it"]
+}]
+async fn handler25(
+    _rqctx: RequestContext<()>,
+    _body: UntypedBody,
+) -> Result<HttpResponseCreated<Response>, HttpError> {
+    Ok(HttpResponseCreated(Response {}))
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -493,6 +506,7 @@ fn make_api(
     api.register(handler22)?;
     api.register(handler23)?;
     api.register(handler24)?;
+    api.register(handler25)?;
     Ok(api)
 }
 

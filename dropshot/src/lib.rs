@@ -652,6 +652,7 @@ pub use handler::NoHeaders;
 pub use handler::RequestContext;
 pub use handler::RequestInfo;
 pub use http_util::CONTENT_TYPE_JSON;
+pub use http_util::CONTENT_TYPE_MULTIPART_FORM_DATA;
 pub use http_util::CONTENT_TYPE_NDJSON;
 pub use http_util::CONTENT_TYPE_OCTET_STREAM;
 pub use http_util::CONTENT_TYPE_URL_ENCODED;

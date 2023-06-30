@@ -15,6 +15,7 @@ use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
+use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
 use crate::CONTENT_TYPE_OCTET_STREAM;
 use crate::CONTENT_TYPE_URL_ENCODED;
 
@@ -183,6 +184,8 @@ pub enum ApiEndpointBodyContentType {
     Json,
     /// application/x-www-form-urlencoded
     UrlEncoded,
+    /// multipart/form-data
+    MultipartFormData,
 }
 
 impl Default for ApiEndpointBodyContentType {
@@ -197,6 +200,7 @@ impl ApiEndpointBodyContentType {
             Self::Bytes => CONTENT_TYPE_OCTET_STREAM,
             Self::Json => CONTENT_TYPE_JSON,
             Self::UrlEncoded => CONTENT_TYPE_URL_ENCODED,
+            Self::MultipartFormData => CONTENT_TYPE_MULTIPART_FORM_DATA,
         }
     }
 
@@ -205,6 +209,7 @@ impl ApiEndpointBodyContentType {
             CONTENT_TYPE_OCTET_STREAM => Ok(Self::Bytes),
             CONTENT_TYPE_JSON => Ok(Self::Json),
             CONTENT_TYPE_URL_ENCODED => Ok(Self::UrlEncoded),
+            CONTENT_TYPE_MULTIPART_FORM_DATA => Ok(Self::MultipartFormData),
             _ => Err(mime_type.to_string()),
         }
     }

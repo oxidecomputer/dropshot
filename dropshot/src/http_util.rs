@@ -19,6 +19,8 @@ pub const CONTENT_TYPE_JSON: &str = "application/json";
 pub const CONTENT_TYPE_NDJSON: &str = "application/x-ndjson";
 /// MIME type for form/urlencoded data
 pub const CONTENT_TYPE_URL_ENCODED: &str = "application/x-www-form-urlencoded";
+/// MIME type for multipart/form-data
+pub const CONTENT_TYPE_MULTIPART_FORM_DATA: &str = "multipart/form-data";
 
 /// Reads the rest of the body from the request, dropping all the bytes.  This is
 /// useful after encountering error conditions.
