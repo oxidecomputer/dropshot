@@ -485,7 +485,8 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/BodyParam"
+                "type": "string",
+                "format": "binary"
               }
             }
           },

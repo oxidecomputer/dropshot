@@ -200,10 +200,8 @@ impl ExclusiveExtractor for UntypedBody {
         Ok(UntypedBody { content: body_bytes.freeze() })
     }
 
-    fn metadata(
-        _content_type: ApiEndpointBodyContentType,
-    ) -> ExtractorMetadata {
-        untyped_metadata()
+    fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
+        untyped_metadata(content_type)
     }
 }
 
@@ -358,17 +356,21 @@ impl ExclusiveExtractor for StreamingBody {
         })
     }
 
-    fn metadata(
-        _content_type: ApiEndpointBodyContentType,
-    ) -> ExtractorMetadata {
-        untyped_metadata()
+    fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
+        untyped_metadata(content_type)
     }
 }
 
-fn untyped_metadata() -> ExtractorMetadata {
+fn untyped_metadata(
+    content_type: ApiEndpointBodyContentType,
+) -> ExtractorMetadata {
     ExtractorMetadata {
         parameters: vec![ApiEndpointParameter::new_body(
-            ApiEndpointBodyContentType::Bytes,
+            if content_type == ApiEndpointBodyContentType::MultipartFormData {
+                content_type
+            } else {
+                ApiEndpointBodyContentType::Bytes
+            },
             true,
             ApiSchemaGenerator::Static {
                 schema: Box::new(

@@ -468,7 +468,7 @@ async fn handler24(
 }]
 async fn handler25(
     _rqctx: RequestContext<()>,
-    _body: TypedBody<BodyParam>,
+    _body: UntypedBody,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
 }

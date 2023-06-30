@@ -176,7 +176,7 @@ pub enum ApiEndpointParameterMetadata {
     Body(ApiEndpointBodyContentType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApiEndpointBodyContentType {
     /// application/octet-stream
     Bytes,
