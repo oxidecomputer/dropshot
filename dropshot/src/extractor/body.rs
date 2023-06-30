@@ -53,36 +53,6 @@ pub struct MultipartBody {
     pub content: multer::Multipart<'static>,
 }
 
-/*impl schemars::JsonSchema for MultipartBody<'static> {
-    // Required methods
-    fn schema_name() -> String {
-        "MultipartBody".to_string()
-    }
-
-    fn json_schema(
-        _gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        let mut schema = schemars::schema::SchemaObject::default();
-        schemars::schema::Schema::Object(schema)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for MultipartBody<'static> {
-    // Required method
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let b: Vec<u8> = Vec::deserialize(deserializer)?;
-        let stream = futures::stream::once(async move {
-            Result::<bytes::Bytes, std::convert::Infallible>::Ok(b.into())
-        });
-        Ok(MultipartBody {
-            content: multer::Multipart::new(stream, "X-BOUNDARY"),
-        })
-    }
-}*/
-
 #[async_trait]
 impl ExclusiveExtractor for MultipartBody {
     async fn from_request<Context: ServerContext>(
@@ -273,8 +243,10 @@ impl ExclusiveExtractor for UntypedBody {
         Ok(UntypedBody { content: body_bytes.freeze() })
     }
 
-    fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
-        untyped_metadata(content_type)
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
+        untyped_metadata()
     }
 }
 
@@ -429,14 +401,14 @@ impl ExclusiveExtractor for StreamingBody {
         })
     }
 
-    fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
-        untyped_metadata(content_type)
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
+        untyped_metadata()
     }
 }
 
-fn untyped_metadata(
-    _content_type: ApiEndpointBodyContentType,
-) -> ExtractorMetadata {
+fn untyped_metadata() -> ExtractorMetadata {
     ExtractorMetadata {
         parameters: vec![ApiEndpointParameter::new_body(
             ApiEndpointBodyContentType::Bytes,

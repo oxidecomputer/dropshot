@@ -1008,11 +1008,7 @@ dependencies = [
  "log",
  "memchr",
  "mime",
- "serde",
- "serde_json",
  "spin 0.9.8",
- "tokio",
- "tokio-util",
  "version_check",
 ]
 
