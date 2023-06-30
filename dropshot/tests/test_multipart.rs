@@ -46,19 +46,23 @@ async fn test_multipart_client() {
     let testctx = common::test_setup("multipart_client", api);
 
     let test_string = "abcd";
-    let mut response = testctx
-        .client_testctx
-        .make_request_with_body(
-            Method::POST,
-            "/upload",
+    let uri = testctx.client_testctx.url("/upload");
+    let request = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Content-Type", "multipart/form-data; boundary=Y-BOUNDARY")
+        .body(
             format!(
-                "--X-BOUNDARY\r\nContent-Disposition: form-data; \
-        name=\"my_text_field\"\r\n\r\n{}\r\n--X-BOUNDARY--\r\n",
+                "--Y-BOUNDARY\r\nContent-Disposition: form-data; \
+        name=\"my_text_field\"\r\n\r\n{}\r\n--Y-BOUNDARY--\r\n",
                 test_string
             )
             .into(),
-            StatusCode::OK,
         )
+        .expect("attempted to construct invalid request");
+    let mut response = testctx
+        .client_testctx
+        .make_request_with_request(request, http::StatusCode::OK)
         .await
         .expect("expected success");
     let body = read_string(&mut response).await;
