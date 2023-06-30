@@ -11,6 +11,7 @@ pub use common::RequestExtractor;
 pub use common::SharedExtractor;
 
 mod body;
+pub use body::MultipartBody;
 pub use body::StreamingBody;
 pub use body::TypedBody;
 pub use body::UntypedBody;

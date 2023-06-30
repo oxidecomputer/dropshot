@@ -6,7 +6,7 @@ use dropshot::{
     HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
     HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
     HttpResponseSeeOther, HttpResponseTemporaryRedirect,
-    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
+    HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
 };
 use hyper::Body;
@@ -463,12 +463,11 @@ async fn handler24(
 #[endpoint {
     method = POST,
     path = "/test/multipart-form-data",
-    content_type = "multipart/form-data",
     tags = ["it"]
 }]
 async fn handler25(
     _rqctx: RequestContext<()>,
-    _body: UntypedBody,
+    _body: MultipartBody,
 ) -> Result<HttpResponseCreated<Response>, HttpError> {
     Ok(HttpResponseCreated(Response {}))
 }

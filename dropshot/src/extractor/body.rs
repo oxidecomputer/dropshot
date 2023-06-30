@@ -48,6 +48,79 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
     }
 }
 
+#[derive(Debug)]
+pub struct MultipartBody {
+    pub content: multer::Multipart<'static>,
+}
+
+/*impl schemars::JsonSchema for MultipartBody<'static> {
+    // Required methods
+    fn schema_name() -> String {
+        "MultipartBody".to_string()
+    }
+
+    fn json_schema(
+        _gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        let mut schema = schemars::schema::SchemaObject::default();
+        schemars::schema::Schema::Object(schema)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for MultipartBody<'static> {
+    // Required method
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let b: Vec<u8> = Vec::deserialize(deserializer)?;
+        let stream = futures::stream::once(async move {
+            Result::<bytes::Bytes, std::convert::Infallible>::Ok(b.into())
+        });
+        Ok(MultipartBody {
+            content: multer::Multipart::new(stream, "X-BOUNDARY"),
+        })
+    }
+}*/
+
+#[async_trait]
+impl ExclusiveExtractor for MultipartBody {
+    async fn from_request<Context: ServerContext>(
+        _rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
+    ) -> Result<Self, HttpError> {
+        let body = request.into_body();
+        Ok(MultipartBody {
+            content: multer::Multipart::new(body, "X-BOUNDARY"),
+        })
+    }
+
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
+        let body = ApiEndpointParameter::new_body(
+            ApiEndpointBodyContentType::MultipartFormData,
+            true,
+            ApiSchemaGenerator::Static {
+                schema: Box::new(
+                    SchemaObject {
+                        instance_type: Some(InstanceType::String.into()),
+                        format: Some(String::from("binary")),
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                dependencies: indexmap::IndexMap::default(),
+            },
+            vec![],
+        );
+        ExtractorMetadata {
+            extension_mode: ExtensionMode::None,
+            parameters: vec![body],
+        }
+    }
+}
+
 /// Given an HTTP request, attempt to read the body, parse it according
 /// to the content type, and deserialize it to an instance of `BodyType`.
 async fn http_request_load_body<Context: ServerContext, BodyType>(
@@ -362,15 +435,11 @@ impl ExclusiveExtractor for StreamingBody {
 }
 
 fn untyped_metadata(
-    content_type: ApiEndpointBodyContentType,
+    _content_type: ApiEndpointBodyContentType,
 ) -> ExtractorMetadata {
     ExtractorMetadata {
         parameters: vec![ApiEndpointParameter::new_body(
-            if content_type == ApiEndpointBodyContentType::MultipartFormData {
-                content_type
-            } else {
-                ApiEndpointBodyContentType::Bytes
-            },
+            ApiEndpointBodyContentType::Bytes,
             true,
             ApiSchemaGenerator::Static {
                 schema: Box::new(

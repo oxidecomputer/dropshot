@@ -626,6 +626,7 @@ pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
 pub use extractor::ExclusiveExtractor;
 pub use extractor::ExtractorMetadata;
+pub use extractor::MultipartBody;
 pub use extractor::Path;
 pub use extractor::Query;
 pub use extractor::RawRequest;
