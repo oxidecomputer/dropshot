@@ -12,7 +12,7 @@ categories = ["network-programming", "web-programming::http-server"]
 
 [dependencies]
 async-stream = "0.3.5"
-async-trait = "0.1.68"
+async-trait = "0.1.69"
 base64 = "0.21.2"
 bytes = "1"
 camino = { version = "1.1.4", features = ["serde1"] }
