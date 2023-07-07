@@ -733,7 +733,11 @@ impl<C: ServerContext> HttpServer<C> {
 impl Drop for CloseHandle {
     fn drop(&mut self) {
         if let Some(c) = self.close_channel.take() {
-            c.send(()).expect("failed to send close signal")
+            // The other side of this channel is owned by a separate tokio task
+            // that's running the hyper server.  We do not expect that to be
+            // cancelled.  But it can happen if the executor itself is shutting
+            // down and that task happens to get cleaned up before this one.
+            let _ = c.send(());
         }
     }
 }
