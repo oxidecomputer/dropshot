@@ -4,5 +4,5 @@
 # The intent is to keep this updated as new stable versions are relased.
 
 [toolchain]
-channel = "1.70.0"
+channel = "1.71.0"
 profile = "default"
