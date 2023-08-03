@@ -783,6 +783,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     // straightforward, since the request handling code can simply return early
     // with an error and we'll treat it like an error from any of the endpoints
     // themselves.
+    let start_time = std::time::Instant::now();
     let request_id = generate_request_id();
     let request_log = server.log.new(o!(
         "remote_addr" => remote_addr,
@@ -818,6 +819,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     )
     .await;
 
+    let latency_us = start_time.elapsed().as_micros();
     let response = match maybe_response {
         Err(error) => {
             let message_external = error.external_message.clone();
@@ -838,6 +840,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
                 "response_code" => r.status().as_str().to_string(),
+                "latency_us" => latency_us,
                 "error_message_internal" => message_internal,
                 "error_message_external" => message_external,
             );
@@ -848,7 +851,8 @@ async fn http_request_handle_wrap<C: ServerContext>(
         Ok(response) => {
             // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
-                "response_code" => response.status().as_str().to_string()
+                "response_code" => response.status().as_str().to_string(),
+                "latency_us" => latency_us,
             );
 
             #[cfg(feature = "usdt-probes")]
