@@ -839,7 +839,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
             // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
-                "response_code" => r.status().as_str().to_string(),
+                "response_code" => r.status().as_str(),
                 "latency_us" => latency_us,
                 "error_message_internal" => message_internal,
                 "error_message_external" => message_external,
@@ -851,7 +851,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         Ok(response) => {
             // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
-                "response_code" => response.status().as_str().to_string(),
+                "response_code" => response.status().as_str(),
                 "latency_us" => latency_us,
             );
 
