@@ -5,10 +5,10 @@ error[E0277]: the trait bound `String: HttpCodedResponse` is not satisfied
    |      ^^^^^^ the trait `HttpCodedResponse` is not implemented for `String`
    |
    = help: the following other types implement trait `HttpCodedResponse`:
-             HttpResponseAccepted<T>
              HttpResponseCreated<T>
-             HttpResponseDeleted
+             HttpResponseAccepted<T>
              HttpResponseOk<T>
+             HttpResponseDeleted
              HttpResponseUpdatedNoContent
              dropshot::handler::HttpResponseFoundStatus
              dropshot::handler::HttpResponseSeeOtherStatus
