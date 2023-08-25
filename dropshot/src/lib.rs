@@ -187,7 +187,7 @@
 //! ```ignore
 //! #[endpoint {
 //!     // Required fields
-//!     method = { DELETE | GET | PATCH | POST | PUT },
+//!     method = { DELETE | HEAD | GET | OPTIONS | PATCH | POST | PUT },
 //!     path = "/path/name/with/{named}/{variables}",
 //!
 //!     // Optional fields
