@@ -564,6 +564,18 @@ pub async fn read_string(response: &mut Response<Body>) -> String {
         .expect("response contained non-UTF-8 bytes")
 }
 
+/// Given a Hyper Response, extract and parse the Content-Length header.
+pub fn read_content_length(response: &Response<Body>) -> usize {
+    response
+        .headers()
+        .get(http::header::CONTENT_LENGTH)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap()
+}
+
 /// Fetches a single resource from the API.
 pub async fn object_get<T: DeserializeOwned>(
     client: &ClientTestContext,
