@@ -94,7 +94,7 @@ trybuild = "1.0.83"
 pem = "3.0"
 rcgen = "0.11.1"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
-tokio-tungstenite = "0.19.0"
+tokio-tungstenite = "0.20.0"
 
 [dev-dependencies.rustls]
 version = "0.21"
