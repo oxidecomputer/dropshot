@@ -15,7 +15,7 @@ async-stream = "0.3.5"
 async-trait = "0.1.73"
 base64 = "0.21.2"
 bytes = "1"
-camino = { version = "1.1.4", features = ["serde1"] }
+camino = { version = "1.1.6", features = ["serde1"] }
 debug-ignore = "1.0.5"
 form_urlencoded = "1.2.0"
 futures = "0.3.28"
