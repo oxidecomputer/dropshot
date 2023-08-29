@@ -58,7 +58,7 @@ version = "1.0.3"
 features = [ "skip_serializing_defaults" ]
 
 [dependencies.serde]
-version = "1.0.164"
+version = "1.0.188"
 features = [ "derive" ]
 
 [dependencies.tokio]
