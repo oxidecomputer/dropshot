@@ -5,14 +5,14 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
    |             ^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = help: the following other types implement trait `serde::ser::Serialize`:
-             &'a T
-             &'a mut T
-             ()
-             (T0, T1)
-             (T0, T1, T2)
-             (T0, T1, T2, T3)
-             (T0, T1, T2, T3, T4)
-             (T0, T1, T2, T3, T4, T5)
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
            and $N others
    = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
 note: required by a bound in `HttpResponseOk`

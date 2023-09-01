@@ -533,7 +533,7 @@
 //! Dropshot optionally exposes two DTrace probes, `request_start` and
 //! `request_finish`. These provide detailed information about each request,
 //! such as their ID, the local and remote IPs, and the response information.
-//! See the dropshot::dtrace::RequestInfo` and `dropshot::dtrace::ResponseInfo`
+//! See the `dropshot::dtrace::RequestInfo` and `dropshot::dtrace::ResponseInfo`
 //! types for a complete listing of what's available.
 //!
 //! These probes are implemented via the `usdt` crate. They may require a
