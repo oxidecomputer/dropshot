@@ -41,7 +41,7 @@ toml = "0.7.6"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
-version = "0.4.26"
+version = "0.4.28"
 features = [ "serde", "std", "clock" ]
 default-features = false
 
