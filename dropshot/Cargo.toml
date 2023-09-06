@@ -36,7 +36,7 @@ serde_path_to_error = "0.1.16"
 serde_urlencoded = "0.7.1"
 sha1 = "0.10.6"
 simple-mermaid = { version = "0.1.1", optional = true }
-slog = "2.5.0"
+slog = { version = "2.5.0", features = ["dynamic-keys"] }
 slog-async = "2.8.0"
 slog-bunyan = "2.5.0"
 slog-json = "2.6.1"
