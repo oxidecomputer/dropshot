@@ -800,7 +800,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             "req_id" => request_id.clone(),
             "method" => request.method().as_str().to_string(),
             "uri" => format!("{}", request.uri()),
-            "x-forwarded-for" => xff,
+            "x_forwarded_for" => xff,
         ))
     } else {
         server.log.new(o!(
