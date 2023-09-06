@@ -30,6 +30,7 @@ enum MethodType {
     POST,
     PUT,
     OPTIONS,
+    HEAD,
 }
 
 impl MethodType {
@@ -41,6 +42,7 @@ impl MethodType {
             MethodType::POST => "POST",
             MethodType::PUT => "PUT",
             MethodType::OPTIONS => "OPTIONS",
+            MethodType::HEAD => "HEAD",
         }
     }
 }
