@@ -330,7 +330,7 @@ mod tests {
                     page_default_nitems: NonZeroU32::new(1).unwrap(),
                     default_handler_task_mode:
                         HandlerTaskMode::CancelOnDisconnect,
-                    include_x_forwarded_for: false,
+                    log_headers: Default::default(),
                 },
                 router: HttpRouter::new(),
                 log: log.clone(),
