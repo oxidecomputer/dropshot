@@ -93,6 +93,9 @@ async fn get_or_head_with_range_support(
 ) -> Result<Response<Body>, HttpError> {
     let headers = rqctx.request.headers();
 
+    // TODO-correctness: We are not supporting the `If-Range:` conditional
+    // header; see RFC 7233 § 3.2.
+
     let Some(range) = headers.get(header::RANGE) else {
         // No range specification; return the full data, but set the
         // `accept-ranges` header to indicate the client _could_ have asked for
