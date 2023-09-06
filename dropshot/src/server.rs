@@ -823,7 +823,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             // refer to the generated properties in dynamic languages used for
             // filtering like rhai.
             let k = format!("hdr_{}", name.to_lowercase().replace('-', "_"));
-            request_log = server.log.new(o!(k => v));
+            request_log = request_log.new(o!(k => v));
         }
     }
 
