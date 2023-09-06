@@ -96,6 +96,9 @@ pub struct ServerConfig {
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
     pub default_handler_task_mode: HandlerTaskMode,
+    /// If an X-Forwarded-For header is present in the request, include it in
+    /// log messages emitted by the per-request logger.
+    pub include_x_forwarded_for: bool,
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
@@ -128,6 +131,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
+            include_x_forwarded_for: config.include_x_forwarded_for,
         };
 
         let handler_waitgroup = WaitGroup::new();
@@ -785,12 +789,27 @@ async fn http_request_handle_wrap<C: ServerContext>(
     // themselves.
     let start_time = std::time::Instant::now();
     let request_id = generate_request_id();
-    let request_log = server.log.new(o!(
-        "remote_addr" => remote_addr,
-        "req_id" => request_id.clone(),
-        "method" => request.method().as_str().to_string(),
-        "uri" => format!("{}", request.uri()),
-    ));
+    let request_log = if server.config.include_x_forwarded_for {
+        let xff = request
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|xff| xff.to_str().ok().map(str::to_string))
+            .unwrap_or_else(|| "".into());
+        server.log.new(o!(
+            "remote_addr" => remote_addr,
+            "req_id" => request_id.clone(),
+            "method" => request.method().as_str().to_string(),
+            "uri" => format!("{}", request.uri()),
+            "x-forwarded-for" => xff,
+        ))
+    } else {
+        server.log.new(o!(
+            "remote_addr" => remote_addr,
+            "req_id" => request_id.clone(),
+            "method" => request.method().as_str().to_string(),
+            "uri" => format!("{}", request.uri()),
+        ))
+    };
     trace!(request_log, "incoming request");
     #[cfg(feature = "usdt-probes")]
     probes::request__start!(|| {

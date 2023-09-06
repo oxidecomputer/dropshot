@@ -52,6 +52,9 @@ pub struct ConfigDropshot {
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
     pub default_handler_task_mode: HandlerTaskMode,
+    /// If an X-Forwarded-For header is present in the request, include it in
+    /// log messages emitted by the per-request logger.
+    pub include_x_forwarded_for: bool,
 }
 
 /// Enum specifying options for how a Dropshot server should run its handler
@@ -107,6 +110,7 @@ impl Default for ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
             request_body_max_bytes: 1024,
             default_handler_task_mode: HandlerTaskMode::Detached,
+            include_x_forwarded_for: false,
         }
     }
 }
