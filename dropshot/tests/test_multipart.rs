@@ -28,16 +28,17 @@ async fn api_multipart(
     mut body: MultipartBody,
 ) -> Result<Response<Body>, HttpError> {
     // Iterate over the fields, use `next_field()` to get the next field.
-    if let Some(field) = body.content.next_field().await.unwrap() {
+    let mut contents = Vec::new();
+    while let Some(field) = body.content.next_field().await.unwrap() {
         // Process the field data chunks e.g. store them in a file.
         if let Ok(bytes) = field.bytes().await {
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .body(bytes.into())?);
+            contents.extend(bytes)
         }
     }
 
-    Err(HttpError::for_internal_error("no field found".to_string()))
+    return Ok(Response::builder()
+        .status(StatusCode::OK)
+        .body(contents.into())?);
 }
 
 #[tokio::test]
@@ -53,9 +54,17 @@ async fn test_multipart_client() {
         .header("Content-Type", "multipart/form-data; boundary=Y-BOUNDARY")
         .body(
             format!(
-                "--Y-BOUNDARY\r\nContent-Disposition: form-data; \
-        name=\"my_text_field\"\r\n\r\n{}\r\n--Y-BOUNDARY--\r\n",
-                test_string
+                "--Y-BOUNDARY\r\n\
+                Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                \r\n\
+                {}\r\n\
+                --Y-BOUNDARY\r\n\
+                Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                \r\n\
+                {}\r\n\
+                --Y-BOUNDARY--\r\n\
+                ",
+                test_string, test_string,
             )
             .into(),
         )
@@ -66,7 +75,7 @@ async fn test_multipart_client() {
         .await
         .expect("expected success");
     let body = read_string(&mut response).await;
-    assert_eq!(body, test_string);
+    assert_eq!(body, format!("{}{}", test_string, test_string));
 
     testctx.teardown().await;
 }
