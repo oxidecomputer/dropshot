@@ -79,3 +79,33 @@ async fn test_multipart_client() {
 
     testctx.teardown().await;
 }
+
+#[tokio::test]
+async fn missing_boundary() {
+    let api = api();
+    let testctx = common::test_setup("multipart_client", api);
+
+    let uri = testctx.client_testctx.url("/upload");
+    let request = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Content-Type", "multipart/form-data")
+        .body(
+            format!(
+                "--Y-BOUNDARY\r\n\
+                Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                \r\n\
+                hello\r\n",
+            )
+            .into(),
+        )
+        .expect("attempted to construct invalid request");
+    let response = testctx
+        .client_testctx
+        .make_request_with_request(request, http::StatusCode::BAD_REQUEST)
+        .await;
+    let err = response.unwrap_err();
+    assert_eq!(err.message, "missing boundary in content-type header");
+
+    testctx.teardown().await;
+}
