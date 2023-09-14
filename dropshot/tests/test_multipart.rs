@@ -36,9 +36,7 @@ async fn api_multipart(
         }
     }
 
-    return Ok(Response::builder()
-        .status(StatusCode::OK)
-        .body(contents.into())?);
+    Ok(Response::builder().status(StatusCode::OK).body(contents.into())?)
 }
 
 #[tokio::test]
@@ -91,13 +89,12 @@ async fn missing_boundary() {
         .uri(uri)
         .header("Content-Type", "multipart/form-data")
         .body(
-            format!(
-                "--Y-BOUNDARY\r\n\
+            "--Y-BOUNDARY\r\n\
                 Content-Disposition: form-data; name=\"my_text_field\"\r\n\
                 \r\n\
-                hello\r\n",
-            )
-            .into(),
+                hello\r\n"
+                .to_owned()
+                .into(),
         )
         .expect("attempted to construct invalid request");
     let response = testctx
@@ -120,13 +117,12 @@ async fn no_content_type() {
         .method(Method::POST)
         .uri(uri)
         .body(
-            format!(
-                "--Y-BOUNDARY\r\n\
+            "--Y-BOUNDARY\r\n\
                 Content-Disposition: form-data; name=\"my_text_field\"\r\n\
                 \r\n\
-                hello\r\n",
-            )
-            .into(),
+                hello\r\n"
+                .to_owned()
+                .into(),
         )
         .expect("attempted to construct invalid request");
     let response = testctx
