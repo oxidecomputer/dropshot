@@ -134,3 +134,35 @@ async fn no_content_type() {
 
     testctx.teardown().await;
 }
+
+#[tokio::test]
+async fn weird_content_type() {
+    let api = api();
+    let testctx = common::test_setup("multipart_client", api);
+
+    let uri = testctx.client_testctx.url("/upload");
+    let request = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Content-Type", vec![0xf0, 0x28, 0x8c, 0xbc])
+        .body(
+            "--Y-BOUNDARY\r\n\
+                Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                \r\n\
+                hello\r\n"
+                .to_owned()
+                .into(),
+        )
+        .expect("attempted to construct invalid request");
+    let response = testctx
+        .client_testctx
+        .make_request_with_request(request, http::StatusCode::BAD_REQUEST)
+        .await;
+    let err = response.unwrap_err();
+    assert_eq!(
+        err.message,
+        "invalid content type: failed to convert header to a str"
+    );
+
+    testctx.teardown().await;
+}
