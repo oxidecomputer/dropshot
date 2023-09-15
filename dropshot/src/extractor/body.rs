@@ -48,6 +48,75 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
     }
 }
 
+#[derive(Debug)]
+pub struct MultipartBody {
+    pub content: multer::Multipart<'static>,
+}
+
+#[async_trait]
+impl ExclusiveExtractor for MultipartBody {
+    async fn from_request<Context: ServerContext>(
+        _rqctx: &RequestContext<Context>,
+        request: hyper::Request<hyper::Body>,
+    ) -> Result<Self, HttpError> {
+        let (parts, body) = request.into_parts();
+        // Get the content-type header.
+        let content_type = parts
+            .headers
+            .get(http::header::CONTENT_TYPE)
+            .ok_or_else(|| {
+                HttpError::for_bad_request(
+                    None,
+                    "missing content-type header".to_string(),
+                )
+            })?
+            .to_str()
+            .map_err(|e| {
+                HttpError::for_bad_request(
+                    None,
+                    format!("invalid content type: {}", e),
+                )
+            })?;
+        // The boundary is the string after the "boundary=" part of the
+        // content-type header.
+        let boundary =
+            content_type.split("boundary=").nth(1).ok_or_else(|| {
+                HttpError::for_bad_request(
+                    None,
+                    "missing boundary in content-type header".to_string(),
+                )
+            })?;
+        Ok(MultipartBody {
+            content: multer::Multipart::new(body, boundary.to_string()),
+        })
+    }
+
+    fn metadata(
+        _content_type: ApiEndpointBodyContentType,
+    ) -> ExtractorMetadata {
+        let body = ApiEndpointParameter::new_body(
+            ApiEndpointBodyContentType::MultipartFormData,
+            true,
+            ApiSchemaGenerator::Static {
+                schema: Box::new(
+                    SchemaObject {
+                        instance_type: Some(InstanceType::String.into()),
+                        format: Some(String::from("binary")),
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                dependencies: indexmap::IndexMap::default(),
+            },
+            vec![],
+        );
+        ExtractorMetadata {
+            extension_mode: ExtensionMode::None,
+            parameters: vec![body],
+        }
+    }
+}
+
 /// Given an HTTP request, attempt to read the body, parse it according
 /// to the content type, and deserialize it to an instance of `BodyType`.
 async fn http_request_load_body<Context: ServerContext, BodyType>(

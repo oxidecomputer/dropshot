@@ -6,7 +6,7 @@ use dropshot::{
     HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
     HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
     HttpResponseSeeOther, HttpResponseTemporaryRedirect,
-    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
+    HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
 };
 use hyper::Body;
@@ -460,6 +460,18 @@ async fn handler24(
     unimplemented!()
 }
 
+#[endpoint {
+    method = POST,
+    path = "/test/multipart-form-data",
+    tags = ["it"]
+}]
+async fn handler25(
+    _rqctx: RequestContext<()>,
+    _body: MultipartBody,
+) -> Result<HttpResponseCreated<Response>, HttpError> {
+    Ok(HttpResponseCreated(Response {}))
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, String> {
@@ -493,6 +505,7 @@ fn make_api(
     api.register(handler22)?;
     api.register(handler23)?;
     api.register(handler24)?;
+    api.register(handler25)?;
     Ok(api)
 }
 
