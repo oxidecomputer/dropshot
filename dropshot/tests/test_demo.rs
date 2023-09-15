@@ -19,6 +19,7 @@ use dropshot::http_response_found;
 use dropshot::http_response_see_other;
 use dropshot::http_response_temporary_redirect;
 use dropshot::test_util::object_delete;
+use dropshot::test_util::read_content_length;
 use dropshot::test_util::read_json;
 use dropshot::test_util::read_string;
 use dropshot::test_util::TEST_HEADER_1;
@@ -76,6 +77,8 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_streaming_body).unwrap();
     api.register(demo_handler_raw_request).unwrap();
     api.register(demo_handler_delete).unwrap();
+    api.register(demo_handler_head_get).unwrap();
+    api.register(demo_handler_head_head).unwrap();
     api.register(demo_handler_headers).unwrap();
     api.register(demo_handler_302_bogus).unwrap();
     api.register(demo_handler_302_found).unwrap();
@@ -820,6 +823,44 @@ async fn test_delete_request() {
     testctx.teardown().await;
 }
 
+// Test head request
+#[tokio::test]
+async fn test_head_request() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_head_request", api);
+    let client = &testctx.client_testctx;
+
+    let mut hr = client
+        .make_request_no_body(Method::HEAD, "/testing/head", StatusCode::OK)
+        .await
+        .unwrap();
+    let hrcl = read_content_length(&hr);
+    let hrs = read_string(&mut hr).await;
+
+    // The HEAD request should have a Content-Length that does not reflect the
+    // length of the HEAD response, but rather the hypothetical GET response we
+    // will get:
+    assert_eq!(hrs.len(), 0);
+    assert_ne!(hrs.len(), hrcl);
+
+    let mut gr = client
+        .make_request_no_body(Method::GET, "/testing/head", StatusCode::OK)
+        .await
+        .unwrap();
+    let grcl = read_content_length(&gr);
+    let grs = read_string(&mut gr).await;
+
+    // The HEAD and GET responses should have a matching Content-Length:
+    assert_eq!(grcl, hrcl);
+
+    // The GET response should have a Content-Length and body that match, and
+    // which match the original HEAD request:
+    assert_ne!(grs.len(), 0);
+    assert_eq!(grs.len(), hrcl);
+
+    testctx.teardown().await;
+}
+
 // Test response headers
 #[tokio::test]
 async fn test_header_request() {
@@ -1252,6 +1293,26 @@ async fn demo_handler_delete(
 }
 
 #[endpoint {
+    method = HEAD,
+    path = "/testing/head",
+}]
+async fn demo_handler_head_head(
+    _rqctx: RequestCtx,
+) -> Result<Response<Body>, HttpError> {
+    http_echo_head(&12345)
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/head",
+}]
+async fn demo_handler_head_get(
+    _rqctx: RequestCtx,
+) -> Result<Response<Body>, HttpError> {
+    http_echo(&12345)
+}
+
+#[endpoint {
     method = GET,
     path = "/testing/headers",
 }]
@@ -1367,5 +1428,19 @@ fn http_echo<T: Serialize>(t: &T) -> Result<Response<Body>, HttpError> {
     Ok(Response::builder()
         .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
         .status(StatusCode::OK)
-        .body(serde_json::to_string(t).unwrap().into())?)
+        .body(serde_json::to_vec(t).unwrap().into())?)
+}
+
+fn http_echo_head<T: Serialize>(t: &T) -> Result<Response<Body>, HttpError> {
+    // We need to know how long the body would be, so serialise now in the
+    // same way that http_echo() would:
+    let body = serde_json::to_vec(t).unwrap();
+
+    Ok(Response::builder()
+        .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+        // For a HEAD request, we need to set the content length appropriately
+        // but then send an empty body.
+        .header(http::header::CONTENT_LENGTH, body.len().to_string())
+        .status(StatusCode::OK)
+        .body(Body::empty())?)
 }

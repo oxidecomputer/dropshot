@@ -26,6 +26,7 @@ mod syn_parsing;
 enum MethodType {
     DELETE,
     GET,
+    HEAD,
     PATCH,
     POST,
     PUT,
@@ -37,6 +38,7 @@ impl MethodType {
         match self {
             MethodType::DELETE => "DELETE",
             MethodType::GET => "GET",
+            MethodType::HEAD => "HEAD",
             MethodType::PATCH => "PATCH",
             MethodType::POST => "POST",
             MethodType::PUT => "PUT",
@@ -99,7 +101,7 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 /// ```ignore
 /// #[endpoint {
 ///     // Required fields
-///     method = { DELETE | GET | OPTIONS | PATCH | POST | PUT },
+///     method = { DELETE | HEAD | GET | OPTIONS | PATCH | POST | PUT },
 ///     path = "/path/name/with/{named}/{variables}",
 ///
 ///     // Optional tags for the operation's description
