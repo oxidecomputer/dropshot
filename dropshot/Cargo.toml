@@ -76,7 +76,7 @@ version = "1.4.1"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.13"
+version = "0.8.15"
 features = [ "uuid1" ]
 
 [dev-dependencies]
@@ -104,7 +104,7 @@ version = "0.21"
 features = [ "dangerous_configuration" ]
 
 [dev-dependencies.schemars]
-version = "0.8.13"
+version = "0.8.15"
 features = [ "chrono", "uuid1" ]
 
 [dev-dependencies.slog]
