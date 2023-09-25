@@ -96,7 +96,7 @@ where
 {
     // Use a modest small number for our initial limit.
     let (itemsby100, npagesby100) =
-        iter_collection::<T>(&client, path, initial_params, 100).await;
+        iter_collection::<T>(client, path, initial_params, 100).await;
     let expected_npages = itemsby100.len() / 100
         + 1
         + (if itemsby100.len() % 100 != 0 { 1 } else { 0 });
@@ -115,13 +115,13 @@ where
 
     // Use a max limit to fetch everything at once to make sure it's the same.
     let (itemsbymax, npagesbymax) =
-        iter_collection::<T>(&client, path, initial_params, 10000).await;
+        iter_collection::<T>(client, path, initial_params, 10000).await;
     assert_eq!(2, npagesbymax);
     assert_eq!(itemsby100, itemsbymax);
 
     // Iterate by one to make sure that edge case works, too.
     let (itemsby1, npagesby1) =
-        iter_collection::<T>(&client, path, initial_params, 1).await;
+        iter_collection::<T>(client, path, initial_params, 1).await;
     assert_eq!(itemsby100.len() + 1, npagesby1);
     assert_eq!(itemsby1, itemsby100);
 
@@ -155,7 +155,7 @@ fn paginate_api() -> ApiDescription<usize> {
 fn range_u16(start: u16, limit: u16) -> Vec<u16> {
     if start < std::u16::MAX {
         let start = start + 1;
-        let end = start.checked_add(limit).unwrap_or(std::u16::MAX);
+        let end = start.saturating_add(limit);
         (start..end).collect()
     } else {
         Vec::new()
@@ -247,7 +247,7 @@ async fn test_paginate_basic() {
     // we change the default count of items, but it's important to check that
     // the default actually works and is reasonable.
     let expected_default = 100;
-    let page = objects_list_page::<u16>(&client, "/intapi").await;
+    let page = objects_list_page::<u16>(client, "/intapi").await;
     assert_sequence_from(&page.items, 1, expected_default);
     assert!(page.next_page.is_some());
 
@@ -257,7 +257,7 @@ async fn test_paginate_basic() {
     // to test this case.
     let expected_max = 10000;
     let page = objects_list_page::<u16>(
-        &client,
+        client,
         &format!("/intapi?limit={}", 2 * expected_max),
     )
     .await;
@@ -269,7 +269,7 @@ async fn test_paginate_basic() {
     assert!(count > expected_default);
     assert!(count < expected_max);
     let page =
-        objects_list_page::<u16>(&client, &format!("/intapi?limit={}", count))
+        objects_list_page::<u16>(client, &format!("/intapi?limit={}", count))
             .await;
     assert_sequence_from(&page.items, 1, count);
 
@@ -280,7 +280,7 @@ async fn test_paginate_basic() {
     let next_page_token = page.next_page.unwrap();
 
     let page = objects_list_page::<u16>(
-        &client,
+        client,
         &format!("/intapi?page_token={}", next_page_token,),
     )
     .await;
@@ -288,7 +288,7 @@ async fn test_paginate_basic() {
     assert!(page.next_page.is_some());
 
     let page = objects_list_page::<u16>(
-        &client,
+        client,
         &format!(
             "/intapi?page_token={}&limit={}",
             next_page_token,
@@ -300,7 +300,7 @@ async fn test_paginate_basic() {
     assert!(page.next_page.is_some());
 
     let page = objects_list_page::<u16>(
-        &client,
+        client,
         &format!("/intapi?page_token={}&limit={}", next_page_token, count),
     )
     .await;
@@ -310,7 +310,7 @@ async fn test_paginate_basic() {
     // Loop through the entire collection.
     let mut next_item = 1u16;
     let mut page = objects_list_page::<u16>(
-        &client,
+        client,
         &format!("/intapi?limit={}", expected_max),
     )
     .await;
@@ -328,7 +328,7 @@ async fn test_paginate_basic() {
             );
             next_item += page.items.len() as u16;
             page = objects_list_page::<u16>(
-                &client,
+                client,
                 &format!(
                     "/intapi?page_token={}&limit={}",
                     &next_token, expected_max
@@ -372,16 +372,16 @@ async fn test_paginate_empty() {
     let testctx = common::test_setup("empty", api);
     let client = &testctx.client_testctx;
 
-    let page = objects_list_page::<u16>(&client, "/empty").await;
+    let page = objects_list_page::<u16>(client, "/empty").await;
     assert_eq!(page.items.len(), 0);
     assert!(page.next_page.is_none());
 
-    let page = objects_list_page::<u16>(&client, "/empty?limit=10").await;
+    let page = objects_list_page::<u16>(client, "/empty?limit=10").await;
     assert_eq!(page.items.len(), 0);
     assert!(page.next_page.is_none());
 
     assert_error(
-        &client,
+        client,
         "/empty?limit=0",
         "unable to parse query string: invalid value: integer `0`, \
         expected a nonzero u32",
@@ -389,7 +389,7 @@ async fn test_paginate_empty() {
     .await;
 
     assert_error(
-        &client,
+        client,
         "/empty?page_token=q",
         "unable to parse query string: failed to parse pagination token: \
          Encoded text cannot have a 6-bit remainder.",
@@ -457,7 +457,7 @@ async fn test_paginate_extra_params() {
 
     // Test that the extra query parameter is optional.
     let page =
-        object_get::<ExtraResultsPage>(&client, "/ints_extra?limit=5").await;
+        object_get::<ExtraResultsPage>(client, "/ints_extra?limit=5").await;
     assert!(!page.debug_was_set);
     assert!(!page.debug_value);
     assert_eq!(page.page.items, vec![1, 2, 3, 4, 5]);
@@ -465,7 +465,7 @@ async fn test_paginate_extra_params() {
 
     // Provide a value for the extra query parameter in the FirstPage case.
     let page = object_get::<ExtraResultsPage>(
-        &client,
+        client,
         "/ints_extra?limit=5&debug=true",
     )
     .await;
@@ -476,7 +476,7 @@ async fn test_paginate_extra_params() {
 
     // Provide a value for the extra query parameter in the NextPage case.
     let page = object_get::<ExtraResultsPage>(
-        &client,
+        client,
         &format!("/ints_extra?page_token={}&debug=false&limit=7", token),
     )
     .await;
@@ -557,7 +557,7 @@ async fn test_paginate_with_required_params() {
     assert_eq!(error.message, "you did not say to do it");
 
     let page =
-        objects_list_page::<u16>(&client, "/required?limit=3&doit=true").await;
+        objects_list_page::<u16>(client, "/required?limit=3&doit=true").await;
     assert_eq!(page.items.len(), 3);
 
     testctx.teardown().await;
@@ -663,14 +663,14 @@ async fn test_paginate_dictionary() {
 
     // simple case
     let page =
-        objects_list_page::<DictionaryWord>(&client, "/dictionary?limit=3")
+        objects_list_page::<DictionaryWord>(client, "/dictionary?limit=3")
             .await;
     let found_words =
         page.items.iter().map(|dw| dw.word.as_str()).collect::<Vec<&str>>();
     assert_eq!(found_words, vec!["A&M", "A&P", "AAA",]);
     let token = page.next_page.unwrap();
     let page = objects_list_page::<DictionaryWord>(
-        &client,
+        client,
         &format!("/dictionary?limit=3&page_token={}", token),
     )
     .await;
@@ -680,7 +680,7 @@ async fn test_paginate_dictionary() {
 
     // Reverse the order.
     let page = objects_list_page::<DictionaryWord>(
-        &client,
+        client,
         "/dictionary?limit=3&order=descending",
     )
     .await;
@@ -690,7 +690,7 @@ async fn test_paginate_dictionary() {
     let token = page.next_page.unwrap();
     // Critically, we don't have to pass order=descending again.
     let page = objects_list_page::<DictionaryWord>(
-        &client,
+        client,
         &format!("/dictionary?limit=3&page_token={}", token),
     )
     .await;
@@ -700,7 +700,7 @@ async fn test_paginate_dictionary() {
 
     // Apply a filter.
     let page = objects_list_page::<DictionaryWord>(
-        &client,
+        client,
         "/dictionary?limit=3&min_length=12",
     )
     .await;
@@ -712,7 +712,7 @@ async fn test_paginate_dictionary() {
     );
     let token = page.next_page.unwrap();
     let page = objects_list_page::<DictionaryWord>(
-        &client,
+        client,
         &format!("/dictionary?limit=3&page_token={}", token),
     )
     .await;
@@ -726,7 +726,7 @@ async fn test_paginate_dictionary() {
     // Let's page through the filtered collection one item at a time.  This is
     // an edge case that only works if the marker is implemented correctly.
     let (sortedby1, npagesby1) = iter_collection::<DictionaryWord>(
-        &client,
+        client,
         "/dictionary",
         "min_length=12",
         1,
@@ -740,7 +740,7 @@ async fn test_paginate_dictionary() {
     // Page through it again one at a time, but in reverse order to make sure
     // the marker works correctly in that direction as well.
     let (rsortedby1, rnpagesby1) = iter_collection::<DictionaryWord>(
-        &client,
+        client,
         "/dictionary",
         "min_length=12&order=descending",
         1,
@@ -749,17 +749,13 @@ async fn test_paginate_dictionary() {
     assert_eq!(npagesby1, rnpagesby1);
     assert_eq!(
         sortedby1,
-        rsortedby1
-            .iter()
-            .rev()
-            .map(|c| c.clone())
-            .collect::<Vec<DictionaryWord>>()
+        rsortedby1.iter().rev().cloned().collect::<Vec<DictionaryWord>>()
     );
 
     // Fetch the whole thing in one go to make sure we didn't hit any edge cases
     // around the markers.
     let (sortedbybig, npagesbybig) = iter_collection::<DictionaryWord>(
-        &client,
+        client,
         "/dictionary",
         "min_length=12&order=ascending",
         10000,
@@ -880,8 +876,7 @@ async fn test_example_basic() {
     let client = &exctx.client;
 
     let alltogether =
-        assert_collection_iter::<ExampleProject>(&client, "/projects", "")
-            .await;
+        assert_collection_iter::<ExampleProject>(client, "/projects", "").await;
     assert_eq!(alltogether.len(), 999);
     assert_eq!(alltogether[0].name, "project001");
     assert_eq!(alltogether[alltogether.len() - 1].name, "project999");
@@ -903,7 +898,7 @@ async fn test_example_multiple_sorts() {
 
     // default sort
     let byname =
-        assert_collection_iter::<ExampleProjectMtime>(&client, "/projects", "")
+        assert_collection_iter::<ExampleProjectMtime>(client, "/projects", "")
             .await;
     assert_eq!(byname.len(), 999);
     assert_eq!(byname[0].name, "project001");
@@ -911,7 +906,7 @@ async fn test_example_multiple_sorts() {
 
     // ascending sort by name
     let byname_asc = assert_collection_iter::<ExampleProjectMtime>(
-        &client,
+        client,
         "/projects",
         "sort=by-name-ascending",
     )
@@ -920,23 +915,19 @@ async fn test_example_multiple_sorts() {
 
     // descending sort by name
     let byname_desc = assert_collection_iter::<ExampleProjectMtime>(
-        &client,
+        client,
         "/projects",
         "sort=by-name-descending",
     )
     .await;
     assert_eq!(
         byname_desc,
-        byname_asc
-            .iter()
-            .rev()
-            .map(|c| c.clone())
-            .collect::<Vec<ExampleProjectMtime>>()
+        byname_asc.iter().rev().cloned().collect::<Vec<ExampleProjectMtime>>()
     );
 
     // ascending sort by mtime
     let bymtime_asc = assert_collection_iter::<ExampleProjectMtime>(
-        &client,
+        client,
         "/projects",
         "sort=by-mtime-ascending",
     )
@@ -945,14 +936,14 @@ async fn test_example_multiple_sorts() {
     assert_ne!(bymtime_asc, byname_desc);
     bymtime_asc.windows(2).for_each(|slice| {
         assert!(
-            slice[0].mtime.timestamp_nanos()
-                <= slice[1].mtime.timestamp_nanos()
+            slice[0].mtime.timestamp_nanos_opt().unwrap()
+                <= slice[1].mtime.timestamp_nanos_opt().unwrap()
         );
     });
 
     // descending sort by mtime
     let bymtime_desc = assert_collection_iter::<ExampleProjectMtime>(
-        &client,
+        client,
         "/projects",
         "sort=by-mtime-descending",
     )
@@ -962,11 +953,7 @@ async fn test_example_multiple_sorts() {
     assert_ne!(bymtime_desc, bymtime_asc);
     assert_eq!(
         bymtime_desc,
-        bymtime_asc
-            .iter()
-            .rev()
-            .map(|c| c.clone())
-            .collect::<Vec<ExampleProjectMtime>>()
+        bymtime_asc.iter().rev().cloned().collect::<Vec<ExampleProjectMtime>>()
     );
 
     exctx.cleanup_successful();
@@ -988,29 +975,25 @@ async fn test_example_multiple_resources() {
     for resource in &resources[..] {
         // Scan parameters are not necessary.
         let no_args =
-            objects_list_page::<ExampleObject>(&client, "/projects?limit=3")
+            objects_list_page::<ExampleObject>(client, "/projects?limit=3")
                 .await;
         assert_eq!(no_args.items.len(), 3);
 
         let by_name_asc = assert_collection_iter::<ExampleObject>(
-            &client,
+            client,
             resource,
             "sort=by-name-ascending",
         )
         .await;
         let by_name_desc = assert_collection_iter::<ExampleObject>(
-            &client,
+            client,
             resource,
             "sort=by-name-descending",
         )
         .await;
         assert_eq!(
             by_name_desc,
-            by_name_asc
-                .iter()
-                .rev()
-                .map(|c| c.clone())
-                .collect::<Vec<ExampleObject>>()
+            by_name_asc.iter().rev().cloned().collect::<Vec<ExampleObject>>()
         );
     }
 
