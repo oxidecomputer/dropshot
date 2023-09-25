@@ -83,6 +83,7 @@ features = [ "uuid1" ]
 async-channel = "1.9.0"
 buf-list = "1.0.3"
 expectorate = "1.0.7"
+http-range-header = "0.4.0"
 hyper-rustls = "0.24.1"
 hyper-staticfile = "0.9"
 lazy_static = "1.4.0"

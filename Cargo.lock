@@ -401,6 +401,7 @@ dependencies = [
  "futures",
  "hostname",
  "http",
+ "http-range-header",
  "hyper",
  "hyper-rustls",
  "hyper-staticfile",
@@ -765,6 +766,12 @@ name = "http-range"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eee9694f83d9b7c09682fdb32213682939507884e5bcf227be9aff5d644b90dc"
+
+[[package]]
+name = "http-range-header"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ce4ef31cda248bbdb6e6820603b82dfcd9e833db65a43e997a0ccec777d11fe"
 
 [[package]]
 name = "httparse"
