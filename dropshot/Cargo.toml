@@ -93,7 +93,7 @@ tempfile = "3.8"
 trybuild = "1.0.85"
 # Used by the https examples and tests
 pem = "3.0"
-rcgen = "0.11.1"
+rcgen = "0.11.3"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.20.1"
 
