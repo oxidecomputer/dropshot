@@ -38,7 +38,7 @@ slog-bunyan = "2.4.0"
 slog-json = "2.6.1"
 slog-term = "2.9.0"
 tokio-rustls = "0.24.1"
-toml = "0.8.1"
+toml = "0.8.2"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
