@@ -1076,7 +1076,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75e56d5c441965b6425165b7e3223cc933ca469834f4a8b4786817a1f9dc4f13"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.0.2",
  "serde",
  "serde_json",
 ]
