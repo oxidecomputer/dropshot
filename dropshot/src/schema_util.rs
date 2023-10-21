@@ -319,7 +319,25 @@ fn j2oas_schema_object(
             ))
         }
         (Some(schemars::schema::InstanceType::Boolean), None) => {
-            openapiv3::SchemaKind::Type(openapiv3::Type::Boolean {})
+            let enumeration = obj
+                .enum_values
+                .as_ref()
+                .map(|values| {
+                    values
+                        .iter()
+                        .map(|vv| match vv {
+                            serde_json::Value::Null => None,
+                            serde_json::Value::Bool(b) => Some(*b),
+                            _ => {
+                                panic!("unexpected enumeration value {:?}", vv)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            openapiv3::SchemaKind::Type(openapiv3::Type::Boolean(
+                openapiv3::BooleanType { enumeration },
+            ))
         }
         (Some(schemars::schema::InstanceType::Object), None) => {
             j2oas_object(&obj.object)
