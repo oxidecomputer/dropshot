@@ -953,7 +953,7 @@ mod test {
     // Test cases exercising violations of each of the fields.
 
     #[test]
-    #[should_panic(expected = "assertion failed")]
+    #[should_panic(expected = "assertion `left == right` failed")]
     fn test_bunyan_bad_name() {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
@@ -970,7 +970,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed")]
+    #[should_panic(expected = "assertion `left == right` failed")]
     fn test_bunyan_bad_hostname() {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
@@ -987,7 +987,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed")]
+    #[should_panic(expected = "assertion `left == right` failed")]
     fn test_bunyan_bad_pid() {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
@@ -1004,7 +1004,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed")]
+    #[should_panic(expected = "assertion `left == right` failed")]
     fn test_bunyan_bad_v() {
         let r1 = make_dummy_record();
         let records: Vec<&BunyanLogRecord> = vec![&r1];
