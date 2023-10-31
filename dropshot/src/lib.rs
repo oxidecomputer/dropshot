@@ -31,7 +31,8 @@
 //! (sometimes without even knowing it!).  There's hardly a clear standard, yet
 //! this is a really basic operation for any REST API.)
 //!
-//! For a discussion of alternative crates considered, see Oxide RFD 10.
+//! For a discussion of alternative crates considered, see [Oxide RFD 10]
+//! (https://github.com/oxidecomputer/dropshot/issues/56#issuecomment-705710515).
 //!
 //! We hope Dropshot will be fairly general-purpose, but it's primarily intended
 //! to address the needs of the Oxide control plane.
