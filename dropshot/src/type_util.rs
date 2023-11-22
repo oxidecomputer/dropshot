@@ -328,7 +328,13 @@ mod tests {
         let schema: schemars::schema::Schema =
             generator.root_schema_for::<ThingHolder>().schema.into();
 
-        let struct_props = schema2struct(&schema, &generator, true);
+        let struct_props = schema2struct(
+            &ThingHolder::schema_name(),
+            "test",
+            &schema,
+            &generator,
+            true,
+        );
 
         assert_eq!(struct_props.len(), 1);
 

@@ -986,23 +986,29 @@ impl<
         );
         let schema = generator.root_schema_for::<H>().schema.into();
 
-        let headers = schema2struct(&schema, &generator, true)
-            .into_iter()
-            .map(|struct_member| {
-                let mut s = struct_member.schema;
-                let mut visitor = ReferenceVisitor::new(&generator);
-                schemars::visit::visit_schema(&mut visitor, &mut s);
-                ApiEndpointHeader {
-                    name: struct_member.name,
-                    description: struct_member.description,
-                    schema: ApiSchemaGenerator::Static {
-                        schema: Box::new(s),
-                        dependencies: visitor.dependencies(),
-                    },
-                    required: struct_member.required,
-                }
-            })
-            .collect::<Vec<_>>();
+        let headers = schema2struct(
+            &H::schema_name(),
+            "headers",
+            &schema,
+            &generator,
+            true,
+        )
+        .into_iter()
+        .map(|struct_member| {
+            let mut s = struct_member.schema;
+            let mut visitor = ReferenceVisitor::new(&generator);
+            schemars::visit::visit_schema(&mut visitor, &mut s);
+            ApiEndpointHeader {
+                name: struct_member.name,
+                description: struct_member.description,
+                schema: ApiSchemaGenerator::Static {
+                    schema: Box::new(s),
+                    dependencies: visitor.dependencies(),
+                },
+                required: struct_member.required,
+            }
+        })
+        .collect::<Vec<_>>();
 
         metadata.headers = headers;
         metadata
