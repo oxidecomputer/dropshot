@@ -5,6 +5,8 @@
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
 
+use std::fmt;
+
 #[derive(Debug)]
 pub(crate) struct StructMember {
     pub name: String,
@@ -20,13 +22,30 @@ pub(crate) struct StructMember {
 /// If the input schema is not a flat structure the result will be a runtime
 /// failure reflective of a programming error (likely an invalid type specified
 /// in a handler function).
-///
-/// This function is invoked recursively on subschemas.
 pub(crate) fn schema2struct(
+    schema_name: &str,
+    kind: &str,
     schema: &schemars::schema::Schema,
     generator: &schemars::gen::SchemaGenerator,
     required: bool,
 ) -> Vec<StructMember> {
+    match schema2struct_impl(schema, generator, required) {
+        Ok(results) => results,
+        Err(error) => {
+            panic!(
+                "while generating schema for {} ({}): {}",
+                schema_name, kind, error
+            );
+        }
+    }
+}
+
+/// This function is invoked recursively on subschemas.
+fn schema2struct_impl(
+    schema: &schemars::schema::Schema,
+    generator: &schemars::gen::SchemaGenerator,
+    required: bool,
+) -> Result<Vec<StructMember>, Box<Schema2StructError>> {
     // We ignore schema.metadata, which includes things like doc comments, and
     // schema.extensions. We call these out explicitly rather than eliding them
     // as .. since we match all other fields in the structure.
@@ -45,7 +64,7 @@ pub(crate) fn schema2struct(
             object: None,
             reference: Some(_),
             extensions: _,
-        }) => schema2struct(
+        }) => schema2struct_impl(
             generator.dereference(schema).expect("invalid reference"),
             generator,
             required,
@@ -99,10 +118,13 @@ pub(crate) fn schema2struct(
                         if_schema: None,
                         then_schema: None,
                         else_schema: None,
-                    } => results.extend(schemas.iter().flat_map(|subschema| {
-                        // Note that these will be tagged as optional.
-                        schema2struct(subschema, generator, false)
-                    })),
+                    } => {
+                        for schema in schemas {
+                            results.extend(schema2struct_impl(
+                                schema, generator, false,
+                            )?);
+                        }
+                    }
 
                     // With an all_of, there should be a single element. We
                     // typically see this in the case where there is a doc
@@ -116,24 +138,107 @@ pub(crate) fn schema2struct(
                         if_schema: None,
                         then_schema: None,
                         else_schema: None,
-                    } if subschemas.len() == 1 => results.extend(
-                        subschemas.iter().flat_map(|subschema| {
-                            schema2struct(subschema, generator, required)
-                        }),
-                    ),
+                    } if subschemas.len() == 1 => {
+                        results.extend(schema2struct_impl(
+                            subschemas.first().unwrap(),
+                            generator,
+                            required,
+                        )?);
+                    }
 
                     // We don't expect any other types of subschemas.
-                    invalid => panic!("invalid subschema {:#?}", invalid),
+                    invalid => {
+                        return Err(Box::new(
+                            Schema2StructError::InvalidSubschema(
+                                invalid.clone(),
+                            ),
+                        ))
+                    }
                 }
             }
 
-            results
+            Ok(results)
         }
 
+        // Unit enums that do not have doc comments result in a schema with
+        // enum_values.
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: _,
+            format: None,
+            enum_values: Some(_),
+            const_value: None,
+            subschemas: None,
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: None,
+            extensions: _,
+        }) => Err(Box::new(Schema2StructError::InvalidEnum(schema.clone()))),
+
+        // Complex enums, and unit enums that have doc comments, are represented
+        // as subschemas with instance_type and reference set to None.
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            metadata: _,
+            instance_type: None,
+            format: None,
+            enum_values: None,
+            const_value: None,
+            subschemas: Some(_),
+            number: None,
+            string: None,
+            array: None,
+            object: None,
+            reference: None,
+            extensions: _,
+        }) => Err(Box::new(Schema2StructError::InvalidEnum(schema.clone()))),
+
         // The generated schema should be an object.
-        invalid => panic!("invalid type {:#?}", invalid),
+        invalid => {
+            Err(Box::new(Schema2StructError::InvalidType(invalid.clone())))
+        }
     }
 }
+
+#[derive(Debug)]
+pub(crate) enum Schema2StructError {
+    InvalidEnum(schemars::schema::Schema),
+    InvalidType(schemars::schema::Schema),
+    InvalidSubschema(schemars::schema::SubschemaValidation),
+}
+
+impl fmt::Display for Schema2StructError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Schema2StructError::InvalidEnum(schema) => {
+                write!(
+                    f,
+                    "invalid type: {}\n\
+                    (hint: this appears to be an enum, \
+                     which needs to be wrapped in a struct)",
+                    serde_json::to_string_pretty(schema).unwrap(),
+                )
+            }
+            Schema2StructError::InvalidType(schema) => {
+                write!(
+                    f,
+                    "invalid type: {}",
+                    serde_json::to_string_pretty(schema).unwrap(),
+                )
+            }
+            Schema2StructError::InvalidSubschema(subschemas) => {
+                write!(
+                    f,
+                    "invalid subschema: {}",
+                    serde_json::to_string_pretty(subschemas).unwrap(),
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for Schema2StructError {}
 
 pub(crate) fn make_subschema_for<T: JsonSchema>(
     gen: &mut schemars::gen::SchemaGenerator,
@@ -711,6 +816,8 @@ fn j2oas_object(
 
 #[cfg(test)]
 mod test {
+    use crate::schema_util::schema2struct_impl;
+
     use super::j2oas_schema;
     use super::j2oas_schema_object;
     use schemars::JsonSchema;
@@ -812,6 +919,111 @@ mod test {
                 },
             })
         );
+    }
+
+    /// These cases are errors, but we want to provide good error messages for
+    /// them.
+    #[test]
+    fn test_schema2struct_with_enum_variants() {
+        #![allow(dead_code)]
+
+        #[derive(JsonSchema)]
+        enum People {
+            Alice,
+            Bob,
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        enum PeopleWithComments {
+            /// Alice
+            Alice,
+
+            /// Bob
+            Bob,
+
+            // Mallory doesn't get a doc comment but still gets reflected as a
+            // complex variant, because the other two have comments.
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people")]
+        enum PeopleInternallyTagged {
+            Alice,
+            Bob,
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people", content = "name")]
+        enum PeopleAdjacentlyTagged {
+            Alice,
+            Bob,
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        enum PeopleWithData {
+            Alice(usize),
+            Bob { id: String },
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people")]
+        enum PeopleWithDataInternallyTagged {
+            Alice(usize),
+            Bob {
+                id: String,
+            },
+            /// Doc comment!
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people")]
+        enum PeopleWithDataAdjacentlyTagged {
+            Alice(usize),
+            Bob {
+                id: String,
+            },
+            /// Doc comment!
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(untagged)]
+        enum PeopleUntagged {
+            Alice(usize),
+            Bob(String),
+            Mallory(f32),
+        }
+
+        fn assert_enum_error<T: JsonSchema>() {
+            let mut generator = schemars::gen::SchemaGenerator::new(
+                schemars::gen::SchemaSettings::openapi3(),
+            );
+            let schema: schemars::schema::Schema =
+                generator.root_schema_for::<T>().schema.into();
+            let error =
+                schema2struct_impl(&schema, &generator, true).unwrap_err();
+            println!("for {}: {}\n", T::schema_name(), error);
+            assert!(
+                matches!(*error, super::Schema2StructError::InvalidEnum(_)),
+                "{} correctly recognized as an enum",
+                T::schema_name(),
+            );
+        }
+
+        assert_enum_error::<People>();
+        assert_enum_error::<PeopleWithComments>();
+        assert_enum_error::<PeopleInternallyTagged>();
+        assert_enum_error::<PeopleAdjacentlyTagged>();
+        assert_enum_error::<PeopleWithData>();
+        assert_enum_error::<PeopleWithDataInternallyTagged>();
+        assert_enum_error::<PeopleWithDataAdjacentlyTagged>();
+        assert_enum_error::<PeopleUntagged>();
     }
 
     #[test]
