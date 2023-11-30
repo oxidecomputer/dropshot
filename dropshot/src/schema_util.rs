@@ -160,7 +160,8 @@ fn schema2struct_impl(
             Ok(results)
         }
 
-        // Unit enums that do not have doc comments are presented as enum_values.
+        // Unit enums that do not have doc comments result in a schema with
+        // enum_values.
         schemars::schema::Schema::Object(schemars::schema::SchemaObject {
             metadata: _,
             instance_type: _,
@@ -174,9 +175,9 @@ fn schema2struct_impl(
             object: None,
             reference: None,
             extensions: _,
-        }) => Err(Box::new(Schema2StructError::UnitEnum(schema.clone()))),
+        }) => Err(Box::new(Schema2StructError::InvalidEnum(schema.clone()))),
 
-        // Complex enums, and unit enums that have doc comments, are presented
+        // Complex enums, and unit enums that have doc comments, are represented
         // as subschemas with instance_type and reference set to None.
         schemars::schema::Schema::Object(schemars::schema::SchemaObject {
             metadata: _,
@@ -191,7 +192,7 @@ fn schema2struct_impl(
             object: None,
             reference: None,
             extensions: _,
-        }) => Err(Box::new(Schema2StructError::ComplexEnum(schema.clone()))),
+        }) => Err(Box::new(Schema2StructError::InvalidEnum(schema.clone()))),
 
         // The generated schema should be an object.
         invalid => {
@@ -202,38 +203,35 @@ fn schema2struct_impl(
 
 #[derive(Debug)]
 pub(crate) enum Schema2StructError {
+    InvalidEnum(schemars::schema::Schema),
     InvalidType(schemars::schema::Schema),
     InvalidSubschema(schemars::schema::SubschemaValidation),
-    UnitEnum(schemars::schema::Schema),
-    ComplexEnum(schemars::schema::Schema),
 }
 
 impl fmt::Display for Schema2StructError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Schema2StructError::InvalidType(schema) => {
-                write!(f, "invalid type {:#?}", schema)
-            }
-            Schema2StructError::InvalidSubschema(subschemas) => {
-                write!(f, "invalid subschema {:#?}", subschemas)
-            }
-            Schema2StructError::UnitEnum(schema) => {
+            Schema2StructError::InvalidEnum(schema) => {
                 write!(
                     f,
-                    "invalid type {:#?}\n\
-                     (hint: this appears to be an enum with unit variants, \
-                     and needs to be wrapped in a struct)",
-                    schema
+                    "invalid type: {}\n\
+                    (hint: this appears to be an enum, \
+                     which needs to be wrapped in a struct)",
+                    serde_json::to_string_pretty(schema).unwrap(),
                 )
             }
-            Schema2StructError::ComplexEnum(schema) => {
+            Schema2StructError::InvalidType(schema) => {
                 write!(
                     f,
-                    "invalid type {:#?}\n\
-                     (hint: this appears to be an enum -- \
-                     if your enum only has unit variants, \
-                     it can be used in this position but needs to be wrapped in a struct)",
-                    schema
+                    "invalid type: {}",
+                    serde_json::to_string_pretty(schema).unwrap(),
+                )
+            }
+            Schema2StructError::InvalidSubschema(subschemas) => {
+                write!(
+                    f,
+                    "invalid subschema: {}",
+                    serde_json::to_string_pretty(subschemas).unwrap(),
                 )
             }
         }
@@ -949,32 +947,83 @@ mod test {
             Mallory,
         }
 
-        let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
-        );
-        {
-            let schema: schemars::schema::Schema =
-                generator.root_schema_for::<People>().schema.into();
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people")]
+        enum PeopleInternallyTagged {
+            Alice,
+            Bob,
+            Mallory,
+        }
 
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people", content = "name")]
+        enum PeopleAdjacentlyTagged {
+            Alice,
+            Bob,
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        enum PeopleWithData {
+            Alice(usize),
+            Bob { id: String },
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people")]
+        enum PeopleWithDataInternallyTagged {
+            Alice(usize),
+            Bob {
+                id: String,
+            },
+            /// Doc comment!
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(tag = "people")]
+        enum PeopleWithDataAdjacentlyTagged {
+            Alice(usize),
+            Bob {
+                id: String,
+            },
+            /// Doc comment!
+            Mallory,
+        }
+
+        #[derive(JsonSchema)]
+        #[schemars(untagged)]
+        enum PeopleUntagged {
+            Alice(usize),
+            Bob(String),
+            Mallory(f32),
+        }
+
+        fn assert_enum_error<T: JsonSchema>() {
+            let mut generator = schemars::gen::SchemaGenerator::new(
+                schemars::gen::SchemaSettings::openapi3(),
+            );
+            let schema: schemars::schema::Schema =
+                generator.root_schema_for::<T>().schema.into();
             let error =
                 schema2struct_impl(&schema, &generator, true).unwrap_err();
+            println!("for {}: {}\n", T::schema_name(), error);
             assert!(
-                matches!(*error, super::Schema2StructError::UnitEnum(_)),
-                "People consists of unit variants"
+                matches!(*error, super::Schema2StructError::InvalidEnum(_)),
+                "{} correctly recognized as an enum",
+                T::schema_name(),
             );
         }
 
-        {
-            let schema: schemars::schema::Schema =
-                generator.root_schema_for::<PeopleWithComments>().schema.into();
-
-            let error =
-                schema2struct_impl(&schema, &generator, true).unwrap_err();
-            assert!(
-                matches!(*error, super::Schema2StructError::ComplexEnum(_)),
-                "PeopleWithComments consists of variants that look complex to schemars"
-            );
-        }
+        assert_enum_error::<People>();
+        assert_enum_error::<PeopleWithComments>();
+        assert_enum_error::<PeopleInternallyTagged>();
+        assert_enum_error::<PeopleAdjacentlyTagged>();
+        assert_enum_error::<PeopleWithData>();
+        assert_enum_error::<PeopleWithDataInternallyTagged>();
+        assert_enum_error::<PeopleWithDataAdjacentlyTagged>();
+        assert_enum_error::<PeopleUntagged>();
     }
 
     #[test]
