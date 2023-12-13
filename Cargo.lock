@@ -34,9 +34,9 @@ dependencies = [
 
 [[package]]
 name = "async-channel"
-version = "2.0.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "336d835910fab747186c56586562cb46f42809c2843ef3a84f47509009522838"
+checksum = "1ca33f4bc4ed1babef42cad36cc1f51fa88be00420404e5b1e80ab1b18f7678c"
 dependencies = [
  "concurrent-queue",
  "event-listener",
@@ -516,9 +516,9 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "3.0.1"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01cec0252c2afff729ee6f00e903d479fba81784c8e2bd77447673471fdfaea1"
+checksum = "770d968249b5d99410d61f5bf89057f3199a077a04d087092f58e7d10692baae"
 dependencies = [
  "concurrent-queue",
  "parking",
@@ -527,9 +527,9 @@ dependencies = [
 
 [[package]]
 name = "event-listener-strategy"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d96b852f1345da36d551b9473fa1e2b1eb5c5195585c6c018118bc92a8d91160"
+checksum = "958e4d70b6d5e81971bebec42271ec641e7ff4e170a6fa605f2b8a8b65cb97d3"
 dependencies = [
  "event-listener",
  "pin-project-lite",

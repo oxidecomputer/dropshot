@@ -80,7 +80,7 @@ version = "0.8.13"
 features = [ "uuid1" ]
 
 [dev-dependencies]
-async-channel = "2.0.0"
+async-channel = "2.1.1"
 buf-list = "1.0.3"
 expectorate = "1.1.0"
 hyper-rustls = "0.24.2"
