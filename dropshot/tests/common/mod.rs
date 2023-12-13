@@ -51,15 +51,15 @@ pub fn create_log_context(test_name: &str) -> LogContext {
     LogContext::new(test_name, &log_config)
 }
 
-pub struct TestCertificateChain {
-    root_cert: rustls::Certificate,
-    intermediate_cert: rustls::Certificate,
+pub struct TestCertificateChain<'a> {
+    root_cert: rustls::pki_types::CertificateDer<'a>,
+    intermediate_cert: rustls::pki_types::CertificateDer<'a>,
     intermediate_keypair: rcgen::Certificate,
-    end_cert: rustls::Certificate,
+    end_cert: rustls::pki_types::CertificateDer<'a>,
     end_keypair: rcgen::Certificate,
 }
 
-impl TestCertificateChain {
+impl<'a> TestCertificateChain<'a> {
     pub fn new() -> Self {
         let mut root_params = rcgen::CertificateParams::new(vec![]);
         root_params.is_ca =
@@ -79,17 +79,17 @@ impl TestCertificateChain {
         )
         .expect("failed to generate end-entity keys");
 
-        let root_cert = rustls::Certificate(
+        let root_cert = rustls::pki_types::CertificateDer::from(
             root_keypair
                 .serialize_der()
                 .expect("failed to serialize root cert"),
         );
-        let intermediate_cert = rustls::Certificate(
+        let intermediate_cert = rustls::pki_types::CertificateDer::from(
             intermediate_keypair
                 .serialize_der_with_signer(&root_keypair)
                 .expect("failed to serialize intermediate cert"),
         );
-        let end_cert = rustls::Certificate(
+        let end_cert = rustls::pki_types::CertificateDer::from(
             end_keypair
                 .serialize_der_with_signer(&intermediate_keypair)
                 .expect("failed to serialize end-entity cert"),
@@ -104,11 +104,17 @@ impl TestCertificateChain {
         }
     }
 
-    pub fn end_cert_private_key(&self) -> rustls::PrivateKey {
-        rustls::PrivateKey(self.end_keypair.serialize_private_key_der())
+    pub fn end_cert_private_key<'b>(
+        &self,
+    ) -> rustls::pki_types::PrivateKeyDer<'b> {
+        rustls::pki_types::PrivateKeyDer::from(
+            rustls::pki_types::PrivatePkcs1KeyDer::from(
+                self.end_keypair.serialize_private_key_der(),
+            ),
+        )
     }
 
-    pub fn cert_chain(&self) -> Vec<rustls::Certificate> {
+    pub fn cert_chain(&self) -> Vec<rustls::pki_types::CertificateDer> {
         vec![
             self.end_cert.clone(),
             self.intermediate_cert.clone(),
@@ -121,7 +127,7 @@ impl TestCertificateChain {
             rcgen::CertificateParams::new(vec!["localhost".into()]),
         )
         .expect("failed to generate end-entity keys");
-        let end_cert = rustls::Certificate(
+        let end_cert = rustls::pki_types::CertificateDer::from(
             end_keypair
                 .serialize_der_with_signer(&self.intermediate_keypair)
                 .expect("failed to serialize end-entity cert"),
@@ -133,25 +139,29 @@ impl TestCertificateChain {
 
 /// Generate a TLS key and a certificate chain containing a certificate for
 /// the key, an intermediate cert, and a self-signed root cert.
-pub fn generate_tls_key() -> (Vec<rustls::Certificate>, rustls::PrivateKey) {
+pub fn generate_tls_key<'a>() -> (
+    Vec<rustls::pki_types::CertificateDer<'a>>,
+    rustls::pki_types::PrivateKeyDer<'a>,
+) {
     let ca = TestCertificateChain::new();
-    (ca.cert_chain(), ca.end_cert_private_key())
+    let cert_chain = ca.cert_chain().to_owned();
+    (cert_chain, ca.end_cert_private_key())
 }
 
 fn make_temp_file() -> std::io::Result<NamedTempFile> {
     tempfile::Builder::new().prefix("dropshot-test-").rand_bytes(5).tempfile()
 }
 
-pub fn tls_key_to_buffer(
-    certs: &Vec<rustls::Certificate>,
-    key: &rustls::PrivateKey,
+pub fn tls_key_to_buffer<'a>(
+    certs: &Vec<rustls::pki_types::CertificateDer<'a>>,
+    key: &rustls::pki_types::PrivateKeyDer<'a>,
 ) -> (Vec<u8>, Vec<u8>) {
     let mut serialized_certs = vec![];
     let mut cert_writer = std::io::BufWriter::new(&mut serialized_certs);
     for cert in certs {
         let encoded_cert = pem::encode(&pem::Pem::new(
             "CERTIFICATE".to_string(),
-            cert.0.clone(),
+            cert.to_vec().clone(),
         ));
         cert_writer
             .write_all(encoded_cert.as_bytes())
@@ -161,8 +171,10 @@ pub fn tls_key_to_buffer(
 
     let mut serialized_key = vec![];
     let mut key_writer = std::io::BufWriter::new(&mut serialized_key);
-    let encoded_key =
-        pem::encode(&pem::Pem::new("PRIVATE KEY".to_string(), key.0.clone()));
+    let encoded_key = pem::encode(&pem::Pem::new(
+        "PRIVATE KEY".to_string(),
+        key.secret_der().to_vec().clone(),
+    ));
     key_writer
         .write_all(encoded_key.as_bytes())
         .expect("failed to serialize key");
@@ -172,9 +184,9 @@ pub fn tls_key_to_buffer(
 }
 
 /// Write keys to a temporary file for passing to the server config
-pub fn tls_key_to_file(
-    certs: &Vec<rustls::Certificate>,
-    key: &rustls::PrivateKey,
+pub fn tls_key_to_file<'a>(
+    certs: &Vec<rustls::pki_types::CertificateDer<'a>>,
+    key: &rustls::pki_types::PrivateKeyDer<'a>,
 ) -> (NamedTempFile, NamedTempFile) {
     let mut cert_file = make_temp_file().expect("failed to create cert_file");
     let mut key_file = make_temp_file().expect("failed to create key_file");

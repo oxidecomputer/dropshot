@@ -12,7 +12,6 @@ use std::convert::TryFrom;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::SystemTime;
 
 pub mod common;
 use common::create_log_context;
@@ -21,43 +20,83 @@ use common::create_log_context;
 /// meanings
 type VerifyCertFn = Box<
     dyn Fn(
-            &rustls::Certificate,
-            &[rustls::Certificate],
-            &rustls::ServerName,
-            &mut dyn Iterator<Item = &[u8]>,
+            &rustls::pki_types::CertificateDer,
+            &[rustls::pki_types::CertificateDer],
+            &rustls::pki_types::ServerName,
             &[u8],
-            SystemTime,
-        ) -> Result<rustls::client::ServerCertVerified, rustls::Error>
+            rustls::pki_types::UnixTime,
+        )
+            -> Result<rustls::client::danger::ServerCertVerified, rustls::Error>
         + Send
         + Sync,
 >;
 
 struct CertificateVerifier(VerifyCertFn);
 
-impl rustls::client::ServerCertVerifier for CertificateVerifier {
+impl std::fmt::Debug for CertificateVerifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl rustls::client::danger::ServerCertVerifier for CertificateVerifier {
+    // fn verify_server_cert(
+    //     &self,
+    //     end_entity: &rustls::pki_types::CertificateDer,
+    //     intermediates: &[rustls::pki_types::CertificateDer],
+    //     server_name: &rustls::pki_types::ServerName,
+    //     scts: &mut dyn Iterator<Item = &[u8]>,
+    //     ocsp_response: &[u8],
+    //     now: SystemTime,
+    // ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+    //     self.0(end_entity, intermediates, server_name, scts, ocsp_response, now)
+    // }
     fn verify_server_cert(
         &self,
-        end_entity: &rustls::Certificate,
-        intermediates: &[rustls::Certificate],
-        server_name: &rustls::ServerName,
-        scts: &mut dyn Iterator<Item = &[u8]>,
+        end_entity: &rustls::pki_types::CertificateDer<'_>,
+        intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        server_name: &rustls::pki_types::ServerName<'_>,
         ocsp_response: &[u8],
-        now: SystemTime,
-    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-        self.0(end_entity, intermediates, server_name, scts, ocsp_response, now)
+        now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        self.0(end_entity, intermediates, server_name, ocsp_response, now)
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+    {
+        todo!()
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+    {
+        todo!()
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        todo!()
     }
 }
 
 fn make_https_client<
-    T: rustls::client::ServerCertVerifier + Send + Sync + 'static,
+    T: rustls::client::danger::ServerCertVerifier + Send + Sync + 'static,
 >(
-    verifier: T,
+    verifier: Arc<T>,
 ) -> hyper::Client<
     hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
 > {
     let tls_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_custom_certificate_verifier(Arc::new(verifier))
+        .dangerous()
+        .with_custom_certificate_verifier(verifier)
         .with_no_client_auth();
     let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(tls_config)
@@ -92,11 +131,13 @@ fn make_server(
 }
 
 fn make_pki_verifier(
-    certs: &Vec<rustls::Certificate>,
-) -> impl rustls::client::ServerCertVerifier {
+    certs: &Vec<rustls::pki_types::CertificateDer>,
+) -> Arc<impl rustls::client::danger::ServerCertVerifier> {
     let mut root_store = rustls::RootCertStore { roots: vec![] };
-    root_store.add(&certs[certs.len() - 1]).expect("adding root cert");
-    rustls::client::WebPkiVerifier::new(root_store, None)
+    root_store.add(certs[certs.len() - 1].clone()).expect("adding root cert");
+    rustls::client::WebPkiServerVerifier::builder(Arc::new(root_store))
+        .build()
+        .unwrap()
 }
 
 #[tokio::test]
@@ -121,30 +162,31 @@ async fn test_tls_certificate_loading() {
 
     let verifier_called = Arc::new(AtomicUsize::new(0));
     let verifier_called_clone = verifier_called.clone();
-    let cert_verifier = move |end_entity: &rustls::Certificate,
-                              intermediates: &[rustls::Certificate],
-                              server_name: &rustls::ServerName,
-                              _scts: &mut dyn Iterator<Item = &[u8]>,
-                              _ocsp_response: &[u8],
-                              _now: SystemTime|
-          -> Result<
-        rustls::client::ServerCertVerified,
-        rustls::Error,
-    > {
-        // Tracking to ensure this method was invoked
-        verifier_called_clone.fetch_add(1, Ordering::SeqCst);
-        // Verify we're seeing the right cert chain from the server
-        assert_eq!(*end_entity, certs[0]);
-        assert_eq!(intermediates, &certs[1..3]);
+    let cert_verifier =
+        move |end_entity: &rustls::pki_types::CertificateDer,
+              intermediates: &[rustls::pki_types::CertificateDer],
+              server_name: &rustls::pki_types::ServerName,
+              _ocsp_response: &[u8],
+              _now: rustls::pki_types::UnixTime|
+              -> Result<
+            rustls::client::danger::ServerCertVerified,
+            rustls::Error,
+        > {
+            // Tracking to ensure this method was invoked
+            verifier_called_clone.fetch_add(1, Ordering::SeqCst);
+            // Verify we're seeing the right cert chain from the server
+            assert_eq!(*end_entity, certs[0]);
+            assert_eq!(intermediates, &certs[1..3]);
 
-        assert_eq!(
-            *server_name,
-            rustls::ServerName::try_from("localhost").unwrap()
-        );
-        Ok(rustls::client::ServerCertVerified::assertion())
-    };
-    let client =
-        make_https_client(CertificateVerifier(Box::new(cert_verifier)));
+            assert_eq!(
+                *server_name,
+                rustls::pki_types::ServerName::try_from("localhost").unwrap()
+            );
+            Ok(rustls::client::danger::ServerCertVerified::assertion())
+        };
+    let client = make_https_client(Arc::new(CertificateVerifier(Box::new(
+        cert_verifier,
+    ))));
     client.request(request).await.unwrap();
     assert_eq!(verifier_called.load(Ordering::SeqCst), 1);
 
@@ -227,16 +269,15 @@ async fn test_tls_refresh_certificates() {
             .unwrap()
     };
 
-    let make_cert_verifier = |certs: Vec<rustls::Certificate>| {
+    let make_cert_verifier = |certs: Vec<rustls::pki_types::CertificateDer>| {
         CertificateVerifier(Box::new(
-            move |end_entity: &rustls::Certificate,
-                  intermediates: &[rustls::Certificate],
-                  server_name: &rustls::ServerName,
-                  _scts: &mut dyn Iterator<Item = &[u8]>,
+            move |end_entity: &rustls::pki_types::CertificateDer,
+                  intermediates: &[rustls::pki_types::CertificateDer],
+                  server_name: &rustls::pki_types::ServerName,
                   _ocsp_response: &[u8],
-                  _now: SystemTime|
+                  _now: rustls::pki_types::UnixTime|
                   -> Result<
-                rustls::client::ServerCertVerified,
+                rustls::client::danger::ServerCertVerified,
                 rustls::Error,
             > {
                 // Verify we're seeing the right cert chain from the server
@@ -251,19 +292,21 @@ async fn test_tls_refresh_certificates() {
                     ));
                 }
                 if *server_name
-                    != rustls::ServerName::try_from("localhost").unwrap()
+                    != rustls::pki_types::ServerName::try_from("localhost")
+                        .unwrap()
                 {
                     return Err(rustls::Error::InvalidCertificate(
                         rustls::CertificateError::BadEncoding,
                     ));
                 }
-                Ok(rustls::client::ServerCertVerified::assertion())
+                Ok(rustls::client::danger::ServerCertVerified::assertion())
             },
         ))
     };
 
     // Make an HTTPS request successfully with the original certificate chain.
-    let https_client = make_https_client(make_cert_verifier(certs.clone()));
+    let https_client =
+        make_https_client(Arc::new(make_cert_verifier(certs.clone())));
     https_client.request(https_request_maker()).await.unwrap();
 
     // Create a brand new certificate chain.
@@ -282,11 +325,13 @@ async fn test_tls_refresh_certificates() {
     https_client.request(https_request_maker()).await.unwrap();
 
     // New client requests using the old certificate chain should fail.
-    let https_client = make_https_client(make_cert_verifier(certs.clone()));
+    let https_client =
+        make_https_client(Arc::new(make_cert_verifier(certs.clone())));
     https_client.request(https_request_maker()).await.unwrap_err();
 
     // New client requests using the new certificate chain should succeed.
-    let https_client = make_https_client(make_cert_verifier(new_certs.clone()));
+    let https_client =
+        make_https_client(Arc::new(make_cert_verifier(new_certs.clone())));
     https_client.request(https_request_maker()).await.unwrap();
 
     server.close().await.unwrap();
@@ -312,25 +357,26 @@ async fn test_tls_aborted_negotiation() {
     // aborting the connection partway through negotitation
     let verifier_called = Arc::new(AtomicUsize::new(0));
     let verifier_called_clone = verifier_called.clone();
-    let cert_verifier = move |_end_entity: &rustls::Certificate,
-                              _intermediates: &[rustls::Certificate],
-                              _server_name: &rustls::ServerName,
-                              _scts: &mut dyn Iterator<Item = &[u8]>,
-                              _ocsp_response: &[u8],
-                              _now: SystemTime|
-          -> Result<
-        rustls::client::ServerCertVerified,
-        rustls::Error,
-    > {
-        // Tracking to ensure this method was invoked
-        verifier_called_clone.fetch_add(1, Ordering::SeqCst);
+    let cert_verifier =
+        move |_end_entity: &rustls::pki_types::CertificateDer,
+              _intermediates: &[rustls::pki_types::CertificateDer],
+              _server_name: &rustls::pki_types::ServerName,
+              _ocsp_response: &[u8],
+              _now: rustls::pki_types::UnixTime|
+              -> Result<
+            rustls::client::danger::ServerCertVerified,
+            rustls::Error,
+        > {
+            // Tracking to ensure this method was invoked
+            verifier_called_clone.fetch_add(1, Ordering::SeqCst);
 
-        Err(rustls::Error::InvalidCertificate(
-            rustls::CertificateError::BadEncoding,
-        ))
-    };
-    let client =
-        make_https_client(CertificateVerifier(Box::new(cert_verifier)));
+            Err(rustls::Error::InvalidCertificate(
+                rustls::CertificateError::BadEncoding,
+            ))
+        };
+    let client = make_https_client(Arc::new(CertificateVerifier(Box::new(
+        cert_verifier,
+    ))));
     client.get(uri.clone()).await.unwrap_err();
     assert_eq!(verifier_called.load(Ordering::SeqCst), 1);
 

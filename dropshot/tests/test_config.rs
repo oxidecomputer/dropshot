@@ -224,17 +224,17 @@ async fn test_config_bind_address_http() {
 
 #[tokio::test]
 async fn test_config_bind_address_https() {
-    struct ConfigBindServerHttps {
+    struct ConfigBindServerHttps<'a> {
         log: slog::Logger,
-        certs: Vec<rustls::Certificate>,
+        certs: Vec<rustls::pki_types::CertificateDer<'a>>,
         cert_file: NamedTempFile,
         key_file: NamedTempFile,
     }
 
-    impl
+    impl<'a>
         TestConfigBindServer<
             hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
-        > for ConfigBindServerHttps
+        > for ConfigBindServerHttps<'a>
     {
         type Context = i32;
 
@@ -246,11 +246,10 @@ async fn test_config_bind_address_https() {
             // Configure TLS to trust the self-signed cert
             let mut root_store = rustls::RootCertStore { roots: vec![] };
             root_store
-                .add(&self.certs[self.certs.len() - 1])
+                .add(self.certs[self.certs.len() - 1].clone())
                 .expect("adding root cert");
 
             let tls_config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
                 .with_root_certificates(root_store)
                 .with_no_client_auth();
             let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
@@ -301,17 +300,17 @@ async fn test_config_bind_address_https() {
 
 #[tokio::test]
 async fn test_config_bind_address_https_buffer() {
-    struct ConfigBindServerHttps {
+    struct ConfigBindServerHttps<'a> {
         log: slog::Logger,
-        certs: Vec<rustls::Certificate>,
+        certs: Vec<rustls::pki_types::CertificateDer<'a>>,
         serialized_certs: Vec<u8>,
         serialized_key: Vec<u8>,
     }
 
-    impl
+    impl<'a>
         TestConfigBindServer<
             hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
-        > for ConfigBindServerHttps
+        > for ConfigBindServerHttps<'a>
     {
         type Context = i32;
 
@@ -323,11 +322,10 @@ async fn test_config_bind_address_https_buffer() {
             // Configure TLS to trust the self-signed cert
             let mut root_store = rustls::RootCertStore { roots: vec![] };
             root_store
-                .add(&self.certs[self.certs.len() - 1])
+                .add(self.certs[self.certs.len() - 1].clone())
                 .expect("adding root cert");
 
             let tls_config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
                 .with_root_certificates(root_store)
                 .with_no_client_auth();
             let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
