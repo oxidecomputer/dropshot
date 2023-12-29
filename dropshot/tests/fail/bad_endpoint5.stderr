@@ -20,3 +20,29 @@ note: required by a bound in `dropshot::Query`
    |
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
+
+error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+  --> tests/fail/bad_endpoint5.rs:23:1
+   |
+23 | / async fn bad_endpoint(
+24 | |     _rqctx: RequestContext<()>,
+25 | |     _params: Query<QueryParams>,
+26 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
