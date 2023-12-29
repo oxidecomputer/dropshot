@@ -162,7 +162,7 @@ pub fn tls_key_to_buffer<'a>(
     for cert in certs {
         let encoded_cert = pem::encode(&pem::Pem::new(
             "CERTIFICATE".to_string(),
-            cert.to_vec().clone(),
+            cert.to_vec(),
         ));
         cert_writer
             .write_all(encoded_cert.as_bytes())
@@ -174,7 +174,7 @@ pub fn tls_key_to_buffer<'a>(
     let mut key_writer = std::io::BufWriter::new(&mut serialized_key);
     let encoded_key = pem::encode(&pem::Pem::new(
         "PRIVATE KEY".to_string(),
-        key.secret_der().to_vec().clone(),
+        key.secret_der().to_vec(),
     ));
     key_writer
         .write_all(encoded_key.as_bytes())

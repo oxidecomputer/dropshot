@@ -77,6 +77,7 @@ impl<'a> rustls::client::danger::ServerCertVerifier
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        // Default algorithm from rcgen
         vec![rustls::SignatureScheme::ECDSA_NISTP256_SHA256]
     }
 }
