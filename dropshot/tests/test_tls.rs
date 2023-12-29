@@ -16,9 +16,11 @@ use std::sync::Arc;
 pub mod common;
 use common::create_log_context;
 
+use crate::common::generate_tls_key;
+
 /// See rustls::client::ServerCertVerifier::verify_server_cert for argument
 /// meanings
-type VerifyCertFn = Box<
+type VerifyCertFn<'a> = Box<
     dyn Fn(
             &rustls::pki_types::CertificateDer,
             &[rustls::pki_types::CertificateDer],
@@ -28,29 +30,21 @@ type VerifyCertFn = Box<
         )
             -> Result<rustls::client::danger::ServerCertVerified, rustls::Error>
         + Send
-        + Sync,
+        + Sync
+        + 'a,
 >;
 
-struct CertificateVerifier(VerifyCertFn);
+struct CertificateVerifier<'a>(VerifyCertFn<'a>);
 
-impl std::fmt::Debug for CertificateVerifier {
+impl<'a> std::fmt::Debug for CertificateVerifier<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        f.write_str("CertificateVerifier... with some function?")
     }
 }
 
-impl rustls::client::danger::ServerCertVerifier for CertificateVerifier {
-    // fn verify_server_cert(
-    //     &self,
-    //     end_entity: &rustls::pki_types::CertificateDer,
-    //     intermediates: &[rustls::pki_types::CertificateDer],
-    //     server_name: &rustls::pki_types::ServerName,
-    //     scts: &mut dyn Iterator<Item = &[u8]>,
-    //     ocsp_response: &[u8],
-    //     now: SystemTime,
-    // ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-    //     self.0(end_entity, intermediates, server_name, scts, ocsp_response, now)
-    // }
+impl<'a> rustls::client::danger::ServerCertVerifier
+    for CertificateVerifier<'a>
+{
     fn verify_server_cert(
         &self,
         end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -64,26 +58,26 @@ impl rustls::client::danger::ServerCertVerifier for CertificateVerifier {
 
     fn verify_tls12_signature(
         &self,
-        message: &[u8],
-        cert: &rustls::pki_types::CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
     {
-        todo!()
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
     fn verify_tls13_signature(
         &self,
-        message: &[u8],
-        cert: &rustls::pki_types::CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
     {
-        todo!()
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        todo!()
+        vec![rustls::SignatureScheme::ECDSA_NISTP256_SHA256]
     }
 }
 
@@ -251,8 +245,7 @@ async fn test_tls_refresh_certificates() {
     let log = logctx.log.new(o!());
 
     // Generate key for the server
-    let ca = common::TestCertificateChain::new();
-    let (certs, key) = (ca.cert_chain(), ca.end_cert_private_key());
+    let (certs, key) = generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
     let server = make_server(&log, cert_file.path(), key_file.path()).start();
@@ -269,49 +262,13 @@ async fn test_tls_refresh_certificates() {
             .unwrap()
     };
 
-    let make_cert_verifier = |certs: Vec<rustls::pki_types::CertificateDer>| {
-        CertificateVerifier(Box::new(
-            move |end_entity: &rustls::pki_types::CertificateDer,
-                  intermediates: &[rustls::pki_types::CertificateDer],
-                  server_name: &rustls::pki_types::ServerName,
-                  _ocsp_response: &[u8],
-                  _now: rustls::pki_types::UnixTime|
-                  -> Result<
-                rustls::client::danger::ServerCertVerified,
-                rustls::Error,
-            > {
-                // Verify we're seeing the right cert chain from the server
-                if *end_entity != certs[0] {
-                    return Err(rustls::Error::InvalidCertificate(
-                        rustls::CertificateError::BadEncoding,
-                    ));
-                }
-                if intermediates != &certs[1..3] {
-                    return Err(rustls::Error::InvalidCertificate(
-                        rustls::CertificateError::BadEncoding,
-                    ));
-                }
-                if *server_name
-                    != rustls::pki_types::ServerName::try_from("localhost")
-                        .unwrap()
-                {
-                    return Err(rustls::Error::InvalidCertificate(
-                        rustls::CertificateError::BadEncoding,
-                    ));
-                }
-                Ok(rustls::client::danger::ServerCertVerified::assertion())
-            },
-        ))
-    };
-
     // Make an HTTPS request successfully with the original certificate chain.
     let https_client =
         make_https_client(Arc::new(make_cert_verifier(certs.clone())));
     https_client.request(https_request_maker()).await.unwrap();
 
     // Create a brand new certificate chain.
-    let ca = common::TestCertificateChain::new();
-    let (new_certs, new_key) = (ca.cert_chain(), ca.end_cert_private_key());
+    let (new_certs, new_key) = generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&new_certs, &new_key);
     let config = ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),
@@ -336,6 +293,42 @@ async fn test_tls_refresh_certificates() {
 
     server.close().await.unwrap();
     logctx.cleanup_successful();
+}
+
+fn make_cert_verifier(
+    certs: Vec<rustls::pki_types::CertificateDer>,
+) -> CertificateVerifier {
+    CertificateVerifier(Box::new(
+        move |end_entity: &rustls::pki_types::CertificateDer,
+              intermediates: &[rustls::pki_types::CertificateDer],
+              server_name: &rustls::pki_types::ServerName,
+              _ocsp_response: &[u8],
+              _now: rustls::pki_types::UnixTime|
+              -> Result<
+            rustls::client::danger::ServerCertVerified,
+            rustls::Error,
+        > {
+            // Verify we're seeing the right cert chain from the server
+            if *end_entity != certs[0] {
+                return Err(rustls::Error::InvalidCertificate(
+                    rustls::CertificateError::BadEncoding,
+                ));
+            }
+            if intermediates != &certs[1..3] {
+                return Err(rustls::Error::InvalidCertificate(
+                    rustls::CertificateError::BadEncoding,
+                ));
+            }
+            if *server_name
+                != rustls::pki_types::ServerName::try_from("localhost").unwrap()
+            {
+                return Err(rustls::Error::InvalidCertificate(
+                    rustls::CertificateError::BadEncoding,
+                ));
+            }
+            Ok(rustls::client::danger::ServerCertVerified::assertion())
+        },
+    ))
 }
 
 #[tokio::test]

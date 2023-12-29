@@ -60,7 +60,7 @@ pub struct TestCertificateChain<'a> {
 }
 
 impl<'a> TestCertificateChain<'a> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut root_params = rcgen::CertificateParams::new(vec![]);
         root_params.is_ca =
             rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
@@ -144,8 +144,9 @@ pub fn generate_tls_key<'a>() -> (
     rustls::pki_types::PrivateKeyDer<'a>,
 ) {
     let ca = TestCertificateChain::new();
-    let cert_chain = ca.cert_chain().to_owned();
-    (cert_chain, ca.end_cert_private_key())
+    let cert_chain =
+        ca.cert_chain().into_iter().map(|x| x.into_owned()).collect();
+    (cert_chain, ca.end_cert_private_key().clone_key())
 }
 
 fn make_temp_file() -> std::io::Result<NamedTempFile> {
