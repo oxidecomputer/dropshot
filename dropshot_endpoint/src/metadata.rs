@@ -12,6 +12,7 @@ use crate::{
     error_store::ErrorSink,
     util::{get_crate, is_wildcard_path, MacroKind, ValidContentType},
 };
+use serde_tokenstream::ParseWrapper;
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
@@ -51,6 +52,7 @@ pub(crate) struct EndpointMetadata {
     pub(crate) deprecated: bool,
     pub(crate) content_type: Option<String>,
     pub(crate) _dropshot_crate: Option<String>,
+    pub(crate) versions: Option<ParseWrapper<VersionRange>>,
 }
 
 impl EndpointMetadata {
@@ -81,6 +83,7 @@ impl EndpointMetadata {
             deprecated,
             content_type,
             _dropshot_crate,
+            versions
         } = self;
 
         if kind == MacroKind::Trait && _dropshot_crate.is_some() {
@@ -232,6 +235,34 @@ impl ValidatedEndpointMetadata {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum VersionRange {
+    From,
+    Until,
+    FromUntil,
+}
+
+impl syn::parse::Parse for VersionRange {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::Token![..]) {
+            let _ = input.parse::<syn::Token![..]>()?;
+            let xxx = input.parse::<syn::LitStr>()?;
+            Ok(VersionRange::Until)
+        } else {
+            let xxx = input.parse::<syn::LitStr>()?;
+            let _ = input.parse::<syn::Token![..]>()?;
+            let lookahead = input.lookahead1();
+            if lookahead.peek(syn::LitStr) {
+                let yyy = input.parse::<syn::LitStr>()?;
+                Ok(VersionRange::FromUntil)
+            } else {
+                Ok(VersionRange::From)
+            }
+        }
+    }
+ }
+
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
 pub(crate) enum ChannelProtocol {
@@ -249,6 +280,7 @@ pub(crate) struct ChannelMetadata {
     #[serde(default)]
     pub(crate) deprecated: bool,
     pub(crate) _dropshot_crate: Option<String>,
+    pub(crate) versions: Option<ParseWrapper<VersionRange>>,
 }
 
 impl ChannelMetadata {
@@ -278,6 +310,7 @@ impl ChannelMetadata {
             unpublished,
             deprecated,
             _dropshot_crate,
+            versions
         } = self;
 
         if kind == MacroKind::Trait && _dropshot_crate.is_some() {

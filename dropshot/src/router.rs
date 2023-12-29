@@ -731,6 +731,7 @@ mod test {
     use super::HttpRouter;
     use super::PathSegment;
     use crate::api_description::ApiEndpointBodyContentType;
+    use crate::api_description::ApiVersions;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
     use crate::ApiEndpoint;
@@ -776,6 +777,7 @@ mod test {
             extension_mode: Default::default(),
             visible: true,
             deprecated: false,
+            versions: ApiVersions::All,
         }
     }
 

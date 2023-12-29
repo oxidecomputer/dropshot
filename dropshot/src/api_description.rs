@@ -59,6 +59,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub extension_mode: ExtensionMode,
     pub visible: bool,
     pub deprecated: bool,
+    pub versions: ApiVersions,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -93,6 +94,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
+            versions: ApiVersions::All,
         }
     }
 
@@ -190,6 +192,7 @@ impl<'a> ApiEndpoint<StubContext> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
+            versions: ApiVersions::All,
         }
     }
 }
@@ -1055,6 +1058,14 @@ impl fmt::Display for ApiDescriptionRegisterError {
 }
 
 impl std::error::Error for ApiDescriptionRegisterError {}
+
+#[derive(Debug)]
+pub enum ApiVersions {
+    All,
+    From(String),
+    FromUntil(String, String),
+    Until(String),
+}
 
 /// Returns true iff the schema represents the void schema that matches no data.
 fn is_empty(schema: &schemars::schema::Schema) -> bool {
