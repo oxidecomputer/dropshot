@@ -20,3 +20,112 @@ note: required by a bound in `HttpResponseOk`
    |
    | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
    |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_endpoint7.rs:24:6
+   |
+24 | ) -> Result<HttpResponseOk<Ret>, HttpError> {
+   |      ^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+   = note: required for `HttpResponseOk<Ret>` to implement `HttpCodedResponse`
+   = note: required for `HttpResponseOk<Ret>` to implement `HttpResponse`
+note: required for `Result<HttpResponseOk<Ret>, HttpError>` to implement `ResultTrait`
+  --> tests/fail/bad_endpoint7.rs:24:6
+   |
+18 | / #[endpoint {
+19 | |     method = GET,
+20 | |     path = "/test",
+21 | | }]
+   | |__- unsatisfied trait bound introduced here
+...
+24 |   ) -> Result<HttpResponseOk<Ret>, HttpError> {
+   |        ^^^^^^
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_endpoint7.rs:25:23
+   |
+25 |       Ok(HttpResponseOk(Ret {
+   |  ________--------------_^
+   | |        |
+   | |        required by a bound introduced by this call
+26 | |         x: "Oxide".to_string(),
+27 | |         y: 0x1de,
+28 | |     }))
+   | |_____^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_endpoint7.rs:25:5
+   |
+25 |     Ok(HttpResponseOk(Ret {
+   |     ^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_endpoint7.rs:25:5
+   |
+25 | /     Ok(HttpResponseOk(Ret {
+26 | |         x: "Oxide".to_string(),
+27 | |         y: 0x1de,
+28 | |     }))
+   | |_______^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
