@@ -398,6 +398,7 @@ impl ClientTestContext {
 pub struct LogContext {
     /// general-purpose logger
     pub log: Logger,
+    test_name: String,
     log_path: Option<Utf8PathBuf>,
 }
 
@@ -441,7 +442,13 @@ impl LogContext {
         };
 
         let log = log_config.to_logger(test_name).unwrap();
-        LogContext { log, log_path }
+        LogContext { log, test_name: test_name.to_owned(), log_path }
+    }
+
+    /// Returns the name of the test.
+    #[inline]
+    pub fn test_name(&self) -> &str {
+        &self.test_name
     }
 
     /// Removes the log file, if this was a file-based logger.
