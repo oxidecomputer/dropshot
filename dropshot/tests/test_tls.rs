@@ -53,6 +53,8 @@ impl<'a> rustls::client::danger::ServerCertVerifier
         ocsp_response: &[u8],
         now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        // In this test environment, we blithely accept that signature matches
+        // the message.
         self.0(end_entity, intermediates, server_name, ocsp_response, now)
     }
 
@@ -63,6 +65,8 @@ impl<'a> rustls::client::danger::ServerCertVerifier
         _dss: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
     {
+        // In this test environment, we blithely accept that signature matches
+        // the message.
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
