@@ -518,29 +518,20 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             .map_err(|err| {
                 io_error(format!("failed to load certificate: {err}"))
             })?;
-        let cert_chain = certs
-            .into_iter()
-            .map(|cert| rustls::Certificate(cert.to_vec()))
-            .collect();
         let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| {
                 io_error(format!("failed to load private key: {err}"))
             })?;
-        let private_key = match keys.as_slice() {
-            [pk] => rustls::PrivateKey(pk.secret_pkcs8_der().to_vec()),
-            _ => {
-                return Err(io_error("expected a single private key".into()));
-            }
+        let mut keys_iter = keys.into_iter();
+        let (Some(private_key), None) = (keys_iter.next(), keys_iter.next())
+        else {
+            return Err(io_error("expected a single private key".into()));
         };
 
         let mut cfg = rustls::ServerConfig::builder()
-            .with_safe_default_cipher_suites()
-            .with_safe_default_kx_groups()
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_client_cert_verifier(rustls::server::NoClientAuth::boxed())
-            .with_single_cert(cert_chain, private_key)
+            .with_no_client_auth()
+            .with_single_cert(certs, private_key.into())
             .expect("bad certificate/key");
         cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         Ok(cfg)
