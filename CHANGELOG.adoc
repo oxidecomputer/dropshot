@@ -24,7 +24,9 @@ https://github.com/oxidecomputer/dropshot/compare/v0.9.0\...HEAD[Full list of co
 
 === Other notable Changes
 
+* https://github.com/oxidecomputer/dropshot/pull/617[#617] Adds support for streaming bodies via the `StreamingBody` extractor.
 * https://github.com/oxidecomputer/dropshot/pull/660[#660] The `x-dropshot-pagination` extension used to be simply the value `true`. Now it is an object with a field, `required`, that is an array of parameters that are mandatory on the first invocation.
+* https://github.com/oxidecomputer/dropshot/pull/755[#755] Adds support for the HEAD method.
 
 == 0.9.0 (released 2023-01-20)
 
