@@ -518,8 +518,7 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             .map_err(|err| {
                 io_error(format!("failed to load certificate: {err}"))
             })?;
-        let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
-            .collect::<Result<Vec<_>, _>>()
+        let keys = rustls_pemfile::private_key(&mut key_reader)
             .map_err(|err| {
                 io_error(format!("failed to load private key: {err}"))
             })?;
