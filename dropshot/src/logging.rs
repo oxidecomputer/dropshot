@@ -112,15 +112,15 @@ impl ConfigLogging {
                 // isn't writeable (e.g., if stderr has been redirected to a
                 // file on a full disk). Our options seem to be:
                 //
-                // a) Return an error if we fail to emit this message b)
-                // Silently swallow errors c) If an error occurs, try to relay
-                // that fact
+                // a) Return an error if we fail to emit this message
+                // b) Silently swallow errors
+                // c) If an error occurs, try to relay that fact
                 //
                 // (a) doesn't seem great, because it's possible we're able to
                 // run just fine (and possibly even use the logger we're about
                 // to create, as we don't know that it will suffer the same fate
                 // that writing to stderr does). (b) is defensible since this is
-                // just an informational message. We go with (c) to attempt to
+                // just an informational message. We go with (c) and attempt to
                 // leave a breadcrumb in the log itself.
                 if let Err(err) = writeln!(
                     io::stderr(),
