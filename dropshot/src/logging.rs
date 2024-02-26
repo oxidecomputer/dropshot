@@ -11,6 +11,7 @@ use slog::Level;
 use slog::Logger;
 use std::fs::OpenOptions;
 use std::io::LineWriter;
+use std::io::Write;
 use std::{io, path::Path};
 
 /// Represents the logging configuration for a server.  This is expected to be a
@@ -101,7 +102,38 @@ impl ConfigLogging {
                     Path::new(path),
                     log_name.as_ref().to_string(),
                 )?;
-                Ok(async_root_logger(level, drain))
+                let logger = async_root_logger(level, drain);
+
+                // Record a message to the stderr so that a reader who doesn't
+                // already know how logging is configured knows where the rest
+                // of the log messages went.
+                //
+                // We don't want to use `eprintln!`, because it panics if stderr
+                // isn't writeable (e.g., if stderr has been redirected to a
+                // file on a full disk). Our options seem to be:
+                //
+                // a) Return an error if we fail to emit this message
+                // b) Silently swallow errors
+                // c) If an error occurs, try to relay that fact
+                //
+                // (a) doesn't seem great, because it's possible we're able to
+                // run just fine (and possibly even use the logger we're about
+                // to create, as we don't know that it will suffer the same fate
+                // that writing to stderr does). (b) is defensible since this is
+                // just an informational message. We go with (c) and attempt to
+                // leave a breadcrumb in the log itself.
+                if let Err(err) = writeln!(
+                    io::stderr(),
+                    "note: configured to log to \"{path}\"",
+                ) {
+                    slog::warn!(
+                        logger,
+                        "failed to report log path on stderr";
+                        "err" => %err,
+                    );
+                }
+
+                Ok(logger)
             }
         }
     }
@@ -134,10 +166,6 @@ fn log_drain_for_file(
 
     // Buffer writes to the file around newlines to minimize syscalls.
     let file = LineWriter::new(open_options.open(path)?);
-
-    // Record a message to the stderr so that a reader who doesn't already know
-    // how logging is configured knows where the rest of the log messages went.
-    eprintln!("note: configured to log to \"{}\"", path.display());
 
     // Using leak() here is dubious.  However, we really want the logger's name
     // to be dynamically generated from the test name.  Unfortunately, the
