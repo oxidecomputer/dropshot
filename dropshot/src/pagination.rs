@@ -418,13 +418,12 @@ fn serialize_page_token<PageSelector: Serialize>(
         let serialized_token =
             SerializedToken { v: PaginationVersion::V1, page_start };
 
-        let json_bytes =
-            serde_json::to_vec(&serialized_token).map_err(|e| {
-                HttpError::for_internal_error(format!(
-                    "failed to serialize token: {}",
-                    e
-                ))
-            })?;
+        let json_bytes = rmp_serde::to_vec(&serialized_token).map_err(|e| {
+            HttpError::for_internal_error(format!(
+                "failed to serialize token: {}",
+                e
+            ))
+        })?;
 
         URL_SAFE.encode(json_bytes)
     };
@@ -470,7 +469,7 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
     // output of the error anyway.  It's not clear how else we could
     // propagate this information out.
     let deserialized: SerializedToken<PageSelector> =
-        serde_json::from_slice(&json_bytes).map_err(|_| {
+        rmp_serde::from_slice(&json_bytes).map_err(|_| {
             String::from("failed to parse pagination token: corrupted token")
         })?;
 
@@ -533,7 +532,7 @@ mod test {
             s: String,
         }
         let input =
-            TokenWithStr { s: String::from_utf8(vec![b'e'; 352]).unwrap() };
+            TokenWithStr { s: String::from_utf8(vec![b'e'; 376]).unwrap() };
         let serialized = serialize_page_token(&input).unwrap();
         assert_eq!(serialized.len(), super::MAX_TOKEN_LENGTH);
         let output: TokenWithStr = deserialize_page_token(&serialized).unwrap();
@@ -544,7 +543,7 @@ mod test {
         // Start by attempting to serialize a token larger than the maximum
         // allowed size.
         let input =
-            TokenWithStr { s: String::from_utf8(vec![b'e'; 353]).unwrap() };
+            TokenWithStr { s: String::from_utf8(vec![b'e'; 377]).unwrap() };
         let error = serialize_page_token(&input).unwrap_err();
         assert_eq!(error.status_code, http::StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(error.external_message, "Internal Server Error");
