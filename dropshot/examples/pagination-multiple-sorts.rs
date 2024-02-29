@@ -304,9 +304,10 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
-    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    let server = HttpServerStarter::new(&config_dropshot, ctx, &log)
+        .api(api)
+        .start()
+        .map_err(|error| format!("failed to create server: {}", error))?;
 
     // Print out some example requests to start with.
     print_example_requests(log, &server.local_addr());
