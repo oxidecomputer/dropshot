@@ -81,14 +81,15 @@ pub struct HttpRouter<Context: ServerContext> {
 #[derive(Debug)]
 struct HttpRouterNode<Context: ServerContext> {
     /// Handlers, etc. for each of the HTTP methods defined for this node.
-    methods: BTreeMap<String, ApiEndpoint<Context>>,
+    pub methods: BTreeMap<String, ApiEndpoint<Context>>,
     /// Edges linking to child nodes.
-    edges: Option<HttpRouterEdges<Context>>,
+    pub edges: Option<HttpRouterEdges<Context>>,
 }
 
 #[derive(Debug)]
 enum HttpRouterEdges<Context: ServerContext> {
     /// Outgoing edges for literal paths.
+    // TODO why box here?
     Literals(BTreeMap<String, Box<HttpRouterNode<Context>>>),
     /// Outgoing edge for variable-named paths.
     VariableSingle(String, Box<HttpRouterNode<Context>>),
@@ -217,6 +218,28 @@ pub struct RouterLookupResult<Context: ServerContext> {
 impl<Context: ServerContext> HttpRouterNode<Context> {
     pub fn new() -> Self {
         HttpRouterNode { methods: BTreeMap::new(), edges: None }
+    }
+
+    // Recursive merge into the target router.
+    fn merge(self, router: &mut HttpRouter<Context>) {
+        let Self { methods, edges } = self;
+
+        // Insert all endpoints.
+        methods.into_iter().for_each(|(_, endpoint)| router.insert(endpoint));
+
+        // Recur as needed.
+        match edges {
+            Some(HttpRouterEdges::Literals(children)) => {
+                children.into_values().for_each(|child| {
+                    child.merge(router);
+                })
+            }
+            Some(HttpRouterEdges::VariableSingle(_, edge))
+            | Some(HttpRouterEdges::VariableRest(_, edge)) => {
+                edge.merge(router)
+            }
+            None => (),
+        }
     }
 }
 
@@ -396,6 +419,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
         node.methods.insert(methodname, endpoint);
     }
 
+    pub fn merge(&mut self, other: HttpRouter<Context>) {
+        other.root.merge(self)
+    }
+
     /// Look up the route handler for an HTTP request having method `method` and
     /// URI path `path`.  A successful lookup produces a `RouterLookupResult`,
     /// which includes both the handler that can process this request and a map
@@ -488,6 +515,19 @@ impl<Context: ServerContext> HttpRouter<Context> {
             .ok_or_else(|| {
                 HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
             })
+    }
+}
+
+impl<Context: ServerContext> Extend<(String, String, ApiEndpoint<Context>)>
+    for HttpRouter<Context>
+{
+    fn extend<
+        T: IntoIterator<Item = (String, String, ApiEndpoint<Context>)>,
+    >(
+        &mut self,
+        iter: T,
+    ) {
+        iter.into_iter().for_each(|(_, _, endpoint)| self.insert(endpoint))
     }
 }
 

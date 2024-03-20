@@ -491,10 +491,10 @@ impl<Context: ServerContext> TestContext<Context> {
         );
 
         // Set up the server itself.
-        let server =
-            HttpServerStarter::new(&config_dropshot, api, private, &log)
-                .unwrap()
-                .start();
+        let server = HttpServerStarter::new(&config_dropshot, private, &log)
+            .api(api)
+            .start()
+            .unwrap();
 
         let server_addr = server.local_addr();
         let client_log = log.new(o!("http_client" => "dropshot test suite"));
