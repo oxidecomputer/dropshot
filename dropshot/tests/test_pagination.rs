@@ -1,4 +1,5 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
+
 //! Test cases for API handler functions that use pagination.
 
 use chrono::DateTime;
@@ -223,8 +224,7 @@ async fn test_paginate_errors() {
         ErrorTestCase {
             path: "/intapi?page_token=q".to_string(),
             message: "unable to parse query string: failed to parse \
-                      pagination token: Encoded text cannot have a 6-bit \
-                      remainder.",
+                      pagination token: Invalid input length: 1",
         },
     ];
 
@@ -392,7 +392,7 @@ async fn test_paginate_empty() {
         client,
         "/empty?page_token=q",
         "unable to parse query string: failed to parse pagination token: \
-         Encoded text cannot have a 6-bit remainder.",
+        Invalid input length: 1",
     )
     .await;
 
@@ -843,7 +843,7 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
                     .method(Method::GET)
                     .uri(url.clone())
                     .body(Body::empty())
-                    .expect("attempted to cosntruct invalid request"),
+                    .expect("attempted to construct invalid request"),
             )
             .await;
         if response.is_ok() {
