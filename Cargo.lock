@@ -369,7 +369,6 @@ dependencies = [
  "paste",
  "pem",
  "percent-encoding",
- "proc-macro2",
  "rcgen",
  "rustls",
  "rustls-pemfile",
