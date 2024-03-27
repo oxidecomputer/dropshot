@@ -16,7 +16,7 @@ where
     input.serialize(&mut serializer)
 }
 
-struct MapSerializer<'de, T>(&'de T);
+struct MapSerializer<T>(T);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MapError(pub String);
@@ -68,7 +68,7 @@ macro_rules! ser_t_err {
 
 }
 
-impl<'de, 'a, Input> Serializer for &'a mut MapSerializer<'de, Input> {
+impl<'a, Input> Serializer for &'a mut MapSerializer<Input> {
     type Ok = BTreeMap<String, String>;
     type Error = MapError;
 
