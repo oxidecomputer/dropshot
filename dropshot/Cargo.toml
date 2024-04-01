@@ -97,7 +97,7 @@ rcgen = "0.12.1"
 tokio-tungstenite = "0.21.0"
 
 [dev-dependencies.rustls-pki-types]
-version = "1.4.0"
+version = "1.4.1"
 # Needed for CertificateDer::into_owned
 features = ["alloc"]
 
