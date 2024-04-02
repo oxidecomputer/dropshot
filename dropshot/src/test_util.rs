@@ -451,6 +451,12 @@ impl LogContext {
         &self.test_name
     }
 
+    /// Returns the log path.
+    #[inline]
+    pub fn log_path(&self) -> Option<Utf8PathBuf> {
+        self.log_path.clone()
+    }
+
     /// Removes the log file, if this was a file-based logger.
     pub fn cleanup_successful(self) {
         if let Some(ref log_path) = self.log_path {

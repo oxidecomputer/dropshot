@@ -542,6 +542,10 @@ async fn test_config_handler_task_mode_cancel() {
 
     server.close().await.unwrap();
 
+    // Check that a warning was logged when the request was cancelled.
+    let log_file = std::fs::read_to_string(logctx.log_path().unwrap()).expect("reading log file");
+    assert!(log_file.contains("client disconnected before response returned"));
+
     logctx.cleanup_successful();
 }
 

@@ -34,6 +34,7 @@ use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::panic;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::io::ReadBuf;
@@ -901,11 +902,24 @@ async fn http_request_handle<C: ServerContext>(
             // For CancelOnDisconnect, we run the request handler directly: if
             // the client disconnects, we will be cancelled, and therefore this
             // future will too.
-            //
-            // TODO-robustness: We should log a warning if we are dropped before
-            // this handler completes; see
-            // https://github.com/oxidecomputer/dropshot/pull/701#pullrequestreview-1480426914.
-            handler.handle_request(rqctx, request).await?
+            // In case it is indeed cancelled, we keep track of the handler
+            // progress with `done`, so the scopeguard below can log a warning 
+            // if it's dropped before completion.
+            let done = AtomicBool::new(false);
+            let request_log = rqctx.log.clone();
+
+            let _guard = scopeguard::guard((), |_| {
+                if !done.load(Ordering::SeqCst) {
+                    warn!(
+                        request_log,
+                        "client disconnected before response returned"
+                    );
+                }
+            });
+
+            let response = handler.handle_request(rqctx, request).await?;
+            done.store(true, Ordering::SeqCst);
+            response
         }
         HandlerTaskMode::Detached => {
             // Spawn the handler so if we're cancelled, the handler still runs
