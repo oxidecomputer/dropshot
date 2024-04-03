@@ -903,7 +903,7 @@ async fn http_request_handle<C: ServerContext>(
             // the client disconnects, we will be cancelled, and therefore this
             // future will too.
             // In case it is indeed cancelled, we keep track of the handler
-            // progress with `done`, so the scopeguard below can log a warning 
+            // progress with `done`, so the scopeguard below can log a warning
             // if it's dropped before completion.
             let done = AtomicBool::new(false);
             let request_log = rqctx.log.clone();
