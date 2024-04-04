@@ -896,6 +896,7 @@ async fn http_request_handle<C: ServerContext>(
         log: request_log,
     };
     let handler = lookup_result.handler;
+    let request_log = rqctx.log.clone();
 
     let mut response = match server.config.default_handler_task_mode {
         HandlerTaskMode::CancelOnDisconnect => {
@@ -906,7 +907,6 @@ async fn http_request_handle<C: ServerContext>(
             // progress with `done`, so the scopeguard below can log a warning
             // if it's dropped before completion.
             let done = AtomicBool::new(false);
-            let request_log = rqctx.log.clone();
 
             let _guard = scopeguard::guard((), |_| {
                 if !done.load(Ordering::SeqCst) {
@@ -925,7 +925,6 @@ async fn http_request_handle<C: ServerContext>(
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();
-            let request_log = rqctx.log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
