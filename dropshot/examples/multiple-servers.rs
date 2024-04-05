@@ -219,7 +219,7 @@ impl SharedMultiServerContext {
             log: log.clone(),
         };
         let server =
-            HttpServerStarter::new(&config_dropshot, api, context, &log)
+            HttpServerStarter::new(config_dropshot, api, context, &log)
                 .map_err(|error| format!("failed to create server: {}", error))?
                 .start();
         let shutdown_handle = server.wait_for_shutdown();

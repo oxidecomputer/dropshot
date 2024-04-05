@@ -86,7 +86,7 @@ async fn main() -> Result<(), String> {
 
     // Set up the server.
     let server = HttpServerStarter::new_with_tls(
-        &config_dropshot,
+        config_dropshot,
         api,
         api_context,
         &log,

@@ -84,7 +84,7 @@ fn test_config_bad_request_body_max_bytes_too_large() {
 
 fn make_server<T: Send + Sync + 'static>(
     context: T,
-    config: &ConfigDropshot,
+    config: ConfigDropshot,
     log: &Logger,
     tls: Option<ConfigTls>,
     api_description: Option<dropshot::ApiDescription<T>>,
@@ -111,6 +111,7 @@ fn make_config(
         ),
         request_body_max_bytes: 1024,
         default_handler_task_mode,
+        ..Default::default()
     }
 }
 
@@ -206,7 +207,7 @@ async fn test_config_bind_address_http() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, None, None).start()
+            make_server(0, config, &self.log, None, None).start()
         }
 
         fn log(&self) -> &slog::Logger {
@@ -274,7 +275,7 @@ async fn test_config_bind_address_https() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, tls, None).start()
+            make_server(0, config, &self.log, tls, None).start()
         }
 
         fn log(&self) -> &Logger {
@@ -350,7 +351,7 @@ async fn test_config_bind_address_https_buffer() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, tls, None).start()
+            make_server(0, config, &self.log, tls, None).start()
         }
 
         fn log(&self) -> &Logger {
@@ -478,7 +479,7 @@ impl TestConfigBindServer<hyper::client::connect::HttpConnector>
         api.register(track_cancel_endpoint).unwrap();
 
         let server =
-            make_server(context, &config, &self.log, None, Some(api)).start();
+            make_server(context, config, &self.log, None, Some(api)).start();
 
         self.bound_port.store(server.local_addr().port(), Ordering::SeqCst);
 

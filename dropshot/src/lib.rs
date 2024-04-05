@@ -49,7 +49,7 @@
 //! use dropshot::ConfigLoggingLevel;
 //! use dropshot::HandlerTaskMode;
 //! use dropshot::HttpServerStarter;
-//! use std::sync::Arc;
+//! use std::{num::NonZeroU32, sync::Arc};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), String> {
@@ -68,9 +68,11 @@
 //!     // Start the server.
 //!     let server =
 //!         HttpServerStarter::new(
-//!             &ConfigDropshot {
+//!             ConfigDropshot {
 //!                 bind_address: "127.0.0.1:0".parse().unwrap(),
 //!                 request_body_max_bytes: 1024,
+//!                 page_max_nitems: NonZeroU32::new(10000).unwrap(),
+//!                 page_default_nitems: NonZeroU32::new(100).unwrap(),
 //!                 default_handler_task_mode: HandlerTaskMode::Detached,
 //!             },
 //!             api,

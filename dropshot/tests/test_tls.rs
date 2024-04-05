@@ -114,13 +114,14 @@ fn make_server(
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+        ..Default::default()
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.to_path_buf(),
         key_file: key_file.to_path_buf(),
     });
     HttpServerStarter::new_with_tls(
-        &config,
+        config,
         dropshot::ApiDescription::new(),
         0,
         log,
@@ -426,6 +427,7 @@ async fn test_server_is_https() {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+        ..Default::default()
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),
@@ -434,7 +436,7 @@ async fn test_server_is_https() {
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
     let server =
-        HttpServerStarter::new_with_tls(&config, api, 0, &log, config_tls)
+        HttpServerStarter::new_with_tls(config, api, 0, &log, config_tls)
             .unwrap()
             .start();
     let port = server.local_addr().port();

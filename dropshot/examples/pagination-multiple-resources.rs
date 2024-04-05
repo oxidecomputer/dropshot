@@ -290,7 +290,7 @@ async fn main() -> Result<(), String> {
     api.register(example_list_projects).unwrap();
     api.register(example_list_disks).unwrap();
     api.register(example_list_instances).unwrap();
-    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
+    let server = HttpServerStarter::new(config_dropshot, api, ctx, &log)
         .map_err(|error| format!("failed to create server: {}", error))?
         .start();
 

@@ -44,7 +44,7 @@ async fn main() -> Result<(), String> {
     let context = FileServerContext { base: PathBuf::from(".") };
 
     // Set up the server.
-    let server = HttpServerStarter::new(&config_dropshot, api, context, &log)
+    let server = HttpServerStarter::new(config_dropshot, api, context, &log)
         .map_err(|error| format!("failed to create server: {}", error))?
         .start();
 

@@ -296,10 +296,9 @@ impl JsonSchema for WebsocketUpgrade {
 mod tests {
     use crate::config::HandlerTaskMode;
     use crate::router::HttpRouter;
-    use crate::server::{DropshotState, ServerConfig};
+    use crate::server::DropshotState;
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
-        WebsocketUpgrade,
+        ConfigDropshot, ExclusiveExtractor, HttpError, RequestContext, RequestInfo, WebsocketUpgrade
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
@@ -324,12 +323,13 @@ mod tests {
         let rqctx = RequestContext {
             server: Arc::new(DropshotState {
                 private: (),
-                config: ServerConfig {
+                config: ConfigDropshot {
                     request_body_max_bytes: 0,
                     page_max_nitems: NonZeroU32::new(1).unwrap(),
                     page_default_nitems: NonZeroU32::new(1).unwrap(),
                     default_handler_task_mode:
                         HandlerTaskMode::CancelOnDisconnect,
+                    ..Default::default()
                 },
                 router: HttpRouter::new(),
                 log: log.clone(),

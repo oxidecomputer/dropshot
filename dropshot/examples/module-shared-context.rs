@@ -43,7 +43,7 @@ async fn main() -> Result<(), String> {
 
     // Set up the server.
     let server = HttpServerStarter::new(
-        &config_dropshot,
+        config_dropshot,
         api,
         api_context.clone(),
         &log,
