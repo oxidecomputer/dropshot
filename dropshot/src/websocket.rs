@@ -298,7 +298,8 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::DropshotState;
     use crate::{
-        ConfigDropshot, ExclusiveExtractor, HttpError, RequestContext, RequestInfo, WebsocketUpgrade
+        ConfigDropshot, ExclusiveExtractor, HttpError, RequestContext,
+        RequestInfo, WebsocketUpgrade,
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
