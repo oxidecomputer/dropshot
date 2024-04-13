@@ -27,6 +27,7 @@ use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use rustls;
+use scopeguard::{guard, ScopeGuard};
 use std::convert::TryFrom;
 use std::future::Future;
 use std::mem;
@@ -806,6 +807,23 @@ async fn http_request_handle_wrap<C: ServerContext>(
     #[cfg(feature = "usdt-probes")]
     let local_addr = server.local_addr;
 
+    // In the case the client disconnects early, the scopeguard allows us
+    // to perform extra housekeeping before this task is dropped.
+    let on_disconnect = guard((), |_| {
+        warn!(request_log, "client disconnected before response returned");
+
+        #[cfg(feature = "usdt-probes")]
+        probes::request__done!(|| {
+            crate::dtrace::ResponseInfo {
+                id: request_id.clone(),
+                local_addr,
+                remote_addr,
+                status_code: 499,
+                message: "".to_string(),
+            }
+        });
+    });
+
     let maybe_response = http_request_handle(
         server,
         request,
@@ -814,6 +832,10 @@ async fn http_request_handle_wrap<C: ServerContext>(
         remote_addr,
     )
     .await;
+
+    // If `http_request_handle` completed, it means the request wasn't
+    // cancelled and we can safely "defuse" the scopeguard.
+    let _ = ScopeGuard::into_inner(on_disconnect);
 
     let latency_us = start_time.elapsed().as_micros();
     let response = match maybe_response {
@@ -901,10 +923,6 @@ async fn http_request_handle<C: ServerContext>(
             // For CancelOnDisconnect, we run the request handler directly: if
             // the client disconnects, we will be cancelled, and therefore this
             // future will too.
-            //
-            // TODO-robustness: We should log a warning if we are dropped before
-            // this handler completes; see
-            // https://github.com/oxidecomputer/dropshot/pull/701#pullrequestreview-1480426914.
             handler.handle_request(rqctx, request).await?
         }
         HandlerTaskMode::Detached => {
@@ -914,17 +932,11 @@ async fn http_request_handle<C: ServerContext>(
             let request_log = rqctx.log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
-                let request_log = rqctx.log.clone();
                 let result = handler.handle_request(rqctx, request).await;
 
                 // If this send fails, our spawning task has been cancelled in
-                // the `rx.await` below; log such a result.
-                if tx.send(result).is_err() {
-                    warn!(
-                        request_log,
-                        "client disconnected before response returned"
-                    );
-                }
+                // the `rx.await` below.
+                let _ = tx.send(result);
 
                 // Drop our waitgroup worker, allowing graceful shutdown to
                 // complete (if it's waiting on us).
