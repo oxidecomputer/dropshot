@@ -100,9 +100,7 @@ impl TestCertificateChain {
         }
     }
 
-    pub fn end_cert_private_key<'b>(
-        &self,
-    ) -> rustls::pki_types::PrivateKeyDer<'b> {
+    pub fn end_cert_private_key(&self) -> rustls::pki_types::PrivateKeyDer {
         rustls::pki_types::PrivateKeyDer::from(
             rustls::pki_types::PrivatePkcs8KeyDer::from(
                 self.end_keypair.serialize_der(),
