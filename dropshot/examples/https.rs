@@ -29,9 +29,6 @@ fn generate_keys() -> Result<(NamedTempFile, NamedTempFile), String> {
         rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
             .map_err(|e| e.to_string())?;
     let cert = keypair.cert.pem();
-    // let cert = keypair.serialize_pem()
-    // .map_err(|e| e.to_string())?;
-    // let priv_key = keypair.serialize_private_key_pem();
     let priv_key = keypair.key_pair.serialize_pem();
 
     let make_temp = || {
