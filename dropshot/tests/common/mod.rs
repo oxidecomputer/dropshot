@@ -51,7 +51,7 @@ pub fn create_log_context(test_name: &str) -> LogContext {
     LogContext::new(test_name, &log_config)
 }
 
-pub struct TestCertificateChain {
+struct TestCertificateChain {
     root_cert: rcgen::Certificate,
     intermediate_keypair: rcgen::KeyPair,
     intermediate_cert: rcgen::Certificate,
