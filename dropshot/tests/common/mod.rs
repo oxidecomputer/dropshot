@@ -53,7 +53,6 @@ pub fn create_log_context(test_name: &str) -> LogContext {
 
 struct TestCertificateChain {
     root_cert: rcgen::Certificate,
-    intermediate_keypair: rcgen::KeyPair,
     intermediate_cert: rcgen::Certificate,
     end_keypair: rcgen::KeyPair,
     end_cert: rcgen::Certificate,
@@ -91,13 +90,7 @@ impl TestCertificateChain {
             .signed_by(&end_keypair, &intermediate_cert, &intermediate_keypair)
             .expect("failed to sign end cert");
 
-        Self {
-            root_cert,
-            intermediate_keypair,
-            intermediate_cert,
-            end_keypair,
-            end_cert,
-        }
+        Self { root_cert, intermediate_cert, end_keypair, end_cert }
     }
 
     pub fn end_cert_private_key(&self) -> rustls::pki_types::PrivateKeyDer {
@@ -114,23 +107,6 @@ impl TestCertificateChain {
             self.intermediate_cert.der().clone(),
             self.root_cert.der().clone(),
         ]
-    }
-
-    pub fn generate_new_end_cert(&mut self) {
-        let end_keypair =
-            rcgen::KeyPair::generate().expect("end keypair generation failed");
-        let end_params =
-            rcgen::CertificateParams::new(vec!["localhost".into()])
-                .expect("invalid end params");
-        let end_cert = end_params
-            .signed_by(
-                &end_keypair,
-                &self.intermediate_cert,
-                &self.intermediate_keypair,
-            )
-            .expect("failed to sign end cert");
-        self.end_keypair = end_keypair;
-        self.end_cert = end_cert;
     }
 }
 
