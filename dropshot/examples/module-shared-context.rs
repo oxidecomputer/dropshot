@@ -42,10 +42,14 @@ async fn main() -> Result<(), String> {
     let api_context = Arc::new(ExampleContext::new());
 
     // Set up the server.
-    let server =
-        HttpServerStarter::new(&config_dropshot, api, api_context.clone(), &log)
-            .map_err(|error| format!("failed to create server: {}", error))?
-            .start();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        api,
+        api_context.clone(),
+        &log,
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
 
     // Wait for the server to stop.  Note that there's not any code to shut down
     // this server, so we should never get past this point.
