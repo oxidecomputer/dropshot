@@ -33,7 +33,7 @@ async fn main() -> Result<(), String> {
 
     let api_context = ();
     let server =
-        HttpServerStarter::new(config_dropshot, api, api_context, &log)
+        HttpServerStarter::new(&config_dropshot, api, api_context, &log)
             .map_err(|error| format!("failed to create server: {}", error))?
             .start();
     server.await

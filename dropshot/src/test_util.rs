@@ -492,7 +492,7 @@ impl<Context: ServerContext> TestContext<Context> {
 
         // Set up the server itself.
         let server =
-            HttpServerStarter::new(config_dropshot, api, private, &log)
+            HttpServerStarter::new(&config_dropshot, api, private, &log)
                 .unwrap()
                 .start();
 

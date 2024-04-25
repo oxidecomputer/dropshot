@@ -91,7 +91,7 @@ pub struct HttpServerStarter<C: ServerContext> {
 
 impl<C: ServerContext> HttpServerStarter<C> {
     pub fn new(
-        config: ConfigDropshot,
+        config: &ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
@@ -100,7 +100,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
     }
 
     pub fn new_with_tls(
-        config: ConfigDropshot,
+        config: &ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
@@ -111,7 +111,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             Some(tls) => {
                 let (starter, app_state, local_addr) =
                     InnerHttpsServerStarter::new(
-                        config,
+                        config.clone(),
                         api,
                         private,
                         log,
@@ -128,7 +128,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             None => {
                 let (starter, app_state, local_addr) =
                     InnerHttpServerStarter::new(
-                        config,
+                        config.clone(),
                         api,
                         private,
                         log,
@@ -1087,7 +1087,7 @@ mod test {
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
-        let server = HttpServerStarter::new(config_dropshot, api, 0, log)
+        let server = HttpServerStarter::new(&config_dropshot, api, 0, log)
             .unwrap()
             .start();
 

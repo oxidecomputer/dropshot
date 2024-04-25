@@ -99,7 +99,7 @@ async fn main() -> Result<(), String> {
     api.register(get_fryism).unwrap();
 
     // Set up the server.
-    let server = HttpServerStarter::new(config_dropshot, api, (), &log)
+    let server = HttpServerStarter::new(&config_dropshot, api, (), &log)
         .map_err(|error| format!("failed to create server: {}", error))?
         .start();
 

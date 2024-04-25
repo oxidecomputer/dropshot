@@ -121,7 +121,7 @@ fn make_server(
         key_file: key_file.to_path_buf(),
     });
     HttpServerStarter::new_with_tls(
-        config,
+        &config,
         dropshot::ApiDescription::new(),
         0,
         log,
@@ -436,7 +436,7 @@ async fn test_server_is_https() {
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
     let server =
-        HttpServerStarter::new_with_tls(config, api, 0, &log, config_tls)
+        HttpServerStarter::new_with_tls(&config, api, 0, &log, config_tls)
             .unwrap()
             .start();
     let port = server.local_addr().port();

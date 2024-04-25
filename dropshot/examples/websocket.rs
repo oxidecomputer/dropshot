@@ -37,7 +37,7 @@ async fn main() -> Result<(), String> {
     api.register(example_api_websocket_counter).unwrap();
 
     // Set up the server.
-    let server = HttpServerStarter::new(config_dropshot, api, (), &log)
+    let server = HttpServerStarter::new(&config_dropshot, api, (), &log)
         .map_err(|error| format!("failed to create server: {}", error))?
         .start();
 
