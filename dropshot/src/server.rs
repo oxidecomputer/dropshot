@@ -112,7 +112,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 let (starter, app_state, local_addr) =
                     InnerHttpsServerStarter::new(
                         config,
-                        // server_config,
                         api,
                         private,
                         log,
@@ -130,7 +129,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 let (starter, app_state, local_addr) =
                     InnerHttpServerStarter::new(
                         config,
-                        // server_config,
                         api,
                         private,
                         log,
@@ -261,7 +259,6 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
 
         let app_state = Arc::new(DropshotState {
             private,
-            // config: server_config,
             config,
             router: api.into_router(),
             log: log.new(o!("local_addr" => local_addr)),
