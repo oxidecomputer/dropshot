@@ -810,7 +810,11 @@ async fn http_request_handle_wrap<C: ServerContext>(
     // In the case the client disconnects early, the scopeguard allows us
     // to perform extra housekeeping before this task is dropped.
     let on_disconnect = guard((), |_| {
-        warn!(request_log, "client disconnected before response returned");
+        let latency_us = start_time.elapsed().as_micros();
+
+        warn!(request_log, "request handling cancelled (client disconnected)";
+            "latency_us" => latency_us,
+        );
 
         #[cfg(feature = "usdt-probes")]
         probes::request__done!(|| {
@@ -818,8 +822,11 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 id: request_id.clone(),
                 local_addr,
                 remote_addr,
+                // 499 is a non-standard code popularized by nginx to mean "client disconnected".
                 status_code: 499,
-                message: "".to_string(),
+                message: String::from(
+                    "client disconnected before response returned",
+                ),
             }
         });
     });
@@ -932,11 +939,26 @@ async fn http_request_handle<C: ServerContext>(
             let request_log = rqctx.log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
+                let request_log = rqctx.log.clone();
                 let result = handler.handle_request(rqctx, request).await;
 
                 // If this send fails, our spawning task has been cancelled in
-                // the `rx.await` below.
-                let _ = tx.send(result);
+                // the `rx.await` below; log such a result.
+                if let Err(result) = tx.send(result) {
+                    match result {
+                        Ok(r) => warn!(
+                            request_log, "request completed after handler was already cancelled";
+                            "response_code" => r.status().as_str(),
+                        ),
+                        Err(error) => {
+                            warn!(request_log, "request completed after handler was already cancelled";
+                                "response_code" => error.status_code.as_str(),
+                                "error_message_internal" => error.external_message,
+                                "error_message_external" => error.internal_message,
+                            );
+                        }
+                    }
+                }
 
                 // Drop our waitgroup worker, allowing graceful shutdown to
                 // complete (if it's waiting on us).
