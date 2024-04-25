@@ -68,7 +68,7 @@
 //!     // Start the server.
 //!     let server =
 //!         HttpServerStarter::new(
-//!             ConfigDropshot {
+//!             &ConfigDropshot {
 //!                 bind_address: "127.0.0.1:0".parse().unwrap(),
 //!                 request_body_max_bytes: 1024,
 //!                 page_max_nitems: NonZeroU32::new(10000).unwrap(),
