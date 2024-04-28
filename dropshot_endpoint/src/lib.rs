@@ -19,6 +19,7 @@ use syn::spanned::Spanned;
 
 use syn_parsing::ItemFnForSignature;
 
+mod server;
 mod syn_parsing;
 
 #[allow(non_snake_case)]
@@ -125,6 +126,14 @@ pub fn endpoint(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     do_output(do_endpoint(attr.into(), item.into()))
+}
+
+#[proc_macro_attribute]
+pub fn dropshot_server(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    do_output(server::do_server(attr.into(), item.into()))
 }
 
 fn do_endpoint(
