@@ -26,6 +26,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
 
 /// ApiEndpoint represents a single API endpoint associated with an
@@ -874,6 +875,34 @@ impl<Context: ServerContext> ApiDescription<Context> {
     // do this.
     pub fn into_router(self) -> HttpRouter<Context> {
         self.router
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiDescriptionBuildError {
+    errors: Vec<String>,
+}
+
+impl ApiDescriptionBuildError {
+    /// Create a new `ApiDescriptionBuildError` with the given errors.
+    pub fn new(errors: Vec<String>) -> Self {
+        Self { errors }
+    }
+
+    /// Return a list of the errors that occurred while building an
+    /// `ApiDescription`.
+    pub fn errors(&self) -> &[String] {
+        &self.errors
+    }
+}
+
+impl fmt::Display for ApiDescriptionBuildError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "failed to register endpoints: \n")?;
+        for error in &self.errors {
+            write!(f, "  - {}\n", error)?;
+        }
+        Ok(())
     }
 }
 

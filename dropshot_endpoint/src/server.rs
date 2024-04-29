@@ -8,9 +8,11 @@ use syn::{spanned::Spanned, *};
 use crate::{extract_doc_from_attrs, get_crate, EndpointMetadata};
 
 pub(crate) fn do_server(
-    attr: proc_macro2::TokenStream,
+    _attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
 ) -> std::result::Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+    // XXX: parse attributes for global metadata.
+
     // This has to be a trait.
     let item_trait: ItemTrait = parse2(item.clone())?;
 
@@ -33,26 +35,29 @@ pub(crate) fn do_server(
 }
 
 fn check_endpoint_or_channel_on_non_fn(
+    kind: &str,
+    name: &str,
     attrs: &[Attribute],
     errors: &mut Vec<Error>,
 ) {
     if let Some(attr) = attrs.iter().find(|a| a.path().is_ident("endpoint")) {
         errors.push(Error::new_spanned(
             attr,
-            "only functions can be marked as endpoints",
+            format!("{kind} `{name}` marked as endpoint is not a method"),
         ));
     }
 
     if let Some(attr) = attrs.iter().find(|a| a.path().is_ident("channel")) {
         errors.push(Error::new_spanned(
             attr,
-            "only functions can be marked as channels",
+            format!("{kind} `{name}` marked as channel is not a method"),
         ));
     }
 }
 
 struct Server<'a> {
     item_trait: &'a ItemTrait,
+    trait_has_errors: bool,
     // We want to maintain the order of items in the trait, so we use a single
     // list to store all of them.
     items: Vec<ServerItem<'a>>,
@@ -60,74 +65,90 @@ struct Server<'a> {
 
 impl<'a> Server<'a> {
     fn new(item_trait: &'a ItemTrait, errors: &mut Vec<Error>) -> Self {
-        let mut items: Vec<_> = Vec::with_capacity(item_trait.items.len());
+        let trait_name = &item_trait.ident;
+        let mut trait_has_errors = false;
 
-        for item in &item_trait.items {
-            match item {
-                TraitItem::Fn(f) => {
-                    // XXX cannot have multiple endpoints or channel attributes,
-                    // check here.
-                    let endpoint_attr =
-                        f.attrs.iter().find(|a| a.path().is_ident("endpoint"));
-                    let channel_attr =
-                        f.attrs.iter().find(|a| a.path().is_ident("channel"));
+        // The trait itself should specify a `Send + Sync + 'static` bound.
+        {
+            let mut has_send = false;
+            let mut has_sync = false;
+            let mut has_static = false;
 
-                    match (endpoint_attr, channel_attr) {
-                        (Some(_), Some(cattr)) => {
-                            errors.push(Error::new_spanned(
-                                cattr,
-                                "methods cannot be both endpoints and channels",
-                            ));
-                        }
-                        (Some(eattr), None) => {
-                            if let Some(endpoint) =
-                                ServerEndpoint::new(f, eattr, errors)
-                            {
-                                items.push(ServerItem::Endpoint(endpoint));
-                            }
-                        }
-                        (None, Some(_cattr)) => {
-                            todo!("implement support for channels")
-                        }
-                        (None, None) => {
-                            // This is just a normal method, so it goes in
-                            // other_items.
-                            items.push(ServerItem::Other(item));
+            for bound in &item_trait.supertraits {
+                match bound {
+                    TypeParamBound::Lifetime(lifetime) => {
+                        if lifetime.ident == "static" {
+                            has_static = true;
                         }
                     }
+                    TypeParamBound::Trait(trait_bound) => {
+                        let path = &trait_bound.path;
+                        if path.is_ident("Send") {
+                            has_send = true;
+                        } else if path.is_ident("Sync") {
+                            has_sync = true;
+                        }
+                    }
+                    TypeParamBound::Verbatim(_) => {}
+                    _ => {}
+                }
+            }
+
+            if !has_send || !has_sync || !has_static {
+                // Produce a single error depending on what's missing.
+                let mut missing = Vec::new();
+                if !has_send {
+                    missing.push("Send");
+                }
+                if !has_sync {
+                    missing.push("Sync");
+                }
+                if !has_static {
+                    missing.push("'static");
                 }
 
-                // Everything else is permissible (for now?) -- just ensure that
-                // they aren't marked as `endpoint` or `channel`.
-                TraitItem::Const(c) => {
-                    check_endpoint_or_channel_on_non_fn(&c.attrs, errors);
-                    items.push(ServerItem::Other(item));
-                }
-                TraitItem::Type(t) => {
-                    check_endpoint_or_channel_on_non_fn(&t.attrs, errors);
-                    items.push(ServerItem::Other(item));
-                }
-                TraitItem::Macro(m) => {
-                    check_endpoint_or_channel_on_non_fn(&m.attrs, errors);
-                    // Note that we can't expand macros within proc macros, so
-                    // that can't be supported.
-                    items.push(ServerItem::Other(item));
-                }
-                TraitItem::Verbatim(_) | _ => {
-                    items.push(ServerItem::Other(item));
-                }
+                // If there are no bounds at all, then use the ident as the span
+                // -- otherwise use the supertraits.
+                let (span, also) = if item_trait.supertraits.empty_or_trailing()
+                {
+                    (item_trait.ident.span(), "")
+                } else {
+                    (item_trait.supertraits.span(), "also ")
+                };
+
+                errors.push(Error::new(
+                    span,
+                    format!(
+                        "server trait `{}` must {}have a `{}` bound",
+                        trait_name,
+                        also,
+                        missing.join(" + "),
+                    ),
+                ));
+
+                trait_has_errors = true;
             }
         }
 
-        Self { item_trait, items }
+        let items: Vec<_> = item_trait
+            .items
+            .iter()
+            .map(|item| ServerItem::new(item, errors))
+            .collect();
+
+        Self { item_trait, trait_has_errors, items }
     }
 
     fn to_output(&self) -> TokenStream {
+        // The trait must be object-safe.
+
         let out_items = self.items.iter().map(|item| item.to_out_trait_item());
+        let top_level_checks =
+            self.items.iter().filter_map(|item| item.to_top_level_checks());
 
         // Everything else about the trait stays the same -- just the items change.
         let mut out_attrs = self.item_trait.attrs.clone();
-        out_attrs.push(parse_quote!(#[::async_trait::async_trait]));
+        out_attrs.push(parse_quote!(#[::dropshot::async_trait]));
 
         let out_trait = ItemTrait {
             attrs: out_attrs,
@@ -135,64 +156,286 @@ impl<'a> Server<'a> {
             ..self.item_trait.clone()
         };
 
-        let api_description = self.to_api_description();
+        // Generate two API description functions: one for the real trait, and
+        // one for a stub impl meant for OpenAPI generation.
+        let api_description = self.to_api_description_fn();
+        let stub_api_description = self.to_stub_api_description_fn();
 
         quote! {
             #out_trait
 
+            #(#top_level_checks)*
+
             #api_description
+
+            #stub_api_description
         }
     }
 
-    fn to_api_description(&self) -> TokenStream {
+    fn to_api_description_fn(&self) -> TokenStream {
         let trait_name = &self.item_trait.ident;
-        let endpoints = self.items.iter().filter_map(|item| match item {
-            ServerItem::Endpoint(e) => Some(e.to_api_endpoint()),
-            ServerItem::Other(_) => None,
+        let trait_name_str = trait_name.to_string();
+        let vis = &self.item_trait.vis;
+        let fn_ident = format_ident!("{trait_name_str}_to_api_description");
+
+        let body = self.to_api_description_fn_body(|data| {
+            // For the real impl, generate a closure that wraps
+            // `dropshot_context` and calls the right method on it. There's some
+            // levels of `move` happening here:
+            //
+            // 1. An owned `dropshot_context` is moved into the closure
+            // 2. Another clone of `dropshot_context` is moved into the async
+            //    block.
+            //
+            // The net result is that the async block is 'static as required by
+            // Dropshot, and the closure is `Fn` (not `FnOnce`).
+
+            let handler_func_name = data.handler_func_name();
+            let name = data.name;
+            let args = data.args;
+            let arg_names = data.arg_names;
+
+            quote! {
+                let #handler_func_name = {
+                    let dropshot_context = dropshot_context.clone();
+                    move |#(#args),*| {
+                        let dropshot_context = dropshot_context.clone();
+                        async move {
+                            dropshot_context.#name(#(#arg_names),*).await
+                        }
+                    }
+                };
+            }
+        })
+        .map_or_else(|err| err, |body| {
+            // For the real impl, we need to provide the context and wrap it in
+            // an Arc. Doing so in the error case will lead to worse error
+            // messages, because the context is likely not object-safe.
+            quote! {
+                let dropshot_context: ::std::sync::Arc<dyn #trait_name> =
+                    ::std::sync::Arc::new(context);
+                #body
+            }
         });
 
         // XXX: need a way to get the dropshot crate name here.
         quote! {
-            fn to_api_description<T: #trait_name>(input: T) -> dropshot::ApiDescription<()> {
-                let __dropshot_input: ::std::sync::Arc<dyn #trait_name> =
-                    ::std::sync::Arc::new(input);
-                let mut __dropshot_api = dropshot::ApiDescription::new();
-                let mut __dropshot_errors = Vec::new();
+            #[automatically_derived]
+            #vis fn #fn_ident<T: #trait_name>(context: T) -> ::std::result::Result<
+                dropshot::ApiDescription<()>,
+                dropshot::ApiDescriptionBuildError,
+            > {
+                #body
+            }
+        }
+    }
+
+    fn to_stub_api_description_fn(&self) -> TokenStream {
+        let trait_name = &self.item_trait.ident;
+        let trait_name_str = trait_name.to_string();
+        let vis = &self.item_trait.vis;
+
+        let fn_ident =
+            format_ident!("{trait_name_str}_to_stub_api_description");
+
+        let body = self.to_api_description_fn_body(|data| {
+            // For the stub impl, generate a free function (not a closure). This
+            // allows the return type to be specified as `impl Future`, which is
+            // required for type inference.
+
+            let handler_func_name = data.handler_func_name();
+        let name_str = data.name.to_string();
+            let args = &data.args;
+            let ret_ty = data.ret_ty;
+
+            quote! {
+                fn #handler_func_name(#(#args),*) -> impl ::std::future::Future<Output = #ret_ty> {
+                    async {
+                        unimplemented!("stub implementation for `{}`", #name_str);
+                    }
+                }
+            }
+        }).unwrap_or_else(|err| {
+            // We don't care about Err vs Ok here -- in both cases the body
+            // returned is the same.
+            err
+        });
+
+        // XXX: need a way to get the dropshot crate name here.
+        quote! {
+            #[automatically_derived]
+            #vis fn #fn_ident() -> ::std::result::Result<
+                dropshot::ApiDescription<()>,
+                dropshot::ApiDescriptionBuildError,
+            > {
+                #body
+            }
+        }
+    }
+
+    /// Generates the API description function body.
+    ///
+    /// This code is shared across the real and stub API description functions.
+    /// If the body represents an invalid function, `Err` is returned, otherwise
+    /// `Ok`.
+    fn to_api_description_fn_body<F>(
+        &self,
+        mut handler_func: F,
+    ) -> std::result::Result<TokenStream, TokenStream>
+    where
+        F: FnMut(HandlerFuncData<'_>) -> TokenStream,
+    {
+        let trait_name = &self.item_trait.ident;
+        let trait_name_str = trait_name.to_string();
+
+        if self.is_invalid() {
+            Err(quote! {
+                panic!(
+                    "errors encountered while generating dropshot server `{}`",
+                    #trait_name_str,
+                );
+            })
+        } else {
+            let endpoints = self.items.iter().filter_map(|item| match item {
+                ServerItem::Endpoint(e) => {
+                    Some(e.to_api_endpoint(&mut handler_func))
+                }
+                ServerItem::Invalid(_) | ServerItem::Other(_) => None,
+            });
+
+            Ok(quote! {
+                let mut dropshot_api = dropshot::ApiDescription::new();
+                let mut dropshot_errors: Vec<String> = Vec::new();
 
                 #(#endpoints)*
 
-                if !__dropshot_errors.is_empty() {
-                    let mut error_str = String::from("failed to register endpoints: \n");
-                    for error in __dropshot_errors {
-                        error_str.push_str("  - ");
-                        error_str.push_str(&format!("{}\n", error));
-                    }
-                    panic!("{}", error_str);
+                if !dropshot_errors.is_empty() {
+                    Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+                } else {
+                    Ok(dropshot_api)
                 }
-
-                __dropshot_api
-            }
+            })
         }
+    }
+
+    /// Returns true if errors were detected while generating the dropshot
+    /// server, and it is invalid as a result.
+    fn is_invalid(&self) -> bool {
+        if self.trait_has_errors {
+            return true;
+        }
+
+        self.items.iter().any(|item| match item {
+            ServerItem::Invalid(_) => true,
+            _ => false,
+        })
     }
 }
 
 enum ServerItem<'a> {
     Endpoint(ServerEndpoint<'a>),
+    // For endpoints that we couldn't parse successfully, we continue to
+    // generate the underlying method because rust-analyzer works better if it
+    // exists.
+    Invalid(&'a TraitItemFn),
     Other(&'a TraitItem),
 }
 
 impl<'a> ServerItem<'a> {
+    fn new(item: &'a TraitItem, errors: &mut Vec<Error>) -> Self {
+        match item {
+            TraitItem::Fn(f) => {
+                // XXX cannot have multiple endpoint or channel attributes,
+                // check here.
+                let endpoint_attr =
+                    f.attrs.iter().find(|a| a.path().is_ident("endpoint"));
+                let channel_attr =
+                    f.attrs.iter().find(|a| a.path().is_ident("channel"));
+
+                match (endpoint_attr, channel_attr) {
+                    (Some(_), Some(cattr)) => {
+                        errors.push(Error::new_spanned(
+                            cattr,
+                            "methods must not be both endpoints and channels",
+                        ));
+                        Self::Invalid(f)
+                    }
+                    (Some(eattr), None) => {
+                        if let Some(endpoint) =
+                            ServerEndpoint::new(f, eattr, errors)
+                        {
+                            Self::Endpoint(endpoint)
+                        } else {
+                            Self::Invalid(f)
+                        }
+                    }
+                    (None, Some(_cattr)) => {
+                        todo!("implement support for channels")
+                    }
+                    (None, None) => {
+                        // This is just a normal method.
+                        Self::Other(item)
+                    }
+                }
+            }
+
+            // Everything else is permissible (for now?) -- just ensure that
+            // they aren't marked as `endpoint` or `channel`.
+            TraitItem::Const(c) => {
+                check_endpoint_or_channel_on_non_fn(
+                    "const",
+                    &c.ident.to_string(),
+                    &c.attrs,
+                    errors,
+                );
+                Self::Other(item)
+            }
+            TraitItem::Type(t) => {
+                check_endpoint_or_channel_on_non_fn(
+                    "type",
+                    &t.ident.to_string(),
+                    &t.attrs,
+                    errors,
+                );
+                Self::Other(item)
+            }
+            TraitItem::Macro(m) => {
+                check_endpoint_or_channel_on_non_fn(
+                    "macro",
+                    &m.mac.path.to_token_stream().to_string(),
+                    &m.attrs,
+                    errors,
+                );
+                // Note that we can't expand macros within proc macros, so
+                // that can't be supported.
+                Self::Other(item)
+            }
+            _ => Self::Other(item),
+        }
+    }
+
     fn to_out_trait_item(&self) -> TraitItem {
         match self {
             Self::Endpoint(e) => e.to_out_trait_item(),
+            Self::Invalid(e) => {
+                // Retain all attributes other than the endpoint attribute.
+                let f = strip_recognized_attrs(e);
+                TraitItem::Fn(f)
+            }
             Self::Other(o) => (*o).clone(),
+        }
+    }
+
+    fn to_top_level_checks(&self) -> Option<TokenStream> {
+        match self {
+            Self::Endpoint(e) => Some(e.to_top_level_checks()),
+            _ => None,
         }
     }
 }
 
 struct ServerEndpoint<'a> {
     f: &'a TraitItemFn,
-    attr: &'a Attribute,
     metadata: EndpointMetadata,
     args: EndpointArgs<'a>,
     ret_ty: &'a Type,
@@ -233,6 +476,7 @@ impl<'a> ServerEndpoint<'a> {
         errors: &mut Vec<Error>,
     ) -> Option<Self> {
         let metadata = parse_metadata(attr, errors);
+        let fname = f.sig.ident.to_string();
 
         let mut had_errors = false;
 
@@ -240,7 +484,7 @@ impl<'a> ServerEndpoint<'a> {
         if f.sig.asyncness.is_none() {
             errors.push(Error::new_spanned(
                 &f.sig.fn_token,
-                "endpoint methods must be async",
+                format!("endpoint method `{fname}` must be async"),
             ));
             had_errors = true;
         }
@@ -253,7 +497,7 @@ impl<'a> ServerEndpoint<'a> {
             ReturnType::Default => {
                 errors.push(Error::new_spanned(
                     &f.sig,
-                    "endpoint methods must return a Result",
+                    format!("endpoint method `{fname}` must return a Result"),
                 ));
                 had_errors = true;
                 None
@@ -269,7 +513,7 @@ impl<'a> ServerEndpoint<'a> {
 
         match (metadata, args, ret_ty) {
             (Some(metadata), Some(args), Some(ret_ty)) => {
-                Some(Self { f, attr, metadata, args, ret_ty })
+                Some(Self { f, metadata, args, ret_ty })
             }
             // This means that something failed.
             _ => None,
@@ -278,24 +522,123 @@ impl<'a> ServerEndpoint<'a> {
 
     fn to_out_trait_item(&self) -> TraitItem {
         // Retain all attributes other than the endpoint attribute.
-        let attrs = self
-            .f
-            .attrs
-            .iter()
-            .filter(|a| !a.path().is_ident("endpoint"))
-            .cloned()
-            .collect();
-
-        let f = TraitItemFn {
-            attrs,
-            sig: self.f.sig.clone(),
-            default: self.f.default.clone(),
-            semi_token: self.f.semi_token,
-        };
+        let f = strip_recognized_attrs(self.f);
         TraitItem::Fn(f)
     }
 
-    fn to_api_endpoint(&self) -> TokenStream {
+    fn to_top_level_checks(&self) -> TokenStream {
+        let dropshot = get_crate(self.metadata._dropshot_crate.clone());
+
+        // The first parameter must be a RequestContext<T>.
+        let rqctx_ty = &self.args.rqctx.ty;
+        let rqctx_span = rqctx_ty.span();
+        let rqctx_check = quote_spanned! { rqctx_span=>
+            const _: fn() = || {
+                struct NeedRequestContext(<#rqctx_ty as #dropshot::RequestContextArgument>::Context);
+            };
+        };
+
+        // XXX: most of this code is copied from lib.rs -- we should move it to
+        // a shared location.
+
+        // Subsequent parameters must impl SharedExtractor.
+        let shared_extractor_checks =
+            self.args.shared_extractors.iter().map(|pat| {
+                let ty = &pat.ty;
+                let span = ty.span();
+                quote_spanned! { span=>
+                    const _: fn() = || {
+                        fn need_shared_extractor<T>()
+                        where
+                            T: ?Sized + #dropshot::SharedExtractor,
+                        {
+                        }
+                        need_shared_extractor::<#ty>();
+                    };
+                }
+            });
+
+        // The final parameter must impl ExclusiveExtractor. (It's okay if it's
+        // another SharedExtractor.  Those impl ExclusiveExtractor, too.)
+        let exclusive_extractor_check =
+            self.args.exclusive_extractor.map(|pat| {
+                let ty = &pat.ty;
+                let span = ty.span();
+                quote_spanned! { span=>
+                    const _: fn() = || {
+                        fn need_exclusive_extractor<T>()
+                        where
+                            T: ?Sized + #dropshot::ExclusiveExtractor,
+                        {
+                        }
+                        need_exclusive_extractor::<#ty>();
+                    };
+                }
+            });
+
+        let ret_check = {
+            let ret_ty = self.ret_ty;
+            let span = ret_ty.span();
+            quote_spanned! { span=>
+                const _: fn() = || {
+                    // Pick apart the Result type.
+                    trait ResultTrait {
+                        type T;
+                        type E;
+                    }
+
+                    // Verify that the affirmative result implements the
+                    // HttpResponse trait.
+                    impl<TT, EE> ResultTrait for Result<TT, EE>
+                    where
+                        TT: #dropshot::HttpResponse,
+                    {
+                        type T = TT;
+                        type E = EE;
+                    }
+
+                    // This is not strictly necessary as we'll try to use
+                    // #ret_ty as ResultTrait below. This does, however,
+                    // produce a cleaner error message as type definition
+                    // errors are detected prior to function type validation.
+                    struct NeedHttpResponse(
+                        <#ret_ty as ResultTrait>::T,
+                    );
+
+                    // Verify that the error result is of type HttpError.
+                    trait TypeEq {
+                        type This: ?Sized;
+                    }
+
+                    impl<T: ?Sized> TypeEq for T {
+                        type This = Self;
+                    }
+
+                    fn validate_result_error_type<T>()
+                    where
+                        T: ?Sized + TypeEq<This = #dropshot::HttpError>,
+                    {
+                    }
+
+                    validate_result_error_type::<
+                        <#ret_ty as ResultTrait>::E,
+                    >();
+                };
+            }
+        };
+
+        quote! {
+            #rqctx_check
+            #(#shared_extractor_checks)*
+            #exclusive_extractor_check
+            #ret_check
+        }
+    }
+
+    fn to_api_endpoint<F>(&self, mut handler_func: F) -> TokenStream
+    where
+        F: FnMut(HandlerFuncData<'_>) -> TokenStream,
+    {
         let dropshot = get_crate(self.metadata._dropshot_crate.clone());
 
         let name = &self.f.sig.ident;
@@ -311,11 +654,11 @@ impl<'a> ServerEndpoint<'a> {
             .content_type
             .clone()
             .unwrap_or_else(|| "application/json".to_string());
-        // TODO: check content type
+        // XXX: check content type
 
         let (summary_text, description_text) =
             extract_doc_from_attrs(&self.f.attrs);
-        // TODO: description doc comment?
+        // XXX: description doc comment?
 
         let summary = summary_text.map(|summary| {
             quote! { .summary(#summary) }
@@ -341,87 +684,38 @@ impl<'a> ServerEndpoint<'a> {
             quote! { .deprecated(true) }
         });
 
-        // The first parameter must be a RequestContext<T>.
-        let rqctx_span = self.args.rqctx.ty.span();
-        let rqctx_ty = &self.args.rqctx.ty;
-        let rqctx_check = quote_spanned! { rqctx_span=>
-            const _: fn() = || {
-                struct NeedRequestContext(<#rqctx_ty as #dropshot::RequestContextArgument>::Context);
-            };
-        };
-
-        // Subsequent parameters must impl SharedExtractor.
-        let shared_extractor_checks =
-            self.args.shared_extractors.iter().map(|pat| {
-                let ty = &pat.ty;
-                quote! {
-                    const _: fn() = || {
-                        fn need_shared_extractor<T>()
-                        where
-                            T: ?Sized + #dropshot::SharedExtractor,
-                        {
-                        }
-                        need_shared_extractor::<#ty>();
-                    };
-                }
-            });
-
-        // The final parameter must impl ExclusiveExtractor. (It's okay if it's
-        // another SharedExtractor.  Those impl ExclusiveExtractor, too.)
-        let exclusive_extractor_check =
-            self.args.exclusive_extractor.map(|pat| {
-                let ty = &pat.ty;
-                quote! {
-                    const _: fn() = || {
-                        fn need_exclusive_extractor<T>()
-                        where
-                            T: ?Sized + #dropshot::ExclusiveExtractor,
-                        {
-                        }
-                        need_exclusive_extractor::<#ty>();
-                    };
-                }
-            });
-
-        // XXX: param checks and ret check
-
         let arg_names = self.args.arg_names();
-        let args = self.args.to_out_pat_types();
+        let args: Vec<_> = self.args.to_out_pat_types().collect();
 
-        // Generate a new function that wraps `__dropshot_input` and calls the
-        // right method on it. There's some levels of `move` happening here:
+        // Note that we use name_str (string) rather than name (ident) here
+        // because we deliberately want to lose the span information. If we
+        // don't do that, then rust-analyzer will get confused and believe that
+        // the name is both a method and a variable.
         //
-        // 1. An owned `__dropshot_input` is moved into the closure
-        // 2. Another clone of `__dropshot_input` is moved into the async block.
-        //
-        // The net result is that the async block is 'static as required by
-        // Dropshot, and the closure is `Fn` (not `FnOnce`).
-        let handler_func = quote! {
-            let #name = {
-                let __dropshot_input = __dropshot_input.clone();
-                move |#(#args),*| {
-                    let __dropshot_input = __dropshot_input.clone();
-                    async move {
-                        __dropshot_input.#name(#(#arg_names),*).await
-                    }
-                }
-            };
+        // Note that there isn't any possible variable name collision here,
+        // since all names are either generated by us (e.g. `extractor0`) or
+        // have a prefix (e.g. `handler_`).
+        let handler_func_data = HandlerFuncData {
+            name,
+            args: &args,
+            arg_names: &arg_names,
+            ret_ty: self.ret_ty,
         };
+        let handler_func_name = handler_func_data.handler_func_name();
+        let handler_func = handler_func(handler_func_data);
+
+        // Same here -- we use name_str deliberately, just like in
+        // `handler_func_name`.
+        let api_endpoint_name = format_ident!("endpoint_{}", name_str);
 
         quote! {
             {
-                let #name = {
-                    #rqctx_check
-
-                    #(#shared_extractor_checks)*
-
-                    #exclusive_extractor_check
-
+                let #api_endpoint_name = {
                     #handler_func
 
                     #dropshot::ApiEndpoint::new(
                         #name_str.to_string(),
-                        #name,
+                        #handler_func_name,
                         #dropshot::Method::#method_ident,
                         #content_type,
                         #path,
@@ -432,12 +726,51 @@ impl<'a> ServerEndpoint<'a> {
                     #visible
                     #deprecated
                 };
-                if let Err(error) = __dropshot_api.register(#name) {
-                    __dropshot_errors.push(error);
+                if let Err(error) = dropshot_api.register(#api_endpoint_name) {
+                    dropshot_errors.push(error);
                 }
             }
         }
     }
+}
+
+/// Information passed into `handler_func` instances.
+///
+/// This is used to generate the handler function for each endpoint.
+struct HandlerFuncData<'a> {
+    name: &'a Ident,
+    args: &'a [PatType],
+    arg_names: &'a [Ident],
+    ret_ty: &'a Type,
+}
+
+impl<'a> HandlerFuncData<'a> {
+    fn handler_func_name(&self) -> Ident {
+        // Note that we call to_string here because we deliberately want to lose
+        // the span information. If we don't do that, then rust-analyzer will
+        // get confused and believe that the name is both a method and a
+        // variable.
+        //
+        // Note that there isn't any possible variable name collision here,
+        // since all names are either generated by us (e.g. `extractor0`) or
+        // have a prefix (e.g. `handler_`).
+        format_ident!("handler_{}", self.name.to_string())
+    }
+}
+
+fn strip_recognized_attrs(f: &TraitItemFn) -> TraitItemFn {
+    let attrs = f
+        .attrs
+        .iter()
+        .filter(|a| {
+            // Strip endpoint and channel attributes, since those are the ones
+            // recognized by us.
+            !(a.path().is_ident("endpoint") || a.path().is_ident("channel"))
+        })
+        .cloned()
+        .collect();
+
+    TraitItemFn { attrs, ..f.clone() }
 }
 
 struct EndpointArgs<'a> {
@@ -449,6 +782,7 @@ struct EndpointArgs<'a> {
 impl<'a> EndpointArgs<'a> {
     fn new(f: &'a TraitItemFn, errors: &mut Vec<Error>) -> Option<Self> {
         let mut had_errors = false;
+        let fname = f.sig.ident.to_string();
 
         let mut inputs = f.sig.inputs.iter();
 
@@ -459,8 +793,8 @@ impl<'a> EndpointArgs<'a> {
                 // XXX consider lifetime parameters?
                 if !(r.reference.is_some() && r.mutability.is_none()) {
                     errors.push(Error::new_spanned(
-                        &f.sig,
-                        "endpoint methods must take `&self`",
+                        r,
+                        format!("endpoint method `{fname}` must take `&self`"),
                     ));
 
                     // Continue parsing the rest of the arguments, though -- we
@@ -470,8 +804,9 @@ impl<'a> EndpointArgs<'a> {
             }
             _ => {
                 errors.push(Error::new_spanned(
+                    // There's no receiver, so point to the whole function.
                     &f.sig,
-                    "endpoint methods must take `&self`",
+                    format!("endpoint method `{fname}` must take `&self`"),
                 ));
 
                 // Bail right away for static methods.
@@ -481,11 +816,13 @@ impl<'a> EndpointArgs<'a> {
 
         // The second arg must be a RequestContext.
         let rqctx = match inputs.next() {
-            Some(FnArg::Typed(pat)) => &*pat,
+            Some(FnArg::Typed(pat)) => pat,
             _ => {
                 errors.push(Error::new_spanned(
                     &f.sig,
-                    "endpoint methods must take a RequestContext",
+                    format!(
+                        "endpoint method `{fname}` must take a RequestContext"
+                    ),
                 ));
                 return None;
             }
@@ -495,12 +832,49 @@ impl<'a> EndpointArgs<'a> {
         // SharedExtractor.
         let mut shared_extractors = Vec::new();
         while let Some(FnArg::Typed(pat)) = inputs.next() {
-            shared_extractors.push(&*pat);
+            shared_extractors.push(pat);
         }
 
         // Pop the last one off the iterator -- it must impl ExclusiveExtractor.
         // (A SharedExtractor can impl ExclusiveExtractor too.)
         let exclusive_extractor = shared_extractors.pop();
+
+        // Object-safe methods can't have type or const parameters.
+        if f.sig.generics.params.iter().any(|p| match p {
+            GenericParam::Type(_) | GenericParam::Const(_) => true,
+            _ => false,
+        }) {
+            errors.push(Error::new_spanned(
+                &f.sig.generics.params,
+                format!(
+                    "endpoint method `{fname}` must not have generic parameters"
+                ),
+            ));
+            had_errors = true;
+        }
+
+        // Ban where clauses in endpoint methods:
+        //
+        // * `where Self: Sized` would mean that the endpoint is erased from dyn
+        //   Trait, which is not what we want.
+        // * Some other `where` clause will likely block object safety
+        // * We could support other where clauses (e.g. `where usize: Copy`),
+        //   but it's easier to just ban them altogether for now.
+        if let Some(c) = &f.sig.generics.where_clause {
+            if c.predicates.iter().any(|p| match p {
+                WherePredicate::Lifetime(_) => false,
+                WherePredicate::Type(_) => true,
+                _ => true,
+            }) {
+                errors.push(Error::new_spanned(
+                    c,
+                    format!(
+                        "endpoint method `{fname}` must not have a where clause"
+                    ),
+                ));
+                had_errors = true;
+            }
+        }
 
         (!had_errors).then(|| Self {
             rqctx,

@@ -607,6 +607,7 @@ pub mod test_util;
 extern crate slog;
 
 pub use api_description::ApiDescription;
+pub use api_description::ApiDescriptionBuildError;
 pub use api_description::ApiEndpoint;
 pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
@@ -682,4 +683,9 @@ pub use http::Method;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::channel;
+pub use dropshot_endpoint::dropshot_server;
 pub use dropshot_endpoint::endpoint;
+
+// Exported for dropshot_endpoint.
+#[doc(hidden)]
+pub use async_trait::async_trait;
