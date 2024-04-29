@@ -3,7 +3,7 @@
 use dropshot::{dropshot_server, HttpError, HttpResponseOk, RequestContext};
 
 #[dropshot_server]
-trait MyServer: Send + Sync + Sized + 'static {
+trait MyServer {
     #[endpoint { method = GET, path = "/test" }]
     async fn non_result_method(
         rqctx: RequestContext<Self>,
