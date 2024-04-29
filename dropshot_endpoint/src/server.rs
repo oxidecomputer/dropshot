@@ -139,11 +139,8 @@ impl<'a> Server<'a> {
         });
 
         // Everything else about the trait stays the same -- just the items change.
-        let mut out_attrs = self.item_trait.attrs.clone();
-        out_attrs.push(parse_quote!(#[::dropshot::make_trait_variant(Send)]));
 
         let out_trait = ItemTrait {
-            attrs: out_attrs,
             supertraits: self.supertraits.clone(),
             items: out_items.collect(),
             ..self.item_trait.clone()
@@ -393,13 +390,6 @@ impl<'a> ServerItem<'a> {
     }
 }
 
-struct ServerEndpoint<'a> {
-    f: &'a TraitItemFn,
-    metadata: EndpointMetadata,
-    args: EndpointArgs<'a>,
-    ret_ty: &'a Type,
-}
-
 fn parse_metadata(
     attr: &Attribute,
     errors: &mut Vec<Error>,
@@ -423,6 +413,13 @@ fn parse_metadata(
             return None;
         }
     }
+}
+
+struct ServerEndpoint<'a> {
+    f: &'a TraitItemFn,
+    metadata: EndpointMetadata,
+    args: EndpointArgs<'a>,
+    ret_ty: &'a Type,
 }
 
 impl<'a> ServerEndpoint<'a> {
@@ -482,7 +479,28 @@ impl<'a> ServerEndpoint<'a> {
     fn to_out_trait_item(&self) -> TraitItem {
         // Retain all attributes other than the endpoint attribute.
         let f = strip_recognized_attrs(self.f);
-        TraitItem::Fn(f)
+
+        // Below code adapted from https://github.com/rust-lang/impl-trait-utils
+        // and used under the MIT and Apache 2.0 licenses.
+        let output_ty = {
+            let ret_ty = &self.ret_ty;
+            let bounds = parse_quote! { ::core::future::Future<Output = #ret_ty> + Send + 'static };
+            Type::ImplTrait(TypeImplTrait {
+                impl_token: Default::default(),
+                bounds,
+            })
+        };
+        TraitItem::Fn(TraitItemFn {
+            sig: Signature {
+                asyncness: None,
+                output: ReturnType::Type(
+                    Default::default(),
+                    Box::new(output_ty),
+                ),
+                ..f.sig
+            },
+            ..f
+        })
     }
 
     fn to_top_level_checks(&self) -> TokenStream {

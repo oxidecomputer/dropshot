@@ -685,7 +685,3 @@ extern crate dropshot_endpoint;
 pub use dropshot_endpoint::channel;
 pub use dropshot_endpoint::dropshot_server;
 pub use dropshot_endpoint::endpoint;
-
-// Exported for dropshot_endpoint -- not part of the public API.
-#[doc(hidden)]
-pub use trait_variant::make as make_trait_variant;
