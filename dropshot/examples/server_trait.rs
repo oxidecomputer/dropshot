@@ -43,7 +43,7 @@ struct CounterValue {
 }
 
 #[dropshot_server]
-trait MyServer: Send + Sync + Sized + 'static {
+trait MyServer {
     type ExtraType;
 
     fn helper(&self) -> u64;
