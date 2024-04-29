@@ -22,16 +22,17 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
     // XXX: The `dropshot_server` attribute macro conjures up this
-    // to_api_description method. Need to make this better somehow. (How? Any
-    // trait-based attempts run into the orphan rules).
-    let my_server = MyServer_to_api_description(MyContext::new()).unwrap();
-
-    // XXX: We always use `()` for the context, because it's assumed that the
-    // actual context is in `self`. Do we need any more flexibility? Doubt it.
-    // In which case, how do we improve this API?
-    let server = HttpServerStarter::new(&config_dropshot, my_server, (), &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    // to_api_description method. Consider making this better somehow. (How? Any
+    // trait-based attempts run into Rust's orphan rules).
+    let my_server = MyServer_to_api_description::<MyImpl>().unwrap();
+    let server = HttpServerStarter::new(
+        &config_dropshot,
+        my_server,
+        MyImpl::new(),
+        &log,
+    )
+    .map_err(|error| format!("failed to create server: {}", error))?
+    .start();
 
     server.await
 }
@@ -42,39 +43,35 @@ struct CounterValue {
 }
 
 #[dropshot_server]
-trait MyServer: Send + Sync + 'static {
-    type ExtraType
-    where
-        Self: Sized;
+trait MyServer: Send + Sync + Sized + 'static {
+    type ExtraType;
 
     fn helper(&self) -> u64;
 
     #[endpoint { method = GET, path = "/counter" }]
     async fn get_counter(
-        &self,
-        rqctx: RequestContext<()>,
+        rqctx: RequestContext<Self>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError>;
 
     #[endpoint { method = PUT, path = "/counter" }]
     async fn put_counter(
-        &self,
-        rqctx: RequestContext<()>,
+        rqctx: RequestContext<Self>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
-struct MyContext {
+struct MyImpl {
     counter: AtomicU64,
 }
 
-impl MyContext {
-    pub fn new() -> MyContext {
-        MyContext { counter: AtomicU64::new(0) }
+impl MyImpl {
+    pub fn new() -> MyImpl {
+        MyImpl { counter: AtomicU64::new(0) }
     }
 }
 
 #[async_trait::async_trait]
-impl MyServer for MyContext {
+impl MyServer for MyImpl {
     type ExtraType = ();
 
     fn helper(&self) -> u64 {
@@ -82,17 +79,17 @@ impl MyServer for MyContext {
     }
 
     async fn get_counter(
-        &self,
-        _rqctx: RequestContext<()>,
+        _rqctx: RequestContext<Self>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
-        Ok(HttpResponseOk(CounterValue { counter: self.helper() }))
+        let self_ = _rqctx.context();
+        Ok(HttpResponseOk(CounterValue { counter: self_.helper() }))
     }
 
     async fn put_counter(
-        &self,
-        _rqctx: RequestContext<()>,
+        _rqctx: RequestContext<Self>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        let self_ = _rqctx.context();
         let updated_value = update.into_inner();
 
         if updated_value.counter == 10 {
@@ -101,7 +98,7 @@ impl MyServer for MyContext {
                 format!("do not like the number {}", updated_value.counter),
             ))
         } else {
-            self.counter.store(updated_value.counter, Ordering::SeqCst);
+            self_.counter.store(updated_value.counter, Ordering::SeqCst);
             Ok(HttpResponseUpdatedNoContent())
         }
     }
