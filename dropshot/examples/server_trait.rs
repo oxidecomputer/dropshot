@@ -70,7 +70,6 @@ impl MyImpl {
     }
 }
 
-#[async_trait::async_trait]
 impl MyServer for MyImpl {
     type ExtraType = ();
 

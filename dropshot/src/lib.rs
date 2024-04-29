@@ -686,6 +686,6 @@ pub use dropshot_endpoint::channel;
 pub use dropshot_endpoint::dropshot_server;
 pub use dropshot_endpoint::endpoint;
 
-// Exported for dropshot_endpoint.
+// Exported for dropshot_endpoint -- not part of the public API.
 #[doc(hidden)]
-pub use async_trait::async_trait;
+pub use trait_variant::make as make_trait_variant;

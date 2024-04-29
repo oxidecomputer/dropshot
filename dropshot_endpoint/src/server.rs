@@ -140,7 +140,7 @@ impl<'a> Server<'a> {
 
         // Everything else about the trait stays the same -- just the items change.
         let mut out_attrs = self.item_trait.attrs.clone();
-        out_attrs.push(parse_quote!(#[::dropshot::async_trait]));
+        out_attrs.push(parse_quote!(#[::dropshot::make_trait_variant(Send)]));
 
         let out_trait = ItemTrait {
             attrs: out_attrs,
