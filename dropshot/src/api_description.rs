@@ -1062,7 +1062,7 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
             &mut *out,
             &self.api.gen_openapi(self.info.clone()),
         )?;
-        writeln!(out, "").map_err(serde_json::Error::custom)?;
+        writeln!(out).map_err(serde_json::Error::custom)?;
         Ok(())
     }
 }
