@@ -2,22 +2,24 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
+use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
-use syn::{punctuated::Punctuated, spanned::Spanned, *};
+use syn::{spanned::Spanned, *};
 
 use crate::{extract_doc_from_attrs, get_crate, EndpointMetadata};
 
 pub(crate) fn do_server(
-    _attr: proc_macro2::TokenStream,
+    attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
 ) -> std::result::Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
-    // XXX: parse attributes for global metadata.
+    // Parse attributes.
+    let server_metadata: ServerMetadata = from_tokenstream(&attr)?;
 
     // This has to be a trait.
     let item_trait: ItemTrait = parse2(item.clone())?;
 
     let mut errors = Vec::new();
-    let server = Server::new(&item_trait, &mut errors);
+    let server = Server::new(server_metadata, &item_trait, &mut errors);
     let output = server.to_output();
 
     // Now generate the output.
@@ -55,79 +57,147 @@ fn check_endpoint_or_channel_on_non_fn(
     }
 }
 
+#[derive(Deserialize, Debug)]
+struct ServerMetadata {
+    #[serde(default)]
+    context: Option<String>,
+    _dropshot_crate: Option<String>,
+}
+
+impl ServerMetadata {
+    /// The default name for the associated context type: `Self::Context`.
+    const DEFAULT_CONTEXT_TY: &'static str = "Context";
+
+    fn context_ty(&self) -> &str {
+        self.context.as_deref().unwrap_or(Self::DEFAULT_CONTEXT_TY)
+    }
+}
+
 struct Server<'a> {
     item_trait: &'a ItemTrait,
-    supertraits: Punctuated<TypeParamBound, Token![+]>,
-    // We want to maintain the order of items in the trait, so we use a single
-    // list to store all of them.
+    // We want to maintain the order of items in the trait (other than the
+    // Context associated type which we're always going to move to the top), so
+    // we use a single list to store all of them.
     items: Vec<ServerItem<'a>>,
+    // This is None if there is no context type, which is an error.
+    context_item: Option<&'a TraitItemType>,
 }
 
 impl<'a> Server<'a> {
-    fn new(item_trait: &'a ItemTrait, errors: &mut Vec<Error>) -> Self {
-        // The trait itself should specify a `Send + Sync + 'static` bound.
-        // Automatically insert the bounds if they're missing.
-        //
-        // We choose to insert these traits rather than producing an error,
-        // because if we don't insert these traits, the API description
-        // functions will produce tons of errors in a horrible way.
-        let supertraits = {
-            let mut has_send = false;
-            let mut has_sync = false;
-            let mut has_sized = false;
-            let mut has_static = false;
+    fn new(
+        server_metadata: ServerMetadata,
+        item_trait: &'a ItemTrait,
+        errors: &mut Vec<Error>,
+    ) -> Self {
+        let mut items = Vec::with_capacity(item_trait.items.len());
 
-            for bound in &item_trait.supertraits {
-                match bound {
-                    TypeParamBound::Lifetime(lifetime) => {
-                        if lifetime.ident == "static" {
-                            has_static = true;
+        let context_ty = server_metadata.context_ty();
+        let mut context_item = None;
+
+        for item in &item_trait.items {
+            match item {
+                TraitItem::Fn(f) => {
+                    // XXX cannot have multiple endpoint or channel attributes,
+                    // check here.
+                    let endpoint_attr =
+                        f.attrs.iter().find(|a| a.path().is_ident("endpoint"));
+                    let channel_attr =
+                        f.attrs.iter().find(|a| a.path().is_ident("channel"));
+
+                    let item = match (endpoint_attr, channel_attr) {
+                        (Some(_), Some(cattr)) => {
+                            errors.push(Error::new_spanned(
+                                cattr,
+                                "methods must not be both endpoints and channels",
+                            ));
+                            ServerItem::Invalid(f)
                         }
-                    }
-                    TypeParamBound::Trait(trait_bound) => {
-                        let path = &trait_bound.path;
-                        if path.is_ident("Send") {
-                            has_send = true;
-                        } else if path.is_ident("Sync") {
-                            has_sync = true;
-                        } else if path.is_ident("Sized") {
-                            has_sized = true;
+                        (Some(eattr), None) => {
+                            if let Some(endpoint) = ServerEndpoint::new(
+                                f, eattr, context_ty, errors,
+                            ) {
+                                ServerItem::Endpoint(endpoint)
+                            } else {
+                                ServerItem::Invalid(f)
+                            }
                         }
+                        (None, Some(_cattr)) => {
+                            todo!("implement support for channels")
+                        }
+                        (None, None) => {
+                            // This is just a normal method.
+                            ServerItem::Other(item)
+                        }
+                    };
+                    items.push(item);
+                }
+
+                TraitItem::Type(t) => {
+                    check_endpoint_or_channel_on_non_fn(
+                        "type",
+                        &t.ident.to_string(),
+                        &t.attrs,
+                        errors,
+                    );
+
+                    // We're looking for the context type. Look for a type with
+                    // the right name.
+                    if t.ident.to_string() == context_ty {
+                        // This is the context type.
+                        context_item = Some(t);
+                    } else {
+                        // This is something else.
+                        items.push(ServerItem::Other(item));
                     }
-                    TypeParamBound::Verbatim(_) => {}
-                    _ => {}
+                }
+
+                // Everything else is permissible (for now?) -- just ensure that
+                // they aren't marked as `endpoint` or `channel`.
+                TraitItem::Const(c) => {
+                    check_endpoint_or_channel_on_non_fn(
+                        "const",
+                        &c.ident.to_string(),
+                        &c.attrs,
+                        errors,
+                    );
+                }
+
+                TraitItem::Macro(m) => {
+                    check_endpoint_or_channel_on_non_fn(
+                        "macro",
+                        &m.mac.path.to_token_stream().to_string(),
+                        &m.attrs,
+                        errors,
+                    );
+                    // Note that we can't expand macros within proc macros, so
+                    // that can't be supported.
+                    items.push(ServerItem::Other(item));
+                }
+                _ => {
+                    items.push(ServerItem::Other(item));
                 }
             }
+        }
 
-            let mut supertraits = item_trait.supertraits.clone();
+        if context_item.is_none() {
+            errors.push(Error::new_spanned(
+                &item_trait.ident,
+                format!(
+                    "no context type found in trait \
+                     (there should be an associated type named `{}`)",
+                    context_ty
+                ),
+            ));
+        }
 
-            if !has_send {
-                supertraits.push(parse_quote!(Send));
-            }
-            if !has_sync {
-                supertraits.push(parse_quote!(Sync));
-            }
-            if !has_sized {
-                supertraits.push(parse_quote!(Sized));
-            }
-            if !has_static {
-                supertraits.push(parse_quote!('static));
-            }
-
-            supertraits
-        };
-
-        let items: Vec<_> = item_trait
-            .items
-            .iter()
-            .map(|item| ServerItem::new(item, errors))
-            .collect();
-
-        Self { item_trait, supertraits, items }
+        Self { item_trait, items, context_item }
     }
 
     fn to_output(&self) -> TokenStream {
-        let out_items = self.items.iter().map(|item| item.to_out_trait_item());
+        let context_item = self.make_context_trait_item();
+        let other_items =
+            self.items.iter().map(|item| item.to_out_trait_item());
+        let out_items = context_item.into_iter().chain(other_items);
 
         let top_level_checks = self.items.iter().filter_map(|item| {
             // Don't generate any top-level checks if the trait is invalid.
@@ -138,18 +208,26 @@ impl<'a> Server<'a> {
             }
         });
 
+        // We need a 'static bound on the trait itself, otherwise we get `T
+        // doesn't live long enough` errors.
+        let mut supertraits = self.item_trait.supertraits.clone();
+        supertraits.push(parse_quote!('static));
+
         // Everything else about the trait stays the same -- just the items change.
 
         let out_trait = ItemTrait {
-            supertraits: self.supertraits.clone(),
+            supertraits,
             items: out_items.collect(),
             ..self.item_trait.clone()
         };
 
         // Generate two API description functions: one for the real trait, and
-        // one for a stub impl meant for OpenAPI generation.
-        let api_description = self.to_api_description_fn();
-        let stub_api_description = self.to_stub_api_description_fn();
+        // one for a stub impl meant for OpenAPI generation. Restrict the first
+        // to the case where the context type is present, since the error
+        // messages are quite ugly otherwise.
+        let api_description =
+            self.context_item.is_some().then(|| self.make_api_description_fn());
+        let stub_api_description = self.make_stub_api_description_fn();
 
         quote! {
             #out_trait
@@ -162,29 +240,52 @@ impl<'a> Server<'a> {
         }
     }
 
-    fn to_api_description_fn(&self) -> TokenStream {
+    fn make_context_trait_item(&self) -> Option<TraitItem> {
+        // XXX obtain dropshot type
+
+        let item = self.context_item?;
+        let mut bounds = item.bounds.clone();
+        // Generate these bounds for the associated type. We could require that
+        // users specify them and error out if they don't, but this is much
+        // easier to do, and also produces better errors.
+        bounds.push(parse_quote!(dropshot::ServerContext));
+        bounds.push(parse_quote!('static));
+
+        let out_item = TraitItemType { bounds, ..item.clone() };
+        Some(TraitItem::Type(out_item))
+    }
+
+    fn make_api_description_fn(&self) -> TokenStream {
         let trait_name = &self.item_trait.ident;
         let trait_name_str = trait_name.to_string();
         let vis = &self.item_trait.vis;
         let fn_ident = format_ident!("{trait_name_str}_to_api_description");
 
-        let body =
-            self.to_api_description_fn_body(parse_quote!(Context), |data| {
-                // For the real impl, just forward to the method on the trait.
-                // It is guaranteed to be static, so this should Just Work.
-                let handler_func_name = data.handler_func_name();
-                let name = data.name;
+        let body = self.make_api_description_fn_body(|data| {
+            // For the real impl, just forward to the method on the trait.
+            // It is guaranteed to be static, so this should Just Work.
+            let dropshot = data.dropshot;
+            let name = data.name;
+            let method_ident = data.method;
+            let content_type = data.content_type;
+            let path = data.path;
 
-                quote! {
-                    let #handler_func_name = <Context as #trait_name>::#name;
-                }
-            });
+            quote! {
+                #dropshot::ApiEndpoint::new(
+                    stringify!(#name).to_string(),
+                    <ServerImpl as #trait_name>::#name,
+                    #dropshot::Method::#method_ident,
+                    #content_type,
+                    #path,
+                )
+            }
+        });
 
         // XXX: need a way to get the dropshot crate name here.
         quote! {
             #[automatically_derived]
-            #vis fn #fn_ident<Context: #trait_name>() -> ::std::result::Result<
-                dropshot::ApiDescription<Context>,
+            #vis fn #fn_ident<ServerImpl: #trait_name>() -> ::std::result::Result<
+                dropshot::ApiDescription<<ServerImpl as #trait_name>::Context>,
                 dropshot::ApiDescriptionBuildError,
             > {
                 #body
@@ -192,7 +293,7 @@ impl<'a> Server<'a> {
         }
     }
 
-    fn to_stub_api_description_fn(&self) -> TokenStream {
+    fn make_stub_api_description_fn(&self) -> TokenStream {
         let trait_name = &self.item_trait.ident;
         let trait_name_str = trait_name.to_string();
         let vis = &self.item_trait.vis;
@@ -200,22 +301,24 @@ impl<'a> Server<'a> {
         let fn_ident =
             format_ident!("{trait_name_str}_to_stub_api_description");
 
-        let body = self.to_api_description_fn_body(parse_quote!(()), |data| {
-            // For the stub impl, generate a free function (not a closure!) that
-            // is unimplemented. This allows the return type to be specified as
-            // `impl Future`, which is required for type inference.
-
-            let handler_func_name = data.handler_func_name();
-            let name_str = data.name.to_string();
-            let args = &data.args;
+        let body = self.make_api_description_fn_body(|data| {
+            // For the stub impl, call `ApiEndpoint::new_stub`. Pass in the
+            // request and response types as a function pointer type parameter.
+            let dropshot = data.dropshot;
+            let name = data.name;
+            let method_ident = data.method;
+            let content_type = data.content_type;
+            let path = data.path;
+            let arg_types = data.args.extractor_types();
             let ret_ty = data.ret_ty;
 
             quote! {
-                fn #handler_func_name(#(#args),*) -> impl ::std::future::Future<Output = #ret_ty> {
-                    async {
-                        unimplemented!("stub implementation for `{}`", #name_str);
-                    }
-                }
+                #dropshot::ApiEndpoint::new_stub::<fn ((#(#arg_types,)*)) -> #ret_ty, _, _>(
+                    stringify!(#name).to_string(),
+                    #dropshot::Method::#method_ident,
+                    #content_type,
+                    #path,
+                )
             }
         });
 
@@ -223,7 +326,7 @@ impl<'a> Server<'a> {
         quote! {
             #[automatically_derived]
             #vis fn #fn_ident() -> ::std::result::Result<
-                dropshot::ApiDescription<()>,
+                dropshot::ApiDescription<dropshot::StubContext>,
                 dropshot::ApiDescriptionBuildError,
             > {
                 #body
@@ -236,13 +339,12 @@ impl<'a> Server<'a> {
     /// This code is shared across the real and stub API description functions.
     /// If the body represents an invalid function, `Err` is returned, otherwise
     /// `Ok`.
-    fn to_api_description_fn_body<F>(
+    fn make_api_description_fn_body<F>(
         &self,
-        rqctx_transform: Type,
-        mut handler_func: F,
+        mut endpoint_func: F,
     ) -> TokenStream
     where
-        F: FnMut(HandlerFuncData<'_>) -> TokenStream,
+        F: FnMut(ApiEndpointFuncData<'_>) -> TokenStream,
     {
         let trait_name = &self.item_trait.ident;
         let trait_name_str = trait_name.to_string();
@@ -256,10 +358,9 @@ impl<'a> Server<'a> {
             }
         } else {
             let endpoints = self.items.iter().filter_map(|item| match item {
-                ServerItem::Endpoint(e) => Some(e.to_api_endpoint(
-                    rqctx_transform.clone(),
-                    &mut handler_func,
-                )),
+                ServerItem::Endpoint(e) => {
+                    Some(e.to_api_endpoint(&mut endpoint_func))
+                }
                 ServerItem::Invalid(_) | ServerItem::Other(_) => None,
             });
 
@@ -281,6 +382,10 @@ impl<'a> Server<'a> {
     /// Returns true if errors were detected while generating the dropshot
     /// server, and it is invalid as a result.
     fn is_invalid(&self) -> bool {
+        if self.context_item.is_none() {
+            return true;
+        }
+
         self.items.iter().any(|item| match item {
             ServerItem::Invalid(_) => true,
             _ => false,
@@ -298,78 +403,6 @@ enum ServerItem<'a> {
 }
 
 impl<'a> ServerItem<'a> {
-    fn new(item: &'a TraitItem, errors: &mut Vec<Error>) -> Self {
-        match item {
-            TraitItem::Fn(f) => {
-                // XXX cannot have multiple endpoint or channel attributes,
-                // check here.
-                let endpoint_attr =
-                    f.attrs.iter().find(|a| a.path().is_ident("endpoint"));
-                let channel_attr =
-                    f.attrs.iter().find(|a| a.path().is_ident("channel"));
-
-                match (endpoint_attr, channel_attr) {
-                    (Some(_), Some(cattr)) => {
-                        errors.push(Error::new_spanned(
-                            cattr,
-                            "methods must not be both endpoints and channels",
-                        ));
-                        Self::Invalid(f)
-                    }
-                    (Some(eattr), None) => {
-                        if let Some(endpoint) =
-                            ServerEndpoint::new(f, eattr, errors)
-                        {
-                            Self::Endpoint(endpoint)
-                        } else {
-                            Self::Invalid(f)
-                        }
-                    }
-                    (None, Some(_cattr)) => {
-                        todo!("implement support for channels")
-                    }
-                    (None, None) => {
-                        // This is just a normal method.
-                        Self::Other(item)
-                    }
-                }
-            }
-
-            // Everything else is permissible (for now?) -- just ensure that
-            // they aren't marked as `endpoint` or `channel`.
-            TraitItem::Const(c) => {
-                check_endpoint_or_channel_on_non_fn(
-                    "const",
-                    &c.ident.to_string(),
-                    &c.attrs,
-                    errors,
-                );
-                Self::Other(item)
-            }
-            TraitItem::Type(t) => {
-                check_endpoint_or_channel_on_non_fn(
-                    "type",
-                    &t.ident.to_string(),
-                    &t.attrs,
-                    errors,
-                );
-                Self::Other(item)
-            }
-            TraitItem::Macro(m) => {
-                check_endpoint_or_channel_on_non_fn(
-                    "macro",
-                    &m.mac.path.to_token_stream().to_string(),
-                    &m.attrs,
-                    errors,
-                );
-                // Note that we can't expand macros within proc macros, so
-                // that can't be supported.
-                Self::Other(item)
-            }
-            _ => Self::Other(item),
-        }
-    }
-
     fn to_out_trait_item(&self) -> TraitItem {
         match self {
             Self::Endpoint(e) => e.to_out_trait_item(),
@@ -413,6 +446,8 @@ fn parse_metadata(
             return None;
         }
     }
+
+    // XXX: ban _dropshot_crate, should only be specified in global metadata
 }
 
 struct ServerEndpoint<'a> {
@@ -429,6 +464,7 @@ impl<'a> ServerEndpoint<'a> {
     fn new(
         f: &'a TraitItemFn,
         attr: &'a Attribute,
+        context_ty: &str,
         errors: &mut Vec<Error>,
     ) -> Option<Self> {
         let metadata = parse_metadata(attr, errors);
@@ -445,7 +481,7 @@ impl<'a> ServerEndpoint<'a> {
             had_errors = true;
         }
 
-        let args = EndpointArgs::new(f, errors);
+        let args = EndpointArgs::new(f, context_ty, errors);
 
         // The return value must exist.
         let ret_ty = match &f.sig.output {
@@ -459,9 +495,6 @@ impl<'a> ServerEndpoint<'a> {
                 None
             }
         };
-
-        // It's okay to allow a body, for a possible stub implementation if
-        // desired.
 
         if had_errors {
             return None;
@@ -612,13 +645,9 @@ impl<'a> ServerEndpoint<'a> {
         }
     }
 
-    fn to_api_endpoint<F>(
-        &self,
-        rqctx_transform: Type,
-        mut handler_func: F,
-    ) -> TokenStream
+    fn to_api_endpoint<F>(&self, mut endpoint_func: F) -> TokenStream
     where
-        F: FnMut(HandlerFuncData<'_>) -> TokenStream,
+        F: FnMut(ApiEndpointFuncData<'_>) -> TokenStream,
     {
         let dropshot = get_crate(self.metadata._dropshot_crate.clone());
 
@@ -665,8 +694,16 @@ impl<'a> ServerEndpoint<'a> {
             quote! { .deprecated(true) }
         });
 
-        let args: Vec<_> =
-            self.args.to_transformed_args(rqctx_transform).collect();
+        let func_data = ApiEndpointFuncData {
+            dropshot: &dropshot,
+            name,
+            method: &method_ident,
+            content_type: &content_type,
+            path: &path,
+            args: &self.args,
+            ret_ty: self.ret_ty,
+        };
+        let endpoint_func = endpoint_func(func_data);
 
         // Note that we use name_str (string) rather than name (ident) here
         // because we deliberately want to lose the span information. If we
@@ -674,36 +711,20 @@ impl<'a> ServerEndpoint<'a> {
         // the name is both a method and a variable.
         //
         // Note that there isn't any possible variable name collision here,
-        // since all names are either generated by us (e.g. `extractor0`) or
-        // have a prefix (e.g. `handler_`).
-        let handler_func_data =
-            HandlerFuncData { name, args: &args, ret_ty: self.ret_ty };
-        let handler_func_name = handler_func_data.handler_func_name();
-        let handler_func = handler_func(handler_func_data);
-
-        // Same here -- we use name_str deliberately, just like in
-        // `handler_func_name`.
-        let api_endpoint_name = format_ident!("endpoint_{}", name_str);
+        // since all names are prefixed with "endpoint_".
+        let endpoint_name = format_ident!("endpoint_{}", name_str);
 
         quote! {
             {
-                let #api_endpoint_name = {
-                    #handler_func
-
-                    #dropshot::ApiEndpoint::new(
-                        #name_str.to_string(),
-                        #handler_func_name,
-                        #dropshot::Method::#method_ident,
-                        #content_type,
-                        #path,
-                    )
+                let #endpoint_name = {
+                    #endpoint_func
                     #summary
                     #description
                     #(#tags)*
                     #visible
                     #deprecated
                 };
-                if let Err(error) = dropshot_api.register(#api_endpoint_name) {
+                if let Err(error) = dropshot_api.register(#endpoint_name) {
                     dropshot_errors.push(error);
                 }
             }
@@ -714,24 +735,14 @@ impl<'a> ServerEndpoint<'a> {
 /// Information passed into `handler_func` instances.
 ///
 /// This is used to generate the handler function for each endpoint.
-struct HandlerFuncData<'a> {
+struct ApiEndpointFuncData<'a> {
+    dropshot: &'a TokenStream,
     name: &'a Ident,
-    args: &'a [PatType],
+    method: &'a Ident,
+    content_type: &'a str,
+    path: &'a str,
+    args: &'a EndpointArgs<'a>,
     ret_ty: &'a Type,
-}
-
-impl<'a> HandlerFuncData<'a> {
-    fn handler_func_name(&self) -> Ident {
-        // Note that we call to_string here because we deliberately want to lose
-        // the span information. If we don't do that, then rust-analyzer will
-        // get confused and believe that the name is both a method and a
-        // variable.
-        //
-        // Note that there isn't any possible variable name collision here,
-        // since all names are either generated by us (e.g. `extractor0`) or
-        // have a prefix (e.g. `handler_`).
-        format_ident!("handler_{}", self.name.to_string())
-    }
 }
 
 fn strip_recognized_attrs(f: &TraitItemFn) -> TraitItemFn {
@@ -756,7 +767,11 @@ struct EndpointArgs<'a> {
 }
 
 impl<'a> EndpointArgs<'a> {
-    fn new(f: &'a TraitItemFn, errors: &mut Vec<Error>) -> Option<Self> {
+    fn new(
+        f: &'a TraitItemFn,
+        context_ty: &str,
+        errors: &mut Vec<Error>,
+    ) -> Option<Self> {
         let mut had_errors = false;
         let fname = f.sig.ident.to_string();
 
@@ -788,11 +803,12 @@ impl<'a> EndpointArgs<'a> {
 
         // Specifically, it must have exactly one type parameter, which must be
         // exactly `Self`.
-        let Some(rqctx) = RqctxTy::new(rqctx) else {
+        let Some(rqctx) = RqctxTy::new(rqctx, context_ty) else {
             errors.push(Error::new_spanned(
                 &rqctx.ty,
                 format!(
-                    "endpoint method `{fname}` must take RequestContext<Self>"
+                    "endpoint method `{fname}` must take \
+                     RequestContext<Self::{context_ty}>"
                 ),
             ));
             return None;
@@ -852,51 +868,11 @@ impl<'a> EndpointArgs<'a> {
         })
     }
 
-    fn arg_names(&self) -> Vec<Ident> {
-        let mut names = Vec::new();
-        names.push(format_ident!("rqctx"));
-
-        for i in 0..self.shared_extractors.len() {
-            names.push(format_ident!("extractor{}", i));
-        }
-
-        if self.exclusive_extractor.is_some() {
-            names.push(format_ident!("last_extractor"));
-        }
-
-        names
-    }
-
-    fn to_transformed_args(
-        &self,
-        rqctx_transform: Type,
-    ) -> impl Iterator<Item = PatType> + '_ {
-        let names = self.arg_names();
-
-        names
-            .into_iter()
-            .zip(self.to_transformed_arg_types(rqctx_transform))
-            .map(|(name, ty)| PatType {
-                attrs: Vec::new(),
-                pat: Box::new(Pat::Ident(PatIdent {
-                    attrs: Vec::new(),
-                    ident: name,
-                    by_ref: None,
-                    mutability: None,
-                    subpat: None,
-                })),
-                colon_token: Default::default(),
-                ty,
-            })
-    }
-
-    fn to_transformed_arg_types(
-        &self,
-        rqctx_transform: Type,
-    ) -> impl Iterator<Item = Box<Type>> + '_ {
-        std::iter::once(self.rqctx.transform_ty(rqctx_transform))
-            .chain(self.shared_extractors.iter().map(|pat| pat.ty.clone()))
-            .chain(self.exclusive_extractor.map(|pat| pat.ty.clone()))
+    fn extractor_types(&self) -> impl Iterator<Item = &Type> {
+        self.shared_extractors
+            .iter()
+            .map(|pat| &*pat.ty)
+            .chain(self.exclusive_extractor.map(|pat| &*pat.ty))
     }
 }
 
@@ -907,7 +883,7 @@ struct RqctxTy<'a> {
 impl<'a> RqctxTy<'a> {
     /// Creates a new `RqctxTy` from a `PatType`, returning None if the type is
     /// invalid.
-    fn new(pat_ty: &'a PatType) -> Option<Self> {
+    fn new(pat_ty: &'a PatType, context_ty: &str) -> Option<Self> {
         let Type::Path(p) = &*pat_ty.ty else { return None };
 
         // Inspect the last path segment.
@@ -927,8 +903,17 @@ impl<'a> RqctxTy<'a> {
             return None;
         };
 
-        // The type must be `Self`.
-        p2.path.is_ident("Self").then_some(Self { pat_ty })
+        // The type must be `Self::Context`.
+        if p2.path.segments.len() != 2 {
+            return None;
+        }
+        if p2.path.segments[0].ident.to_string() != "Self"
+            || p2.path.segments[1].ident.to_string() != context_ty
+        {
+            return None;
+        }
+
+        Some(Self { pat_ty })
     }
 
     /// Generate a new Type where the inner type to the `RequestContext` is

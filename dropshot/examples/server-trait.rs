@@ -1,5 +1,8 @@
 // Copyright 2023 Oxide Computer Company
 
+//! An example demonstrating use of the `dropshot_server` attribute macro to
+//! define an endpoint.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dropshot::{
@@ -42,22 +45,32 @@ struct CounterValue {
     counter: u64,
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct MultiplyAndAddPath {
+    counter: u64,
+}
+
 #[dropshot_server]
 trait MyServer {
-    type ExtraType;
-
-    fn helper(&self) -> u64;
+    /// By default, the name of the context type is Context. To specify a
+    /// different name, use the { context = ... } attribute on
+    /// `#[dropshot_server]`.
+    type Context;
 
     #[endpoint { method = GET, path = "/counter" }]
     async fn get_counter(
-        rqctx: RequestContext<Self>,
+        rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError>;
 
     #[endpoint { method = PUT, path = "/counter" }]
     async fn put_counter(
-        rqctx: RequestContext<Self>,
+        rqctx: RequestContext<Self::Context>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+
+    /// A miscellaneous function that is left untouched by the `dropshot_server`
+    /// attribute macro.
+    fn helper(&self) -> u64;
 }
 
 struct MyImpl {
@@ -71,24 +84,20 @@ impl MyImpl {
 }
 
 impl MyServer for MyImpl {
-    type ExtraType = ();
-
-    fn helper(&self) -> u64 {
-        self.counter.load(Ordering::Relaxed)
-    }
+    type Context = Self;
 
     async fn get_counter(
-        _rqctx: RequestContext<Self>,
+        rqctx: RequestContext<Self>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
-        let self_ = _rqctx.context();
+        let self_ = rqctx.context();
         Ok(HttpResponseOk(CounterValue { counter: self_.helper() }))
     }
 
     async fn put_counter(
-        _rqctx: RequestContext<Self>,
+        rqctx: RequestContext<Self>,
         update: TypedBody<CounterValue>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-        let self_ = _rqctx.context();
+        let self_ = rqctx.context();
         let updated_value = update.into_inner();
 
         if updated_value.counter == 10 {
@@ -100,5 +109,9 @@ impl MyServer for MyImpl {
             self_.counter.store(updated_value.counter, Ordering::SeqCst);
             Ok(HttpResponseUpdatedNoContent())
         }
+    }
+
+    fn helper(&self) -> u64 {
+        self.counter.load(Ordering::Relaxed)
     }
 }

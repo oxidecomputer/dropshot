@@ -1,86 +1,86 @@
 error: endpoint method `ref_self_method` must be static
-  --> tests/fail/bad_server_invalid_method_kinds.rs:10:9
+  --> tests/fail/bad_server_invalid_method_kinds.rs:15:9
    |
-10 |         &self,
+15 |         &self,
    |         ^^^^^
 
 error: endpoint method `mut_self_method` must be static
-  --> tests/fail/bad_server_invalid_method_kinds.rs:16:9
+  --> tests/fail/bad_server_invalid_method_kinds.rs:21:9
    |
-16 |         &mut self,
+21 |         &mut self,
    |         ^^^^^^^^^
 
 error: endpoint method `self_method` must be static
-  --> tests/fail/bad_server_invalid_method_kinds.rs:22:9
+  --> tests/fail/bad_server_invalid_method_kinds.rs:27:9
    |
-22 |         self,
+27 |         self,
    |         ^^^^
 
 error: endpoint method `self_box_self_method` must be static
-  --> tests/fail/bad_server_invalid_method_kinds.rs:28:9
+  --> tests/fail/bad_server_invalid_method_kinds.rs:33:9
    |
-28 |         self: Box<Self>,
+33 |         self: Box<Self>,
    |         ^^^^^^^^^^^^^^^
 
 error: endpoint method `self_arc_self_method` must be static
-  --> tests/fail/bad_server_invalid_method_kinds.rs:34:9
+  --> tests/fail/bad_server_invalid_method_kinds.rs:39:9
    |
-34 |         self: Arc<Self>,
+39 |         self: Arc<Self>,
    |         ^^^^^^^^^^^^^^^
 
 error: endpoint method `non_async_method` must be async
-  --> tests/fail/bad_server_invalid_method_kinds.rs:39:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:44:5
    |
-39 |     fn non_async_method(
+44 |     fn non_async_method(
    |     ^^
 
 error: endpoint method `non_returning_method` must return a Result
-  --> tests/fail/bad_server_invalid_method_kinds.rs:44:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:49:5
    |
-44 |     async fn non_returning_method(rqctx: RequestContext<Self>);
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+49 |     async fn non_returning_method(rqctx: RequestContext<Self::Context>);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: endpoint method `with_type_param` must take RequestContext<Self>
-  --> tests/fail/bad_server_invalid_method_kinds.rs:48:16
+error: endpoint method `with_type_param` must not have generic parameters
+  --> tests/fail/bad_server_invalid_method_kinds.rs:52:30
    |
-48 |         rqctx: RequestContext<T>,
-   |                ^^^^^^^^^^^^^^^^^
+52 |     async fn with_type_param<T: Send + Sync + JsonSchema + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: endpoint method `with_const_param` must not have generic parameters
-  --> tests/fail/bad_server_invalid_method_kinds.rs:52:31
+  --> tests/fail/bad_server_invalid_method_kinds.rs:58:31
    |
-52 |     async fn with_const_param<const N: usize>(
+58 |     async fn with_const_param<const N: usize>(
    |                               ^^^^^^^^^^^^^^
 
 error: endpoint method `with_where_clause` must not have a where clause
-  --> tests/fail/bad_server_invalid_method_kinds.rs:61:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:67:5
    |
-61 | /     where
-62 | |         Self: Sized;
+67 | /     where
+68 | |         Self: Sized;
    | |___________________^
 
 error: endpoint method `with_where_clause_2` must not have a where clause
-  --> tests/fail/bad_server_invalid_method_kinds.rs:68:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:74:5
    |
-68 | /     where
-69 | |         Self: std::fmt::Debug;
+74 | /     where
+75 | |         Self: std::fmt::Debug;
    | |_____________________________^
 
 error: endpoint method `with_where_clause_3` must not have a where clause
-  --> tests/fail/bad_server_invalid_method_kinds.rs:75:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:81:5
    |
-75 | /     where
-76 | |         usize: std::fmt::Debug;
+81 | /     where
+82 | |         usize: std::fmt::Debug;
    | |______________________________^
 
 error: endpoint method `many_things_wrong` must be async
-  --> tests/fail/bad_server_invalid_method_kinds.rs:81:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:87:5
    |
-81 |     fn many_things_wrong(rqctx: RequestContext<Self>);
+87 |     fn many_things_wrong(rqctx: RequestContext<Self::Context>);
    |     ^^
 
 error: endpoint method `many_things_wrong` must return a Result
-  --> tests/fail/bad_server_invalid_method_kinds.rs:81:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:87:5
    |
-81 |     fn many_things_wrong(rqctx: RequestContext<Self>);
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+87 |     fn many_things_wrong(rqctx: RequestContext<Self::Context>);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

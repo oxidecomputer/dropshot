@@ -1,15 +1,15 @@
 error[E0277]: the trait bound `HttpResponseOk<()>: _::{closure#0}::ResultTrait` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:10:10
+  --> tests/fail/bad_server_invalid_types.rs:12:10
    |
-10 |     ) -> HttpResponseOk<()>;
+12 |     ) -> HttpResponseOk<()>;
    |          ^^^^^^^^^^^^^^ the trait `_::{closure#0}::ResultTrait` is not implemented for `HttpResponseOk<()>`
    |
    = help: the trait `_::{closure#0}::ResultTrait` is implemented for `Result<TT, EE>`
 
 error[E0277]: the trait bound `(): HttpCodedResponse` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:20:10
+  --> tests/fail/bad_server_invalid_types.rs:22:10
    |
-20 |     ) -> Result<(), HttpError>;
+22 |     ) -> Result<(), HttpError>;
    |          ^^^^^^ the trait `HttpCodedResponse` is not implemented for `()`
    |
    = help: the following other types implement trait `HttpCodedResponse`:
@@ -23,18 +23,18 @@ error[E0277]: the trait bound `(): HttpCodedResponse` is not satisfied
              dropshot::handler::HttpResponseTemporaryRedirectStatus
    = note: required for `()` to implement `HttpResponse`
 note: required for `Result<(), HttpError>` to implement `_::{closure#0}::ResultTrait`
-  --> tests/fail/bad_server_invalid_types.rs:20:10
+  --> tests/fail/bad_server_invalid_types.rs:22:10
    |
 5  | #[dropshot_server]
    | ------------------ unsatisfied trait bound introduced here
 ...
-20 |     ) -> Result<(), HttpError>;
+22 |     ) -> Result<(), HttpError>;
    |          ^^^^^^
 
 error[E0277]: the trait bound `(): HttpCodedResponse` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:25:10
+  --> tests/fail/bad_server_invalid_types.rs:27:10
    |
-25 |     ) -> Result<(), ()>;
+27 |     ) -> Result<(), ()>;
    |          ^^^^^^ the trait `HttpCodedResponse` is not implemented for `()`
    |
    = help: the following other types implement trait `HttpCodedResponse`:
@@ -48,48 +48,48 @@ error[E0277]: the trait bound `(): HttpCodedResponse` is not satisfied
              dropshot::handler::HttpResponseTemporaryRedirectStatus
    = note: required for `()` to implement `HttpResponse`
 note: required for `Result<(), ()>` to implement `_::{closure#0}::ResultTrait`
-  --> tests/fail/bad_server_invalid_types.rs:25:10
+  --> tests/fail/bad_server_invalid_types.rs:27:10
    |
 5  | #[dropshot_server]
    | ------------------ unsatisfied trait bound introduced here
 ...
-25 |     ) -> Result<(), ()>;
+27 |     ) -> Result<(), ()>;
    |          ^^^^^^
 
 error[E0277]: the trait bound `HttpResponseOk<()>: _::{closure#0}::ResultTrait` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:10:10
+  --> tests/fail/bad_server_invalid_types.rs:12:10
    |
-10 |     ) -> HttpResponseOk<()>;
+12 |     ) -> HttpResponseOk<()>;
    |          ^^^^^^^^^^^^^^^^^^ the trait `_::{closure#0}::ResultTrait` is not implemented for `HttpResponseOk<()>`
    |
    = help: the trait `_::{closure#0}::ResultTrait` is implemented for `Result<TT, EE>`
 
 error[E0271]: type mismatch resolving `<() as TypeEq>::This == HttpError`
-  --> tests/fail/bad_server_invalid_types.rs:15:10
+  --> tests/fail/bad_server_invalid_types.rs:17:10
    |
-15 |     ) -> Result<HttpResponseOk<()>, ()>;
+17 |     ) -> Result<HttpResponseOk<()>, ()>;
    |          ^^^^^^
    |          |
    |          expected this to be `HttpError`
    |          type mismatch resolving `<() as TypeEq>::This == HttpError`
    |
 note: required by a bound in `_::{closure#0}::validate_result_error_type`
-  --> tests/fail/bad_server_invalid_types.rs:15:10
+  --> tests/fail/bad_server_invalid_types.rs:17:10
    |
-15 |     ) -> Result<HttpResponseOk<()>, ()>;
+17 |     ) -> Result<HttpResponseOk<()>, ()>;
    |          ^^^^^^ required by this bound in `validate_result_error_type`
 
 error[E0271]: type mismatch resolving `<() as TypeEq>::This == HttpError`
-  --> tests/fail/bad_server_invalid_types.rs:25:10
+  --> tests/fail/bad_server_invalid_types.rs:27:10
    |
-25 |     ) -> Result<(), ()>;
+27 |     ) -> Result<(), ()>;
    |          ^^^^^^
    |          |
    |          expected this to be `HttpError`
    |          type mismatch resolving `<() as TypeEq>::This == HttpError`
    |
 note: required by a bound in `_::{closure#0}::validate_result_error_type`
-  --> tests/fail/bad_server_invalid_types.rs:25:10
+  --> tests/fail/bad_server_invalid_types.rs:27:10
    |
-25 |     ) -> Result<(), ()>;
+27 |     ) -> Result<(), ()>;
    |          ^^^^^^ required by this bound in `validate_result_error_type`
