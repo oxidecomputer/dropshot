@@ -142,7 +142,7 @@ impl<'a> Server<'a> {
 
                     // We're looking for the context type. Look for a type with
                     // the right name.
-                    if t.ident.to_string() == context_ty {
+                    if t.ident == context_ty {
                         // This is the context type.
                         context_item = Some(t);
                     } else {
@@ -906,8 +906,8 @@ impl<'a> RqctxTy<'a> {
         if p2.path.segments.len() != 2 {
             return None;
         }
-        if p2.path.segments[0].ident.to_string() != "Self"
-            || p2.path.segments[1].ident.to_string() != context_ty
+        if p2.path.segments[0].ident != "Self"
+            || p2.path.segments[1].ident != context_ty
         {
             return None;
         }
