@@ -259,7 +259,7 @@ impl<'a> Server<'a> {
         let trait_name = &self.item_trait.ident;
         let trait_name_str = trait_name.to_string();
         let vis = &self.item_trait.vis;
-        let fn_ident = format_ident!("{trait_name_str}_to_api_description");
+        let fn_ident = format_ident!("{trait_name_str}_api_description");
 
         let body = self.make_api_description_fn_body(|data| {
             // For the real impl, just forward to the method on the trait.
@@ -298,8 +298,7 @@ impl<'a> Server<'a> {
         let trait_name_str = trait_name.to_string();
         let vis = &self.item_trait.vis;
 
-        let fn_ident =
-            format_ident!("{trait_name_str}_to_stub_api_description");
+        let fn_ident = format_ident!("{trait_name_str}_stub_api_description");
 
         let body = self.make_api_description_fn_body(|data| {
             // For the stub impl, call `ApiEndpoint::new_stub`. Pass in the

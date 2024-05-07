@@ -27,11 +27,11 @@ async fn main() -> Result<(), String> {
     // XXX: The `dropshot_server` attribute macro conjures up this
     // to_api_description method. Consider making this better somehow. (How? Any
     // trait-based attempts run into Rust's orphan rules).
-    let my_server = MyServer_to_api_description::<MyImpl>().unwrap();
+    let my_server = CounterServer_api_description::<CounterImpl>().unwrap();
     let server = HttpServerStarter::new(
         &config_dropshot,
         my_server,
-        MyImpl::new(),
+        CounterImpl::new(),
         &log,
     )
     .map_err(|error| format!("failed to create server: {}", error))?
@@ -51,7 +51,7 @@ struct MultiplyAndAddPath {
 }
 
 #[dropshot_server]
-trait MyServer {
+trait CounterServer {
     /// By default, the name of the context type is Context. To specify a
     /// different name, use the { context = ... } attribute on
     /// `#[dropshot_server]`.
@@ -73,17 +73,17 @@ trait MyServer {
     fn helper(&self) -> u64;
 }
 
-struct MyImpl {
+struct CounterImpl {
     counter: AtomicU64,
 }
 
-impl MyImpl {
-    pub fn new() -> MyImpl {
-        MyImpl { counter: AtomicU64::new(0) }
+impl CounterImpl {
+    pub fn new() -> CounterImpl {
+        CounterImpl { counter: AtomicU64::new(0) }
     }
 }
 
-impl MyServer for MyImpl {
+impl CounterServer for CounterImpl {
     type Context = Self;
 
     async fn get_counter(

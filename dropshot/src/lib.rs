@@ -248,7 +248,7 @@
 //! fn main() {
 //!     // The type of `api` is provided for clarity -- it is generally inferred.
 //!     let mut api: ApiDescription<()> =
-//!         ProjectServer_to_api_description::<ServerImpl>().unwrap();
+//!         ProjectServer_api_description::<ServerImpl>().unwrap();
 //!
 //!     // This will automatically register the endpoint.
 //!
@@ -420,7 +420,7 @@
 //! describing the API.  See [`ApiDescription::openapi`].
 //!
 //! With trait servers, the `#[dropshot_server]` macro generates a helper
-//! function called `*_to_stub_api_description`, which returns a stub
+//! function called `*_stub_api_description`, which returns a stub
 //! `ApiDescription`. The stub description can be used to generate an OpenAPI
 //! spec for the trait server. For example:
 //!
@@ -452,7 +452,7 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
-//! let description = ProjectServer_to_stub_api_description().unwrap();
+//! let description = ProjectServer_stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! ```
