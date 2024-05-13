@@ -14,6 +14,7 @@ use quote::{quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
+use serde_tokenstream::ParseWrapper;
 use std::ops::DerefMut;
 use syn::spanned::Spanned;
 
@@ -59,6 +60,7 @@ struct EndpointMetadata {
     deprecated: bool,
     content_type: Option<String>,
     _dropshot_crate: Option<String>,
+    versions: Option<ParseWrapper<VersionRange>>,
 }
 
 #[allow(non_snake_case)]
@@ -78,6 +80,35 @@ struct ChannelMetadata {
     #[serde(default)]
     deprecated: bool,
     _dropshot_crate: Option<String>,
+    versions: Option<ParseWrapper<VersionRange>>,
+}
+
+#[derive(Debug)]
+enum VersionRange {
+    From,
+    Until,
+    FromUntil,
+}
+
+impl syn::parse::Parse for VersionRange {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::Token![..]) {
+            let _ = input.parse::<syn::Token![..]>()?;
+            let xxx = input.parse::<syn::LitStr>()?;
+            Ok(VersionRange::Until)
+        } else {
+            let xxx = input.parse::<syn::LitStr>()?;
+            let _ = input.parse::<syn::Token![..]>()?;
+            let lookahead = input.lookahead1();
+            if lookahead.peek(syn::LitStr) {
+                let yyy = input.parse::<syn::LitStr>()?;
+                Ok(VersionRange::FromUntil)
+            } else {
+                Ok(VersionRange::From)
+            }
+        }
+    }
 }
 
 const DROPSHOT: &str = "dropshot";
@@ -174,6 +205,7 @@ fn do_channel(
         unpublished,
         deprecated,
         _dropshot_crate,
+        versions,
     } = from_tokenstream(&attr)?;
     match protocol {
         ChannelProtocol::WEBSOCKETS => {
@@ -248,6 +280,7 @@ fn do_channel(
                 deprecated,
                 content_type: Some("application/json".to_string()),
                 _dropshot_crate,
+                versions,
             };
             do_endpoint_inner(metadata, attr, new_item)
         }
