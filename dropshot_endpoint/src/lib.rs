@@ -14,6 +14,7 @@ use serde_tokenstream::Error;
 mod channel;
 mod endpoint;
 mod syn_parsing;
+mod util;
 
 /// This attribute transforms a handler function into a Dropshot endpoint
 /// suitable to be used as a parameter to
