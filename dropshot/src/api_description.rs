@@ -130,8 +130,8 @@ impl<'a> ApiEndpoint<StubContext> {
     ///
     /// # Example
     ///
-    /// This is typically invoked by specifying a function pointer type as the
-    /// first type parameter. For example:
+    /// This must be invoked by specifying the request and response types as
+    /// type parameters.
     ///
     /// ```rust
     /// use dropshot::{ApiDescription, ApiEndpoint, HttpError, HttpResponseOk, Query, StubContext};
@@ -145,11 +145,11 @@ impl<'a> ApiEndpoint<StubContext> {
     ///
     /// let mut api: ApiDescription<StubContext> = ApiDescription::new();
     /// let endpoint = ApiEndpoint::new_stub::<
-    ///     // This is the function signature from which the request and
-    ///     // response types are derived. (Note the 1-tuple parameter.)
-    ///     fn ((Query<GetValueParams>,)) -> Result<HttpResponseOk<String>, HttpError>,
-    ///     _,
-    ///     _,
+    ///     // The request type is always a tuple. Note the 1-tuple syntax.
+    ///     (Query<GetValueParams>,),
+    ///     // The response type is always Result<T, HttpError> where T implements
+    ///     // HttpResponse.
+    ///     Result<HttpResponseOk<String>, HttpError>,
     /// >(
     ///     "get_value".to_string(),
     ///     http::Method::GET,
@@ -158,22 +158,21 @@ impl<'a> ApiEndpoint<StubContext> {
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
-    pub fn new_stub<StubType, FuncParams, ResponseType>(
+    pub fn new_stub<FuncParams, ResultType>(
         operation_id: String,
         method: Method,
         content_type: &'a str,
         path: &'a str,
     ) -> Self
     where
-        StubType: Fn(FuncParams) -> Result<ResponseType, HttpError> + 'static,
         FuncParams: RequestExtractor + 'static,
-        ResponseType: HttpResponse + Send + Sync + 'static,
+        ResultType: HttpResultType,
     {
         let body_content_type =
             ApiEndpointBodyContentType::from_mime_type(content_type)
                 .expect("unsupported mime type");
         let func_parameters = FuncParams::metadata(body_content_type.clone());
-        let response = ResponseType::response_metadata();
+        let response = ResultType::Response::response_metadata();
         let handler = StubRouteHandler::new_with_name(&operation_id);
         ApiEndpoint {
             operation_id,
@@ -191,6 +190,17 @@ impl<'a> ApiEndpoint<StubContext> {
             deprecated: false,
         }
     }
+}
+
+pub trait HttpResultType {
+    type Response: HttpResponse + Send + Sync + 'static;
+}
+
+impl<T> HttpResultType for Result<T, HttpError>
+where
+    T: HttpResponse + Send + Sync + 'static,
+{
+    type Response = T;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a

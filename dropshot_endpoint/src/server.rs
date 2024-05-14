@@ -302,7 +302,7 @@ impl<'a> Server<'a> {
 
         let body = self.make_api_description_fn_body(|data| {
             // For the stub impl, call `ApiEndpoint::new_stub`. Pass in the
-            // request and response types as a function pointer type parameter.
+            // request and response types as type parameters.
             let dropshot = data.dropshot;
             let name = data.name;
             let method_ident = data.method;
@@ -312,7 +312,7 @@ impl<'a> Server<'a> {
             let ret_ty = data.ret_ty;
 
             quote! {
-                #dropshot::ApiEndpoint::new_stub::<fn ((#(#arg_types,)*)) -> #ret_ty, _, _>(
+                #dropshot::ApiEndpoint::new_stub::<(#(#arg_types,)*), #ret_ty>(
                     stringify!(#name).to_string(),
                     #dropshot::Method::#method_ident,
                     #content_type,
