@@ -21,6 +21,7 @@ use crate::CONTENT_TYPE_URL_ENCODED;
 
 use http::Method;
 use http::StatusCode;
+use serde::de::Error;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -1058,9 +1059,11 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         out: &mut dyn std::io::Write,
     ) -> serde_json::Result<()> {
         serde_json::to_writer_pretty(
-            out,
+            &mut *out,
             &self.api.gen_openapi(self.info.clone()),
-        )
+        )?;
+        writeln!(out).map_err(serde_json::Error::custom)?;
+        Ok(())
     }
 }
 
