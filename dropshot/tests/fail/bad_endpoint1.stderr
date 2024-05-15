@@ -1,4 +1,4 @@
-error: Endpoint handlers must have the following signature:
+error: endpoint handlers must have the following signature:
            async fn(
                rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
@@ -13,7 +13,7 @@ error: Endpoint handlers must have the following signature:
 20 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: Endpoint requires arguments
+error: endpoint `bad_endpoint` must have at least one RequestContext argument
   --> tests/fail/bad_endpoint1.rs:20:22
    |
 20 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {

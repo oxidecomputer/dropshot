@@ -1,0 +1,20 @@
+error[E0271]: expected `{async block@$DIR/tests/fail/bad_channel12.rs:10:1: 13:3}` to be a future that resolves to `Result<(), Box<dyn Error + Send + Sync>>`, but it resolves to `Result<String, Box<dyn Error + Send + Sync>>`
+  --> tests/fail/bad_channel12.rs:10:1
+   |
+10 | / #[channel {
+11 | |     protocol = WEBSOCKETS,
+12 | |     path = "/test",
+13 | | }]
+   | |__^ expected `Result<(), Box<...>>`, found `Result<String, Box<...>>`
+   |
+   = note: expected enum `Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>`
+              found enum `Result<String, Box<dyn std::error::Error + Send + Sync>>`
+note: required by a bound in `WebsocketUpgrade::handle`
+  --> src/websocket.rs
+   |
+   |     pub fn handle<C, F>(mut self, handler: C) -> WebsocketEndpointResult
+   |            ------ required by a bound in this associated function
+...
+   |         F: Future<Output = WebsocketChannelResult> + Send + 'static,
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `WebsocketUpgrade::handle`
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)

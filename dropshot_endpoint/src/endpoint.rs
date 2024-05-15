@@ -2,19 +2,24 @@
 
 //! Support for HTTP `#[endpoint]` macros.
 
+use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
-use quote::{quote_spanned, ToTokens};
+use quote::quote_spanned;
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
 use syn::spanned::Spanned;
 
+use crate::doc::ExtractedDoc;
+use crate::error_store::ErrorSink;
+use crate::error_store::ErrorStore;
 use crate::syn_parsing::ItemFnForSignature;
-use crate::util::{extract_doc_from_attrs, get_crate};
+use crate::util::get_crate;
+use crate::util::ValidContentType;
 
-/// Endpoint usage message, produced if there were syntax errors.
-const USAGE: &str = "Endpoint handlers must have the following signature:
+/// Endpoint usage message, produced if there were parameter errors.
+const USAGE: &str = "endpoint handlers must have the following signature:
     async fn(
         rqctx: dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]
@@ -30,310 +35,94 @@ pub(crate) fn do_endpoint(
     item: proc_macro2::TokenStream,
 ) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
     let metadata = from_tokenstream(&attr)?;
-    // factored this way for now so #[channel] can use it too
-    do_endpoint_inner(metadata, attr, item)
+
+    let mut error_store = ErrorStore::new();
+    let errors = error_store.sink();
+
+    let output = do_endpoint_inner(metadata, attr, item, errors)?;
+    let mut errors = error_store.into_inner();
+
+    // If there are any errors, we also want to provide a usage message as an error.
+    if output.has_param_errors {
+        // Note that we must use `Error::new_spanned` with &ast.sig, not
+        // Error::new(ast.sig.span(), ...). That's because with Rust 1.76,
+        // obtaining ast.sig.span() only returns the initial "fn" token, not the
+        // entire function signature.
+        errors.insert(0, Error::new_spanned(&output.item_fn.sig, USAGE));
+    }
+
+    Ok((output.output, errors))
 }
 
+/// The result of calling `do_endpoint_inner`.
+pub(crate) struct EndpointOutput {
+    /// The actual output.
+    pub(crate) output: TokenStream,
+
+    /// The parsed `fn` item consisting of the signature.
+    pub(crate) item_fn: ItemFnForSignature,
+
+    /// Whether there were any parameter-related errors.
+    ///
+    /// If there were, then we provide a usage message.
+    pub(crate) has_param_errors: bool,
+}
+
+// The return value is the ItemFnForSignature and the TokenStream.
 pub(crate) fn do_endpoint_inner(
     metadata: EndpointMetadata,
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
-) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+    errors: ErrorSink<'_, Error>,
+) -> Result<EndpointOutput, Error> {
     let ast: ItemFnForSignature = syn::parse2(item.clone())?;
-    let method = metadata.method.as_str();
-    let path = metadata.path;
-    let content_type =
-        metadata.content_type.unwrap_or_else(|| "application/json".to_string());
-    if !matches!(
-        content_type.as_str(),
-        "application/json"
-            | "application/x-www-form-urlencoded"
-            | "multipart/form-data"
-    ) {
-        return Err(Error::new_spanned(
-            &attr,
-            "invalid content type for endpoint",
-        ));
-    }
-
-    let mut errors = Vec::new();
-
-    if ast.sig.constness.is_some() {
-        errors.push(Error::new_spanned(
-            &ast.sig.constness,
-            "endpoint handlers may not be const functions",
-        ));
-    }
-
-    if ast.sig.asyncness.is_none() {
-        errors.push(Error::new_spanned(
-            &ast.sig.fn_token,
-            "endpoint handler functions must be async",
-        ));
-    }
-
-    if ast.sig.unsafety.is_some() {
-        errors.push(Error::new_spanned(
-            &ast.sig.unsafety,
-            "endpoint handlers may not be unsafe",
-        ));
-    }
-
-    if ast.sig.abi.is_some() {
-        errors.push(Error::new_spanned(
-            &ast.sig.abi,
-            "endpoint handler may not use an alternate ABI",
-        ));
-    }
-
-    if !ast.sig.generics.params.is_empty() {
-        errors.push(Error::new_spanned(
-            &ast.sig.generics,
-            "generics are not permitted for endpoint handlers",
-        ));
-    }
-
-    if ast.sig.variadic.is_some() {
-        errors
-            .push(Error::new_spanned(&ast.sig.variadic, "no language C here"));
-    }
+    let dropshot = metadata.dropshot_crate();
 
     let name = &ast.sig.ident;
     let name_str = name.to_string();
-    let method_ident = format_ident!("{}", method);
+
+    // Perform validations first.
+    let metadata = metadata.validate(&name_str, &attr, &errors);
+    let params = EndpointParams::new(&ast, &errors);
+
     let visibility = &ast.vis;
 
-    let (summary_text, description_text) = extract_doc_from_attrs(&ast.attrs);
-    let comment_text = {
-        let mut buf = String::new();
-        buf.push_str("API Endpoint: ");
-        buf.push_str(&name_str);
-        if let Some(s) = &summary_text {
-            buf.push_str("\n");
-            buf.push_str(&s);
-        }
-        if let Some(s) = &description_text {
-            buf.push_str("\n");
-            buf.push_str(&s);
-        }
-        buf
-    };
+    let doc = ExtractedDoc::from_attrs(&ast.attrs);
+    let comment_text = doc.comment_text(&name_str);
+
     let description_doc_comment = quote! {
         #[doc = #comment_text]
     };
 
-    let summary = summary_text.map(|summary| {
-        quote! { .summary(#summary) }
-    });
-    let description = description_text.map(|description| {
-        quote! { .description(#description) }
-    });
+    // If the metadata is valid, output the corresponding ApiEndpoint.
+    let construct = if let Some(metadata) = metadata {
+        let path = metadata.path;
+        let content_type = metadata.content_type;
+        let method_ident = format_ident!("{}", metadata.method.as_str());
 
-    let tags = metadata
-        .tags
-        .iter()
-        .map(|tag| {
-            quote! { .tag(#tag) }
-        })
-        .collect::<Vec<_>>();
+        let summary = doc.summary.map(|summary| {
+            quote! { .summary(#summary) }
+        });
+        let description = doc.description.map(|description| {
+            quote! { .description(#description) }
+        });
 
-    let visible = metadata.unpublished.then(|| {
-        quote! { .visible(false) }
-    });
+        let tags = metadata
+            .tags
+            .iter()
+            .map(|tag| {
+                quote! { .tag(#tag) }
+            })
+            .collect::<Vec<_>>();
 
-    let deprecated = metadata.deprecated.then(|| {
-        quote! { .deprecated(true) }
-    });
+        let visible = metadata.unpublished.then(|| {
+            quote! { .visible(false) }
+        });
 
-    let dropshot = get_crate(metadata._dropshot_crate);
+        let deprecated = metadata.deprecated.then(|| {
+            quote! { .deprecated(true) }
+        });
 
-    let first_arg = match ast.sig.inputs.first() {
-        Some(syn::FnArg::Typed(syn::PatType {
-            attrs: _,
-            pat: _,
-            colon_token: _,
-            ty,
-        })) => quote! {
-                <#ty as #dropshot::RequestContextArgument>::Context
-        },
-        Some(first_arg @ syn::FnArg::Receiver(_)) => {
-            errors.push(Error::new(
-                first_arg.span(),
-                "Expected a non-receiver argument",
-            ));
-            quote! { () }
-        }
-        None => {
-            errors.push(Error::new(
-                ast.sig.paren_token.span.join(),
-                "Endpoint requires arguments",
-            ));
-            quote! { () }
-        }
-    };
-
-    // When the user attaches this proc macro to a function with the wrong type
-    // signature, the resulting errors can be deeply inscrutable. To attempt to
-    // make failures easier to understand, we inject code that asserts the types
-    // of the various parameters. We do this by calling dummy functions that
-    // require a type that satisfies SharedExtractor or ExclusiveExtractor.
-    let mut arg_types = Vec::new();
-    let mut arg_is_receiver = false;
-    let param_checks = ast
-        .sig
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(index, arg)| {
-            match arg {
-                syn::FnArg::Receiver(_) => {
-                    // The compiler failure here is already comprehensible.
-                    arg_is_receiver = true;
-                    quote! {}
-                }
-                syn::FnArg::Typed(pat) => {
-                    let span = pat.ty.span();
-                    let ty = pat.ty.as_ref().into_token_stream();
-                    arg_types.push(ty.clone());
-                    if index == 0 {
-                        // The first parameter must be a RequestContext<T>
-                        // and fortunately we already have a trait that we can
-                        // use to validate this type.
-                        quote_spanned! { span=>
-                            const _: fn() = || {
-                                struct NeedRequestContext(<#ty as #dropshot::RequestContextArgument>::Context);
-                            };
-                        }
-                    } else if index < ast.sig.inputs.len() - 1 {
-                        // Subsequent parameters aside from the last one must
-                        // impl SharedExtractor.
-                        quote_spanned! { span=>
-                            const _: fn() = || {
-                                fn need_shared_extractor<T>()
-                                where
-                                    T: ?Sized + #dropshot::SharedExtractor,
-                                {
-                                }
-                                need_shared_extractor::<#ty>();
-                            };
-                        }
-                    } else {
-                        // The final parameter must impl ExclusiveExtractor.
-                        // (It's okay if it's another SharedExtractor.  Those
-                        // impl ExclusiveExtractor, too.)
-                        quote_spanned! { span=>
-                            const _: fn() = || {
-                                fn need_exclusive_extractor<T>()
-                                where
-                                    T: ?Sized + #dropshot::ExclusiveExtractor,
-                                {
-                                }
-                                need_exclusive_extractor::<#ty>();
-                            };
-                        }
-                    }
-                }
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // We want to construct a function that will call the user's endpoint, so
-    // we can check the future it returns for bounds that otherwise produce
-    // inscrutable error messages (like returning a non-`Send` future). We
-    // produce a wrapper function that takes all the same argument types,
-    // which requires building up a list of argument names: we can't use the
-    // original definitions argument names since they could have multiple args
-    // named `_`, so we use "arg0", "arg1", etc.
-    let arg_names = (0..arg_types.len())
-        .map(|i| {
-            let argname = format_ident!("arg{}", i);
-            quote! { #argname }
-        })
-        .collect::<Vec<_>>();
-
-    // If we have a `self` arg, this check would introduce even more confusing
-    // error messages, so we only include it if there is no receiver.
-    let impl_checks = (!arg_is_receiver).then(||
-        quote! {
-            const _: fn() = || {
-                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
-                    future_endpoint_must_be_send(#name(#(#arg_names),*));
-                }
-            };
-        }
-    );
-
-    let ret_check = match &ast.sig.output {
-        syn::ReturnType::Default => {
-            errors.push(Error::new_spanned(
-                &ast.sig,
-                "Endpoint must return a Result",
-            ));
-            quote! {}
-        }
-        syn::ReturnType::Type(_, ret_ty) => {
-            let span = ret_ty.span();
-            quote_spanned! { span=>
-                const _: fn() = || {
-                    // Pick apart the Result type.
-                    trait ResultTrait {
-                        type T;
-                        type E;
-                    }
-
-                    // Verify that the affirmative result implements the
-                    // HttpResponse trait.
-                    impl<TT, EE> ResultTrait for Result<TT, EE>
-                    where
-                        TT: #dropshot::HttpResponse,
-                    {
-                        type T = TT;
-                        type E = EE;
-                    }
-
-                    // This is not strictly necessary as we'll try to use
-                    // #ret_ty as ResultTrait below. This does, however,
-                    // produce a cleaner error message as type definition
-                    // errors are detected prior to function type validation.
-                    struct NeedHttpResponse(
-                        <#ret_ty as ResultTrait>::T,
-                    );
-
-                    // Verify that the error result is of type HttpError.
-                    trait TypeEq {
-                        type This: ?Sized;
-                    }
-
-                    impl<T: ?Sized> TypeEq for T {
-                        type This = Self;
-                    }
-
-                    fn validate_result_error_type<T>()
-                    where
-                        T: ?Sized + TypeEq<This = #dropshot::HttpError>,
-                    {
-                    }
-
-                    validate_result_error_type::<
-                        <#ret_ty as ResultTrait>::E,
-                    >();
-                };
-            }
-        }
-    };
-
-    // For reasons that are not well understood unused constants that use the
-    // (default) call_site() Span do not trigger the dead_code lint. Because
-    // defining but not using an endpoint is likely a programming error, we
-    // want to be sure to have the compiler flag this. We force this by using
-    // the span from the name of the function to which this macro was applied.
-    let span = ast.sig.ident.span();
-    let const_struct = quote_spanned! {span=>
-        #visibility const #name: #name = #name {};
-    };
-
-    let construct = if errors.is_empty() {
         quote! {
             #dropshot::ApiEndpoint::new(
                 #name_str.to_string(),
@@ -354,12 +143,71 @@ pub(crate) fn do_endpoint_inner(
         }
     };
 
+    // If the params are valid, output the corresponding type checks.
+    let (param_checks, from_impl) = if let Some(params) = &params {
+        let param_checks = params.to_type_checks(&dropshot);
+
+        // We want to construct a function that will call the user's endpoint, so
+        // we can check the future it returns for bounds that otherwise produce
+        // inscrutable error messages (like returning a non-`Send` future). We
+        // produce a wrapper function that takes all the same argument types,
+        // which requires building up a list of argument names: we can't use the
+        // original definitions argument names since they could have multiple args
+        // named `_`, so we use "arg0", "arg1", etc.
+        let arg_names: Vec<_> = params.arg_names().collect();
+        let arg_types = params.arg_types();
+
+        let impl_checks = quote! {
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
+                    future_endpoint_must_be_send(#name(#(#arg_names),*));
+                }
+            };
+        };
+
+        let rqctx_context = params.rqctx_context(&dropshot);
+
+        let from_impl = quote! {
+            // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
+            // `#name` to be passed into `ApiDescription::register()`
+            impl From<#name>
+                for #dropshot::ApiEndpoint< #rqctx_context >
+            {
+                fn from(_: #name) -> Self {
+                    #[allow(clippy::unused_async)]
+                    #item
+
+                    // The checks on the implementation require #name to be in
+                    // scope, which is provided by #item, hence we place these
+                    // checks here instead of above with the others.
+                    #impl_checks
+
+                    #construct
+                }
+            }
+        };
+
+        (param_checks, from_impl)
+    } else {
+        (quote! {}, quote! {})
+    };
+
+    // For reasons that are not well understood unused constants that use the
+    // (default) call_site() Span do not trigger the dead_code lint. Because
+    // defining but not using an endpoint is likely a programming error, we
+    // want to be sure to have the compiler flag this. We force this by using
+    // the span from the name of the function to which this macro was applied.
+    let span = ast.sig.ident.span();
+    let const_struct = quote_spanned! {span=>
+        #visibility const #name: #name = #name {};
+    };
+
     // The final TokenStream returned will have a few components that reference
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         // ... type validation for parameter and return types
-        #(#param_checks)*
-        #ret_check
+        #param_checks
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -370,39 +218,261 @@ pub(crate) fn do_endpoint_inner(
         #description_doc_comment
         #const_struct
 
-        // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
-        // `#name` to be passed into `ApiDescription::register()`
-        impl From<#name>
-            for #dropshot::ApiEndpoint< #first_arg >
-        {
-            fn from(_: #name) -> Self {
-                #[allow(clippy::unused_async)]
-                #item
-
-                // The checks on the implementation require #name to be in
-                // scope, which is provided by #item, hence we place these
-                // checks here instead of above with the others.
-                #impl_checks
-
-                #construct
-            }
-        }
+        #from_impl
     };
 
-    // Prepend the usage message if any errors were detected.
-    if !errors.is_empty() {
-        errors.insert(0, Error::new_spanned(&ast.sig, USAGE));
+    let has_param_errors = params.is_none();
+
+    Ok(EndpointOutput { output: stream, item_fn: ast, has_param_errors })
+}
+
+/// Request and return types for an endpoint.
+struct EndpointParams<'a> {
+    rqctx_ty: &'a syn::Type,
+    shared_extractors: Vec<&'a syn::Type>,
+    // This is the last request argument -- it could also be a shared extractor,
+    // because shared extractors are also exclusive.
+    exclusive_extractor: Option<&'a syn::Type>,
+    ret_ty: &'a syn::Type,
+}
+
+impl<'a> EndpointParams<'a> {
+    /// Creates a new EndpointParams from an ItemFnForSignature.
+    ///
+    /// Validates that the AST looks reasonable and that all the types make
+    /// sense, and return None if it does not.
+    fn new(
+        ast: &'a ItemFnForSignature,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<Self> {
+        let name_str = ast.sig.ident.to_string();
+        let errors = errors.new();
+
+        // Perform AST validations.
+        if ast.sig.constness.is_some() {
+            errors.push(Error::new_spanned(
+                &ast.sig.constness,
+                format!("endpoint `{name_str}` must not be a const fn"),
+            ));
+        }
+
+        if ast.sig.asyncness.is_none() {
+            errors.push(Error::new_spanned(
+                &ast.sig.fn_token,
+                format!("endpoint `{name_str}` must be async"),
+            ));
+        }
+
+        if ast.sig.unsafety.is_some() {
+            errors.push(Error::new_spanned(
+                &ast.sig.unsafety,
+                format!("endpoint `{name_str}` must not be unsafe"),
+            ));
+        }
+
+        if ast.sig.abi.is_some() {
+            errors.push(Error::new_spanned(
+                &ast.sig.abi,
+                format!("endpoint `{name_str}` must not use an alternate ABI"),
+            ));
+        }
+
+        if !ast.sig.generics.params.is_empty() {
+            errors.push(Error::new_spanned(
+                &ast.sig.generics,
+                format!("endpoint `{name_str}` must not have generics"),
+            ));
+        }
+
+        if ast.sig.variadic.is_some() {
+            errors.push(Error::new_spanned(
+                &ast.sig.variadic,
+                format!(
+                    "endpoint `{name_str}` must not have a variadic argument"
+                ),
+            ));
+        }
+
+        let mut inputs = ast.sig.inputs.iter();
+
+        let rqctx_ty = match inputs.next() {
+            Some(syn::FnArg::Typed(syn::PatType {
+                attrs: _,
+                pat: _,
+                colon_token: _,
+                ty,
+            })) => Some(&**ty),
+            Some(first_arg @ syn::FnArg::Receiver(_)) => {
+                errors.push(Error::new_spanned(
+                    first_arg,
+                    format!(
+                        "endpoint `{name_str}` must not have a `self` argument"
+                    ),
+                ));
+                None
+            }
+            None => {
+                errors.push(Error::new(
+                    ast.sig.paren_token.span.join(),
+                    format!(
+                        "endpoint `{name_str}` must have at least one \
+                         RequestContext argument"
+                    ),
+                ));
+                None
+            }
+        };
+
+        // Subsequent parameters other than the last one must impl
+        // SharedExtractor.
+        let mut shared_extractors = Vec::new();
+        while let Some(syn::FnArg::Typed(pat)) = inputs.next() {
+            shared_extractors.push(&*pat.ty);
+        }
+
+        // Pop the last one off the iterator -- it must impl ExclusiveExtractor.
+        // (A SharedExtractor can impl ExclusiveExtractor too.)
+        let exclusive_extractor = shared_extractors.pop();
+
+        let ret_ty = match &ast.sig.output {
+            syn::ReturnType::Default => {
+                errors.push(Error::new_spanned(
+                    &ast.sig,
+                    format!("endpoint `{name_str}` must return a Result"),
+                ));
+                None
+            }
+            syn::ReturnType::Type(_, ty) => Some(&**ty),
+        };
+
+        if errors.has_errors() {
+            None
+        } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
+            Some(Self {
+                rqctx_ty,
+                shared_extractors,
+                exclusive_extractor,
+                ret_ty,
+            })
+        } else {
+            unreachable!("has_errors is false, but rqctx_ty or ret_ty is None")
+        }
     }
 
-    if path.contains(":.*}") && !metadata.unpublished {
-        errors.push(Error::new_spanned(
-            &attr,
-            "paths that contain a wildcard match must include 'unpublished = \
-             true'",
-        ));
+    /// Returns a token stream that obtains the rqctx context type.
+    fn rqctx_context(&self, dropshot: &TokenStream) -> TokenStream {
+        let rqctx_ty = self.rqctx_ty;
+        quote_spanned! { rqctx_ty.span()=>
+            <#rqctx_ty as #dropshot::RequestContextArgument>::Context
+        }
     }
 
-    Ok((stream, errors))
+    /// Returns a list of argument names.
+    fn arg_names(&self) -> impl Iterator<Item = syn::Ident> + '_ {
+        // The total number of arguments is 1 (rqctx) + the number of shared
+        // extractors + 0 or 1 exclusive extractors.
+        let arg_count = 1
+            + self.shared_extractors.len()
+            + self.exclusive_extractor.map_or(0, |_| 1);
+
+        (0..arg_count).map(|i| format_ident!("arg{}", i))
+    }
+
+    /// Returns a list of all argument types, including the request context.
+    fn arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
+        std::iter::once(self.rqctx_ty)
+            .chain(self.shared_extractors.iter().copied())
+            .chain(self.exclusive_extractor)
+    }
+
+    /// Returns semantic type checks for the endpoint.
+    ///
+    /// When the user attaches this proc macro to a function with the wrong type
+    /// signature, the resulting errors can be deeply inscrutable. To attempt to
+    /// make failures easier to understand, we inject code that asserts the
+    /// types of the various parameters. We do this by calling dummy functions
+    /// that require a type that satisfies SharedExtractor or
+    /// ExclusiveExtractor.
+    fn to_type_checks(&self, dropshot: &TokenStream) -> TokenStream {
+        let rqctx_context = self.rqctx_context(dropshot);
+        let rqctx_check = quote_spanned! { self.rqctx_ty.span()=>
+            const _: fn() = || {
+                struct NeedRequestContext(#rqctx_context);
+            };
+        };
+
+        let shared_extractor_checks = self.shared_extractors.iter().map(|ty| {
+            quote_spanned! { ty.span()=>
+                const _: fn() = || {
+                    fn need_shared_extractor<T>()
+                    where
+                        T: ?Sized + #dropshot::SharedExtractor,
+                    {
+                    }
+                    need_shared_extractor::<#ty>();
+                };
+            }
+        });
+
+        let exclusive_extractor_check = self.exclusive_extractor.map(|ty| {
+            quote_spanned! { ty.span()=>
+                const _: fn() = || {
+                    fn need_exclusive_extractor<T>()
+                    where
+                        T: ?Sized + #dropshot::ExclusiveExtractor,
+                    {
+                    }
+                    need_exclusive_extractor::<#ty>();
+                };
+            }
+        });
+
+        // XXX: We should consider, instead, slapping an impl bound on the
+        // return type.
+        let ret_ty = self.ret_ty;
+        let ret_check = quote_spanned! { ret_ty.span()=>
+            const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                where
+                    TT: #dropshot::HttpResponse,
+                {
+                    type T = TT;
+                    type E = EE;
+                }
+                struct NeedHttpResponse(
+                    <#ret_ty as ResultTrait>::T,
+                );
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_error_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = #dropshot::HttpError>,
+                {
+                }
+                validate_result_error_type::<
+                    <#ret_ty as ResultTrait>::E,
+                >();
+            };
+        };
+
+        quote! {
+            #rqctx_check
+
+            #(#shared_extractor_checks)*
+
+            #exclusive_extractor_check
+
+            #ret_check
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -443,6 +513,92 @@ pub(crate) struct EndpointMetadata {
     pub(crate) deprecated: bool,
     pub(crate) content_type: Option<String>,
     pub(crate) _dropshot_crate: Option<String>,
+}
+
+impl EndpointMetadata {
+    /// Returns the dropshot crate value as a TokenStream.
+    pub(crate) fn dropshot_crate(&self) -> TokenStream {
+        get_crate(self._dropshot_crate.as_deref())
+    }
+
+    /// Validates metadata, returning an `EndpointMetadata` if valid.
+    ///
+    /// Note: the only reason we pass in attr here is to provide a span for
+    /// error reporting. As of Rust 1.76, just passing in `attr.span()` produces
+    /// incorrect span info in error messages.
+    pub(crate) fn validate(
+        self,
+        name_str: &str,
+        attr: &proc_macro2::TokenStream,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<ValidatedEndpointMetadata> {
+        let errors = errors.new();
+
+        let EndpointMetadata {
+            method,
+            path,
+            tags,
+            unpublished,
+            deprecated,
+            content_type,
+            _dropshot_crate,
+        } = self;
+
+        if path.contains(":.*}") && !self.unpublished {
+            errors.push(Error::new_spanned(
+                attr,
+                format!(
+                    "endpoint `{name_str}` has paths that contain \
+                     a wildcard match, but is not marked 'unpublished = true'",
+                ),
+            ));
+        }
+
+        // The content type must be one of the allowed values.
+        let content_type = match content_type {
+            Some(content_type) => match content_type.parse() {
+                Ok(content_type) => Some(content_type),
+                Err(_) => {
+                    errors.push(Error::new_spanned(
+                        attr,
+                        format!(
+                            "endpoint `{name_str}` has an invalid \
+                            content type\n\
+                            note: supported content types are: {}",
+                            ValidContentType::to_supported_string()
+                        ),
+                    ));
+                    None
+                }
+            },
+            None => Some(ValidContentType::ApplicationJson),
+        };
+
+        if errors.has_errors() {
+            None
+        } else if let Some(content_type) = content_type {
+            Some(ValidatedEndpointMetadata {
+                method,
+                path,
+                tags,
+                unpublished,
+                deprecated,
+                content_type,
+            })
+        } else {
+            unreachable!("has_errors is false, but content_type is None")
+        }
+    }
+}
+
+/// A validated form of endpoint metadata.
+pub(crate) struct ValidatedEndpointMetadata {
+    method: MethodType,
+    path: String,
+    tags: Vec<String>,
+    unpublished: bool,
+    deprecated: bool,
+    content_type: ValidContentType,
 }
 
 #[cfg(test)]
