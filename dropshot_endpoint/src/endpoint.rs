@@ -546,8 +546,11 @@ impl EndpointMetadata {
         let content_type = match content_type {
             Some(content_type) => match content_type.parse() {
                 Ok(content_type) => Some(content_type),
-                Err(error) => {
-                    errors.push(Error::new_spanned(attr, error));
+                Err(_) => {
+                    errors.push(Error::new_spanned(
+                        attr,
+                        "invalid content type for endpoint",
+                    ));
                     None
                 }
             },

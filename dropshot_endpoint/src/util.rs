@@ -28,7 +28,7 @@ impl ValidContentType {
 }
 
 impl FromStr for ValidContentType {
-    type Err = &'static str;
+    type Err = InvalidContentTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -37,7 +37,7 @@ impl FromStr for ValidContentType {
                 Ok(ValidContentType::ApplicationXWwwFormUrlencoded)
             }
             MULTIPART_FORM_DATA => Ok(ValidContentType::MultipartFormData),
-            _ => Err("invalid content type for endpoint"),
+            _ => Err(InvalidContentTypeError),
         }
     }
 }
@@ -48,6 +48,9 @@ impl ToTokens for ValidContentType {
         tokens.extend(quote::quote! { #s });
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct InvalidContentTypeError;
 
 /// Given an optional string, returns the crate name as a token stream.
 pub(crate) fn get_crate(var: Option<&str>) -> proc_macro2::TokenStream {
