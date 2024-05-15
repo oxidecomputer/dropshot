@@ -114,3 +114,34 @@ async fn example_api_put_counter(
         Ok(HttpResponseUpdatedNoContent())
     }
 }
+
+const _: fn() = || {
+    trait ResultTrait {
+        type T;
+        type E;
+    }
+    impl<TT, EE> ResultTrait for Result<TT, EE>
+    where
+        TT: dropshot::HttpResponse,
+    {
+        type T = TT;
+        type E = EE;
+    }
+    struct NeedHttpResponse(
+        <Result<HttpResponseOk<CounterValue>, HttpError> as ResultTrait>::E,
+    );
+    trait TypeEq {
+        type This: ?Sized;
+    }
+    impl<T: ?Sized> TypeEq for T {
+        type This = Self;
+    }
+    fn validate_result_error_type<T>()
+    where
+        T: ?Sized + TypeEq<This = dropshot::HttpError>,
+    {
+    }
+    validate_result_error_type::<
+        <Result<HttpResponseOk<CounterValue>, HttpError> as ResultTrait>::E,
+    >();
+};

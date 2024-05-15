@@ -18,23 +18,3 @@ error: Expected a non-receiver argument
    |
 13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
    |                       ^^^^
-
-error: `self` parameter is only allowed in associated functions
-  --> tests/fail/bad_endpoint2.rs:13:23
-   |
-13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
-   |                       ^^^^ not semantically valid as function parameter
-   |
-   = note: associated functions are those in `impl` or `trait` definitions
-
-error[E0401]: can't use generic parameters from outer item
-  --> tests/fail/bad_endpoint2.rs:13:23
-   |
-9  | #[endpoint {
-   | ---------- `Self` type implicitly declared here, by this `impl`
-...
-13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
-   |                       ^^^^
-   |                       |
-   |                       use of generic parameter from outer item
-   |                       refer to the type directly here instead
