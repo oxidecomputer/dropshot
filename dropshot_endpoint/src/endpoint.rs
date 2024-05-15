@@ -156,8 +156,6 @@ pub(crate) fn do_endpoint_inner(
         let arg_names: Vec<_> = params.arg_names().collect();
         let arg_types = params.arg_types();
 
-        // If we have a `self` arg, this check would introduce even more confusing
-        // error messages, so we only include it if there is no receiver.
         let impl_checks = quote! {
             const _: fn() = || {
                 fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
