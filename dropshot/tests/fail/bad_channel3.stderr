@@ -1,0 +1,23 @@
+error[E0631]: type mismatch in closure arguments
+  --> tests/fail/bad_channel3.rs:10:1
+   |
+10 | / #[channel {
+11 | |     protocol = WEBSOCKETS,
+12 | |     path = "/test",
+13 | | }]
+   | |  ^
+   | |  |
+   | |__expected due to this
+   |    found signature defined here
+   |
+   = note: expected closure signature `fn(WebsocketConnection) -> _`
+              found closure signature `fn(String) -> _`
+note: required by a bound in `WebsocketUpgrade::handle`
+  --> src/websocket.rs
+   |
+   |     pub fn handle<C, F>(mut self, handler: C) -> WebsocketEndpointResult
+   |            ------ required by a bound in this associated function
+   |     where
+   |         C: FnOnce(WebsocketConnection) -> F + Send + 'static,
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `WebsocketUpgrade::handle`
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
