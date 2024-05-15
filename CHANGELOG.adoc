@@ -15,6 +15,18 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.0\...HEAD[Full list of commits]
 
+=== Breaking Changes
+
+*None*
+
+=== Other notable changes
+
+* https://github.com/oxidecomputer/dropshot/pull/965[#965] Improved handling of disconnected clients.
+* https://github.com/oxidecomputer/dropshot/pull/994[#994] Preserve schema extensions in the OpenAPI output.
+* https://github.com/oxidecomputer/dropshot/pull/1003[#1003] Work around schemars 0.8.19 behavior change.
+* https://github.com/oxidecomputer/dropshot/pull/1005[#1005] Update edition to 2021.
+* https://github.com/oxidecomputer/dropshot/pull/988[#988] Add a spurious, trailing newline to OpenAPI output.
+
 == 0.10.0 (released 2024-02-06)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.9.0\...v0.10.0[Full list of commits]
@@ -26,7 +38,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.9.0\...v0.10.0[Full list of
 * https://github.com/oxidecomputer/dropshot/pull/701[#701] changes how Dropshot manages the tasks that are used to handle requests.  There are two modes, now configurable server-wide using `HandlerTaskMode`.  Prior to this change, the behavior matched what's now called `HandlerTaskMode::CancelOnDisconnect`: the Future associated with a request handler could be cancelled if, for example, the client disconnected early.  After this change, the default behavior is what's now called `HandlerTaskMode::Detached`, which causes Dropshot to use `tokio::spawn` to run the request handler.  That task will never be cancelled.  This is useful for consumers whose request handlers may not be cancellation-safe.
 * https://github.com/oxidecomputer/dropshot/pull/849[#849] updates rustls to 0.22 which is a breaking change due to the dependency on `rustls::ServerConfig`. If your server supplies a `ServerConfig` you will need to apply the appropriate changes.
 
-=== Other notable Changes
+=== Other notable changes
 
 * https://github.com/oxidecomputer/dropshot/pull/660[#660] The `x-dropshot-pagination` extension used to be simply the value `true`. Now it is an object with a field, `required`, that is an array of parameters that are mandatory on the first invocation.
 
@@ -74,7 +86,7 @@ b. If that code is accessing other parts of the request (e.g., reading the body 
 
 We realize this was a lot of breaking changes.  We expect that most of these will affect few people (there don't seem to be a lot of custom extractor impls out there).  The rest are pretty mechanical.  We hope the result will be a safer, easier to use API.
 
-=== Other notable Changes
+=== Other notable changes
 
 * https://github.com/oxidecomputer/dropshot/pull/522[#522] Dropshot's DTrace
  probes can now be used with a stable compiler on all platforms. This requires
