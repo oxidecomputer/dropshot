@@ -3,8 +3,6 @@
 #![allow(unused_imports)]
 
 use dropshot::channel;
-use dropshot::HttpError;
-use dropshot::HttpResponseOk;
 use dropshot::WebsocketConnection;
 
 #[channel {

@@ -1,10 +1,10 @@
 error[E0277]: the trait bound `WebsocketUpgrade: RequestContextArgument` is not satisfied
-  --> tests/fail/bad_channel1.rs:10:1
+  --> tests/fail/bad_channel1b.rs:8:1
    |
-10 | / #[channel {
-11 | |     protocol = WEBSOCKETS,
-12 | |     path = "/test",
-13 | | }]
+8  | / #[channel {
+9  | |     protocol = WEBSOCKETS,
+10 | |     path = "/test",
+11 | | }]
    | |__^ the trait `RequestContextArgument` is not implemented for `WebsocketUpgrade`
    |
    = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
