@@ -23,4 +23,4 @@ For channels:
 
 - Some of these tests may be moot. In this case, we check in text files with the rationale for skipping. For example, `bad_channel7.txt`.
 
-In either case, we do not renumber tests--instead, we skip that number so the fixtures afterwards stay consistent, 
+In either case, we do not renumber tests--instead, we skip that number so the fixtures afterwards stay consistent.

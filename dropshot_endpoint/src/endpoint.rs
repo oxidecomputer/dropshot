@@ -1260,7 +1260,7 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("endpoint handler functions must be async".to_string())
+            Some("endpoint `handler_xyz` must be async".to_string())
         );
     }
 
@@ -1280,7 +1280,10 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("Expected a non-receiver argument".to_string())
+            Some(
+                "endpoint `handler_xyz` must not have a `self` argument"
+                    .to_string()
+            )
         );
     }
 
@@ -1300,7 +1303,7 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("Endpoint requires arguments".to_string())
+            Some("endpoint `handler_xyz` must have at least one RequestContext argument".to_string())
         );
     }
 
