@@ -12,7 +12,9 @@ use quote::quote;
 use serde_tokenstream::Error;
 
 mod channel;
+mod doc;
 mod endpoint;
+mod error_store;
 mod syn_parsing;
 mod util;
 
