@@ -1,0 +1,11 @@
+error[E0277]: the trait bound `WebsocketUpgrade: RequestContextArgument` is not satisfied
+  --> tests/fail/bad_channel1b.rs:8:1
+   |
+8  | / #[channel {
+9  | |     protocol = WEBSOCKETS,
+10 | |     path = "/test",
+11 | | }]
+   | |__^ the trait `RequestContextArgument` is not implemented for `WebsocketUpgrade`
+   |
+   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
