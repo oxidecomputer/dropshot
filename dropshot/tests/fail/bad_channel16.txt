@@ -1,0 +1,2 @@
+bad_endpoint16.rs tests a Content-Type that isn't allowed -- the #[channel]
+macro doesn't support custom content types so this test is moot.
