@@ -1,6 +1,0 @@
-error: paths that contain a wildcard match must include 'unpublished = true'
-  --> tests/fail/bad_channel14.rs:18:5
-   |
-18 | /     protocol = WEBSOCKETS,
-19 | |     path = "/assets/{stuff:.*}",
-   | |________________________________^
