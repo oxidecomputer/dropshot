@@ -45,10 +45,10 @@ pub(crate) fn do_endpoint(
 
     // If there are any errors, we also want to provide a usage message as an error.
     if output.has_param_errors {
-        // Note that we must use `Error::new_spanned` with &ast.sig, not
-        // Error::new(ast.sig.span(), ...). That's because with Rust 1.76,
-        // obtaining ast.sig.span() only returns the initial "fn" token, not the
-        // entire function signature.
+        // Note that we must use `Error::new_spanned` with the function
+        // signature, not Error::new(sig.span(), ...). That's because with Rust
+        // 1.76, obtaining sig.span() only returns the initial "fn" token, not
+        // the entire function signature.
         errors.insert(0, Error::new_spanned(&output.item_fn.sig, USAGE));
     }
 
@@ -103,10 +103,11 @@ pub(crate) fn do_endpoint_inner(
         }
     };
 
-    // If the params are valid, output the corresponding type checks.
-    let (has_param_errors, param_checks, from_impl) =
+    // If the params are valid, output the corresponding type checks and impl
+    // statement.
+    let (has_param_errors, type_checks, from_impl) =
         if let Some(params) = &params {
-            let param_checks = params.to_type_checks(&dropshot);
+            let type_checks = params.to_type_checks(&dropshot);
             let impl_checks = params.to_impl_checks(name);
 
             let rqctx_context = params.rqctx_context(&dropshot);
@@ -129,7 +130,7 @@ pub(crate) fn do_endpoint_inner(
                 }
             };
 
-            (false, param_checks, from_impl)
+            (false, type_checks, from_impl)
         } else {
             (true, quote! {}, quote! {})
         };
@@ -148,7 +149,7 @@ pub(crate) fn do_endpoint_inner(
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         // ... type validation for parameter and return types
-        #param_checks
+        #type_checks
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -276,17 +277,17 @@ impl<'ast> EndpointParams<'ast> {
             syn::ReturnType::Type(_, ty) => Some(&**ty),
         };
 
-        if errors.has_errors() {
-            None
-        } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
+        if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
             Some(Self {
                 rqctx_ty,
                 shared_extractors,
                 exclusive_extractor,
                 ret_ty,
             })
+        } else if errors.has_errors() {
+            None
         } else {
-            unreachable!("has_errors is false, but rqctx_ty or ret_ty is None")
+            unreachable!("no param errors, but rqctx_ty or ret_ty is None");
         }
     }
 
@@ -484,7 +485,7 @@ impl EndpointMetadata {
     /// incorrect span info in error messages.
     pub(crate) fn validate(
         self,
-        attr: &proc_macro2::TokenStream,
+        attr: &dyn ToTokens,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<ValidatedEndpointMetadata> {
         let errors = errors.new();
@@ -522,9 +523,7 @@ impl EndpointMetadata {
             None => Some(ValidContentType::ApplicationJson),
         };
 
-        if errors.has_errors() {
-            None
-        } else if let Some(content_type) = content_type {
+        if let Some(content_type) = content_type {
             Some(ValidatedEndpointMetadata {
                 method,
                 path,
@@ -533,8 +532,10 @@ impl EndpointMetadata {
                 deprecated,
                 content_type,
             })
+        } else if errors.has_errors() {
+            None
         } else {
-            unreachable!("has_errors is false, but content_type is None")
+            unreachable!("no validation errors, but content_type is None")
         }
     }
 }
