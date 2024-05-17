@@ -235,13 +235,13 @@ struct EndpointParams<'ast> {
     ret_ty: &'ast syn::Type,
 }
 
-impl<'a> EndpointParams<'a> {
+impl<'ast> EndpointParams<'ast> {
     /// Creates a new EndpointParams from an ItemFnForSignature.
     ///
     /// Validates that the AST looks reasonable and that all the types make
     /// sense, and return None if it does not.
     fn new(
-        sig: &'a syn::Signature,
+        sig: &'ast syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
         let errors = errors.new();
