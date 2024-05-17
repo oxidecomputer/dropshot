@@ -326,7 +326,7 @@ impl<'a> EndpointParams<'a> {
         let ret_ty = match &sig.output {
             syn::ReturnType::Default => {
                 errors.push(Error::new_spanned(
-                    &sig,
+                    sig,
                     "Endpoint must return a Result",
                 ));
                 None
