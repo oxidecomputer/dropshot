@@ -409,7 +409,7 @@ impl<'ast> EndpointParams<'ast> {
     ///
     /// These checks are placed in the same scope as the definition of the
     /// endpoint.
-    pub fn to_impl_checks(&self, name: &syn::Ident) -> TokenStream {
+    fn to_impl_checks(&self, name: &syn::Ident) -> TokenStream {
         // We want to construct a function that will call the user's endpoint,
         // so we can check the future it returns for bounds that otherwise
         // produce inscrutable error messages (like returning a non-`Send`
