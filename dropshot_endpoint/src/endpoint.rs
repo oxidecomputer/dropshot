@@ -6,6 +6,7 @@ use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
+use quote::ToTokens;
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
@@ -44,10 +45,10 @@ pub(crate) fn do_endpoint(
 
     // If there are any errors, we also want to provide a usage message as an error.
     if output.has_param_errors {
-        // Note that we must use `Error::new_spanned` with &ast.sig, not
-        // Error::new(ast.sig.span(), ...). That's because with Rust 1.76,
-        // obtaining ast.sig.span() only returns the initial "fn" token, not the
-        // entire function signature.
+        // Note that we must use `Error::new_spanned` with the function
+        // signature, not Error::new(sig.span(), ...). That's because with Rust
+        // 1.76, obtaining sig.span() only returns the initial "fn" token, not
+        // the entire function signature.
         errors.insert(0, Error::new_spanned(&output.item_fn.sig, USAGE));
     }
 
@@ -96,102 +97,44 @@ pub(crate) fn do_endpoint_inner(
 
     // If the metadata is valid, output the corresponding ApiEndpoint.
     let construct = if let Some(metadata) = metadata {
-        let path = metadata.path;
-        let content_type = metadata.content_type;
-        let method_ident = format_ident!("{}", metadata.method.as_str());
-
-        let summary = doc.summary.map(|summary| {
-            quote! { .summary(#summary) }
-        });
-        let description = doc.description.map(|description| {
-            quote! { .description(#description) }
-        });
-
-        let tags = metadata
-            .tags
-            .iter()
-            .map(|tag| {
-                quote! { .tag(#tag) }
-            })
-            .collect::<Vec<_>>();
-
-        let visible = metadata.unpublished.then(|| {
-            quote! { .visible(false) }
-        });
-
-        let deprecated = metadata.deprecated.then(|| {
-            quote! { .deprecated(true) }
-        });
-
-        quote! {
-            #dropshot::ApiEndpoint::new(
-                #name_str.to_string(),
-                #name,
-                #dropshot::Method::#method_ident,
-                #content_type,
-                #path,
-            )
-            #summary
-            #description
-            #(#tags)*
-            #visible
-            #deprecated
-        }
+        metadata.to_api_endpoint_fn(&dropshot, &name_str, name, &doc)
     } else {
         quote! {
             unreachable!()
         }
     };
 
-    // If the params are valid, output the corresponding type checks.
-    let (param_checks, from_impl) = if let Some(params) = &params {
-        let param_checks = params.to_type_checks(&dropshot);
+    // If the params are valid, output the corresponding type checks and impl
+    // statement.
+    let (has_param_errors, type_checks, from_impl) =
+        if let Some(params) = &params {
+            let type_checks = params.to_type_checks(&dropshot);
+            let impl_checks = params.to_impl_checks(name);
 
-        // We want to construct a function that will call the user's endpoint, so
-        // we can check the future it returns for bounds that otherwise produce
-        // inscrutable error messages (like returning a non-`Send` future). We
-        // produce a wrapper function that takes all the same argument types,
-        // which requires building up a list of argument names: we can't use the
-        // original definitions argument names since they could have multiple args
-        // named `_`, so we use "arg0", "arg1", etc.
-        let arg_names: Vec<_> = params.arg_names().collect();
-        let arg_types = params.arg_types();
+            let rqctx_context = params.rqctx_context(&dropshot);
 
-        let impl_checks = quote! {
-            const _: fn() = || {
-                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
-                    future_endpoint_must_be_send(#name(#(#arg_names),*));
+            let from_impl = quote! {
+                impl From<#name>
+                    for #dropshot::ApiEndpoint< #rqctx_context >
+                {
+                    fn from(_: #name) -> Self {
+                        #[allow(clippy::unused_async)]
+                        #item
+
+                        // The checks on the implementation require #name to be in
+                        // scope, which is provided by #item, hence we place these
+                        // checks here instead of above with the others.
+                        #impl_checks
+
+                        #construct
+                    }
                 }
             };
+
+            (false, type_checks, from_impl)
+        } else {
+            (true, quote! {}, quote! {})
         };
-
-        let rqctx_context = params.rqctx_context(&dropshot);
-
-        let from_impl = quote! {
-            // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
-            // `#name` to be passed into `ApiDescription::register()`
-            impl From<#name>
-                for #dropshot::ApiEndpoint< #rqctx_context >
-            {
-                fn from(_: #name) -> Self {
-                    #[allow(clippy::unused_async)]
-                    #item
-
-                    // The checks on the implementation require #name to be in
-                    // scope, which is provided by #item, hence we place these
-                    // checks here instead of above with the others.
-                    #impl_checks
-
-                    #construct
-                }
-            }
-        };
-
-        (param_checks, from_impl)
-    } else {
-        (quote! {}, quote! {})
-    };
 
     // For reasons that are not well understood unused constants that use the
     // (default) call_site() Span do not trigger the dead_code lint. Because
@@ -207,7 +150,7 @@ pub(crate) fn do_endpoint_inner(
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         // ... type validation for parameter and return types
-        #param_checks
+        #type_checks
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -218,10 +161,10 @@ pub(crate) fn do_endpoint_inner(
         #description_doc_comment
         #const_struct
 
+        // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
+        // `#name` to be passed into `ApiDescription::register()`
         #from_impl
     };
-
-    let has_param_errors = params.is_none();
 
     Ok(EndpointOutput { output: stream, item_fn: ast, has_param_errors })
 }
@@ -236,13 +179,13 @@ struct EndpointParams<'ast> {
     ret_ty: &'ast syn::Type,
 }
 
-impl<'a> EndpointParams<'a> {
+impl<'ast> EndpointParams<'ast> {
     /// Creates a new EndpointParams from an ItemFnForSignature.
     ///
     /// Validates that the AST looks reasonable and that all the types make
     /// sense, and return None if it does not.
     fn new(
-        sig: &'a syn::Signature,
+        sig: &'ast syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
         let name_str = sig.ident.to_string();
@@ -287,7 +230,9 @@ impl<'a> EndpointParams<'a> {
         if sig.variadic.is_some() {
             errors.push(Error::new_spanned(
                 &sig.variadic,
-                "endpoint `{name_str}` must not have a variadic argument",
+                format!(
+                    "endpoint `{name_str}` must not have a variadic argument",
+                ),
             ));
         }
 
@@ -343,6 +288,9 @@ impl<'a> EndpointParams<'a> {
             syn::ReturnType::Type(_, ty) => Some(&**ty),
         };
 
+        // errors.has_errors() must be checked first, because it's possible for
+        // rqctx_ty and ret_ty to both be Some, but one of the extractors to
+        // have errored out.
         if errors.has_errors() {
             None
         } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
@@ -353,7 +301,7 @@ impl<'a> EndpointParams<'a> {
                 ret_ty,
             })
         } else {
-            unreachable!("has_errors is false, but rqctx_ty or ret_ty is None")
+            unreachable!("no param errors, but rqctx_ty or ret_ty is None");
         }
     }
 
@@ -365,7 +313,7 @@ impl<'a> EndpointParams<'a> {
         }
     }
 
-    /// Returns a list of argument names.
+    /// Returns a list of generated argument names.
     fn arg_names(&self) -> impl Iterator<Item = syn::Ident> + '_ {
         // The total number of arguments is 1 (rqctx) + the number of shared
         // extractors + 0 or 1 exclusive extractors.
@@ -471,6 +419,31 @@ impl<'a> EndpointParams<'a> {
             #ret_check
         }
     }
+
+    /// Constructs implementation checks for the endpoint.
+    ///
+    /// These checks are placed in the same scope as the definition of the
+    /// endpoint.
+    fn to_impl_checks(&self, name: &syn::Ident) -> TokenStream {
+        // We want to construct a function that will call the user's endpoint,
+        // so we can check the future it returns for bounds that otherwise
+        // produce inscrutable error messages (like returning a non-`Send`
+        // future). We produce a wrapper function that takes all the same
+        // argument types, which requires building up a list of argument names:
+        // we can't use the original definition's argument names since they
+        // could have multiple args named `_`, so we use "arg0", "arg1", etc.
+        let arg_names: Vec<_> = self.arg_names().collect();
+        let arg_types = self.arg_types();
+
+        quote! {
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
+                    future_endpoint_must_be_send(#name(#(#arg_names),*));
+                }
+            };
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -527,7 +500,7 @@ impl EndpointMetadata {
     pub(crate) fn validate(
         self,
         name_str: &str,
-        attr: &proc_macro2::TokenStream,
+        attr: &dyn ToTokens,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<ValidatedEndpointMetadata> {
         let errors = errors.new();
@@ -572,6 +545,8 @@ impl EndpointMetadata {
             None => Some(ValidContentType::ApplicationJson),
         };
 
+        // errors.has_errors() must be checked first, because it's possible for
+        // content_type to be Some, but other errors to have occurred.
         if errors.has_errors() {
             None
         } else if let Some(content_type) = content_type {
@@ -584,7 +559,7 @@ impl EndpointMetadata {
                 content_type,
             })
         } else {
-            unreachable!("has_errors is false, but content_type is None")
+            unreachable!("no validation errors, but content_type is None")
         }
     }
 }
@@ -597,6 +572,58 @@ pub(crate) struct ValidatedEndpointMetadata {
     unpublished: bool,
     deprecated: bool,
     content_type: ValidContentType,
+}
+
+impl ValidatedEndpointMetadata {
+    fn to_api_endpoint_fn(
+        &self,
+        dropshot: &TokenStream,
+        endpoint_name: &str,
+        endpoint_fn: &dyn ToTokens,
+        doc: &ExtractedDoc,
+    ) -> TokenStream {
+        let path = &self.path;
+        let content_type = self.content_type;
+        let method_ident = format_ident!("{}", self.method.as_str());
+
+        let summary = doc.summary.as_ref().map(|summary| {
+            quote! { .summary(#summary) }
+        });
+        let description = doc.description.as_ref().map(|description| {
+            quote! { .description(#description) }
+        });
+
+        let tags = self
+            .tags
+            .iter()
+            .map(|tag| {
+                quote! { .tag(#tag) }
+            })
+            .collect::<Vec<_>>();
+
+        let visible = self.unpublished.then(|| {
+            quote! { .visible(false) }
+        });
+
+        let deprecated = self.deprecated.then(|| {
+            quote! { .deprecated(true) }
+        });
+
+        quote! {
+            #dropshot::ApiEndpoint::new(
+                #endpoint_name.to_string(),
+                #endpoint_fn,
+                #dropshot::Method::#method_ident,
+                #content_type,
+                #path,
+            )
+            #summary
+            #description
+            #(#tags)*
+            #visible
+            #deprecated
+        }
+    }
 }
 
 #[cfg(test)]
