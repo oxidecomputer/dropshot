@@ -83,7 +83,7 @@ pub(crate) fn do_endpoint_inner(
 
     // Perform validations first.
     let metadata = metadata.validate(&name_str, &attr, &errors);
-    let params = EndpointParams::new(&ast, &errors);
+    let params = EndpointParams::new(&ast.sig, &errors);
 
     let visibility = &ast.vis;
 
@@ -227,13 +227,13 @@ pub(crate) fn do_endpoint_inner(
 }
 
 /// Request and return types for an endpoint.
-struct EndpointParams<'a> {
-    rqctx_ty: &'a syn::Type,
-    shared_extractors: Vec<&'a syn::Type>,
+struct EndpointParams<'ast> {
+    rqctx_ty: &'ast syn::Type,
+    shared_extractors: Vec<&'ast syn::Type>,
     // This is the last request argument -- it could also be a shared extractor,
     // because shared extractors are also exclusive.
-    exclusive_extractor: Option<&'a syn::Type>,
-    ret_ty: &'a syn::Type,
+    exclusive_extractor: Option<&'ast syn::Type>,
+    ret_ty: &'ast syn::Type,
 }
 
 impl<'a> EndpointParams<'a> {
@@ -242,58 +242,56 @@ impl<'a> EndpointParams<'a> {
     /// Validates that the AST looks reasonable and that all the types make
     /// sense, and return None if it does not.
     fn new(
-        ast: &'a ItemFnForSignature,
+        sig: &'a syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
-        let name_str = ast.sig.ident.to_string();
+        let name_str = sig.ident.to_string();
         let errors = errors.new();
 
         // Perform AST validations.
-        if ast.sig.constness.is_some() {
+        if sig.constness.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.constness,
+                &sig.constness,
                 format!("endpoint `{name_str}` must not be a const fn"),
             ));
         }
 
-        if ast.sig.asyncness.is_none() {
+        if sig.asyncness.is_none() {
             errors.push(Error::new_spanned(
-                &ast.sig.fn_token,
+                &sig.fn_token,
                 format!("endpoint `{name_str}` must be async"),
             ));
         }
 
-        if ast.sig.unsafety.is_some() {
+        if sig.unsafety.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.unsafety,
+                &sig.unsafety,
                 format!("endpoint `{name_str}` must not be unsafe"),
             ));
         }
 
-        if ast.sig.abi.is_some() {
+        if sig.abi.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.abi,
+                &sig.abi,
                 format!("endpoint `{name_str}` must not use an alternate ABI"),
             ));
         }
 
-        if !ast.sig.generics.params.is_empty() {
+        if !sig.generics.params.is_empty() {
             errors.push(Error::new_spanned(
-                &ast.sig.generics,
+                &sig.generics,
                 format!("endpoint `{name_str}` must not have generics"),
             ));
         }
 
-        if ast.sig.variadic.is_some() {
+        if sig.variadic.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.variadic,
-                format!(
-                    "endpoint `{name_str}` must not have a variadic argument"
-                ),
+                &sig.variadic,
+                "endpoint `{name_str}` must not have a variadic argument",
             ));
         }
 
-        let mut inputs = ast.sig.inputs.iter();
+        let mut inputs = sig.inputs.iter();
 
         let rqctx_ty = match inputs.next() {
             Some(syn::FnArg::Typed(syn::PatType {
@@ -313,7 +311,7 @@ impl<'a> EndpointParams<'a> {
             }
             None => {
                 errors.push(Error::new(
-                    ast.sig.paren_token.span.join(),
+                    sig.paren_token.span.join(),
                     format!(
                         "endpoint `{name_str}` must have at least one \
                          RequestContext argument"
@@ -334,10 +332,10 @@ impl<'a> EndpointParams<'a> {
         // (A SharedExtractor can impl ExclusiveExtractor too.)
         let exclusive_extractor = shared_extractors.pop();
 
-        let ret_ty = match &ast.sig.output {
+        let ret_ty = match &sig.output {
             syn::ReturnType::Default => {
                 errors.push(Error::new_spanned(
-                    &ast.sig,
+                    sig,
                     format!("endpoint `{name_str}` must return a Result"),
                 ));
                 None
