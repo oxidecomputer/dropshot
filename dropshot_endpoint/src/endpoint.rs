@@ -83,7 +83,7 @@ pub(crate) fn do_endpoint_inner(
 
     // Perform validations first.
     let metadata = metadata.validate(&name_str, &attr, &errors);
-    let params = EndpointParams::new(&ast, &errors);
+    let params = EndpointParams::new(&ast.sig, &errors);
 
     let visibility = &ast.vis;
 
@@ -227,13 +227,13 @@ pub(crate) fn do_endpoint_inner(
 }
 
 /// Request and return types for an endpoint.
-struct EndpointParams<'a> {
-    rqctx_ty: &'a syn::Type,
-    shared_extractors: Vec<&'a syn::Type>,
+struct EndpointParams<'ast> {
+    rqctx_ty: &'ast syn::Type,
+    shared_extractors: Vec<&'ast syn::Type>,
     // This is the last request argument -- it could also be a shared extractor,
     // because shared extractors are also exclusive.
-    exclusive_extractor: Option<&'a syn::Type>,
-    ret_ty: &'a syn::Type,
+    exclusive_extractor: Option<&'ast syn::Type>,
+    ret_ty: &'ast syn::Type,
 }
 
 impl<'a> EndpointParams<'a> {
@@ -242,58 +242,56 @@ impl<'a> EndpointParams<'a> {
     /// Validates that the AST looks reasonable and that all the types make
     /// sense, and return None if it does not.
     fn new(
-        ast: &'a ItemFnForSignature,
+        sig: &'a syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
-        let name_str = ast.sig.ident.to_string();
+        let name_str = sig.ident.to_string();
         let errors = errors.new();
 
         // Perform AST validations.
-        if ast.sig.constness.is_some() {
+        if sig.constness.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.constness,
+                &sig.constness,
                 format!("endpoint `{name_str}` must not be a const fn"),
             ));
         }
 
-        if ast.sig.asyncness.is_none() {
+        if sig.asyncness.is_none() {
             errors.push(Error::new_spanned(
-                &ast.sig.fn_token,
+                &sig.fn_token,
                 format!("endpoint `{name_str}` must be async"),
             ));
         }
 
-        if ast.sig.unsafety.is_some() {
+        if sig.unsafety.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.unsafety,
+                &sig.unsafety,
                 format!("endpoint `{name_str}` must not be unsafe"),
             ));
         }
 
-        if ast.sig.abi.is_some() {
+        if sig.abi.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.abi,
+                &sig.abi,
                 format!("endpoint `{name_str}` must not use an alternate ABI"),
             ));
         }
 
-        if !ast.sig.generics.params.is_empty() {
+        if !sig.generics.params.is_empty() {
             errors.push(Error::new_spanned(
-                &ast.sig.generics,
+                &sig.generics,
                 format!("endpoint `{name_str}` must not have generics"),
             ));
         }
 
-        if ast.sig.variadic.is_some() {
+        if sig.variadic.is_some() {
             errors.push(Error::new_spanned(
-                &ast.sig.variadic,
-                format!(
-                    "endpoint `{name_str}` must not have a variadic argument"
-                ),
+                &sig.variadic,
+                "endpoint `{name_str}` must not have a variadic argument",
             ));
         }
 
-        let mut inputs = ast.sig.inputs.iter();
+        let mut inputs = sig.inputs.iter();
 
         let rqctx_ty = match inputs.next() {
             Some(syn::FnArg::Typed(syn::PatType {
@@ -313,7 +311,7 @@ impl<'a> EndpointParams<'a> {
             }
             None => {
                 errors.push(Error::new(
-                    ast.sig.paren_token.span.join(),
+                    sig.paren_token.span.join(),
                     format!(
                         "endpoint `{name_str}` must have at least one \
                          RequestContext argument"
@@ -334,10 +332,10 @@ impl<'a> EndpointParams<'a> {
         // (A SharedExtractor can impl ExclusiveExtractor too.)
         let exclusive_extractor = shared_extractors.pop();
 
-        let ret_ty = match &ast.sig.output {
+        let ret_ty = match &sig.output {
             syn::ReturnType::Default => {
                 errors.push(Error::new_spanned(
-                    &ast.sig,
+                    sig,
                     format!("endpoint `{name_str}` must return a Result"),
                 ));
                 None
@@ -603,6 +601,9 @@ pub(crate) struct ValidatedEndpointMetadata {
 
 #[cfg(test)]
 mod tests {
+    use expectorate::assert_contents;
+    use syn::parse_quote;
+
     use super::*;
 
     #[test]
@@ -621,82 +622,12 @@ mod tests {
             },
         )
         .unwrap();
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz>
-                for dropshot::ApiEndpoint<
-                    <RequestContext<()>
-                as dropshot::RequestContextArgument>::Context>
-            {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    pub async fn handler_xyz(
-                        _rqctx: RequestContext<()>,
-                    ) -> Result<HttpResponseOk<()>, HttpError> {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: RequestContext<()>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::GET,
-                        "application/json",
-                        "/a/b/c",
-                    )
-                }
-            }
-        };
 
         assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
+        assert_contents(
+            "tests/output/endpoint_basic.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
     }
 
     #[test]
@@ -714,78 +645,12 @@ mod tests {
                 }
             },
         ).unwrap();
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz> for dropshot::ApiEndpoint< <dropshot::RequestContext<()> as dropshot::RequestContextArgument>::Context> {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    pub async fn handler_xyz(_rqctx: dropshot::RequestContext<()>) ->
-                        std::Result<dropshot::HttpResponseOk<()>, dropshot::HttpError>
-                    {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: dropshot::RequestContext<()>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::GET,
-                        "application/json",
-                        "/a/b/c",
-                    )
-                }
-            }
-        };
 
         assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
+        assert_contents(
+            "tests/output/endpoint_context_fully_qualified_names.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
     }
 
     #[test]
@@ -806,93 +671,12 @@ mod tests {
             },
         )
         .unwrap();
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<RequestContext<std::i32> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                fn need_exclusive_extractor<T>()
-                where
-                    T: ?Sized + dropshot::ExclusiveExtractor,
-                {
-                }
-                need_exclusive_extractor::<Query<Q> >();
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz>
-                for dropshot::ApiEndpoint<
-                    <RequestContext<std::i32> as dropshot::RequestContextArgument>::Context
-                >
-            {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    async fn handler_xyz(
-                        _rqctx: RequestContext<std::i32>,
-                        q: Query<Q>,
-                    ) ->
-                        Result<HttpResponseOk<()>, HttpError>
-                    {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: RequestContext<std::i32>, arg1: Query<Q>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0, arg1));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::GET,
-                        "application/json",
-                        "/a/b/c",
-                    )
-                }
-            }
-        };
 
         assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
+        assert_contents(
+            "tests/output/endpoint_with_query.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
     }
 
     #[test]
@@ -913,93 +697,12 @@ mod tests {
             },
         )
         .unwrap();
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                fn need_exclusive_extractor<T>()
-                where
-                    T: ?Sized + dropshot::ExclusiveExtractor,
-                {
-                }
-                need_exclusive_extractor::<Query<Q> >();
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub(crate) struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub(crate) const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz>
-                for dropshot::ApiEndpoint<
-                    <RequestContext<()> as dropshot::RequestContextArgument>::Context
-                >
-            {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    pub(crate) async fn handler_xyz(
-                        _rqctx: RequestContext<()>,
-                        q: Query<Q>,
-                    ) ->
-                        Result<HttpResponseOk<()>, HttpError>
-                    {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: RequestContext<()>, arg1: Query<Q>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0, arg1));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::GET,
-                        "application/json",
-                        "/a/b/c",
-                    )
-                }
-            }
-        };
 
         assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
+        assert_contents(
+            "tests/output/endpoint_pub_crate.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
     }
 
     #[test]
@@ -1019,84 +722,12 @@ mod tests {
             },
         )
         .unwrap();
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz>
-                for dropshot::ApiEndpoint<
-                    <RequestContext<()>
-                as dropshot::RequestContextArgument>::Context>
-            {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    async fn handler_xyz(
-                        _rqctx: RequestContext<()>,
-                    ) -> Result<HttpResponseOk<()>, HttpError> {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: RequestContext<()>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::GET,
-                        "application/json",
-                        "/a/b/c",
-                    )
-                    .tag("stuff")
-                    .tag("things")
-                }
-            }
-        };
 
         assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
+        assert_contents(
+            "tests/output/endpoint_with_tags.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
     }
 
     #[test]
@@ -1116,84 +747,37 @@ mod tests {
             },
         )
         .unwrap();
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz\nhandle \"xyz\" requests"]
-            struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz\nhandle \"xyz\" requests"]
-            const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz>
-                for dropshot::ApiEndpoint<
-                    <RequestContext<()>
-                as dropshot::RequestContextArgument>::Context>
-            {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    #[doc = r#" handle "xyz" requests "#]
-                    async fn handler_xyz(
-                        _rqctx: RequestContext<()>,
-                    ) -> Result<HttpResponseOk<()>, HttpError> {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: RequestContext<()>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::GET,
-                        "application/json",
-                        "/a/b/c",
-                    )
-                    .summary("handle \"xyz\" requests")
-                }
-            }
-        };
 
         assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
+        assert_contents(
+            "tests/output/endpoint_with_doc.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
+    fn test_endpoint_content_type() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = POST,
+                path = "/a/b/c",
+                content_type = "application/x-www-form-urlencoded"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        )
+        .unwrap();
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_content_type.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
     }
 
     #[test]
@@ -1305,101 +889,5 @@ mod tests {
             errors.get(1).map(ToString::to_string),
             Some("endpoint `handler_xyz` must have at least one RequestContext argument".to_string())
         );
-    }
-
-    #[test]
-    fn test_endpoint_content_type() {
-        let (item, errors) = do_endpoint(
-            quote! {
-                method = POST,
-                path = "/a/b/c",
-                content_type = "application/x-www-form-urlencoded"
-            },
-            quote! {
-                pub async fn handler_xyz(
-                    _rqctx: RequestContext<()>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
-                    Ok(())
-                }
-            },
-        )
-        .unwrap();
-
-        let expected = quote! {
-            const _: fn() = || {
-                struct NeedRequestContext(<RequestContext<()> as dropshot::RequestContextArgument>::Context) ;
-            };
-            const _: fn() = || {
-                trait ResultTrait {
-                    type T;
-                    type E;
-                }
-                impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: dropshot::HttpResponse,
-                {
-                    type T = TT;
-                    type E = EE;
-                }
-                struct NeedHttpResponse(
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
-                >();
-            };
-
-            #[allow(non_camel_case_types, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub struct handler_xyz {}
-
-            #[allow(non_upper_case_globals, missing_docs)]
-            #[doc = "API Endpoint: handler_xyz"]
-            pub const handler_xyz: handler_xyz = handler_xyz {};
-
-            impl From<handler_xyz>
-                for dropshot::ApiEndpoint<
-                    <RequestContext<()>
-                as dropshot::RequestContextArgument>::Context>
-            {
-                fn from(_: handler_xyz) -> Self {
-                    #[allow(clippy::unused_async)]
-                    pub async fn handler_xyz(
-                        _rqctx: RequestContext<()>,
-                    ) -> Result<HttpResponseOk<()>, HttpError> {
-                        Ok(())
-                    }
-
-                    const _: fn() = || {
-                        fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
-                        fn check_future_bounds(arg0: RequestContext<()>) {
-                            future_endpoint_must_be_send(handler_xyz(arg0));
-                        }
-                    };
-
-                    dropshot::ApiEndpoint::new(
-                        "handler_xyz".to_string(),
-                        handler_xyz,
-                        dropshot::Method::POST,
-                        "application/x-www-form-urlencoded",
-                        "/a/b/c",
-                    )
-                }
-            }
-        };
-
-        assert!(errors.is_empty());
-        assert_eq!(expected.to_string(), item.to_string());
     }
 }
