@@ -277,15 +277,18 @@ impl<'ast> EndpointParams<'ast> {
             syn::ReturnType::Type(_, ty) => Some(&**ty),
         };
 
-        if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
+        // errors.has_errors() must be checked first, because it's possible for
+        // rqctx_ty and ret_ty to both be Some, but one of the extractors to
+        // have errored out.
+        if errors.has_errors() {
+            None
+        } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
             Some(Self {
                 rqctx_ty,
                 shared_extractors,
                 exclusive_extractor,
                 ret_ty,
             })
-        } else if errors.has_errors() {
-            None
         } else {
             unreachable!("no param errors, but rqctx_ty or ret_ty is None");
         }
@@ -523,7 +526,11 @@ impl EndpointMetadata {
             None => Some(ValidContentType::ApplicationJson),
         };
 
-        if let Some(content_type) = content_type {
+        // errors.has_errors() must be checked first, because it's possible for
+        // content_type to be Some, but other errors to have occurred.
+        if errors.has_errors() {
+            None
+        } else if let Some(content_type) = content_type {
             Some(ValidatedEndpointMetadata {
                 method,
                 path,
@@ -532,8 +539,6 @@ impl EndpointMetadata {
                 deprecated,
                 content_type,
             })
-        } else if errors.has_errors() {
-            None
         } else {
             unreachable!("no validation errors, but content_type is None")
         }
