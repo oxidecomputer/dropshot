@@ -239,13 +239,13 @@ struct EndpointParams<'ast> {
     ret_ty: &'ast syn::Type,
 }
 
-impl<'a> EndpointParams<'a> {
+impl<'ast> EndpointParams<'ast> {
     /// Creates a new EndpointParams from an ItemFnForSignature.
     ///
     /// Validates that the AST looks reasonable and that all the types make
     /// sense, and return None if it does not.
     fn new(
-        sig: &'a syn::Signature,
+        sig: &'ast syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
         let name_str = sig.ident.to_string();
@@ -506,22 +506,22 @@ impl<'a> EndpointParams<'a> {
 /// Perform syntactic validation for an argument or return type.
 ///
 /// This returns the input type for convenience.
-fn validate_param_ty<'input>(
-    ty: &'input syn::Type,
+fn validate_param_ty<'ast>(
+    ty: &'ast syn::Type,
     kind: ParamTyKind,
     name_str: &str,
     errors: &ErrorSink<'_, Error>,
-) -> &'input syn::Type {
+) -> &'ast syn::Type {
     // Types can be arbitrarily nested, so to keep these checks simple we use
     // the visitor pattern.
 
-    struct Visitor<'store, 'input> {
+    struct Visitor<'store, 'ast> {
         kind: ParamTyKind,
-        name_str: &'input str,
-        errors: &'input ErrorSink<'store, Error>,
+        name_str: &'ast str,
+        errors: &'ast ErrorSink<'store, Error>,
     }
 
-    impl<'store, 'input, 'ast> Visit<'ast> for Visitor<'store, 'input> {
+    impl<'store, 'ast> Visit<'ast> for Visitor<'store, 'ast> {
         fn visit_bound_lifetimes(&mut self, i: &'ast syn::BoundLifetimes) {
             let name_str = self.name_str;
             let kind = self.kind;
