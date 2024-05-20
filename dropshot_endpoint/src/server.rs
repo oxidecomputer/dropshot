@@ -37,7 +37,7 @@ pub(crate) fn do_server(
     let output = server.to_output();
     let errors = error_store.into_inner();
 
-    // XXX: If there are parameter errors, also provide a usage message.
+    // XXX: If there are any parameter errors, also provide a usage message.
 
     Ok((output, errors))
 }
