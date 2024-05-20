@@ -4,6 +4,12 @@
 
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
+use dropshot::RequestContext;
+use schemars::JsonSchema;
+use serde::Serialize;
+
+#[derive(JsonSchema, Serialize)]
+struct Ret {}
 
 #[dropshot::server]
 trait MyServer {
@@ -13,7 +19,7 @@ trait MyServer {
         method = GET,
         path = "/test",
     }]
-    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError>;
+    async fn bad_no_result(_: RequestContext<Self::Context>);
 }
 
 enum MyImpl {}
@@ -22,9 +28,7 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
-    }
+    async fn bad_no_result(_: RequestContext<Self::Context>) {}
 }
 
 fn main() {}

@@ -4,12 +4,16 @@
 
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
+use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::Deserialize;
 
-#[derive(JsonSchema, Serialize)]
-struct Ret {}
+#[derive(Deserialize, JsonSchema)]
+struct QueryParams {
+    x: String,
+    y: u32,
+}
 
 #[dropshot::server]
 trait MyServer {
@@ -19,10 +23,10 @@ trait MyServer {
         method = GET,
         path = "/test",
     }]
-    fn bad_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-    ) -> Result<HttpResponseOk<Ret>, HttpError> {
-        Ok(HttpResponseOk(Ret {}))
+    async fn bad_endpoint(
+        _params: Query<QueryParams>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        Ok(HttpResponseOk(()))
     }
 }
 
@@ -32,10 +36,10 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    fn bad_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-    ) -> Result<HttpResponseOk<Ret>, HttpError> {
-        Ok(HttpResponseOk(Ret {}))
+    async fn bad_endpoint(
+        _params: Query<QueryParams>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        Ok(HttpResponseOk(()))
     }
 }
 

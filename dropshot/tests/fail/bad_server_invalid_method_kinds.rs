@@ -9,14 +9,6 @@ trait MyServer {
     type Context;
 
     #[endpoint { method = GET, path = "/test" }]
-    fn non_async_method(
-        rqctx: RequestContext<Self::Context>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
-
-    #[endpoint { method = GET, path = "/test" }]
-    async fn non_returning_method(rqctx: RequestContext<Self::Context>);
-
-    #[endpoint { method = GET, path = "/test" }]
     async fn with_type_param<T: Send + Sync + JsonSchema + 'static>(
         rqctx: RequestContext<Self::Context>,
         path_params: Path<T>,

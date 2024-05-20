@@ -1,37 +1,25 @@
-error: endpoint `non_async_method` must be async
-  --> tests/fail/bad_server_invalid_method_kinds.rs:12:5
-   |
-12 |     fn non_async_method(
-   |     ^^
-
-error: endpoint `non_returning_method` must return a Result
-  --> tests/fail/bad_server_invalid_method_kinds.rs:17:5
-   |
-17 |     async fn non_returning_method(rqctx: RequestContext<Self::Context>);
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
 error: endpoint `with_type_param` must not have generics
-  --> tests/fail/bad_server_invalid_method_kinds.rs:20:29
+  --> tests/fail/bad_server_invalid_method_kinds.rs:12:29
    |
-20 |     async fn with_type_param<T: Send + Sync + JsonSchema + 'static>(
+12 |     async fn with_type_param<T: Send + Sync + JsonSchema + 'static>(
    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: endpoint `with_const_param` must not have generics
-  --> tests/fail/bad_server_invalid_method_kinds.rs:26:30
+  --> tests/fail/bad_server_invalid_method_kinds.rs:18:30
    |
-26 |     async fn with_const_param<const N: usize>(
+18 |     async fn with_const_param<const N: usize>(
    |                              ^^^^^^^^^^^^^^^^
 
 error: endpoint `many_things_wrong` must be async
-  --> tests/fail/bad_server_invalid_method_kinds.rs:55:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:47:5
    |
-55 |     fn many_things_wrong(rqctx: RequestContext<Self::Context>);
+47 |     fn many_things_wrong(rqctx: RequestContext<Self::Context>);
    |     ^^
 
 error: endpoint `many_things_wrong` must return a Result
-  --> tests/fail/bad_server_invalid_method_kinds.rs:55:5
+  --> tests/fail/bad_server_invalid_method_kinds.rs:47:5
    |
-55 |     fn many_things_wrong(rqctx: RequestContext<Self::Context>);
+47 |     fn many_things_wrong(rqctx: RequestContext<Self::Context>);
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: unused import: `std::sync::Arc`

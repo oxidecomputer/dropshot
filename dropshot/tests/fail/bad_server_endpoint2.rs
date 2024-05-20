@@ -44,7 +44,7 @@ trait MyServer {
 
 enum MyImpl {}
 
-// This should not produce errors about the endpoints being missing.
+// This should not produce errors about items being missing.
 impl MyServer for MyImpl {
     type Context = ();
 

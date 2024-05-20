@@ -1,0 +1,5 @@
+error: endpoint `bad_no_result` must return a Result
+  --> tests/fail/bad_server_endpoint11.rs:22:5
+   |
+22 |     async fn bad_no_result(_: RequestContext<Self::Context>);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
