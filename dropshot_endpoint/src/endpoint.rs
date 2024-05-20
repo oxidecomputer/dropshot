@@ -362,8 +362,6 @@ impl<'ast> EndpointParams<'ast> {
             }
         });
 
-        // XXX: We should consider, instead, slapping an impl bound on the
-        // return type.
         let ret_ty = self.ret_ty;
         let ret_check = quote_spanned! { ret_ty.span()=>
             const _: fn() = || {
