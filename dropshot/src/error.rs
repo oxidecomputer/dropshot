@@ -1,4 +1,5 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
+
 //! Generic server error handling facilities
 //!
 //! Error handling in an API
@@ -98,19 +99,56 @@ pub struct HttpError {
 /// Body of an HTTP response for an `HttpError`.  This type can be used to
 /// deserialize an HTTP response corresponding to an error in order to access the
 /// error code, message, etc.
-// TODO: does this need to be pub if it's going to be expressed in the OpenAPI
-// output?
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
-#[schemars(rename = "Error")]
-#[schemars(description = "Error information from a response.")]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct HttpErrorResponseBody {
     pub request_id: String,
-    // The combination of default and required removes "nullable" from the
-    // OpenAPI-flavored JSON Schema output.
-    #[schemars(default, required)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
     pub message: String,
+}
+
+// We hand-roll our JSON schema to avoid `error_code` being "nullable".
+impl JsonSchema for HttpErrorResponseBody {
+    fn schema_name() -> String {
+        "Error".to_string()
+    }
+
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        let str_schema = String::json_schema(gen);
+
+        schemars::schema::SchemaObject {
+            metadata: Some(
+                schemars::schema::Metadata {
+                    description: Some(
+                        "Error information from a response.".into(),
+                    ),
+                    ..Default::default()
+                }
+                .into(),
+            ),
+            instance_type: Some(schemars::schema::InstanceType::Object.into()),
+            object: Some(
+                schemars::schema::ObjectValidation {
+                    required: ["message".into(), "request_id".into()]
+                        .into_iter()
+                        .collect(),
+                    properties: [
+                        ("error_code".into(), str_schema.clone()),
+                        ("message".into(), str_schema.clone()),
+                        ("request_id".into(), str_schema.clone()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    ..Default::default()
+                }
+                .into(),
+            ),
+            ..Default::default()
+        }
+        .into()
+    }
 }
 
 impl From<HyperError> for HttpError {

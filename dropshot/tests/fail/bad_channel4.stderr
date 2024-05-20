@@ -1,0 +1,140 @@
+error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
+  --> tests/fail/bad_channel4.rs:22:14
+   |
+22 |     _params: Query<QueryParams>,
+   |              ^^^^^^^^^^^^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `schemars::JsonSchema`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                                                ^^^^^^^^^^ required by this bound in `Query`
+
+error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+  --> tests/fail/bad_channel4.rs:22:14
+   |
+22 |     _params: Query<QueryParams>,
+   |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
+
+error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
+  --> tests/fail/bad_channel4.rs:22:5
+   |
+22 |     _params: Query<QueryParams>,
+   |     ^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `schemars::JsonSchema`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                                                ^^^^^^^^^^ required by this bound in `Query`
+
+error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+  --> tests/fail/bad_channel4.rs:22:5
+   |
+22 |     _params: Query<QueryParams>,
+   |     ^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
+
+error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
+  --> tests/fail/bad_channel4.rs:16:1
+   |
+16 | / #[channel {
+17 | |     protocol = WEBSOCKETS,
+18 | |     path = "/test",
+19 | | }]
+   | |__^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `schemars::JsonSchema`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                                                ^^^^^^^^^^ required by this bound in `Query`
+
+error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+  --> tests/fail/bad_channel4.rs:16:1
+   |
+16 | / #[channel {
+17 | |     protocol = WEBSOCKETS,
+18 | |     path = "/test",
+19 | | }]
+   | |__^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |
+   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+note: required by a bound in `dropshot::Query`
+  --> src/extractor/query.rs
+   |
+   | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
+   |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`

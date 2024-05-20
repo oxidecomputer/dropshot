@@ -1,9 +1,9 @@
 [package]
 name = "dropshot"
 description = "expose REST APIs from a Rust program"
-version = "0.10.1-dev"
+version = "0.10.2-dev"
 authors = ["David Pacheco <dap@oxidecomputer.com>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/oxidecomputer/dropshot/"
 readme = "README-crates.io.md"
@@ -47,7 +47,7 @@ features = [ "serde", "std", "clock" ]
 default-features = false
 
 [dependencies.dropshot_endpoint]
-version = "^0.10.1-dev"
+version = "^0.10.2-dev"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
@@ -76,11 +76,11 @@ version = "1.8.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.17"
+version = "0.8.19"
 features = [ "uuid1" ]
 
 [dev-dependencies]
-async-channel = "2.2.1"
+async-channel = "2.3.0"
 buf-list = "1.0.3"
 expectorate = "1.1.0"
 hyper-rustls = "0.25.0"
@@ -103,7 +103,7 @@ version = "1.7.0"
 features = ["alloc"]
 
 [dev-dependencies.schemars]
-version = "0.8.17"
+version = "0.8.19"
 features = [ "chrono", "uuid1" ]
 
 [dev-dependencies.slog]

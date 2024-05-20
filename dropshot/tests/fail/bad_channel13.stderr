@@ -1,0 +1,20 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel13.rs:19:1
+   |
+19 | / async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+20 | |     _rqctx: RequestContext<S>,
+21 | |     _upgraded: WebsocketConnection,
+22 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
+
+error: endpoint `bad_channel` must not have generics
+  --> tests/fail/bad_channel13.rs:19:21
+   |
+19 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

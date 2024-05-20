@@ -6,3 +6,5 @@
 [workspace]
 members = ["dropshot", "dropshot_endpoint" ]
 default-members = ["dropshot", "dropshot_endpoint" ]
+
+resolver = "2"
