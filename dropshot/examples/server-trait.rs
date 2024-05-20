@@ -9,7 +9,6 @@ use dropshot::{
     ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext, TypedBody,
 };
-use dropshot_endpoint::dropshot_server;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -50,18 +49,20 @@ struct MultiplyAndAddPath {
     counter: u64,
 }
 
-#[dropshot_server]
+#[dropshot::server]
 trait CounterServer {
     /// By default, the name of the context type is Context. To specify a
     /// different name, use the { context = ... } attribute on
     /// `#[dropshot_server]`.
     type Context;
 
+    /// Get the value of the counter.
     #[endpoint { method = GET, path = "/counter" }]
     async fn get_counter(
         rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseOk<CounterValue>, HttpError>;
 
+    /// Set the value of the counter.
     #[endpoint { method = PUT, path = "/counter" }]
     async fn put_counter(
         rqctx: RequestContext<Self::Context>,

@@ -1,0 +1,6 @@
+error: endpoint `must_be_unpublished` has paths that contain a wildcard match, but is not marked 'unpublished = true'
+  --> tests/fail/bad_channel14.rs:18:5
+   |
+18 | /     protocol = WEBSOCKETS,
+19 | |     path = "/assets/{stuff:.*}",
+   | |________________________________^

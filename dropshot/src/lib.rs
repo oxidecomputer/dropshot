@@ -806,5 +806,5 @@ pub use http::Method;
 
 extern crate dropshot_endpoint;
 pub use dropshot_endpoint::channel;
-pub use dropshot_endpoint::dropshot_server;
 pub use dropshot_endpoint::endpoint;
+pub use dropshot_endpoint::server;

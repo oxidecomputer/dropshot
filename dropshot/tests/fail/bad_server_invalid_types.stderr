@@ -1,95 +1,209 @@
-error[E0277]: the trait bound `HttpResponseOk<()>: _::{closure#0}::ResultTrait` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:12:10
-   |
-12 |     ) -> HttpResponseOk<()>;
-   |          ^^^^^^^^^^^^^^ the trait `_::{closure#0}::ResultTrait` is not implemented for `HttpResponseOk<()>`
-   |
-   = help: the trait `_::{closure#0}::ResultTrait` is implemented for `Result<TT, EE>`
+error[E0432]: unresolved import `dropshot::dropshot_server`
+ --> tests/fail/bad_server_invalid_types.rs:3:16
+  |
+3 | use dropshot::{dropshot_server, HttpError, HttpResponseOk, RequestContext};
+  |                ^^^^^^^^^^^^^^^ no `dropshot_server` in the root
 
-error[E0277]: the trait bound `(): HttpCodedResponse` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:22:10
-   |
-22 |     ) -> Result<(), HttpError>;
-   |          ^^^^^^ the trait `HttpCodedResponse` is not implemented for `()`
-   |
-   = help: the following other types implement trait `HttpCodedResponse`:
-             HttpResponseCreated<T>
-             HttpResponseAccepted<T>
-             HttpResponseOk<T>
-             HttpResponseDeleted
-             HttpResponseUpdatedNoContent
-             dropshot::handler::HttpResponseFoundStatus
-             dropshot::handler::HttpResponseSeeOtherStatus
-             dropshot::handler::HttpResponseTemporaryRedirectStatus
-   = note: required for `()` to implement `HttpResponse`
-note: required for `Result<(), HttpError>` to implement `_::{closure#0}::ResultTrait`
-  --> tests/fail/bad_server_invalid_types.rs:22:10
-   |
-5  | #[dropshot_server]
-   | ------------------ unsatisfied trait bound introduced here
-...
-22 |     ) -> Result<(), HttpError>;
-   |          ^^^^^^
+error: cannot determine resolution for the attribute macro `dropshot_server`
+ --> tests/fail/bad_server_invalid_types.rs:5:3
+  |
+5 | #[dropshot_server]
+  |   ^^^^^^^^^^^^^^^
+  |
+  = note: import resolution is stuck, try simplifying macro imports
 
-error[E0277]: the trait bound `(): HttpCodedResponse` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:27:10
-   |
-27 |     ) -> Result<(), ()>;
-   |          ^^^^^^ the trait `HttpCodedResponse` is not implemented for `()`
-   |
-   = help: the following other types implement trait `HttpCodedResponse`:
-             HttpResponseCreated<T>
-             HttpResponseAccepted<T>
-             HttpResponseOk<T>
-             HttpResponseDeleted
-             HttpResponseUpdatedNoContent
-             dropshot::handler::HttpResponseFoundStatus
-             dropshot::handler::HttpResponseSeeOtherStatus
-             dropshot::handler::HttpResponseTemporaryRedirectStatus
-   = note: required for `()` to implement `HttpResponse`
-note: required for `Result<(), ()>` to implement `_::{closure#0}::ResultTrait`
-  --> tests/fail/bad_server_invalid_types.rs:27:10
-   |
-5  | #[dropshot_server]
-   | ------------------ unsatisfied trait bound introduced here
-...
-27 |     ) -> Result<(), ()>;
-   |          ^^^^^^
+error: cannot find attribute `endpoint` in this scope
+ --> tests/fail/bad_server_invalid_types.rs:9:7
+  |
+9 |     #[endpoint { method = GET, path = "/test" }]
+  |       ^^^^^^^^
+  |
+help: consider importing one of these items
+  |
+3 + use dropshot::endpoint;
+  |
+3 + use dropshot_endpoint::endpoint;
+  |
 
-error[E0277]: the trait bound `HttpResponseOk<()>: _::{closure#0}::ResultTrait` is not satisfied
-  --> tests/fail/bad_server_invalid_types.rs:12:10
+error: cannot find attribute `endpoint` in this scope
+  --> tests/fail/bad_server_invalid_types.rs:14:7
    |
-12 |     ) -> HttpResponseOk<()>;
-   |          ^^^^^^^^^^^^^^^^^^ the trait `_::{closure#0}::ResultTrait` is not implemented for `HttpResponseOk<()>`
+14 |     #[endpoint { method = GET, path = "/test" }]
+   |       ^^^^^^^^
    |
-   = help: the trait `_::{closure#0}::ResultTrait` is implemented for `Result<TT, EE>`
+help: consider importing one of these items
+   |
+3  + use dropshot::endpoint;
+   |
+3  + use dropshot_endpoint::endpoint;
+   |
 
-error[E0271]: type mismatch resolving `<() as TypeEq>::This == HttpError`
-  --> tests/fail/bad_server_invalid_types.rs:17:10
+error: cannot find attribute `endpoint` in this scope
+  --> tests/fail/bad_server_invalid_types.rs:19:7
    |
-17 |     ) -> Result<HttpResponseOk<()>, ()>;
-   |          ^^^^^^
-   |          |
-   |          expected this to be `HttpError`
-   |          type mismatch resolving `<() as TypeEq>::This == HttpError`
+19 |     #[endpoint { method = GET, path = "/test" }]
+   |       ^^^^^^^^
    |
-note: required by a bound in `_::{closure#0}::validate_result_error_type`
-  --> tests/fail/bad_server_invalid_types.rs:17:10
+help: consider importing one of these items
    |
-17 |     ) -> Result<HttpResponseOk<()>, ()>;
-   |          ^^^^^^ required by this bound in `validate_result_error_type`
+3  + use dropshot::endpoint;
+   |
+3  + use dropshot_endpoint::endpoint;
+   |
 
-error[E0271]: type mismatch resolving `<() as TypeEq>::This == HttpError`
-  --> tests/fail/bad_server_invalid_types.rs:27:10
+error: cannot find attribute `endpoint` in this scope
+  --> tests/fail/bad_server_invalid_types.rs:24:7
    |
-27 |     ) -> Result<(), ()>;
-   |          ^^^^^^
-   |          |
-   |          expected this to be `HttpError`
-   |          type mismatch resolving `<() as TypeEq>::This == HttpError`
+24 |     #[endpoint { method = GET, path = "/test" }]
+   |       ^^^^^^^^
    |
-note: required by a bound in `_::{closure#0}::validate_result_error_type`
-  --> tests/fail/bad_server_invalid_types.rs:27:10
+help: consider importing one of these items
    |
-27 |     ) -> Result<(), ()>;
-   |          ^^^^^^ required by this bound in `validate_result_error_type`
+3  + use dropshot::endpoint;
+   |
+3  + use dropshot_endpoint::endpoint;
+   |
+
+error[E0277]: `<Self as MyServer>::Context` cannot be sent between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:11:16
+   |
+11 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+12 |     ) -> HttpResponseOk<()> where <Self as MyServer>::Context: Send;
+   |                             +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be shared between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:11:16
+   |
+11 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+12 |     ) -> HttpResponseOk<()> where <Self as MyServer>::Context: Sync;
+   |                             +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be sent between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:16:16
+   |
+16 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+17 |     ) -> Result<HttpResponseOk<()>, ()> where <Self as MyServer>::Context: Send;
+   |                                         +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be shared between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:16:16
+   |
+16 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+17 |     ) -> Result<HttpResponseOk<()>, ()> where <Self as MyServer>::Context: Sync;
+   |                                         +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be sent between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:21:16
+   |
+21 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+22 |     ) -> Result<(), HttpError> where <Self as MyServer>::Context: Send;
+   |                                +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be shared between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:21:16
+   |
+21 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+22 |     ) -> Result<(), HttpError> where <Self as MyServer>::Context: Sync;
+   |                                +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be sent between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:26:16
+   |
+26 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+27 |     ) -> Result<(), ()> where <Self as MyServer>::Context: Send;
+   |                         +++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyServer>::Context` cannot be shared between threads safely
+  --> tests/fail/bad_server_invalid_types.rs:26:16
+   |
+26 |         rqctx: RequestContext<Self::Context>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyServer>::Context` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `<Self as MyServer>::Context`
+   = note: required for `<Self as MyServer>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+27 |     ) -> Result<(), ()> where <Self as MyServer>::Context: Sync;
+   |                         +++++++++++++++++++++++++++++++++++++++

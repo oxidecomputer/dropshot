@@ -1,9 +1,9 @@
 [package]
 name = "dropshot_endpoint"
 description = "macro used by dropshot consumers for registering handlers"
-version = "0.10.1-dev"
+version = "0.10.2-dev"
 authors = ["Adam H. Leventhal <ahl@oxide.computer>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/oxidecomputer/dropshot/"
 
@@ -21,7 +21,9 @@ features = [ "derive" ]
 
 [dependencies.syn]
 version = "2.0"
-features = [ "full" ]
+features = [ "full", "visit" ]
 
 [dev-dependencies]
+expectorate = "1.1.0"
+prettyplease = "0.2.20"
 schema = "0.1.0"

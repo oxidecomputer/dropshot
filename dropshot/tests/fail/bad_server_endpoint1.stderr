@@ -1,0 +1,5 @@
+error: endpoint `bad_endpoint` must have at least one RequestContext argument
+  --> tests/fail/bad_server_endpoint1.rs:16:26
+   |
+16 |     async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError>;
+   |                          ^^

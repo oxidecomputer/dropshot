@@ -1,0 +1,29 @@
+error: endpoint `ref_self_method` must not have a `self` argument
+  --> tests/fail/bad_server_endpoint2.rs:16:9
+   |
+16 |         &self,
+   |         ^^^^^
+
+error: endpoint `mut_self_method` must not have a `self` argument
+  --> tests/fail/bad_server_endpoint2.rs:22:9
+   |
+22 |         &mut self,
+   |         ^^^^^^^^^
+
+error: endpoint `self_method` must not have a `self` argument
+  --> tests/fail/bad_server_endpoint2.rs:28:9
+   |
+28 |         self,
+   |         ^^^^
+
+error: endpoint `self_box_self_method` must not have a `self` argument
+  --> tests/fail/bad_server_endpoint2.rs:34:9
+   |
+34 |         self: Box<Self>,
+   |         ^^^^^^^^^^^^^^^
+
+error: endpoint `self_arc_self_method` must not have a `self` argument
+  --> tests/fail/bad_server_endpoint2.rs:40:9
+   |
+40 |         self: Arc<Self>,
+   |         ^^^^^^^^^^^^^^^
