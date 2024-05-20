@@ -183,7 +183,7 @@
 //! With Rust 1.75 and above, it is also possible to define an API using a
 //! *trait server*. A trait server is a trait that represents a collection
 //! of API endpoints. Each endpoint is defined as a static method on the trait,
-//! and the trait is annotated with `#[dropshot_server]`.
+//! and the trait is annotated with `#[dropshot::server]`.
 //!
 //! The advantage of trait servers is that they can be defined in a separate
 //! crate from the implementation. This results in quicker builds for the API,
@@ -192,7 +192,6 @@
 //! Here's an example of a trait server equivalent to the endpoint above:
 //!
 //! ```
-//! use dropshot::dropshot_server;
 //! use dropshot::ApiDescription;
 //! use dropshot::HttpError;
 //! use dropshot::HttpResponseOk;
@@ -210,7 +209,7 @@
 //! }
 //!
 //! /** Defines the trait that captures all the methods */
-//! #[dropshot_server]
+//! #[dropshot::server]
 //! trait ProjectServer {
 //!     /** The context type used within endpoints. */
 //!     type Context;
@@ -228,8 +227,8 @@
 //! /**
 //! Define an empty type to hold the project server context.
 //! This type is never constructed, and is purely to hang the
-//! server impl off of. This type can also be in another crate
-//! from the trait.
+//! server impl off of. This type is generally in a different
+//! crate from the server trait.
 //! **/
 //!
 //! enum ServerImpl {}
@@ -419,13 +418,12 @@
 //! For a given `ApiDescription`, you can also print out an OpenAPI spec
 //! describing the API.  See [`ApiDescription::openapi`].
 //!
-//! With trait servers, the `#[dropshot_server]` macro generates a helper
+//! With trait-based servers, the `#[dropshot::server]` macro generates a helper
 //! function called `*_stub_api_description`, which returns a stub
 //! `ApiDescription`. The stub description can be used to generate an OpenAPI
 //! spec for the trait server. For example:
 //!
 //! ```
-//! # use dropshot::dropshot_server;
 //! # use dropshot::ApiDescription;
 //! # use dropshot::HttpError;
 //! # use dropshot::HttpResponseOk;
@@ -440,7 +438,7 @@
 //! #     name: String,
 //! # }
 //! /** This is the server trait defined above. */
-//! #[dropshot_server]
+//! #[dropshot::server]
 //! trait ProjectServer {
 //!     type Context;
 //!     #[endpoint {
