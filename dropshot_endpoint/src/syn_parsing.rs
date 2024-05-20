@@ -50,7 +50,7 @@ pub(crate) struct ItemTraitForFnSignatures {
     pub colon_token: Option<Token![:]>,
     pub supertraits: Punctuated<TypeParamBound, Token![+]>,
     pub brace_token: token::Brace,
-    pub items: Vec<TraitItemForEndpoint>,
+    pub items: Vec<TraitItemForFnSignature>,
 }
 
 impl Parse for ItemTraitForFnSignatures {
@@ -168,7 +168,7 @@ impl ToTokens for ItemTraitForFnSignatures {
 
 /// Similar to `syn::TraitItem`, except function bodies aren't parsed.
 #[derive(Clone)]
-pub(crate) enum TraitItemForEndpoint {
+pub(crate) enum TraitItemForFnSignature {
     /// An associated function within the definition of a trait.
     Fn(TraitItemFnForSignature),
 
@@ -176,7 +176,7 @@ pub(crate) enum TraitItemForEndpoint {
     Other(TraitItem),
 }
 
-impl Parse for TraitItemForEndpoint {
+impl Parse for TraitItemForFnSignature {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         // The only case we need to consider is a function -- for everything
         // else, we defer to syn.
@@ -237,7 +237,7 @@ impl Parse for TraitItemForEndpoint {
     }
 }
 
-impl ToTokens for TraitItemForEndpoint {
+impl ToTokens for TraitItemForFnSignature {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             Self::Fn(f) => f.to_tokens(tokens),

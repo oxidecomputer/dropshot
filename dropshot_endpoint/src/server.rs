@@ -15,7 +15,7 @@ use crate::{
     error_store::{ErrorSink, ErrorStore},
     syn_parsing::{
         ItemTraitForFnSignatures, TraitItemFnForSignature,
-        TraitItemForEndpoint, UnparsedBlock,
+        TraitItemForFnSignature, UnparsedBlock,
     },
     util::{get_crate, MacroKind},
 };
@@ -92,7 +92,7 @@ impl<'ast> Server<'ast> {
 
         for item in &item_trait.items {
             match item {
-                TraitItemForEndpoint::Fn(f) => {
+                TraitItemForFnSignature::Fn(f) => {
                     // XXX cannot have multiple endpoint or channel attributes,
                     // check here.
                     let endpoint_attr = f
@@ -143,7 +143,7 @@ impl<'ast> Server<'ast> {
 
                 // Everything else is permissible -- just ensure that they
                 // aren't marked as `endpoint` or `channel`.
-                TraitItemForEndpoint::Other(other) => {
+                TraitItemForFnSignature::Other(other) => {
                     let should_push = match other {
                         syn::TraitItem::Const(c) => {
                             check_endpoint_or_channel_on_non_fn(
@@ -214,7 +214,7 @@ impl<'ast> Server<'ast> {
 
     fn to_output(&self) -> TokenStream {
         let context_item =
-            self.make_context_trait_item().map(TraitItemForEndpoint::Other);
+            self.make_context_trait_item().map(TraitItemForFnSignature::Other);
         let other_items =
             self.items.iter().map(|item| item.to_out_trait_item());
         let out_items = context_item.into_iter().chain(other_items);
@@ -431,18 +431,18 @@ enum ServerItem<'ast> {
     // generate the underlying method because rust-analyzer works better if it
     // exists.
     Invalid(&'ast TraitItemFnForSignature),
-    Other(&'ast TraitItemForEndpoint),
+    Other(&'ast TraitItemForFnSignature),
 }
 
 impl<'a> ServerItem<'a> {
-    fn to_out_trait_item(&self) -> TraitItemForEndpoint {
+    fn to_out_trait_item(&self) -> TraitItemForFnSignature {
         match self {
             Self::Endpoint(e) => e.to_out_trait_item(),
             Self::Channel(c) => c.to_out_trait_item(),
             Self::Invalid(e) => {
                 // Retain all attributes other than the endpoint attribute.
                 let f = strip_recognized_attrs(e);
-                TraitItemForEndpoint::Fn(f)
+                TraitItemForFnSignature::Fn(f)
             }
             Self::Other(o) => (*o).clone(),
         }
@@ -523,7 +523,7 @@ impl<'ast> ServerEndpoint<'ast> {
         }
     }
 
-    fn to_out_trait_item(&self) -> TraitItemForEndpoint {
+    fn to_out_trait_item(&self) -> TraitItemForFnSignature {
         // Retain all attributes other than the endpoint attribute.
         let f = strip_recognized_attrs(self.f);
 
@@ -548,7 +548,7 @@ impl<'ast> ServerEndpoint<'ast> {
             UnparsedBlock { brace_token: block.brace_token, tokens }
         });
 
-        TraitItemForEndpoint::Fn(TraitItemFnForSignature {
+        TraitItemForFnSignature::Fn(TraitItemFnForSignature {
             sig: syn::Signature {
                 asyncness: None,
                 output: syn::ReturnType::Type(
@@ -615,10 +615,10 @@ impl<'ast> ServerChannel<'ast> {
         Some(Self { orig })
     }
 
-    fn to_out_trait_item(&self) -> TraitItemForEndpoint {
+    fn to_out_trait_item(&self) -> TraitItemForFnSignature {
         // Retain all attributes other than the channel attribute.
         let f = strip_recognized_attrs(self.orig);
-        TraitItemForEndpoint::Fn(f)
+        TraitItemForFnSignature::Fn(f)
     }
 }
 
