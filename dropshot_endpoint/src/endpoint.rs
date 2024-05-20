@@ -45,10 +45,10 @@ pub(crate) fn do_endpoint(
 
     // If there are any errors, we also want to provide a usage message as an error.
     if output.has_param_errors {
-        // Note that we must use `Error::new_spanned` with &ast.sig, not
-        // Error::new(ast.sig.span(), ...). That's because with Rust 1.76,
-        // obtaining ast.sig.span() only returns the initial "fn" token, not the
-        // entire function signature.
+        // Note that we must use `Error::new_spanned` with the function
+        // signature, not Error::new(sig.span(), ...). That's because with Rust
+        // 1.76, obtaining sig.span() only returns the initial "fn" token, not
+        // the entire function signature.
         errors.insert(0, Error::new_spanned(&output.item_fn.sig, USAGE));
     }
 
@@ -104,10 +104,11 @@ pub(crate) fn do_endpoint_inner(
         }
     };
 
-    // If the params are valid, output the corresponding type checks.
-    let (has_param_errors, param_checks, from_impl) =
+    // If the params are valid, output the corresponding type checks and impl
+    // statement.
+    let (has_param_errors, type_checks, from_impl) =
         if let Some(params) = &params {
-            let param_checks = params.to_type_checks(&dropshot);
+            let type_checks = params.to_type_checks(&dropshot);
             let impl_checks = params.to_impl_checks(name);
 
             let rqctx_context = params.rqctx_context(&dropshot);
@@ -130,7 +131,7 @@ pub(crate) fn do_endpoint_inner(
                 }
             };
 
-            (false, param_checks, from_impl)
+            (false, type_checks, from_impl)
         } else {
             (true, quote! {}, quote! {})
         };
@@ -149,7 +150,7 @@ pub(crate) fn do_endpoint_inner(
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         // ... type validation for parameter and return types
-        #param_checks
+        #type_checks
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -229,7 +230,9 @@ impl<'ast> EndpointParams<'ast> {
         if sig.variadic.is_some() {
             errors.push(Error::new_spanned(
                 &sig.variadic,
-                "endpoint `{name_str}` must not have a variadic argument",
+                format!(
+                    "endpoint `{name_str}` must not have a variadic argument",
+                ),
             ));
         }
 
@@ -285,6 +288,9 @@ impl<'ast> EndpointParams<'ast> {
             syn::ReturnType::Type(_, ty) => Some(&**ty),
         };
 
+        // errors.has_errors() must be checked first, because it's possible for
+        // rqctx_ty and ret_ty to both be Some, but one of the extractors to
+        // have errored out.
         if errors.has_errors() {
             None
         } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
@@ -295,7 +301,7 @@ impl<'ast> EndpointParams<'ast> {
                 ret_ty,
             })
         } else {
-            unreachable!("has_errors is false, but rqctx_ty or ret_ty is None")
+            unreachable!("no param errors, but rqctx_ty or ret_ty is None");
         }
     }
 
@@ -367,8 +373,6 @@ impl<'ast> EndpointParams<'ast> {
             }
         });
 
-        // XXX: We should consider, instead, slapping an impl bound on the
-        // return type.
         let ret_ty = self.ret_ty;
         let ret_check = quote_spanned! { ret_ty.span()=>
             const _: fn() = || {
@@ -494,7 +498,7 @@ impl EndpointMetadata {
     pub(crate) fn validate(
         self,
         name_str: &str,
-        attr: &proc_macro2::TokenStream,
+        attr: &dyn ToTokens,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<ValidatedEndpointMetadata> {
         let errors = errors.new();
@@ -539,6 +543,8 @@ impl EndpointMetadata {
             None => Some(ValidContentType::ApplicationJson),
         };
 
+        // errors.has_errors() must be checked first, because it's possible for
+        // content_type to be Some, but other errors to have occurred.
         if errors.has_errors() {
             None
         } else if let Some(content_type) = content_type {
@@ -551,7 +557,7 @@ impl EndpointMetadata {
                 content_type,
             })
         } else {
-            unreachable!("has_errors is false, but content_type is None")
+            unreachable!("no validation errors, but content_type is None")
         }
     }
 }
