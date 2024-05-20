@@ -8,53 +8,17 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint20.rs:22:1
+  --> tests/fail/bad_endpoint20.rs:24:1
    |
-22 | / async fn weird_types<'a>(
-23 | |     _rqctx: RequestContext<T, Self::U>,
-24 | |     _param1: Query<&'a QueryParams>,
-25 | |     _param2: for<'b> TypedBody<&'b ()>,
-26 | | ) -> Result<impl HttpResponse, HttpError> {
-   | |_________________________________________^
+24 | / async fn variadic_argument(
+25 | |     _rqctx: RequestContext<()>,
+26 | |     _param1: Query<QueryParams>,
+27 | |     ...
+28 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^
 
-error: endpoint `weird_types` must not have generics
-  --> tests/fail/bad_endpoint20.rs:22:21
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_endpoint20.rs:27:5
    |
-22 | async fn weird_types<'a>(
-   |                     ^^^^
-
-error: endpoint `weird_types` must accept a RequestContext<T> as its first argument
-  --> tests/fail/bad_endpoint20.rs:23:13
-   |
-23 |     _rqctx: RequestContext<T, Self::U>,
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error: endpoint `weird_types` must not have `Self` in RequestContext
-  --> tests/fail/bad_endpoint20.rs:23:31
-   |
-23 |     _rqctx: RequestContext<T, Self::U>,
-   |                               ^^^^
-
-error: endpoint `weird_types` must not have lifetime parameters in extractor
-  --> tests/fail/bad_endpoint20.rs:24:21
-   |
-24 |     _param1: Query<&'a QueryParams>,
-   |                     ^^
-
-error: endpoint `weird_types` must not have lifetime bounds in extractor
-  --> tests/fail/bad_endpoint20.rs:25:14
-   |
-25 |     _param2: for<'b> TypedBody<&'b ()>,
-   |              ^^^^^^^
-
-error: endpoint `weird_types` must not have lifetime parameters in extractor
-  --> tests/fail/bad_endpoint20.rs:25:33
-   |
-25 |     _param2: for<'b> TypedBody<&'b ()>,
-   |                                 ^^
-
-error: endpoint `weird_types` must not have impl Trait in return type
-  --> tests/fail/bad_endpoint20.rs:26:13
-   |
-26 | ) -> Result<impl HttpResponse, HttpError> {
-   |             ^^^^^^^^^^^^^^^^^
+27 |     ...
+   |     ^^^

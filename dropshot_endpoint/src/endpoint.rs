@@ -48,10 +48,10 @@ pub(crate) fn do_endpoint(
 
     // If there are any errors, we also want to provide a usage message as an error.
     if output.has_param_errors {
-        // Note that we must use `Error::new_spanned` with &ast.sig, not
-        // Error::new(ast.sig.span(), ...). That's because with Rust 1.76,
-        // obtaining ast.sig.span() only returns the initial "fn" token, not the
-        // entire function signature.
+        // Note that we must use `Error::new_spanned` with the function
+        // signature, not Error::new(sig.span(), ...). That's because with Rust
+        // 1.76, obtaining sig.span() only returns the initial "fn" token, not
+        // the entire function signature.
         errors.insert(0, Error::new_spanned(&output.item_fn.sig, USAGE));
     }
 
@@ -107,10 +107,11 @@ pub(crate) fn do_endpoint_inner(
         }
     };
 
-    // If the params are valid, output the corresponding type checks.
-    let (has_param_errors, param_checks, from_impl) =
+    // If the params are valid, output the corresponding type checks and impl
+    // statement.
+    let (has_param_errors, type_checks, from_impl) =
         if let Some(params) = &params {
-            let param_checks = params.to_type_checks(&dropshot);
+            let type_checks = params.to_type_checks(&dropshot);
             let impl_checks = params.to_impl_checks(name);
 
             let rqctx_context = params.rqctx_context(&dropshot);
@@ -133,7 +134,7 @@ pub(crate) fn do_endpoint_inner(
                 }
             };
 
-            (false, param_checks, from_impl)
+            (false, type_checks, from_impl)
         } else {
             (true, quote! {}, quote! {})
         };
@@ -152,7 +153,7 @@ pub(crate) fn do_endpoint_inner(
     // `#name`, the name of the function to which this macro was applied...
     let stream = quote! {
         // ... type validation for parameter and return types
-        #param_checks
+        #type_checks
 
         // ... a struct type called `#name` that has no members
         #[allow(non_camel_case_types, missing_docs)]
@@ -173,7 +174,7 @@ pub(crate) fn do_endpoint_inner(
 
 /// Request and return types for an endpoint.
 struct EndpointParams<'ast> {
-    rqctx_ty: &'ast syn::Type,
+    rqctx_ty: RqctxTy<'ast>,
     shared_extractors: Vec<&'ast syn::Type>,
     // This is the last request argument -- it could also be a shared extractor,
     // because shared extractors are also exclusive.
@@ -232,7 +233,9 @@ impl<'ast> EndpointParams<'ast> {
         if sig.variadic.is_some() {
             errors.push(Error::new_spanned(
                 &sig.variadic,
-                "endpoint `{name_str}` must not have a variadic argument",
+                format!(
+                    "endpoint `{name_str}` must not have a variadic argument",
+                ),
             ));
         }
 
@@ -244,24 +247,7 @@ impl<'ast> EndpointParams<'ast> {
                 pat: _,
                 colon_token: _,
                 ty,
-            })) => {
-                if let Err(_) = extract_rqctx_param(ty) {
-                    errors.push(Error::new_spanned(
-                        ty,
-                        format!(
-                            "endpoint `{name_str}` must accept a \
-                            RequestContext<T> as its first argument",
-                        ),
-                    ));
-                }
-
-                Some(validate_param_ty(
-                    ty,
-                    ParamTyKind::RequestContext,
-                    &name_str,
-                    &errors,
-                ))
-            }
+            })) => RqctxTy::new(&name_str, ty, &errors),
             Some(first_arg @ syn::FnArg::Receiver(_)) => {
                 errors.push(Error::new_spanned(
                     first_arg,
@@ -287,12 +273,14 @@ impl<'ast> EndpointParams<'ast> {
         // SharedExtractor.
         let mut shared_extractors = Vec::new();
         while let Some(syn::FnArg::Typed(pat)) = inputs.next() {
-            shared_extractors.push(validate_param_ty(
+            if let Some(ty) = validate_param_ty(
                 &pat.ty,
                 ParamTyKind::Extractor,
                 &name_str,
                 &errors,
-            ));
+            ) {
+                shared_extractors.push(ty);
+            }
         }
 
         // Pop the last one off the iterator -- it must impl ExclusiveExtractor.
@@ -307,14 +295,14 @@ impl<'ast> EndpointParams<'ast> {
                 ));
                 None
             }
-            syn::ReturnType::Type(_, ty) => Some(validate_param_ty(
-                ty,
-                ParamTyKind::Return,
-                &name_str,
-                &errors,
-            )),
+            syn::ReturnType::Type(_, ty) => {
+                validate_param_ty(ty, ParamTyKind::Return, &name_str, &errors)
+            }
         };
 
+        // errors.has_errors() must be checked first, because it's possible for
+        // rqctx_ty and ret_ty to both be Some, but one of the extractors to
+        // have errored out.
         if errors.has_errors() {
             None
         } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
@@ -325,13 +313,13 @@ impl<'ast> EndpointParams<'ast> {
                 ret_ty,
             })
         } else {
-            unreachable!("has_errors is false, but rqctx_ty or ret_ty is None")
+            unreachable!("no param errors, but rqctx_ty or ret_ty is None");
         }
     }
 
     /// Returns a token stream that obtains the rqctx context type.
     fn rqctx_context(&self, dropshot: &TokenStream) -> TokenStream {
-        let rqctx_ty = self.rqctx_ty;
+        let rqctx_ty = self.rqctx_ty.as_type();
         quote_spanned! { rqctx_ty.span()=>
             <#rqctx_ty as #dropshot::RequestContextArgument>::Context
         }
@@ -350,7 +338,7 @@ impl<'ast> EndpointParams<'ast> {
 
     /// Returns a list of all argument types, including the request context.
     fn arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
-        std::iter::once(self.rqctx_ty)
+        std::iter::once(self.rqctx_ty.as_type())
             .chain(self.shared_extractors.iter().copied())
             .chain(self.exclusive_extractor)
     }
@@ -365,7 +353,7 @@ impl<'ast> EndpointParams<'ast> {
     /// ExclusiveExtractor.
     fn to_type_checks(&self, dropshot: &TokenStream) -> TokenStream {
         let rqctx_context = self.rqctx_context(dropshot);
-        let rqctx_check = quote_spanned! { self.rqctx_ty.span()=>
+        let rqctx_check = quote_spanned! { self.rqctx_ty.as_type().span()=>
             const _: fn() = || {
                 struct NeedRequestContext(#rqctx_context);
             };
@@ -397,8 +385,6 @@ impl<'ast> EndpointParams<'ast> {
             }
         });
 
-        // XXX: We should consider, instead, slapping an impl bound on the
-        // return type.
         let ret_ty = self.ret_ty;
         let ret_check = quote_spanned! { ret_ty.span()=>
             const _: fn() = || {
@@ -472,16 +458,20 @@ impl<'ast> EndpointParams<'ast> {
 
 /// Perform syntactic validation for an argument or return type.
 ///
-/// This returns the input type for convenience.
+/// This returns the input type if it is valid.
 fn validate_param_ty<'ast>(
     ty: &'ast syn::Type,
     kind: ParamTyKind,
     name_str: &str,
     errors: &ErrorSink<'_, Error>,
-) -> &'ast syn::Type {
+) -> Option<&'ast syn::Type> {
     // Types can be arbitrarily nested, so to keep these checks simple we use
     // the visitor pattern.
 
+    let errors = errors.new();
+
+    // This just needs a second 'store lifetime because the one inside ErrorSink
+    // is invariant. Everything else is covariant and can share lifetimes.
     struct Visitor<'store, 'ast> {
         kind: ParamTyKind,
         name_str: &'ast str,
@@ -540,22 +530,76 @@ fn validate_param_ty<'ast>(
         }
     }
 
-    let mut visitor = Visitor { kind, name_str, errors };
+    let mut visitor = Visitor { kind, name_str, errors: &errors };
     visitor.visit_type(ty);
-    ty
+
+    // Don't return the type if there were errors.
+    (!errors.has_errors()).then(|| ty)
+}
+
+/// A representation of the RequestContext type.
+#[derive(Clone, Eq, PartialEq)]
+enum RqctxTy<'ast> {
+    /// This is a function-based macro, with the payload being the full type.
+    Function(&'ast syn::Type),
+}
+
+impl<'ast> RqctxTy<'ast> {
+    /// Ensures that the type parameter for RequestContext is valid.
+    fn new(
+        name_str: &str,
+        ty: &'ast syn::Type,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<Self> {
+        let param = match extract_rqctx_param(ty) {
+            Ok(Some(ty)) => ty,
+            Ok(None) => {
+                return Some(Self::Function(ty));
+            }
+            Err(_) => {
+                // Can't do any further validation on the type.
+                errors.push(Error::new_spanned(
+                    ty,
+                    format!(
+                        "endpoint `{name_str}` must accept a \
+                        RequestContext<T> as its first argument",
+                    ),
+                ));
+                return None;
+            }
+        };
+
+        // Now validate the inner parameter.
+        validate_param_ty(param, ParamTyKind::RequestContext, name_str, errors)
+            .map(|_| Self::Function(ty))
+    }
+
+    fn as_type(&self) -> &'ast syn::Type {
+        match self {
+            RqctxTy::Function(ty) => ty,
+        }
+    }
+}
+
+impl<'ast> fmt::Debug for RqctxTy<'ast> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RqctxTy::Function(ty) => write!(f, "Function({})", quote! { #ty }),
+        }
+    }
 }
 
 /// Extracts and ensures that the type parameter for RequestContext is valid.
-fn extract_rqctx_param<'input>(
-    ty: &'input syn::Type,
-) -> Result<RqctxParam<'input>, RqctxTyParamError> {
+fn extract_rqctx_param<'ast>(
+    ty: &'ast syn::Type,
+) -> Result<Option<&'ast syn::Type>, RqctxTyError> {
     let syn::Type::Path(p) = &*ty else {
-        return Err(RqctxTyParamError::NotTypePath);
+        return Err(RqctxTyError::NotTypePath);
     };
 
     // Inspect the last path segment.
     let Some(last_segment) = p.path.segments.last() else {
-        return Err(RqctxTyParamError::NoPathSegments);
+        return Err(RqctxTyError::NoPathSegments);
     };
 
     // It must either not have type arguments at all, or if so then exactly one
@@ -563,58 +607,34 @@ fn extract_rqctx_param<'input>(
     let a = match &last_segment.arguments {
         syn::PathArguments::None => {
             // This is all right -- hopefully a type alias.
-            return Ok(RqctxParam::Absent);
+            return Ok(None);
         }
         syn::PathArguments::AngleBracketed(a) => a,
         syn::PathArguments::Parenthesized(_) => {
             // This isn't really possible in this position?
-            return Err(RqctxTyParamError::ArgsNotAngleBracketed);
+            return Err(RqctxTyError::ArgsNotAngleBracketed);
         }
     };
 
     if a.args.len() != 1 {
-        return Err(RqctxTyParamError::IncorrectTypeArgCount(a.args.len()));
+        return Err(RqctxTyError::IncorrectTypeArgCount(a.args.len()));
     }
 
-    // The argument must be a type. (For now we don't validate the inner type
-    // further -- just make sure that it's a type and not something weird like a
-    // lifetime.)
+    // The argument must be a type.
     let syn::GenericArgument::Type(tp) = a.args.first().unwrap() else {
-        return Err(RqctxTyParamError::ArgNotType);
+        return Err(RqctxTyError::ArgNotType);
     };
 
-    Ok(RqctxParam::Present(tp))
+    Ok(Some(tp))
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum RqctxTyParamError {
+enum RqctxTyError {
     NotTypePath,
     NoPathSegments,
     ArgsNotAngleBracketed,
     IncorrectTypeArgCount(usize),
     ArgNotType,
-}
-
-/// The type parameter for RequestContext.
-///
-/// This may not actually be present if a type alias is used for request
-/// contexts, but we validate that at least there are at most one.
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum RqctxParam<'input> {
-    /// The type parameter is present.
-    Present(&'input syn::Type),
-
-    /// The type parameter is not present.
-    Absent,
-}
-
-impl<'input> fmt::Debug for RqctxParam<'input> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RqctxParam::Present(ty) => write!(f, "Present({})", quote! { #ty }),
-            RqctxParam::Absent => write!(f, "Absent"),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -688,7 +708,7 @@ impl EndpointMetadata {
     pub(crate) fn validate(
         self,
         name_str: &str,
-        attr: &proc_macro2::TokenStream,
+        attr: &dyn ToTokens,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<ValidatedEndpointMetadata> {
         let errors = errors.new();
@@ -733,6 +753,8 @@ impl EndpointMetadata {
             None => Some(ValidContentType::ApplicationJson),
         };
 
+        // errors.has_errors() must be checked first, because it's possible for
+        // content_type to be Some, but other errors to have occurred.
         if errors.has_errors() {
             None
         } else if let Some(content_type) = content_type {
@@ -745,7 +767,7 @@ impl EndpointMetadata {
                 content_type,
             })
         } else {
-            unreachable!("has_errors is false, but content_type is None")
+            unreachable!("no validation errors, but content_type is None")
         }
     }
 }
@@ -1164,19 +1186,19 @@ mod tests {
         let tuple = parse_quote! { (SomeType, OtherType) };
 
         // Valid types.
-        let valid: &[(syn::Type, RqctxParam<'_>)] = &[
+        let valid: &[(syn::Type, RqctxTy<'_>)] = &[
             (
                 parse_quote! { RequestContext<SomeType> },
-                RqctxParam::Present(&some_type),
+                RqctxTy::Present(&some_type),
             ),
             // Tuple types.
-            (parse_quote! { RequestContext<()> }, RqctxParam::Present(&unit)),
+            (parse_quote! { RequestContext<()> }, RqctxTy::Present(&unit)),
             (
                 parse_quote! { ::path::to::dropshot::RequestContext<(SomeType, OtherType)> },
-                RqctxParam::Present(&tuple),
+                RqctxTy::Present(&tuple),
             ),
             // Type alias.
-            (parse_quote! { MyRequestContext }, RqctxParam::Absent),
+            (parse_quote! { MyRequestContext }, RqctxTy::Absent),
         ];
 
         // We can't parse parenthesized generic arguments via parse_quote -- syn
@@ -1202,20 +1224,14 @@ mod tests {
         });
 
         // Invalid types.
-        let invalid: &[(syn::Type, RqctxTyParamError)] = &[
-            (
-                parse_quote! { &'a MyRequestContext },
-                RqctxTyParamError::NotTypePath,
-            ),
-            (paren_generic_type, RqctxTyParamError::ArgsNotAngleBracketed),
+        let invalid: &[(syn::Type, RqctxTyError)] = &[
+            (parse_quote! { &'a MyRequestContext }, RqctxTyError::NotTypePath),
+            (paren_generic_type, RqctxTyError::ArgsNotAngleBracketed),
             (
                 parse_quote! { RequestContext<SomeType, OtherType> },
-                RqctxTyParamError::IncorrectTypeArgCount(2),
+                RqctxTyError::IncorrectTypeArgCount(2),
             ),
-            (
-                parse_quote! { RequestContext<'a> },
-                RqctxTyParamError::ArgNotType,
-            ),
+            (parse_quote! { RequestContext<'a> }, RqctxTyError::ArgNotType),
         ];
 
         for (ty, expected) in valid {
