@@ -16,4 +16,15 @@ trait MyServer {
     async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError>;
 }
 
+enum MyImpl {}
+
+// This should not produce errors about the endpoint being missing.
+impl MyServer for MyImpl {
+    type Context = ();
+
+    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
+        Ok(HttpResponseOk(()))
+    }
+}
+
 fn main() {}

@@ -1,0 +1,5 @@
+error: endpoint `bad_endpoint` must be async
+  --> tests/fail/bad_server_endpoint8.rs:22:5
+   |
+22 |     fn bad_endpoint(
+   |     ^^

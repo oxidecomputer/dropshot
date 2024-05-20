@@ -42,4 +42,46 @@ trait MyServer {
     ) -> Result<HttpResponseOk<()>, HttpError>;
 }
 
+enum MyImpl {}
+
+// This should not produce errors about the endpoints being missing.
+impl MyServer for MyImpl {
+    type Context = ();
+
+    async fn ref_self_method(
+        &self,
+        _rqctx: RequestContext<Self::Context>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        todo!()
+    }
+
+    async fn mut_self_method(
+        &mut self,
+        _rqctx: RequestContext<Self::Context>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        todo!()
+    }
+
+    async fn self_method(
+        self,
+        _rqctx: RequestContext<Self::Context>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        todo!()
+    }
+
+    async fn self_box_self_method(
+        self: Box<Self>,
+        _rqctx: RequestContext<Self::Context>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        todo!()
+    }
+
+    async fn self_arc_self_method(
+        self: Arc<Self>,
+        _rqctx: RequestContext<Self::Context>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        todo!()
+    }
+}
+
 fn main() {}

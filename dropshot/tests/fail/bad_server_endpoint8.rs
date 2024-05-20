@@ -5,33 +5,37 @@
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
-use std::sync::Arc;
+use schemars::JsonSchema;
+use serde::Serialize;
+
+#[derive(JsonSchema, Serialize)]
+struct Ret {}
 
 #[dropshot::server]
 trait MyServer {
     type Context;
 
-    // Test: final parameter is neither an ExclusiveExtractor nor a SharedExtractor.
     #[endpoint {
         method = GET,
         path = "/test",
     }]
-    async fn bad_endpoint(
+    fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
-        _param: String,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseOk<Ret>, HttpError> {
+        Ok(HttpResponseOk(Ret {}))
+    }
 }
 
 enum MyImpl {}
 
+// This should not produce errors about the endpoint being missing.
 impl MyServer for MyImpl {
-    type Context = Arc<()>;
+    type Context = ();
 
-    async fn bad_endpoint(
+    fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
-        _param: String,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseOk<Ret>, HttpError> {
+        Ok(HttpResponseOk(Ret {}))
     }
 }
 
