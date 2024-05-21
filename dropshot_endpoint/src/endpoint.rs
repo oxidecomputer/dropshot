@@ -1186,19 +1186,16 @@ mod tests {
         let tuple = parse_quote! { (SomeType, OtherType) };
 
         // Valid types.
-        let valid: &[(syn::Type, RqctxTy<'_>)] = &[
-            (
-                parse_quote! { RequestContext<SomeType> },
-                RqctxTy::Present(&some_type),
-            ),
+        let valid: &[(syn::Type, _)] = &[
+            (parse_quote! { RequestContext<SomeType> }, Some(&some_type)),
             // Tuple types.
-            (parse_quote! { RequestContext<()> }, RqctxTy::Present(&unit)),
+            (parse_quote! { RequestContext<()> }, Some(&unit)),
             (
                 parse_quote! { ::path::to::dropshot::RequestContext<(SomeType, OtherType)> },
-                RqctxTy::Present(&tuple),
+                Some(&tuple),
             ),
             // Type alias.
-            (parse_quote! { MyRequestContext }, RqctxTy::Absent),
+            (parse_quote! { MyRequestContext }, None),
         ];
 
         // We can't parse parenthesized generic arguments via parse_quote -- syn
