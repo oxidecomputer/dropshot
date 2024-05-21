@@ -29,30 +29,66 @@ pub(crate) fn do_channel(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
 ) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
-    let metadata: ChannelMetadata = from_tokenstream(&attr)?;
-    let item: ItemFnForSignature = syn::parse2(item)?;
-
     let mut error_store = ErrorStore::new();
-
     let errors = error_store.sink();
-    let channel = match ParsedChannel::new(metadata, attr, item.clone(), errors)
-    {
-        Some(channel) => channel,
-        None => {
-            // For now, None always means that there was a parameter
-            // error.
-            let mut errors = error_store.into_inner();
-            errors.insert(0, Error::new_spanned(&item.sig, USAGE));
-            return Ok((quote! {}, errors));
+
+    // Parse attributes. (Do this before parsing the function since that's the
+    // order they're in, in source code.)
+    let metadata = match from_tokenstream(&attr) {
+        Ok(metadata) => Some(metadata),
+        Err(e) => {
+            // If there is an error while parsing the metadata, report it, but
+            // continue to generate the original function.
+            errors.push(e);
+            None
         }
     };
 
-    let errors = error_store.sink();
-    let output = do_channel_inner(channel, errors)?;
+    // Attempt to parse the function.
+    let item_fn = match syn::parse2::<ItemFnForSignature>(item.clone()) {
+        Ok(item_fn) => Some(item_fn),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    let output = match (metadata, item_fn.as_ref()) {
+        (Some(metadata), Some(item_fn)) => {
+            match ParsedChannel::new(metadata, attr, item_fn.clone(), errors) {
+                Some(channel) => {
+                    // The happy path.
+                    let errors = error_store.sink();
+                    do_channel_inner(channel, errors)?
+                }
+                None => {
+                    // For now, None always means that there was a parameter
+                    // error. Generate the original function (but not the
+                    // attribute proc macro).
+                    ChannelOutput {
+                        output: quote! { #item },
+                        has_param_errors: true,
+                    }
+                }
+            }
+        }
+        (None, Some(_)) => {
+            // In this case, continue to generate the original function (but not
+            // the attribute proc macro).
+            ChannelOutput { output: quote! { #item }, has_param_errors: false }
+        }
+        (_, None) => {
+            // Can't do anything here, just return errors.
+            ChannelOutput { output: quote! {}, has_param_errors: false }
+        }
+    };
 
     let mut errors = error_store.into_inner();
     if output.has_param_errors {
-        errors.insert(0, Error::new_spanned(&item.sig, USAGE));
+        let item_fn = item_fn
+            .as_ref()
+            .expect("has_param_errors is true => item_fn is Some");
+        errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
     }
 
     Ok((output.output, errors))
@@ -191,17 +227,18 @@ fn do_channel_inner(
     errors: ErrorSink<'_, Error>,
 ) -> Result<ChannelOutput, Error> {
     let ParsedChannel { metadata, attr, new_item } = parsed;
-    let endpoint =
-        endpoint::do_endpoint_inner(metadata, attr, new_item, errors)?;
+    let endpoint_fn = syn::parse2::<ItemFnForSignature>(new_item.clone())?;
+    let endpoint = endpoint::do_endpoint_inner(
+        metadata,
+        attr,
+        new_item,
+        &endpoint_fn,
+        errors,
+    );
 
     Ok(ChannelOutput {
         output: endpoint.output,
         has_param_errors: endpoint.has_param_errors,
-        // Note: unlike EndpointOutput, we don't return the parsed
-        // ItemFnForSignature. That's because that would be the endpoint we
-        // generate up in Self::new, which is not the right span to report
-        // errors with. Instead, whatever code generates the channel has the
-        // original ItemFnForSignature.
     })
 }
 

@@ -35,21 +35,59 @@ pub(crate) fn do_endpoint(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
 ) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
-    let metadata = from_tokenstream(&attr)?;
-
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
 
-    let output = do_endpoint_inner(metadata, attr, item, errors)?;
+    // Parse attributes. (Do this before parsing the function since that's the
+    // order they're in, in source code.)
+    let metadata = match from_tokenstream(&attr) {
+        Ok(metadata) => Some(metadata),
+        Err(e) => {
+            // If there is an error while parsing the metadata, report it, but
+            // continue to generate the original function.
+            errors.push(e);
+            None
+        }
+    };
+
+    // Attempt to parse the function.
+    let item_fn = match syn::parse2::<ItemFnForSignature>(item.clone()) {
+        Ok(item_fn) => Some(item_fn),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    let output = match (metadata, item_fn.as_ref()) {
+        (Some(metadata), Some(item_fn)) => {
+            // The happy path.
+            do_endpoint_inner(metadata, attr, item, &item_fn, errors)
+        }
+        (None, Some(_)) => {
+            // In this case, continue to generate the original function (but not
+            // the attribute proc macro).
+            EndpointOutput {
+                output: quote! { #item },
+                // We don't validate parameters, so we don't know if there are
+                // errors in them.
+                has_param_errors: false,
+            }
+        }
+        (_, None) => {
+            // Can't do anything here, just return errors.
+            EndpointOutput { output: quote! {}, has_param_errors: false }
+        }
+    };
+
     let mut errors = error_store.into_inner();
 
     // If there are any errors, we also want to provide a usage message as an error.
     if output.has_param_errors {
-        // Note that we must use `Error::new_spanned` with the function
-        // signature, not Error::new(sig.span(), ...). That's because with Rust
-        // 1.76, obtaining sig.span() only returns the initial "fn" token, not
-        // the entire function signature.
-        errors.insert(0, Error::new_spanned(&output.item_fn.sig, USAGE));
+        let item_fn = item_fn
+            .as_ref()
+            .expect("has_param_errors is true => item_fn is Some");
+        errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
     }
 
     Ok((output.output, errors))
@@ -59,9 +97,6 @@ pub(crate) fn do_endpoint(
 pub(crate) struct EndpointOutput {
     /// The actual output.
     pub(crate) output: TokenStream,
-
-    /// The parsed `fn` item consisting of the signature.
-    pub(crate) item_fn: ItemFnForSignature,
 
     /// Whether there were any parameter-related errors.
     ///
@@ -74,20 +109,20 @@ pub(crate) fn do_endpoint_inner(
     metadata: EndpointMetadata,
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
+    item_fn: &ItemFnForSignature,
     errors: ErrorSink<'_, Error>,
-) -> Result<EndpointOutput, Error> {
-    let ast: ItemFnForSignature = syn::parse2(item.clone())?;
+) -> EndpointOutput {
     let dropshot = metadata.dropshot_crate();
 
     // Perform validations first.
     let metadata = metadata.validate(&attr, &errors);
-    let params = EndpointParams::new(&ast.sig, &errors);
+    let params = EndpointParams::new(&item_fn.sig, &errors);
 
-    let name = &ast.sig.ident;
+    let name = &item_fn.sig.ident;
     let name_str = name.to_string();
-    let visibility = &ast.vis;
+    let visibility = &item_fn.vis;
 
-    let doc = ExtractedDoc::from_attrs(&ast.attrs);
+    let doc = ExtractedDoc::from_attrs(&item_fn.attrs);
     let comment_text = doc.comment_text(&name_str);
 
     let description_doc_comment = quote! {
@@ -140,7 +175,7 @@ pub(crate) fn do_endpoint_inner(
     // defining but not using an endpoint is likely a programming error, we
     // want to be sure to have the compiler flag this. We force this by using
     // the span from the name of the function to which this macro was applied.
-    let span = ast.sig.ident.span();
+    let span = item_fn.sig.ident.span();
     let const_struct = quote_spanned! {span=>
         #visibility const #name: #name = #name {};
     };
@@ -165,7 +200,7 @@ pub(crate) fn do_endpoint_inner(
         #from_impl
     };
 
-    Ok(EndpointOutput { output: stream, item_fn: ast, has_param_errors })
+    EndpointOutput { output: stream, has_param_errors }
 }
 
 /// Request and return types for an endpoint.
