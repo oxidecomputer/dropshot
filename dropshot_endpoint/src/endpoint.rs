@@ -661,8 +661,7 @@ mod tests {
                     Ok(())
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -685,7 +684,7 @@ mod tests {
                     Ok(())
                 }
             },
-        ).unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -710,8 +709,7 @@ mod tests {
                     Ok(())
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -736,8 +734,7 @@ mod tests {
                     Ok(())
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -761,8 +758,7 @@ mod tests {
                     Ok(())
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -786,8 +782,7 @@ mod tests {
                     Ok(())
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -811,8 +806,7 @@ mod tests {
                     Ok(())
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(
@@ -823,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_endpoint_invalid_item() {
-        let ret = do_endpoint(
+        let (_, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c"
@@ -833,13 +827,14 @@ mod tests {
             },
         );
 
-        let msg = format!("{}", ret.err().unwrap());
+        assert_eq!(errors.len(), 1);
+        let msg = format!("{}", errors.first().unwrap());
         assert_eq!("expected `fn`", msg);
     }
 
     #[test]
     fn test_endpoint_bad_string() {
-        let ret = do_endpoint(
+        let (_, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = /a/b/c
@@ -849,13 +844,18 @@ mod tests {
             },
         );
 
-        let msg = format!("{}", ret.err().unwrap());
+        assert_eq!(errors.len(), 2);
+
+        let msg = format!("{}", errors.first().unwrap());
         assert_eq!("expected a string, but found `/`", msg);
+
+        let msg = format!("{}", errors.last().unwrap());
+        assert_eq!("expected `fn`", msg);
     }
 
     #[test]
     fn test_endpoint_bad_metadata() {
-        let ret = do_endpoint(
+        let (_, errors) = do_endpoint(
             quote! {
                 methud = GET,
                 path = "/a/b/c"
@@ -865,8 +865,13 @@ mod tests {
             },
         );
 
-        let msg = format!("{}", ret.err().unwrap());
+        assert_eq!(errors.len(), 2);
+
+        let msg = format!("{}", errors.first().unwrap());
         assert_eq!("extraneous member `methud`", msg);
+
+        let msg = format!("{}", errors.last().unwrap());
+        assert_eq!("expected `fn`", msg);
     }
 
     #[test]
@@ -879,8 +884,7 @@ mod tests {
             quote! {
                 fn handler_xyz(_rqctx: RequestContext) {}
             },
-        )
-        .unwrap();
+        );
 
         assert!(!errors.is_empty());
         assert_eq!(
@@ -899,8 +903,7 @@ mod tests {
             quote! {
                 async fn handler_xyz(&self) {}
             },
-        )
-        .unwrap();
+        );
 
         assert!(!errors.is_empty());
         assert_eq!(
@@ -919,8 +922,7 @@ mod tests {
             quote! {
                 async fn handler_xyz() {}
             },
-        )
-        .unwrap();
+        );
 
         assert!(!errors.is_empty());
         assert_eq!(
