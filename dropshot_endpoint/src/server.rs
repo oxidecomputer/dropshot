@@ -242,8 +242,11 @@ impl<'ast> Server<'ast> {
         Self { dropshot, item_trait, items, context_item }
     }
 
-    /// Creates a `Server` for invalid metadata, for which it is impossible to
-    /// ascertain output.
+    /// Creates a `Server` for invalid metadata.
+    ///
+    /// In this case, no further checking is done on the items, and they are all
+    /// stored as `Other`. The trait will be output as-is, with `#[endpoint]`
+    /// and `#[channel]` attributes stripped.
     fn invalid_no_metadata(item_trait: &'ast ItemTraitPartParsed) -> Self {
         // Just store all the items as "Other", to indicate that we haven't
         // performed any validation on them.
