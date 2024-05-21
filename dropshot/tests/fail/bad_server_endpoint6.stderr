@@ -14,8 +14,24 @@ error: expected identifier, found `0x1de`
    |                           |
    |                           while parsing this struct
 
-error[E0063]: missing fields `x` and `y` in initializer of `Ret`
-  --> tests/fail/bad_server_endpoint6.rs:31:27
+error: expected identifier, found `"220"`
+  --> tests/fail/bad_server_endpoint6.rs:46:33
    |
-31 |         Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
+46 |         Ok(HttpResponseOk(Ret { "220".to_string(), 0x220 }))
+   |                           ---   ^^^^^ expected identifier
+   |                           |
+   |                           while parsing this struct
+
+error: expected identifier, found `0x220`
+  --> tests/fail/bad_server_endpoint6.rs:46:52
+   |
+46 |         Ok(HttpResponseOk(Ret { "220".to_string(), 0x220 }))
+   |                           ---                      ^^^^^ expected identifier
+   |                           |
+   |                           while parsing this struct
+
+error[E0063]: missing fields `x` and `y` in initializer of `Ret`
+  --> tests/fail/bad_server_endpoint6.rs:46:27
+   |
+46 |         Ok(HttpResponseOk(Ret { "220".to_string(), 0x220 }))
    |                           ^^^ missing `x` and `y`

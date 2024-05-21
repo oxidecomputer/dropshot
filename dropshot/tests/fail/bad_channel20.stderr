@@ -1,21 +1,5 @@
-error: channel handlers must have the following signature:
-           async fn(
-               rqctx: dropshot::RequestContext<MyContext>,
-               [query_params: Query<Q>,]
-               [path_params: Path<P>,]
-               websocket_connection: dropshot::WebsocketConnection,
-           ) -> dropshot::WebsocketChannelResult
-  --> tests/fail/bad_channel20.rs:23:1
-   |
-23 | / async fn variadic_argument(
-24 | |     _rqctx: RequestContext<()>,
-25 | |     _param1: Query<QueryParams>,
-26 | |     ...
-27 | | ) -> dropshot::WebsocketChannelResult {
-   | |_____________________________________^
-
-error: endpoint `variadic_argument` must not have a variadic argument
-  --> tests/fail/bad_channel20.rs:26:5
-   |
-26 |     ...
-   |     ^^^
+error: unknown variant `UNKNOWN`, expected `WEBSOCKETS`
+ --> tests/fail/bad_channel20.rs:8:16
+  |
+8 |     protocol = UNKNOWN,
+  |                ^^^^^^^

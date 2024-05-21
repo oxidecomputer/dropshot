@@ -14,8 +14,8 @@ use crate::{
     },
     error_store::{ErrorSink, ErrorStore},
     syn_parsing::{
-        ItemTraitForFnSignatures, TraitItemFnForSignature,
-        TraitItemForFnSignature, UnparsedBlock,
+        ItemTraitPartParsed, TraitItemFnForSignature, TraitItemPartParsed,
+        UnparsedBlock,
     },
     util::{get_crate, MacroKind},
 };
@@ -23,23 +23,53 @@ use crate::{
 pub(crate) fn do_server(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
-) -> std::result::Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
-    // Parse attributes.
-    let server_metadata: ServerMetadata = from_tokenstream(&attr)?;
-
-    // This has to be a trait.
-    let item_trait: ItemTraitForFnSignatures = syn::parse2(item.clone())?;
-
+) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
 
-    let server = Server::new(server_metadata, &item_trait, errors);
-    let output = server.to_output();
+    // Parse attributes. (Do this before parsing the trait since that's the
+    // order they're in, in source code.)
+    let server_metadata = match from_tokenstream::<ServerMetadata>(&attr) {
+        Ok(m) => Some(m),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    // Attempt to parse the trait.
+    let item_trait = match syn::parse2::<ItemTraitPartParsed>(item) {
+        Ok(item_trait) => Some(item_trait),
+        Err(e) => {
+            errors.push(e);
+            None
+        }
+    };
+
+    let output = match (server_metadata, item_trait) {
+        (Some(server_metadata), Some(item_trait)) => {
+            // The happy path.
+            let server = Server::new(server_metadata, &item_trait, errors);
+            server.to_output()
+        }
+        (None, Some(item_trait)) => {
+            // This is a case where we can do something useful. Don't try and
+            // validate the input, but we can at least regenerate the same type
+            // with endpoint and channel attributes stripped.
+            let server = Server::invalid_no_metadata(&item_trait);
+            server.to_output()
+        }
+        (_, None) => {
+            // Can't do anything here, just return errors.
+            quote! {}
+        }
+    };
+
     let errors = error_store.into_inner();
 
     // XXX: If there are any parameter errors, also provide a usage message.
 
-    Ok((output, errors))
+    (output, errors)
 }
 
 #[derive(Deserialize, Debug)]
@@ -65,7 +95,7 @@ impl ServerMetadata {
 
 struct Server<'ast> {
     dropshot: TokenStream,
-    item_trait: &'ast ItemTraitForFnSignatures,
+    item_trait: &'ast ItemTraitPartParsed,
     // We want to maintain the order of items in the trait (other than the
     // Context associated type which we're always going to move to the top), so
     // we use a single list to store all of them.
@@ -80,7 +110,7 @@ const CHANNEL_IDENT: &str = "channel";
 impl<'ast> Server<'ast> {
     fn new(
         metadata: ServerMetadata,
-        item_trait: &'ast ItemTraitForFnSignatures,
+        item_trait: &'ast ItemTraitPartParsed,
         errors: ErrorSink<'_, Error>,
     ) -> Self {
         let dropshot = metadata.dropshot_crate();
@@ -92,7 +122,7 @@ impl<'ast> Server<'ast> {
 
         for item in &item_trait.items {
             match item {
-                TraitItemForFnSignature::Fn(f) => {
+                TraitItemPartParsed::Fn(f) => {
                     // XXX cannot have multiple endpoint or channel attributes,
                     // check here.
                     let endpoint_attr = f
@@ -118,7 +148,7 @@ impl<'ast> Server<'ast> {
                                 f,
                                 eattr,
                                 &context_ident,
-                                &errors.new(),
+                                &errors,
                             ) {
                                 ServerItem::Endpoint(endpoint)
                             } else {
@@ -143,7 +173,7 @@ impl<'ast> Server<'ast> {
 
                 // Everything else is permissible -- just ensure that they
                 // aren't marked as `endpoint` or `channel`.
-                TraitItemForFnSignature::Other(other) => {
+                TraitItemPartParsed::Other(other) => {
                     let should_push = match other {
                         syn::TraitItem::Const(c) => {
                             check_endpoint_or_channel_on_non_fn(
@@ -212,9 +242,26 @@ impl<'ast> Server<'ast> {
         Self { dropshot, item_trait, items, context_item }
     }
 
+    /// Creates a `Server` for invalid metadata, for which it is impossible to
+    /// ascertain output.
+    fn invalid_no_metadata(item_trait: &'ast ItemTraitPartParsed) -> Self {
+        // Just store all the items as "Other", to indicate that we haven't
+        // performed any validation on them.
+        let items = item_trait.items.iter().map(ServerItem::Other);
+
+        Self {
+            // The "dropshot" token is not available, so the best we can do is
+            // to use the default "dropshot".
+            dropshot: get_crate(None),
+            item_trait,
+            items: items.collect(),
+            context_item: None,
+        }
+    }
+
     fn to_output(&self) -> TokenStream {
         let context_item =
-            self.make_context_trait_item().map(TraitItemForFnSignature::Other);
+            self.make_context_trait_item().map(TraitItemPartParsed::Other);
         let other_items =
             self.items.iter().map(|item| item.to_out_trait_item());
         let out_items = context_item.into_iter().chain(other_items);
@@ -231,7 +278,7 @@ impl<'ast> Server<'ast> {
 
         // Everything else about the trait stays the same -- just the items change.
 
-        let out_trait = ItemTraitForFnSignatures {
+        let out_trait = ItemTraitPartParsed {
             supertraits,
             items: out_items.collect(),
             ..self.item_trait.clone()
@@ -431,20 +478,25 @@ enum ServerItem<'ast> {
     // generate the underlying method because rust-analyzer works better if it
     // exists.
     Invalid(&'ast TraitItemFnForSignature),
-    Other(&'ast TraitItemForFnSignature),
+    Other(&'ast TraitItemPartParsed),
 }
 
 impl<'a> ServerItem<'a> {
-    fn to_out_trait_item(&self) -> TraitItemForFnSignature {
+    fn to_out_trait_item(&self) -> TraitItemPartParsed {
         match self {
             Self::Endpoint(e) => e.to_out_trait_item(),
             Self::Channel(c) => c.to_out_trait_item(),
-            Self::Invalid(e) => {
-                // Retain all attributes other than the endpoint attribute.
-                let f = strip_recognized_attrs(e);
-                TraitItemForFnSignature::Fn(f)
+            Self::Invalid(f) => {
+                // Strip recognized attributes, retaining all others.
+                let mut f = (*f).clone();
+                f.strip_recognized_attrs();
+                TraitItemPartParsed::Fn(f)
             }
-            Self::Other(o) => (*o).clone(),
+            Self::Other(o) => {
+                let mut o = (*o).clone();
+                o.strip_recognized_attrs();
+                o
+            }
         }
     }
 
@@ -523,9 +575,10 @@ impl<'ast> ServerEndpoint<'ast> {
         }
     }
 
-    fn to_out_trait_item(&self) -> TraitItemForFnSignature {
+    fn to_out_trait_item(&self) -> TraitItemPartParsed {
         // Retain all attributes other than the endpoint attribute.
-        let f = strip_recognized_attrs(self.f);
+        let mut f = self.f.clone();
+        f.strip_recognized_attrs();
 
         // Below code adapted from https://github.com/rust-lang/impl-trait-utils
         // and used under the MIT and Apache 2.0 licenses.
@@ -541,25 +594,19 @@ impl<'ast> ServerEndpoint<'ast> {
         };
 
         // If there's a block, then surround it with `async move`, to match the
-        // fact that we removed `async` from the signature.
+        // fact that we're going to remove `async` from the signature.
         let block = f.block.as_ref().map(|block| {
             let block = block.clone();
             let tokens = quote! { async move #block };
             UnparsedBlock { brace_token: block.brace_token, tokens }
         });
 
-        TraitItemForFnSignature::Fn(TraitItemFnForSignature {
-            sig: syn::Signature {
-                asyncness: None,
-                output: syn::ReturnType::Type(
-                    Default::default(),
-                    Box::new(output_ty),
-                ),
-                ..f.sig
-            },
-            block,
-            ..f
-        })
+        f.sig.asyncness = None;
+        f.sig.output =
+            syn::ReturnType::Type(Default::default(), Box::new(output_ty));
+        f.block = block;
+
+        TraitItemPartParsed::Fn(f)
     }
 
     fn to_top_level_checks(&self, dropshot: &TokenStream) -> TokenStream {
@@ -615,29 +662,57 @@ impl<'ast> ServerChannel<'ast> {
         Some(Self { orig })
     }
 
-    fn to_out_trait_item(&self) -> TraitItemForFnSignature {
+    fn to_out_trait_item(&self) -> TraitItemPartParsed {
         // Retain all attributes other than the channel attribute.
-        let f = strip_recognized_attrs(self.orig);
-        TraitItemForFnSignature::Fn(f)
+        let mut f = self.orig.clone();
+        f.strip_recognized_attrs();
+        TraitItemPartParsed::Fn(f)
     }
 }
 
-fn strip_recognized_attrs(
-    f: &TraitItemFnForSignature,
-) -> TraitItemFnForSignature {
-    let attrs = f
-        .attrs
-        .iter()
-        .filter(|a| {
-            // Strip endpoint and channel attributes, since those are the ones
-            // recognized by us.
-            !(a.path().is_ident(ENDPOINT_IDENT)
-                || a.path().is_ident(CHANNEL_IDENT))
-        })
-        .cloned()
-        .collect();
+trait StripRecognizedAttrs {
+    fn strip_recognized_attrs(&mut self);
+}
 
-    TraitItemFnForSignature { attrs, ..f.clone() }
+impl StripRecognizedAttrs for TraitItemPartParsed {
+    fn strip_recognized_attrs(&mut self) {
+        match self {
+            TraitItemPartParsed::Fn(f) => f.strip_recognized_attrs(),
+            TraitItemPartParsed::Other(o) => o.strip_recognized_attrs(),
+        }
+    }
+}
+
+impl StripRecognizedAttrs for TraitItemFnForSignature {
+    fn strip_recognized_attrs(&mut self) {
+        strip_attrs_impl(&mut self.attrs);
+    }
+}
+
+impl StripRecognizedAttrs for syn::TraitItem {
+    fn strip_recognized_attrs(&mut self) {
+        match self {
+            syn::TraitItem::Const(c) => {
+                strip_attrs_impl(&mut c.attrs);
+            }
+            syn::TraitItem::Fn(f) => {
+                strip_attrs_impl(&mut f.attrs);
+            }
+            syn::TraitItem::Type(t) => {
+                strip_attrs_impl(&mut t.attrs);
+            }
+            syn::TraitItem::Macro(m) => {
+                strip_attrs_impl(&mut m.attrs);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn strip_attrs_impl(attrs: &mut Vec<syn::Attribute>) {
+    attrs.retain(|a| {
+        !(a.path().is_ident(ENDPOINT_IDENT) || a.path().is_ident(CHANNEL_IDENT))
+    });
 }
 
 #[cfg(test)]

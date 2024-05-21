@@ -1,5 +1,5 @@
 error: unknown variant `UNKNOWN`, expected one of `DELETE`, `GET`, `HEAD`, `PATCH`, `POST`, `PUT`, `OPTIONS`
-  --> tests/fail/bad_endpoint20.rs:12:14
+  --> tests/fail/bad_server_endpoint20b.rs:16:18
    |
-12 |     method = UNKNOWN,
-   |              ^^^^^^^
+16 |         method = UNKNOWN,
+   |                  ^^^^^^^

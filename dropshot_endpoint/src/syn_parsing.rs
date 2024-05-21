@@ -36,7 +36,7 @@ impl Parse for ItemFnForSignature {
 ///
 /// Only function signatures are parsed, not their bodies.
 #[derive(Clone)]
-pub(crate) struct ItemTraitForFnSignatures {
+pub(crate) struct ItemTraitPartParsed {
     pub attrs: Vec<Attribute>,
     pub vis: Visibility,
     pub unsafety: Option<Token![unsafe]>,
@@ -50,10 +50,10 @@ pub(crate) struct ItemTraitForFnSignatures {
     pub colon_token: Option<Token![:]>,
     pub supertraits: Punctuated<TypeParamBound, Token![+]>,
     pub brace_token: token::Brace,
-    pub items: Vec<TraitItemForFnSignature>,
+    pub items: Vec<TraitItemPartParsed>,
 }
 
-impl Parse for ItemTraitForFnSignatures {
+impl Parse for ItemTraitPartParsed {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         // Adapted from syn.
         let outer_attrs = input.call(Attribute::parse_outer)?;
@@ -85,7 +85,7 @@ fn parse_rest_of_trait(
     trait_token: Token![trait],
     ident: Ident,
     mut generics: Generics,
-) -> Result<ItemTraitForFnSignatures> {
+) -> Result<ItemTraitPartParsed> {
     // Adapted from syn.
     let colon_token: Option<Token![:]> = input.parse()?;
 
@@ -113,7 +113,7 @@ fn parse_rest_of_trait(
         items.push(content.parse()?);
     }
 
-    Ok(ItemTraitForFnSignatures {
+    Ok(ItemTraitPartParsed {
         attrs,
         vis,
         unsafety,
@@ -129,7 +129,7 @@ fn parse_rest_of_trait(
     })
 }
 
-impl ToTokens for ItemTraitForFnSignatures {
+impl ToTokens for ItemTraitPartParsed {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         // Adapted from syn.
         let Self {
@@ -168,7 +168,7 @@ impl ToTokens for ItemTraitForFnSignatures {
 
 /// Similar to `syn::TraitItem`, except function bodies aren't parsed.
 #[derive(Clone)]
-pub(crate) enum TraitItemForFnSignature {
+pub(crate) enum TraitItemPartParsed {
     /// An associated function within the definition of a trait.
     Fn(TraitItemFnForSignature),
 
@@ -176,7 +176,7 @@ pub(crate) enum TraitItemForFnSignature {
     Other(TraitItem),
 }
 
-impl Parse for TraitItemForFnSignature {
+impl Parse for TraitItemPartParsed {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         // The only case we need to consider is a function -- for everything
         // else, we defer to syn.
@@ -237,7 +237,7 @@ impl Parse for TraitItemForFnSignature {
     }
 }
 
-impl ToTokens for TraitItemForFnSignature {
+impl ToTokens for TraitItemPartParsed {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             Self::Fn(f) => f.to_tokens(tokens),

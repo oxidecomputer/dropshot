@@ -1,0 +1,5 @@
+error: expected a string, but found `123`
+  --> tests/fail/bad_server_endpoint20a.rs:10:32
+   |
+10 | #[dropshot::server { context = 123 }]
+   |                                ^^^
