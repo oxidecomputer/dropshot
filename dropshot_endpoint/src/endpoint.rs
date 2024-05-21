@@ -34,7 +34,7 @@ const USAGE: &str = "Endpoint handlers must have the following signature:
 pub(crate) fn do_endpoint(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
-) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
 
@@ -90,7 +90,7 @@ pub(crate) fn do_endpoint(
         errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
     }
 
-    Ok((output.output, errors))
+    (output.output, errors)
 }
 
 /// The result of calling `do_endpoint_inner`.

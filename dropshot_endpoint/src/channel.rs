@@ -28,7 +28,7 @@ const USAGE: &str = "channel handlers must have the following signature:
 pub(crate) fn do_channel(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
-) -> Result<(proc_macro2::TokenStream, Vec<Error>), Error> {
+) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
 
@@ -59,7 +59,7 @@ pub(crate) fn do_channel(
                 Some(channel) => {
                     // The happy path.
                     let errors = error_store.sink();
-                    do_channel_inner(channel, errors)?
+                    do_channel_inner(channel, errors)
                 }
                 None => {
                     // For now, None always means that there was a parameter
@@ -91,7 +91,7 @@ pub(crate) fn do_channel(
         errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
     }
 
-    Ok((output.output, errors))
+    (output.output, errors)
 }
 
 /// Parsed output of a `#[channel]` macro.
@@ -106,7 +106,8 @@ pub(crate) fn do_channel(
 struct ParsedChannel {
     metadata: EndpointMetadata,
     attr: proc_macro2::TokenStream,
-    new_item: proc_macro2::TokenStream,
+    endpoint_item: proc_macro2::TokenStream,
+    endpoint_fn: ItemFnForSignature,
 }
 
 impl ParsedChannel {
@@ -187,13 +188,25 @@ impl ParsedChannel {
                     syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))
                         .expect("valid ReturnType");
 
-                let new_item = quote! {
+                let endpoint_item = quote! {
                     #(#attrs)*
                     #vis #sig {
                         async fn __dropshot_websocket_handler(#inner_args) #inner_output #body
                         __dropshot_websocket_upgrade.handle(move | #conn_name: #conn_type | async move {
                             __dropshot_websocket_handler(#(#arg_names),*).await
                         })
+                    }
+                };
+
+                // Attempt to parse the new item immediately. This should always
+                // work, but if it doesn't, error out right away.
+                let endpoint_fn = match syn::parse2::<ItemFnForSignature>(
+                    endpoint_item.clone(),
+                ) {
+                    Ok(endpoint_fn) => endpoint_fn,
+                    Err(e) => {
+                        errors.push(e);
+                        return None;
                     }
                 };
 
@@ -207,7 +220,7 @@ impl ParsedChannel {
                     _dropshot_crate,
                 };
 
-                Some(Self { metadata, attr, new_item })
+                Some(Self { metadata, attr, endpoint_item, endpoint_fn })
             }
         }
     }
@@ -225,21 +238,20 @@ struct ChannelOutput {
 fn do_channel_inner(
     parsed: ParsedChannel,
     errors: ErrorSink<'_, Error>,
-) -> Result<ChannelOutput, Error> {
-    let ParsedChannel { metadata, attr, new_item } = parsed;
-    let endpoint_fn = syn::parse2::<ItemFnForSignature>(new_item.clone())?;
+) -> ChannelOutput {
+    let ParsedChannel { metadata, attr, endpoint_item, endpoint_fn } = parsed;
     let endpoint = endpoint::do_endpoint_inner(
         metadata,
         attr,
-        new_item,
+        endpoint_item,
         &endpoint_fn,
         errors,
     );
 
-    Ok(ChannelOutput {
+    ChannelOutput {
         output: endpoint.output,
         has_param_errors: endpoint.has_param_errors,
-    })
+    }
 }
 
 #[allow(non_snake_case)]
