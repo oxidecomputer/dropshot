@@ -1,32 +1,21 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 #![allow(unused_imports)]
 
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::Query;
-use dropshot::RequestContext;
-use schemars::JsonSchema;
-use serde::Deserialize;
 
-#[allow(dead_code)]
-#[derive(Deserialize, JsonSchema)]
-struct QueryParams {
-    x: String,
-}
-
-// Test: last parameter is variadic.
+// Check that bad_endpoint is present in the generated output, even though the
+// #[endpoint] annotation is incorrect.
 #[endpoint {
-    method = GET,
+    method = UNKNOWN,
     path = "/test",
 }]
-async fn variadic_argument(
-    _rqctx: RequestContext<()>,
-    _param1: Query<QueryParams>,
-    ...
-) -> Result<HttpResponseOk<()>, HttpError> {
+async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }
 
-fn main() {}
+fn main() {
+    bad_endpoint(); // this line should not produce any errors
+}
