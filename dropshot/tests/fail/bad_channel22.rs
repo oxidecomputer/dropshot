@@ -2,11 +2,12 @@
 
 #![allow(unused_imports)]
 
-use dropshot::endpoint;
+use dropshot::channel;
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponse;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::WebsocketConnection;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -16,16 +17,15 @@ struct QueryParams {
     x: String,
 }
 
-// Test: last parameter is variadic.
-#[endpoint {
-    method = GET,
+#[channel {
+    protocol = WEBSOCKETS,
     path = "/test",
 }]
-async fn variadic_argument(
-    _rqctx: RequestContext<()>,
-    _param1: Query<QueryParams>,
-    ...
-) -> Result<HttpResponseOk<()>, HttpError> {
+async fn weird_types<'a>(
+    _rqctx: RequestContext<T, Self::U>,
+    _param1: Query<&'a QueryParams>,
+    _param2: for<'b> TypedBody<&'b ()>,
+) -> Result<impl HttpResponse, HttpError> {
     Ok(HttpResponseOk(()))
 }
 
