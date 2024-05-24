@@ -1,7 +1,7 @@
 // Copyright 2023 Oxide Computer Company
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use syn::{parse_quote, Error};
@@ -269,11 +269,6 @@ impl<'ast> Server<'ast> {
             self.items.iter().map(|item| item.to_out_trait_item());
         let out_items = context_item.into_iter().chain(other_items);
 
-        let top_level_checks = self
-            .items
-            .iter()
-            .filter_map(|item| item.to_top_level_checks(&self.dropshot));
-
         // We need a 'static bound on the trait itself, otherwise we get `T
         // doesn't live long enough` errors.
         let mut supertraits = self.item_trait.supertraits.clone();
@@ -298,11 +293,15 @@ impl<'ast> Server<'ast> {
         quote! {
             #out_trait
 
-            #(#top_level_checks)*
+            // We don't need to generate type checks the way we do with
+            // function-based macros, because we get error messages that are
+            // exactly as good through the stub API description generator.
+            //
+            // For that reason, put it above the real API description as well --
+            // that way, the best error messages appear first.
+            #stub_api_description
 
             #api_description
-
-            #stub_api_description
         }
     }
 
@@ -382,11 +381,13 @@ impl<'ast> Server<'ast> {
         } else {
             let endpoints = self.items.iter().filter_map(|item| match item {
                 ServerItem::Endpoint(e) => {
+                    let name = &e.f.sig.ident;
                     let endpoint = match kind {
                         ApiFactoryKind::Regular => {
-                            let name = &e.f.sig.ident;
+                            // Adding the span information to path_to_name leads
+                            // to fewer call_site errors.
                             let path_to_name =
-                                quote! { <ServerImpl as #trait_name>::#name };
+                                quote_spanned! {name.span()=> <ServerImpl as #trait_name>::#name };
                             e.to_api_endpoint(
                                 &self.dropshot,
                                 &ApiEndpointKind::Regular(&path_to_name),
@@ -399,6 +400,7 @@ impl<'ast> Server<'ast> {
                             e.to_api_endpoint(
                                 &self.dropshot,
                                 &ApiEndpointKind::Stub {
+                                    name,
                                     extractor_types,
                                     ret_ty,
                                 },
@@ -416,7 +418,7 @@ impl<'ast> Server<'ast> {
                 ServerItem::Invalid(_) | ServerItem::Other(_) => None,
             });
 
-            quote! {
+            quote_spanned! {self.item_trait.ident.span()=>
                 let mut dropshot_api = dropshot::ApiDescription::new();
                 let mut dropshot_errors: Vec<String> = Vec::new();
 
@@ -500,17 +502,6 @@ impl<'a> ServerItem<'a> {
                 o.strip_recognized_attrs();
                 o
             }
-        }
-    }
-
-    fn to_top_level_checks(
-        &self,
-        dropshot: &TokenStream,
-    ) -> Option<TokenStream> {
-        match self {
-            Self::Endpoint(e) => Some(e.to_top_level_checks(dropshot)),
-            Self::Channel(_) => todo!("still need to implement channels"),
-            Self::Invalid(_) | Self::Other(_) => None,
         }
     }
 }
@@ -612,13 +603,6 @@ impl<'ast> ServerEndpoint<'ast> {
         TraitItemPartParsed::Fn(f)
     }
 
-    fn to_top_level_checks(&self, dropshot: &TokenStream) -> TokenStream {
-        // Type checks go at the top level -- in particular, we don't want to
-        // repeat them twice, once for the main function and once for the stub
-        // function.
-        self.params.to_type_checks(dropshot)
-    }
-
     fn to_api_endpoint(
         &self,
         dropshot: &TokenStream,
@@ -641,7 +625,7 @@ impl<'ast> ServerEndpoint<'ast> {
         // since all names are prefixed with "endpoint_".
         let endpoint_name = format_ident!("endpoint_{}", name_str);
 
-        quote! {
+        quote_spanned! {name.span()=>
             {
                 let #endpoint_name = #endpoint_fn;
                 if let Err(error) = dropshot_api.register(#endpoint_name) {

@@ -690,9 +690,6 @@
 //! {"ok":{"id":"a53696af-543d-452f-81b6-5a045dd9921d","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:57376","status_code":204,"message":""}}
 //! ```
 
-// Clippy's style advice is definitely valuable, but not worth the trouble for
-// automated enforcement.
-#![allow(clippy::style)]
 // The `usdt` crate may require nightly, enabled if our consumer is enabling
 // DTrace probes.
 #![cfg_attr(all(feature = "usdt-probes", usdt_need_asm), feature(asm))]

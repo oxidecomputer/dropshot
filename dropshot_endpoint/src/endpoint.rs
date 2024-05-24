@@ -20,6 +20,7 @@ use crate::doc::ExtractedDoc;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
 use crate::syn_parsing::ItemFnForSignature;
+use crate::syn_parsing::TraitItemFnForSignature;
 use crate::util::get_crate;
 use crate::util::MacroKind;
 use crate::util::ValidContentType;
@@ -42,6 +43,26 @@ pub(crate) fn do_endpoint(
 ) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
+
+    // Attempt to parse the function as a trait function. If this is successful
+    // and there's no block, then it's likely that the user has imported
+    // `dropshot::endpoint` and is using that.
+    if let Ok(trait_item_fn) =
+        syn::parse2::<TraitItemFnForSignature>(item.clone())
+    {
+        if trait_item_fn.block.is_none() {
+            let name = &trait_item_fn.sig.ident;
+            errors.push(Error::new_spanned(
+                        &trait_item_fn.sig,
+                        format!(
+                            "endpoint `{name}` appears to be a trait function\n\
+                             (did you mean to use `#[dropshot::server]` instead?)",
+                        ),
+                    ));
+            // Don't do any further validation -- just return the original item.
+            return (quote! { #item }, error_store.into_inner());
+        }
+    }
 
     // Parse attributes. (Do this before parsing the function since that's the
     // order they're in, in source code.)
@@ -1052,7 +1073,7 @@ impl ValidatedEndpointMetadata {
 
         let fn_call = match kind {
             ApiEndpointKind::Regular(endpoint_fn) => {
-                quote! {
+                quote_spanned! {endpoint_fn.span()=>
                     #dropshot::ApiEndpoint::new(
                         #endpoint_name.to_string(),
                         #endpoint_fn,
@@ -1062,8 +1083,8 @@ impl ValidatedEndpointMetadata {
                     )
                 }
             }
-            ApiEndpointKind::Stub { extractor_types, ret_ty } => {
-                quote! {
+            ApiEndpointKind::Stub { name, extractor_types, ret_ty } => {
+                quote_spanned! {name.span()=>
                     #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
@@ -1092,6 +1113,13 @@ pub(crate) enum ApiEndpointKind<'ast> {
     Regular(&'ast dyn ToTokens),
     /// A stub API endpoint. This is used for #[server].
     Stub {
+        /// The name of the function, used for span information.
+        ///
+        /// Ideally we'd use the entire function signature here, but as of Rust
+        /// 1.76 that only records the span of the first token (typically
+        /// `async`) rather than the full signature.
+        name: &'ast syn::Ident,
+
         /// The extractor types in use.
         extractor_types: Vec<&'ast syn::Type>,
 
