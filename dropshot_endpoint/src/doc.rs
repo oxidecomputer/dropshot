@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExtractedDoc {
