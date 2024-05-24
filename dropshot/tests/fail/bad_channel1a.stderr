@@ -1,0 +1,6 @@
+error: An argument of type dropshot::WebsocketConnection must be provided last.
+ --> tests/fail/bad_channel1a.rs:8:5
+  |
+8 | /     protocol = WEBSOCKETS,
+9 | |     path = "/test",
+  | |___________________^
