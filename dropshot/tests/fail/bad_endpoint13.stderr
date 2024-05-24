@@ -10,13 +10,22 @@ error: endpoint handlers must have the following signature:
            ) -> Result<HttpResponse*, HttpError>
   --> tests/fail/bad_endpoint13.rs:18:1
    |
-18 | / async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
+18 | / async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
 19 | |     _: RequestContext<S>,
-20 | | ) -> Result<HttpResponseOk<String>, HttpError> {
-   | |______________________________________________^
+20 | | ) -> Result<HttpResponseOk<String>, HttpError>
+21 | | where
+22 | |     usize: 'static,
+   | |___________________^
 
-error: endpoint `bad_response_type` must not have generics
-  --> tests/fail/bad_endpoint13.rs:18:27
+error: endpoint `generics_and_where_clause` must not have generics
+  --> tests/fail/bad_endpoint13.rs:18:35
    |
-18 | async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
-   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+18 | async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: endpoint `generics_and_where_clause` must not have a where clause
+  --> tests/fail/bad_endpoint13.rs:21:1
+   |
+21 | / where
+22 | |     usize: 'static,
+   | |___________________^

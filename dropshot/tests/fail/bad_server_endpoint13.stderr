@@ -1,0 +1,12 @@
+error: endpoint `generics_and_where_clause` must not have generics
+  --> tests/fail/bad_server_endpoint13.rs:23:39
+   |
+23 |     async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
+   |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: endpoint `generics_and_where_clause` must not have a where clause
+  --> tests/fail/bad_server_endpoint13.rs:26:5
+   |
+26 | /     where
+27 | |         usize: 'static;
+   | |______________________^

@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
-use syn::{parse_quote, Error};
+use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
     doc::ExtractedDoc,
@@ -295,10 +295,12 @@ impl<'ast> Server<'ast> {
 
             // We don't need to generate type checks the way we do with
             // function-based macros, because we get error messages that are
-            // exactly as good through the stub API description generator.
+            // roughly as good through the stub API description generator.
+            // (Also, adding type checks would end up duplicating a ton of error
+            // messages.)
             //
-            // For that reason, put it above the real API description as well --
-            // that way, the best error messages appear first.
+            // For that reason, put it above the real API description -- that
+            // way, the best error messages appear first.
             #stub_api_description
 
             #api_description
@@ -578,7 +580,7 @@ impl<'ast> ServerEndpoint<'ast> {
         // and used under the MIT and Apache 2.0 licenses.
         let output_ty = {
             let ret_ty = self.params.ret_ty;
-            let bounds = parse_quote! {
+            let bounds = parse_quote_spanned! {ret_ty.span()=>
                 ::core::future::Future<Output = #ret_ty> + Send + 'static
             };
             syn::Type::ImplTrait(syn::TypeImplTrait {
@@ -591,7 +593,7 @@ impl<'ast> ServerEndpoint<'ast> {
         // fact that we're going to remove `async` from the signature.
         let block = f.block.as_ref().map(|block| {
             let block = block.clone();
-            let tokens = quote! { async move #block };
+            let tokens = quote_spanned! {block.span()=> async move #block };
             UnparsedBlock { brace_token: block.brace_token, tokens }
         });
 

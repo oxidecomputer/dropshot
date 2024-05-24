@@ -53,12 +53,13 @@ pub(crate) fn do_endpoint(
         if trait_item_fn.block.is_none() {
             let name = &trait_item_fn.sig.ident;
             errors.push(Error::new_spanned(
-                        &trait_item_fn.sig,
-                        format!(
-                            "endpoint `{name}` appears to be a trait function\n\
-                             (did you mean to use `#[dropshot::server]` instead?)",
-                        ),
-                    ));
+                &trait_item_fn.sig,
+                format!(
+                    "endpoint `{name}` appears to be a trait function\n\
+                     note: did you mean to use `#[dropshot::server]` \
+                     instead?",
+                ),
+            ));
             // Don't do any further validation -- just return the original item.
             return (quote! { #item }, error_store.into_inner());
         }
@@ -294,6 +295,18 @@ impl<'ast> EndpointParams<'ast> {
                 &sig.generics,
                 format!("endpoint `{name_str}` must not have generics"),
             ));
+        }
+
+        if let Some(where_clause) = &sig.generics.where_clause {
+            // Empty where clauses are no-ops and therefore permitted.
+            if !where_clause.predicates.is_empty() {
+                errors.push(Error::new_spanned(
+                    where_clause,
+                    format!(
+                        "endpoint `{name_str}` must not have a where clause"
+                    ),
+                ));
+            }
         }
 
         if sig.variadic.is_some() {
@@ -1177,6 +1190,32 @@ mod tests {
         assert!(errors.is_empty());
         assert_contents(
             "tests/output/endpoint_context_fully_qualified_names.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    /// An empty where clause is a no-op and therefore permitted.
+    #[test]
+    fn test_endpoint_with_empty_where_clause() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                ) -> Result<HttpResponseOk<()>, HttpError>
+                where
+                {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_empty_where_clause.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }

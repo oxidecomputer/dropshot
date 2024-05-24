@@ -42,12 +42,13 @@ pub(crate) fn do_channel(
         if trait_item_fn.block.is_none() {
             let name = &trait_item_fn.sig.ident;
             errors.push(Error::new_spanned(
-                        &trait_item_fn.sig,
-                        format!(
-                            "endpoint `{name}` appears to be a trait function\n\
-                             (did you mean to use `#[dropshot::server]` instead?)",
-                        ),
-                    ));
+                &trait_item_fn.sig,
+                format!(
+                    "endpoint `{name}` appears to be a trait function\n\
+                     note: did you mean to use `#[dropshot::server]` \
+                     instead?",
+                ),
+            ));
             // Don't do any further validation -- just return the original item.
             return (quote! { #item }, error_store.into_inner());
         }

@@ -1,0 +1,10 @@
+error: endpoint `bad_endpoint` has an invalid content type
+       note: supported content types are: application/json, application/x-www-form-urlencoded, multipart/form-data
+  --> tests/fail/bad_server_endpoint16.rs:13:5
+   |
+13 | /     #[endpoint {
+14 | |         method = GET,
+15 | |         path = "/test",
+16 | |         content_type = "foo/bar",
+17 | |     }]
+   | |______^
