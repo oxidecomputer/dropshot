@@ -5,16 +5,16 @@ error: channel handlers must have the following signature:
                [path_params: Path<P>,]
                websocket_connection: dropshot::WebsocketConnection,
            ) -> dropshot::WebsocketChannelResult
-  --> tests/fail/bad_channel13.rs:19:1
+  --> tests/fail/bad_channel13.rs:17:1
    |
-19 | / async fn bad_channel<S: Stuff + Sync + Send + 'static>(
-20 | |     _rqctx: RequestContext<S>,
-21 | |     _upgraded: WebsocketConnection,
-22 | | ) -> dropshot::WebsocketChannelResult {
+17 | / async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+18 | |     _rqctx: RequestContext<S>,
+19 | |     _upgraded: WebsocketConnection,
+20 | | ) -> dropshot::WebsocketChannelResult {
    | |_____________________________________^
 
 error: generics are not permitted for endpoint handlers
-  --> tests/fail/bad_channel13.rs:19:21
+  --> tests/fail/bad_channel13.rs:17:21
    |
-19 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+17 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

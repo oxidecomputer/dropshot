@@ -1,4 +1,7 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
+
+// XXX: There's probably no good reason to support wildcards in channel
+// endpoints. We should just ban them.
 
 #![allow(unused_imports)]
 

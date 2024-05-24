@@ -619,7 +619,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         ApiEndpointParameterLocation::Query => {
                             Some(openapiv3::ReferenceOr::Item(
                                 openapiv3::Parameter::Query {
-                                    parameter_data: parameter_data,
+                                    parameter_data,
                                     allow_reserved: false,
                                     style: openapiv3::QueryStyle::Form,
                                     allow_empty_value: None,
@@ -629,7 +629,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         ApiEndpointParameterLocation::Path => {
                             Some(openapiv3::ReferenceOr::Item(
                                 openapiv3::Parameter::Path {
-                                    parameter_data: parameter_data,
+                                    parameter_data,
                                     style: openapiv3::PathStyle::Simple,
                                 },
                             ))
@@ -670,7 +670,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     );
 
                     Some(openapiv3::ReferenceOr::Item(openapiv3::RequestBody {
-                        content: content,
+                        content,
                         required: true,
                         ..Default::default()
                     }))
@@ -848,7 +848,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             "Error".to_string(),
             openapiv3::ReferenceOr::Item(openapiv3::Response {
                 description: "Error".to_string(),
-                content: content,
+                content,
                 ..Default::default()
             }),
         );

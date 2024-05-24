@@ -9,11 +9,15 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   check-style:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@9b4c13b0bfa31b4514c14f74b5a166c2708f43c6
+      - uses: taiki-e/install-action@nextest
       - name: Report cargo version
         run: cargo --version
       - name: Report rustfmt version
@@ -29,28 +33,34 @@ jobs:
         run: cargo --version
       - name: Report Clippy version
         run: cargo clippy -- --version
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
       - name: Run Clippy Lints
-        # Clippy's style nits are useful, but not worth keeping in CI.  This
-        # override belongs in src/lib.rs, but that doesn't reliably work due to
-        # rust-lang/rust-clippy#6610.
-        run: cargo clippy --all-targets -- --deny warnings --allow clippy::style
+        run: cargo clippy --all-targets -- --deny warnings
 
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2022, macos-12]
-        features: [ all, default ]
+        # macos-14 for M1 runners
+        os: [ubuntu-22.04, windows-2022, macos-14]
+        features: [all, default]
         include:
           - features: all
             feature_flags: --all-features
     steps:
       - uses: actions/checkout@9b4c13b0bfa31b4514c14f74b5a166c2708f43c6
+      - uses: taiki-e/install-action@nextest
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
         run: rustc --version
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
+        with:
+          # Matrix instances other than OS need to be added to this explicitly
+          key: ${{ matrix.features }}
       - name: Build
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
-        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose
+        run: cargo nextest run ${{ matrix.feature_flags }} --locked --all-targets --cargo-verbose
+      - name: Run doctests
+        run: cargo test ${{ matrix.feature_flags }} --doc --locked --verbose
