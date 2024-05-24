@@ -24,3 +24,17 @@ For channels:
 - Some of these tests may be moot. In this case, we check in text files with the rationale for skipping. For example, `bad_channel7.txt`.
 
 In either case, we do not renumber tests--instead, we skip that number so the fixtures afterwards stay consistent.
+
+== Updating to new Rust versions
+
+When upgrading to newer Rust versions in `rust-toolchain.toml`, compiler errors can sometimes change.
+
+- If the changes are desirable or otherwise immaterial, then it's easiest to just update the checked-in `.stderr` files via `TRYBUILD=overwrite`. For example: https://github.com/oxidecomputer/dropshot/pull/903[#903].
+- If the changes obscure the thing we're testing, we've had to sometimes adjust our tests. For example: https://github.com/oxidecomputer/dropshot/pull/727[#727].
+- Rarely, there have been regressions as a result of which we've had to file bugs against the Rust compiler. For example, https://github.com/rust-lang/rust/issues/76360[Rust issue #76360].
+
+== Disabling import warnings
+
+Tests in this repo are annotated with `#![allow(unused_imports)]`. That's because when a compiler error is thrown, imports which haven't yet successfully been used may throw "unused import" warnings. This is often a false positive, as the compiler error itself blocks intended usage.
+
+Disabling unused import warnings removes these irrelevant messages, helping us to focus on the actual compile errors we care about.
