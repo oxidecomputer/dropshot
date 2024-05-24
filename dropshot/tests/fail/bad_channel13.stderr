@@ -8,56 +8,56 @@ error: Endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_channel13.rs:15:1
+  --> tests/fail/bad_channel13.rs:18:1
    |
-15 | / #[channel {
-16 | |     protocol = WEBSOCKETS,
-17 | |     path = "/test",
-18 | | }]
+18 | / #[channel {
+19 | |     protocol = WEBSOCKETS,
+20 | |     path = "/test",
+21 | | }]
    | |__^
    |
    = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: generics are not permitted for endpoint handlers
-  --> tests/fail/bad_channel13.rs:19:21
+  --> tests/fail/bad_channel13.rs:22:21
    |
-19 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+22 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0401]: can't use generic parameters from outer item
-  --> tests/fail/bad_channel13.rs:20:28
+  --> tests/fail/bad_channel13.rs:23:28
    |
-18 | }]
+21 | }]
    |   - help: try introducing a local generic parameter here: `<S>`
-19 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+22 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
    |                      - type parameter from outer item
-20 |     _rqctx: RequestContext<S>,
+23 |     _rqctx: RequestContext<S>,
    |                            ^ use of generic parameter from outer item
 
 error[E0401]: can't use generic parameters from outer item
-  --> tests/fail/bad_channel13.rs:23:5
+  --> tests/fail/bad_channel13.rs:26:5
    |
-18 | }]
+21 | }]
    |   - help: try introducing a local generic parameter here: `<S>`
-19 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+22 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
    |                      - type parameter from outer item
 ...
-23 |     S::do_stuff();
+26 |     S::do_stuff();
    |     ^^^^^^^^^^^ use of generic parameter from outer item
 
 error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_channel13.rs:20:28
+  --> tests/fail/bad_channel13.rs:23:28
    |
-20 |     _rqctx: RequestContext<S>,
+23 |     _rqctx: RequestContext<S>,
    |                            ^ not found in this scope
    |
 help: you might be missing a type parameter
    |
-20 |     _rqctx: RequestContext<S><S>,
+23 |     _rqctx: RequestContext<S><S>,
    |                           +++
 
 error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_channel13.rs:20:28
+  --> tests/fail/bad_channel13.rs:23:28
    |
-20 |     _rqctx: RequestContext<S>,
+23 |     _rqctx: RequestContext<S>,
    |                            ^ not found in this scope
