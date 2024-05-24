@@ -7,14 +7,23 @@ error: channel handlers must have the following signature:
            ) -> dropshot::WebsocketChannelResult
   --> tests/fail/bad_channel13.rs:17:1
    |
-17 | / async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+17 | / async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
 18 | |     _rqctx: RequestContext<S>,
 19 | |     _upgraded: WebsocketConnection,
-20 | | ) -> dropshot::WebsocketChannelResult {
-   | |_____________________________________^
+20 | | ) -> dropshot::WebsocketChannelResult
+21 | | where
+22 | |     usize: 'static,
+   | |___________________^
 
-error: endpoint `bad_channel` must not have generics
-  --> tests/fail/bad_channel13.rs:17:21
+error: endpoint `generics_and_where_clause` must not have generics
+  --> tests/fail/bad_channel13.rs:17:35
    |
-17 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
-   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+17 | async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: endpoint `generics_and_where_clause` must not have a where clause
+  --> tests/fail/bad_channel13.rs:21:1
+   |
+21 | / where
+22 | |     usize: 'static,
+   | |___________________^
