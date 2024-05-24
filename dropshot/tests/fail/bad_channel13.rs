@@ -1,6 +1,4 @@
-// Copyright 2021 Oxide Computer Company
-
-// XXX: The error message produced by this test isn't great -- we should fix it.
+// Copyright 2024 Oxide Computer Company
 
 #![allow(unused_imports)]
 
