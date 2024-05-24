@@ -8,13 +8,18 @@ error: Endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint1.rs:13:1
+  --> tests/fail/bad_channel8.rs:9:1
    |
-13 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+9  | / #[channel {
+10 | |     protocol = WEBSOCKETS,
+11 | |     path = "/test",
+12 | | }]
+   | |__^
+   |
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: Endpoint requires arguments
-  --> tests/fail/bad_endpoint1.rs:13:22
+error: endpoint handler functions must be async
+  --> tests/fail/bad_channel8.rs:13:1
    |
-13 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
-   |                      ^^
+13 | fn bad_channel(
+   | ^^
