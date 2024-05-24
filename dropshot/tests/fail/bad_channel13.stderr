@@ -1,63 +1,20 @@
-error: Endpoint handlers must have the following signature:
+error: channel handlers must have the following signature:
            async fn(
                rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
                [path_params: Path<P>,]
-               [body_param: TypedBody<J>,]
-               [body_param: UntypedBody,]
-               [body_param: StreamingBody,]
-               [raw_request: RawRequest,]
-           ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_channel13.rs:18:1
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel13.rs:17:1
    |
-18 | / #[channel {
-19 | |     protocol = WEBSOCKETS,
-20 | |     path = "/test",
-21 | | }]
-   | |__^
-   |
-   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
+17 | / async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+18 | |     _rqctx: RequestContext<S>,
+19 | |     _upgraded: WebsocketConnection,
+20 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
 
-error: generics are not permitted for endpoint handlers
-  --> tests/fail/bad_channel13.rs:22:21
+error: endpoint `bad_channel` must not have generics
+  --> tests/fail/bad_channel13.rs:17:21
    |
-22 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+17 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error[E0401]: can't use generic parameters from outer item
-  --> tests/fail/bad_channel13.rs:23:28
-   |
-21 | }]
-   |   - help: try introducing a local generic parameter here: `<S>`
-22 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
-   |                      - type parameter from outer item
-23 |     _rqctx: RequestContext<S>,
-   |                            ^ use of generic parameter from outer item
-
-error[E0401]: can't use generic parameters from outer item
-  --> tests/fail/bad_channel13.rs:26:5
-   |
-21 | }]
-   |   - help: try introducing a local generic parameter here: `<S>`
-22 | async fn bad_channel<S: Stuff + Sync + Send + 'static>(
-   |                      - type parameter from outer item
-...
-26 |     S::do_stuff();
-   |     ^^^^^^^^^^^ use of generic parameter from outer item
-
-error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_channel13.rs:23:28
-   |
-23 |     _rqctx: RequestContext<S>,
-   |                            ^ not found in this scope
-   |
-help: you might be missing a type parameter
-   |
-23 |     _rqctx: RequestContext<S><S>,
-   |                           +++
-
-error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_channel13.rs:23:28
-   |
-23 |     _rqctx: RequestContext<S>,
-   |                            ^ not found in this scope

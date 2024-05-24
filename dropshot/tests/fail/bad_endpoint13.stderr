@@ -1,4 +1,4 @@
-error: Endpoint handlers must have the following signature:
+error: endpoint handlers must have the following signature:
            async fn(
                rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
@@ -12,28 +12,20 @@ error: Endpoint handlers must have the following signature:
    |
 18 | / async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
 19 | |     _: RequestContext<S>,
-20 | | ) -> Result<HttpResponseOk<String>, HttpError> {
-   | |______________________________________________^
+20 | | ) -> Result<HttpResponseOk<String>, HttpError>
+21 | | where
+22 | |     usize: 'static,
+   | |___________________^
 
-error: generics are not permitted for endpoint handlers
+error: endpoint `bad_response_type` must not have generics
   --> tests/fail/bad_endpoint13.rs:18:27
    |
 18 | async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_endpoint13.rs:19:23
+error: endpoint `bad_response_type` must not have a where clause
+  --> tests/fail/bad_endpoint13.rs:21:1
    |
-19 |     _: RequestContext<S>,
-   |                       ^ not found in this scope
-   |
-help: you might be missing a type parameter
-   |
-19 |     _: RequestContext<S><S>,
-   |                      +++
-
-error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_endpoint13.rs:19:23
-   |
-19 |     _: RequestContext<S>,
-   |                       ^ not found in this scope
+21 | / where
+22 | |     usize: 'static,
+   | |___________________^

@@ -10,6 +10,9 @@ repository = "https://github.com/oxidecomputer/dropshot/"
 [lib]
 proc-macro = true
 
+[lints]
+workspace = true
+
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
@@ -24,4 +27,6 @@ version = "2.0"
 features = [ "full" ]
 
 [dev-dependencies]
+expectorate = "1.1.0"
+prettyplease = "0.2.20"
 schema = "0.1.0"
