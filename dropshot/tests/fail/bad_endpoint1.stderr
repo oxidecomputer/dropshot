@@ -8,13 +8,13 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint1.rs:20:1
+  --> tests/fail/bad_endpoint1.rs:13:1
    |
-20 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
+13 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: endpoint `bad_endpoint` must have at least one RequestContext argument
-  --> tests/fail/bad_endpoint1.rs:20:22
+  --> tests/fail/bad_endpoint1.rs:13:22
    |
-20 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
+13 | async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
    |                      ^^
