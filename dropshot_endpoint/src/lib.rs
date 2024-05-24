@@ -4,15 +4,13 @@
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
 //! Spec (OAS) v3 document that describes the API.
 
-// Clippy's style advice is definitely valuable, but not worth the trouble for
-// automated enforcement.
-#![allow(clippy::style)]
-
 use quote::quote;
 use serde_tokenstream::Error;
 
 mod channel;
+mod doc;
 mod endpoint;
+mod error_store;
 mod syn_parsing;
 mod util;
 
@@ -79,26 +77,14 @@ pub fn channel(
 }
 
 fn do_output(
-    res: Result<(proc_macro2::TokenStream, Vec<Error>), Error>,
+    (endpoint, errors): (proc_macro2::TokenStream, Vec<Error>),
 ) -> proc_macro::TokenStream {
-    match res {
-        Err(err) => err.to_compile_error().into(),
-        Ok((endpoint, errors)) => {
-            let compiler_errors =
-                errors.iter().map(|err| err.to_compile_error());
+    let compiler_errors = errors.iter().map(|err| err.to_compile_error());
 
-            let output = quote! {
-                #endpoint
-                #( #compiler_errors )*
-            };
+    let output = quote! {
+        #endpoint
+        #( #compiler_errors )*
+    };
 
-            output.into()
-        }
-    }
-}
-
-#[allow(dead_code)]
-fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
-    let compile_errors = errors.iter().map(syn::Error::to_compile_error);
-    quote!(#(#compile_errors)*)
+    output.into()
 }
