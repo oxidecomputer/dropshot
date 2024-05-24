@@ -1,6 +1,9 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
-// XXX: The error message produced by this test isn't great -- we should fix it.
+// The error messages produced by this test aren't great, with messages like
+// "can't use generic parameters from outer item" which leak implementation
+// details. We should improve this by generating channels directly rather than
+// converting them to endpoints.
 
 #![allow(unused_imports)]
 
