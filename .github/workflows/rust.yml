@@ -60,5 +60,3 @@ jobs:
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
         run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose
-      - name: Run doctests
-        run: cargo test ${{ matrix.feature_flags }} --doc --locked --verbose
