@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@9b4c13b0bfa31b4514c14f74b5a166c2708f43c6
-      - uses: taiki-e/install-action@nextest
       - name: Report cargo version
         run: cargo --version
       - name: Report rustfmt version
@@ -49,7 +48,6 @@ jobs:
             feature_flags: --all-features
     steps:
       - uses: actions/checkout@9b4c13b0bfa31b4514c14f74b5a166c2708f43c6
-      - uses: taiki-e/install-action@nextest
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
@@ -61,6 +59,6 @@ jobs:
       - name: Build
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
-        run: cargo nextest run ${{ matrix.feature_flags }} --locked --all-targets --cargo-verbose
+        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run doctests
         run: cargo test ${{ matrix.feature_flags }} --doc --locked --verbose
