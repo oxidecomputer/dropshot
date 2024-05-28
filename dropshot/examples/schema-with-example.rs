@@ -67,6 +67,6 @@ fn main() -> Result<(), String> {
 async fn get_foo(
     _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<Foo>, HttpError> {
-    let foo = foo_example();
-    Ok(HttpResponseOk(foo))
+    let ret = foo_example();
+    Ok(HttpResponseOk(ret))
 }

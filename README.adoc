@@ -22,7 +22,7 @@ suite runs cleanly and should remain clean.
 
 You can format the code using `cargo fmt`.  CI checks that code is correctly formatted.
 
-https://github.com/rust-lang/rust-clippy[Clippy] is used to check for common code issues.  (We disable the style checks.)  You can run it with `cargo clippy --all-targets -- --deny warnings --allow clippy::style`.  CI will run clippy as well.
+https://github.com/rust-lang/rust-clippy[Clippy] is used to check for common code issues.  (We disable most style checks; see the `[workspace.lints.clippy]` section in `Cargo.toml` for the full configuration.)  You can run it with `cargo clippy --all-targets -- --deny warnings`.  CI will run clippy as well.
 
 For maintainers (e.g., publishing new releases and managing dependabot), see link:./MAINTAINERS.adoc[MAINTAINERS.adoc].
 
