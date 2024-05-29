@@ -122,53 +122,14 @@ impl<'ast> Server<'ast> {
 
         for item in &item_trait.items {
             match item {
+                // Functions need to be parsed to see if they are endpoints or
+                // channels.
                 TraitItemPartParsed::Fn(f) => {
-                    // XXX cannot have multiple endpoint or channel attributes,
-                    // check here.
-                    let endpoint_attr = f
-                        .attrs
-                        .iter()
-                        .find(|a| a.path().is_ident(ENDPOINT_IDENT));
-                    let channel_attr = f
-                        .attrs
-                        .iter()
-                        .find(|a| a.path().is_ident(CHANNEL_IDENT));
-
-                    let item = match (endpoint_attr, channel_attr) {
-                        (Some(_), Some(cattr)) => {
-                            let name = &f.sig.ident;
-                            errors.push(Error::new_spanned(
-                                cattr,
-                                format!("method `{name}` marked as both endpoint and channel"),
-                            ));
-                            ServerItem::Invalid(f)
-                        }
-                        (Some(eattr), None) => {
-                            if let Some(endpoint) = ServerEndpoint::new(
-                                f,
-                                eattr,
-                                &context_ident,
-                                &errors,
-                            ) {
-                                ServerItem::Endpoint(endpoint)
-                            } else {
-                                ServerItem::Invalid(f)
-                            }
-                        }
-                        (None, Some(cattr)) => {
-                            if let Some(channel) = ServerChannel::new(f, cattr)
-                            {
-                                ServerItem::Channel(channel)
-                            } else {
-                                ServerItem::Invalid(f)
-                            }
-                        }
-                        (None, None) => {
-                            // This is just a normal method.
-                            ServerItem::Other(item)
-                        }
-                    };
-                    items.push(item);
+                    items.push(ServerItem::Fn(ServerFnItem::new(
+                        f,
+                        &context_ident,
+                        &errors,
+                    )));
                 }
 
                 // Everything else is permissible -- just ensure that they
@@ -344,6 +305,8 @@ impl<'ast> Server<'ast> {
     }
 
     fn make_stub_api(&self) -> TokenStream {
+        let dropshot = &self.dropshot;
+
         let trait_name = &self.item_trait.ident;
         let trait_name_str = trait_name.to_string();
         let vis = &self.item_trait.vis;
@@ -352,12 +315,11 @@ impl<'ast> Server<'ast> {
 
         let body = self.make_api_factory_body(ApiFactoryKind::Stub);
 
-        // XXX: need a way to get the dropshot crate name here.
         quote! {
             #[automatically_derived]
             #vis fn #fn_ident() -> ::std::result::Result<
-                dropshot::ApiDescription<dropshot::StubContext>,
-                dropshot::ApiDescriptionBuildError,
+                #dropshot::ApiDescription<#dropshot::StubContext>,
+                #dropshot::ApiDescriptionBuildError,
             > {
                 #body
             }
@@ -382,7 +344,7 @@ impl<'ast> Server<'ast> {
             }
         } else {
             let endpoints = self.items.iter().filter_map(|item| match item {
-                ServerItem::Endpoint(e) => {
+                ServerItem::Fn(ServerFnItem::Endpoint(e)) => {
                     let name = &e.f.sig.ident;
                     let endpoint = match kind {
                         ApiFactoryKind::Regular => {
@@ -413,11 +375,11 @@ impl<'ast> Server<'ast> {
                     Some(endpoint)
                 }
 
-                ServerItem::Channel(_) => {
+                ServerItem::Fn(ServerFnItem::Channel(_)) => {
                     todo!("still need to implement channels")
                 }
 
-                ServerItem::Invalid(_) | ServerItem::Other(_) => None,
+                ServerItem::Fn(ServerFnItem::Invalid(_)) | ServerItem::Fn(ServerFnItem::NonEndpoint(_)) | ServerItem::Other(_) => None,
             });
 
             quote_spanned! {self.item_trait.ident.span()=>
@@ -443,7 +405,7 @@ impl<'ast> Server<'ast> {
         }
 
         self.items.iter().any(|item| match item {
-            ServerItem::Invalid(_) => true,
+            ServerItem::Fn(ServerFnItem::Invalid(_)) => true,
             _ => false,
         })
     }
@@ -479,17 +441,102 @@ fn check_endpoint_or_channel_on_non_fn(
 }
 
 enum ServerItem<'ast> {
-    Endpoint(ServerEndpoint<'ast>),
-    Channel(ServerChannel<'ast>),
-    // For endpoints that we couldn't parse successfully, we continue to
-    // generate the underlying method because rust-analyzer works better if it
-    // exists.
-    Invalid(&'ast TraitItemFnForSignature),
+    Fn(ServerFnItem<'ast>),
     Other(&'ast TraitItemPartParsed),
 }
 
-impl<'a> ServerItem<'a> {
+impl ServerItem<'_> {
     fn to_out_trait_item(&self) -> TraitItemPartParsed {
+        match self {
+            Self::Fn(f) => TraitItemPartParsed::Fn(f.to_out_trait_item()),
+            Self::Other(&ref o) => {
+                let mut o = o.clone();
+                o.strip_recognized_attrs();
+                o
+            }
+        }
+    }
+}
+
+enum ServerFnItem<'ast> {
+    Endpoint(ServerEndpoint<'ast>),
+    Channel(ServerChannel<'ast>),
+    // An endpoint item that was somehow invalid.
+    Invalid(&'ast TraitItemFnForSignature),
+    // A non-endpoint item not managed by the macro.
+    NonEndpoint(&'ast TraitItemFnForSignature),
+}
+
+impl<'ast> ServerFnItem<'ast> {
+    fn new(
+        f: &'ast TraitItemFnForSignature,
+        context_ident: &syn::Ident,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Self {
+        // We must have zero or one endpoint or channel attributes.
+        let attrs = f
+            .attrs
+            .iter()
+            .filter_map(|attr| {
+                if attr.path().is_ident(ENDPOINT_IDENT) {
+                    Some(ServerAttr::Endpoint(attr))
+                } else if attr.path().is_ident(CHANNEL_IDENT) {
+                    Some(ServerAttr::Channel(attr))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        match attrs.as_slice() {
+            [] => {
+                // This is just a normal method.
+                Self::NonEndpoint(f)
+            }
+            [ServerAttr::Endpoint(eattr)] => {
+                if let Some(endpoint) =
+                    ServerEndpoint::new(f, eattr, context_ident, errors)
+                {
+                    Self::Endpoint(endpoint)
+                } else {
+                    Self::Invalid(f)
+                }
+            }
+            [ServerAttr::Channel(cattr)] => {
+                if let Some(channel) = ServerChannel::new(f, cattr) {
+                    Self::Channel(channel)
+                } else {
+                    Self::Invalid(f)
+                }
+            }
+            [first, rest @ ..] => {
+                // We must have exactly one endpoint or channel attribute, so
+                // this is an error. Produce errors for all the rest of the
+                // attrs.
+                let name = &f.sig.ident;
+
+                for attr in rest {
+                    let msg = match (first, attr) {
+                        (ServerAttr::Endpoint(_), ServerAttr::Endpoint(_)) => {
+                            format!("method `{name}` marked as endpoint multiple times")
+                        }
+                        (ServerAttr::Channel(_), ServerAttr::Channel(_)) => {
+                            format!("method `{name}` marked as channel multiple times")
+                        }
+                        _ => {
+                            format!("method `{name}` marked as both endpoint and channel")
+                        }
+                    };
+
+                    errors.push(Error::new_spanned(attr, msg));
+                }
+
+                Self::Invalid(f)
+            }
+        }
+    }
+
+    fn to_out_trait_item(&self) -> TraitItemFnForSignature {
         match self {
             Self::Endpoint(e) => e.to_out_trait_item(),
             Self::Channel(c) => c.to_out_trait_item(),
@@ -497,12 +544,12 @@ impl<'a> ServerItem<'a> {
                 // Strip recognized attributes, retaining all others.
                 let mut f = (*f).clone();
                 f.strip_recognized_attrs();
-                TraitItemPartParsed::Fn(f)
+                f
             }
-            Self::Other(o) => {
-                let mut o = (*o).clone();
-                o.strip_recognized_attrs();
-                o
+            Self::NonEndpoint(&ref f) => {
+                let mut f = f.clone();
+                f.strip_recognized_attrs();
+                f
             }
         }
     }
@@ -571,7 +618,7 @@ impl<'ast> ServerEndpoint<'ast> {
         }
     }
 
-    fn to_out_trait_item(&self) -> TraitItemPartParsed {
+    fn to_out_trait_item(&self) -> TraitItemFnForSignature {
         // Retain all attributes other than the endpoint attribute.
         let mut f = self.f.clone();
         f.strip_recognized_attrs();
@@ -602,7 +649,7 @@ impl<'ast> ServerEndpoint<'ast> {
             syn::ReturnType::Type(Default::default(), Box::new(output_ty));
         f.block = block;
 
-        TraitItemPartParsed::Fn(f)
+        f
     }
 
     fn to_api_endpoint(
@@ -651,11 +698,25 @@ impl<'ast> ServerChannel<'ast> {
         Some(Self { orig })
     }
 
-    fn to_out_trait_item(&self) -> TraitItemPartParsed {
+    fn to_out_trait_item(&self) -> TraitItemFnForSignature {
         // Retain all attributes other than the channel attribute.
         let mut f = self.orig.clone();
         f.strip_recognized_attrs();
-        TraitItemPartParsed::Fn(f)
+        f
+    }
+}
+
+enum ServerAttr<'ast> {
+    Endpoint(&'ast syn::Attribute),
+    Channel(&'ast syn::Attribute),
+}
+
+impl ToTokens for ServerAttr<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            ServerAttr::Endpoint(attr) => attr.to_tokens(tokens),
+            ServerAttr::Channel(attr) => attr.to_tokens(tokens),
+        }
     }
 }
 
@@ -724,8 +785,7 @@ mod tests {
                     ) -> Result<HttpResponseOk<()>, HttpError>;
                 }
             },
-        )
-        .unwrap();
+        );
 
         assert!(errors.is_empty());
         assert_contents(

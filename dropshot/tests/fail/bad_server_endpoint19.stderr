@@ -1,0 +1,36 @@
+error[E0277]: the trait bound `std::string::String: SharedExtractor` is not satisfied
+  --> tests/fail/bad_server_endpoint19.rs:28:14
+   |
+28 |     async fn non_extractor_as_last_argument(
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `SharedExtractor` is not implemented for `std::string::String`
+   |
+   = help: the following other types implement trait `SharedExtractor`:
+             dropshot::Path<PathType>
+             dropshot::Query<QueryType>
+   = note: required for `(std::string::String, dropshot::Query<QueryParams>)` to implement `dropshot::extractor::common::RequestExtractor`
+note: required by a bound in `ApiEndpoint::<StubContext>::new_stub`
+  --> src/api_description.rs
+   |
+   |     pub fn new_stub<FuncParams, ResultType>(
+   |            -------- required by a bound in this associated function
+...
+   |         FuncParams: RequestExtractor + 'static,
+   |                     ^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<StubContext>::new_stub`
+
+error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyServer>::Context>, std::string::String, dropshot::Query<QueryParams>) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> + Send + 'static {<ServerImpl as MyServer>::non_extractor_as_last_argument}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+  --> tests/fail/bad_server_endpoint19.rs:28:14
+   |
+20 | #[dropshot::server]
+   | ------------------- required by a bound introduced by this call
+...
+28 |     async fn non_extractor_as_last_argument(
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<...>, ..., ...) -> ... {<... as MyServer>::non_extractor_as_last_argument}`
+   |
+note: required by a bound in `ApiEndpoint::<Context>::new`
+  --> src/api_description.rs
+   |
+   |     pub fn new<HandlerType, FuncParams, ResponseType>(
+   |            --- required by a bound in this associated function
+...
+   |         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`

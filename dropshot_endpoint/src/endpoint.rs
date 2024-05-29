@@ -783,10 +783,10 @@ impl<'ast> fmt::Debug for RqctxTy<'ast> {
 }
 
 /// Extracts and ensures that the type parameter for RequestContext is valid.
-fn extract_rqctx_param<'ast>(
-    ty: &'ast syn::Type,
-) -> Result<Option<&'ast syn::Type>, RqctxTyError> {
-    let syn::Type::Path(p) = &*ty else {
+fn extract_rqctx_param(
+    ty: &syn::Type,
+) -> Result<Option<&syn::Type>, RqctxTyError> {
+    let syn::Type::Path(p) = ty else {
         return Err(RqctxTyError::NotTypePath);
     };
 
@@ -821,9 +821,9 @@ fn extract_rqctx_param<'ast>(
 }
 
 /// Exactly like extract_rqctx_param, but works on mutable references.
-fn extract_rqctx_param_mut<'ast>(
-    ty: &'ast mut syn::Type,
-) -> Result<Option<&'ast mut syn::Type>, RqctxTyError> {
+fn extract_rqctx_param_mut(
+    ty: &mut syn::Type,
+) -> Result<Option<&mut syn::Type>, RqctxTyError> {
     let syn::Type::Path(p) = &mut *ty else {
         return Err(RqctxTyError::NotTypePath);
     };

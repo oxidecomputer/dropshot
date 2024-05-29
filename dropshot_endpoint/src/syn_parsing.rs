@@ -76,6 +76,7 @@ impl Parse for ItemTraitPartParsed {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_rest_of_trait(
     input: ParseStream,
     mut attrs: Vec<Attribute>,

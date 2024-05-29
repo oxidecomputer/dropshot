@@ -1,0 +1,60 @@
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_server_endpoint21.rs:30:9
+   |
+30 |         ...
+   |         ^^^
+
+error: only foreign or `unsafe extern "C"` functions may be C-variadic
+  --> tests/fail/bad_server_endpoint21.rs:30:9
+   |
+30 |         ...
+   |         ^^^
+
+error: only foreign or `unsafe extern "C"` functions may be C-variadic
+  --> tests/fail/bad_server_endpoint21.rs:43:9
+   |
+43 |         ...
+   |         ^^^
+
+error[E0658]: C-variadic functions are unstable
+  --> tests/fail/bad_server_endpoint21.rs:27:5
+   |
+27 | /     async fn variadic_argument(
+28 | |         _rqctx: RequestContext<Self::Context>,
+29 | |         _param1: Query<QueryParams>,
+30 | |         ...
+31 | |     ) -> Result<HttpResponseOk<()>, HttpError>;
+   | |_______________________________________________^
+   |
+   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
+
+error[E0658]: C-variadic functions are unstable
+  --> tests/fail/bad_server_endpoint21.rs:40:5
+   |
+40 | /     async fn variadic_argument(
+41 | |         _rqctx: RequestContext<()>,
+42 | |         _param1: Query<QueryParams>,
+43 | |         ...
+44 | |     ) -> Result<HttpResponseOk<()>, HttpError> {
+45 | |         Ok(HttpResponseOk(()))
+46 | |     }
+   | |_____^
+   |
+   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
+
+error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseOk<()>, HttpError>>` captures lifetime that does not appear in bounds
+  --> tests/fail/bad_server_endpoint21.rs:44:48
+   |
+40 | /      async fn variadic_argument(
+41 | |          _rqctx: RequestContext<()>,
+42 | |          _param1: Query<QueryParams>,
+43 | |          ...
+44 | |      ) -> Result<HttpResponseOk<()>, HttpError> {
+   | | ______________________________________________-_^
+   | ||______________________________________________|
+   |  |                                              opaque type defined here
+45 |  |         Ok(HttpResponseOk(()))
+46 |  |     }
+   |  |_____^
+   |
+   = note: hidden type `{async fn body@$DIR/tests/fail/bad_server_endpoint21.rs:44:48: 46:6}` captures lifetime `'_`

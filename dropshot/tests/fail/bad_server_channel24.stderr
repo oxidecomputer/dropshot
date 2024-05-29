@@ -1,0 +1,24 @@
+error: method `bad_channel` marked as both endpoint and channel
+  --> tests/fail/bad_server_channel24.rs:18:5
+   |
+18 | /     #[endpoint {
+19 | |         method = GET,
+20 | |         path = "/test",
+21 | |     }]
+   | |______^
+
+error: method `bad_channel2` marked as channel multiple times
+  --> tests/fail/bad_server_channel24.rs:30:5
+   |
+30 | /     #[channel {
+31 | |         protocol = WEBSOCKETS,
+32 | |     }]
+   | |______^
+
+error: method `bad_channel2` marked as channel multiple times
+  --> tests/fail/bad_server_channel24.rs:33:5
+   |
+33 | /     #[channel {
+34 | |         protocol = WEBSOCKETS,
+35 | |     }]
+   | |______^

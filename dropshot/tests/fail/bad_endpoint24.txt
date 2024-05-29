@@ -1,0 +1,3 @@
+bad_server_endpoint24.rs ensures that if a method is marked as both an endpoint
+and a channel, or an endpoint multiple times, that it produces an error. We
+don't have similar detection for function-based traits yet.
