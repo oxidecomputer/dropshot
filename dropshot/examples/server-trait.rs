@@ -23,10 +23,12 @@ async fn main() -> Result<(), String> {
         .to_logger("example-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
-    // XXX: The `dropshot_server` attribute macro conjures up this
-    // to_api_description method. Consider making this better somehow. (How? Any
-    // trait-based attempts run into Rust's orphan rules).
-    let my_server = CounterServer_api_description::<CounterImpl>().unwrap();
+    // Print the OpenAPI spec to stdout as an example.
+    println!("OpenAPI spec:");
+    println!("{}", generate_openapi_spec());
+
+    let my_server =
+        CounterServerFactory::api_description::<CounterImpl>().unwrap();
     let server = HttpServerStarter::new(
         &config_dropshot,
         my_server,
@@ -37,6 +39,14 @@ async fn main() -> Result<(), String> {
     .start();
 
     server.await
+}
+
+// A simple function to generate an OpenAPI spec for the server, without having a
+// real implementation available.
+fn generate_openapi_spec() -> String {
+    let my_server = CounterServerFactory::stub_api_description().unwrap();
+    let spec = my_server.openapi("Counter Server", "1.0.0");
+    serde_json::to_string_pretty(&spec.json().unwrap()).unwrap()
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

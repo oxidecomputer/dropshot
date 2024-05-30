@@ -7,7 +7,7 @@ use serde_tokenstream::from_tokenstream;
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
-    doc::ExtractedDoc,
+    doc::{string_to_doc_attrs, ExtractedDoc},
     endpoint::{
         ApiEndpointKind, EndpointMetadata, EndpointParams, RqctxKind,
         ValidatedEndpointMetadata,
@@ -76,6 +76,7 @@ pub(crate) fn do_server(
 struct ServerMetadata {
     #[serde(default)]
     context: Option<String>,
+    factory: Option<String>,
     _dropshot_crate: Option<String>,
 }
 
@@ -91,6 +92,10 @@ impl ServerMetadata {
     fn context_ty(&self) -> &str {
         self.context.as_deref().unwrap_or(Self::DEFAULT_CONTEXT_TY)
     }
+
+    fn factory_ty(&self, trait_ident: &syn::Ident) -> String {
+        self.factory.clone().unwrap_or_else(|| format!("{trait_ident}Factory"))
+    }
 }
 
 struct Server<'ast> {
@@ -100,8 +105,13 @@ struct Server<'ast> {
     // Context associated type which we're always going to move to the top), so
     // we use a single list to store all of them.
     items: Vec<ServerItem<'ast>>,
+
+    context_ident: syn::Ident,
     // This is None if there is no context type, which is an error.
     context_item: Option<&'ast syn::TraitItemType>,
+
+    // None indicates invalid metadata.
+    factory_ident: Option<syn::Ident>,
 }
 
 const ENDPOINT_IDENT: &str = "endpoint";
@@ -117,8 +127,32 @@ impl<'ast> Server<'ast> {
         let mut items = Vec::with_capacity(item_trait.items.len());
 
         let context_ty = metadata.context_ty();
-        let context_ident = format_ident!("{}", context_ty);
+
+        // Do a first pass to look for the context type. We could forgo this
+        // pass and always generate a context ident from context_ty, but that
+        // would lose valuable span information.
         let mut context_item = None;
+        for item in &item_trait.items {
+            if let TraitItemPartParsed::Other(syn::TraitItem::Type(t)) = item {
+                if t.ident == context_ty {
+                    // This is the context type.
+                    context_item = Some(t);
+                    break;
+                }
+            }
+        }
+
+        let context_ident = context_item.map_or_else(
+            || {
+                // In this case, conjure up a context type. We can't provide span
+                // info.
+                format_ident!("{}", context_ty)
+            },
+            |t| t.ident.clone(),
+        );
+
+        let factory_ident =
+            format_ident!("{}", metadata.factory_ty(&item_trait.ident));
 
         for item in &item_trait.items {
             match item {
@@ -158,17 +192,8 @@ impl<'ast> Server<'ast> {
                                 &errors,
                             );
 
-                            // We're looking for the context type. Look for a type with
-                            // the right name.
-                            if t.ident == context_ty {
-                                // This is the context type.
-                                context_item = Some(t);
-                                false
-                            } else {
-                                // This is something else.
-                                items.push(ServerItem::Other(item));
-                                true
-                            }
+                            // We'll handle the context type separately.
+                            t.ident != context_ty
                         }
                         syn::TraitItem::Macro(m) => {
                             check_endpoint_or_channel_on_non_fn(
@@ -200,7 +225,14 @@ impl<'ast> Server<'ast> {
             ));
         }
 
-        Self { dropshot, item_trait, items, context_item }
+        Self {
+            dropshot,
+            item_trait,
+            items,
+            context_ident,
+            context_item,
+            factory_ident: Some(factory_ident),
+        }
     }
 
     /// Creates a `Server` for invalid metadata.
@@ -219,7 +251,9 @@ impl<'ast> Server<'ast> {
             dropshot: get_crate(None),
             item_trait,
             items: items.collect(),
+            context_ident: format_ident!("Context"),
             context_item: None,
+            factory_ident: None,
         }
     }
 
@@ -236,35 +270,19 @@ impl<'ast> Server<'ast> {
         supertraits.push(parse_quote!('static));
 
         // Everything else about the trait stays the same -- just the items change.
-
         let out_trait = ItemTraitPartParsed {
             supertraits,
             items: out_items.collect(),
             ..self.item_trait.clone()
         };
 
-        // Generate two API description functions: one for the real trait, and
-        // one for a stub impl meant for OpenAPI generation. Restrict the first
-        // to the case where the context type is present, since the error
-        // messages are quite ugly otherwise.
-        let api_description =
-            self.context_item.is_some().then(|| self.make_api_factory());
-        let stub_api_description = self.make_stub_api();
+        // Also generate the factory.
+        let factory = self.make_factory();
 
         quote! {
             #out_trait
 
-            // We don't need to generate type checks the way we do with
-            // function-based macros, because we get error messages that are
-            // roughly as good through the stub API description generator.
-            // (Also, adding type checks would end up duplicating a ton of error
-            // messages.)
-            //
-            // For that reason, put it above the real API description -- that
-            // way, the best error messages appear first.
-            #stub_api_description
-
-            #api_description
+            #factory
         }
     }
 
@@ -282,21 +300,65 @@ impl<'ast> Server<'ast> {
         Some(syn::TraitItem::Type(out_item))
     }
 
-    fn make_api_factory(&self) -> TokenStream {
-        let dropshot = &self.dropshot;
-
-        let trait_name = &self.item_trait.ident;
-        let trait_name_str = trait_name.to_string();
+    /// Generate a factory corresponding to the trait, with ways to make real
+    /// servers and stub API descriptions.
+    fn make_factory(&self) -> Option<TokenStream> {
+        // Only generate a factory if the context and factory types are both
+        // known, otherwise the error messages get quite ugly.
+        self.context_item?;
+        let factory_ident = self.factory_ident.as_ref()?;
         let vis = &self.item_trait.vis;
-        let fn_ident = format_ident!("{trait_name_str}_api_description");
 
-        let body = self.make_api_factory_body(ApiFactoryKind::Regular);
+        let doc_comments = FactoryDocComments::generate(
+            &self.dropshot,
+            &self.item_trait.ident,
+            &self.context_ident,
+            factory_ident,
+        );
 
-        // XXX: Switch to enum TraitFactory {}
-        quote! {
+        // Generate two API description functions: one for the real trait, and
+        // one for a stub impl meant for OpenAPI generation.
+        let api = self.make_api_description(doc_comments.api_description());
+        let stub_api =
+            self.make_stub_api_description(doc_comments.stub_api_description());
+        let outer = doc_comments.outer();
+
+        let ret = quote! {
+            #outer
+            #[derive(Copy, Clone, Debug)]
             #[automatically_derived]
-            #vis fn #fn_ident<ServerImpl: #trait_name>() -> ::std::result::Result<
-                #dropshot::ApiDescription<<ServerImpl as #trait_name>::Context>,
+            #vis enum #factory_ident {}
+
+            impl #factory_ident {
+                // We don't need to generate type checks the way we do with
+                // function-based macros, because we get error messages that are
+                // roughly as good through the stub API description generator.
+                // (Also, adding type checks would end up duplicating a ton of error
+                // messages.)
+                //
+                // For that reason, put it above the real API description -- that
+                // way, the best error messages appear first.
+                #stub_api
+
+                #api
+            }
+        };
+        Some(ret)
+    }
+
+    fn make_api_description(&self, doc: TokenStream) -> TokenStream {
+        let dropshot = &self.dropshot;
+        let trait_name = &self.item_trait.ident;
+        let vis = &self.item_trait.vis;
+
+        let body = self.make_api_factory_body(FactoryKind::Regular);
+        let context_ident = &self.context_ident;
+
+        quote! {
+            #doc
+            #[automatically_derived]
+            #vis fn api_description<ServerImpl: #trait_name>() -> ::std::result::Result<
+                #dropshot::ApiDescription<<ServerImpl as #trait_name>::#context_ident>,
                 #dropshot::ApiDescriptionBuildError,
             > {
                 #body
@@ -304,20 +366,16 @@ impl<'ast> Server<'ast> {
         }
     }
 
-    fn make_stub_api(&self) -> TokenStream {
+    fn make_stub_api_description(&self, doc: TokenStream) -> TokenStream {
         let dropshot = &self.dropshot;
-
-        let trait_name = &self.item_trait.ident;
-        let trait_name_str = trait_name.to_string();
         let vis = &self.item_trait.vis;
 
-        let fn_ident = format_ident!("{trait_name_str}_stub_api_description");
-
-        let body = self.make_api_factory_body(ApiFactoryKind::Stub);
+        let body = self.make_api_factory_body(FactoryKind::Stub);
 
         quote! {
+            #doc
             #[automatically_derived]
-            #vis fn #fn_ident() -> ::std::result::Result<
+            #vis fn stub_api_description() -> ::std::result::Result<
                 #dropshot::ApiDescription<#dropshot::StubContext>,
                 #dropshot::ApiDescriptionBuildError,
             > {
@@ -330,7 +388,8 @@ impl<'ast> Server<'ast> {
     /// generator function.
     ///
     /// This code is shared across the real and stub API description functions.
-    fn make_api_factory_body(&self, kind: ApiFactoryKind) -> TokenStream {
+    fn make_api_factory_body(&self, kind: FactoryKind) -> TokenStream {
+        let dropshot = &self.dropshot;
         let trait_name = &self.item_trait.ident;
         let trait_name_str = trait_name.to_string();
 
@@ -347,7 +406,7 @@ impl<'ast> Server<'ast> {
                 ServerItem::Fn(ServerFnItem::Endpoint(e)) => {
                     let name = &e.f.sig.ident;
                     let endpoint = match kind {
-                        ApiFactoryKind::Regular => {
+                        FactoryKind::Regular => {
                             // Adding the span information to path_to_name leads
                             // to fewer call_site errors.
                             let path_to_name =
@@ -357,12 +416,12 @@ impl<'ast> Server<'ast> {
                                 &ApiEndpointKind::Regular(&path_to_name),
                             )
                         }
-                        ApiFactoryKind::Stub => {
+                        FactoryKind::Stub => {
                             let extractor_types =
                                 e.params.extractor_types().collect();
                             let ret_ty = e.params.ret_ty;
                             e.to_api_endpoint(
-                                &self.dropshot,
+                                dropshot,
                                 &ApiEndpointKind::Stub {
                                     name,
                                     extractor_types,
@@ -383,13 +442,13 @@ impl<'ast> Server<'ast> {
             });
 
             quote_spanned! {self.item_trait.ident.span()=>
-                let mut dropshot_api = dropshot::ApiDescription::new();
+                let mut dropshot_api = #dropshot::ApiDescription::new();
                 let mut dropshot_errors: Vec<String> = Vec::new();
 
                 #(#endpoints)*
 
                 if !dropshot_errors.is_empty() {
-                    Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+                    Err(#dropshot::ApiDescriptionBuildError::new(dropshot_errors))
                 } else {
                     Ok(dropshot_api)
                 }
@@ -411,8 +470,132 @@ impl<'ast> Server<'ast> {
     }
 }
 
+/// Generated documentation comments for an API factory.
+struct FactoryDocComments {
+    /// Doc comment for the factory type.
+    outer: String,
+
+    /// Doc comment for the API description function.
+    api_description: String,
+
+    /// Doc comment for the stub API description function.
+    stub_api_description: String,
+}
+
+impl FactoryDocComments {
+    fn generate(
+        dropshot: &TokenStream,
+        trait_ident: &syn::Ident,
+        context_ident: &syn::Ident,
+        factory_ident: &syn::Ident,
+    ) -> FactoryDocComments {
+        let outer = format!(
+            "API description factory for the Dropshot server trait \
+            [`{trait_ident}`]({trait_ident}).",
+        );
+
+        let api_description = format!(
+"Given an implementation of [`{trait_ident}`], generate an API description.
+
+This function accepts a single type argument `ServerImpl`, turning it into a
+Dropshot [`ApiDescription`]`<ServerImpl::`[`{context_ident}`]`>`. 
+The returned `ApiDescription` can then be turned into a Dropshot server that
+accepts a concrete `{context_ident}`.
+
+## Example
+
+```rust,ignore
+/// A type used to define the concrete implementation for `{trait_ident}`.
+/// 
+/// This type is never constructed -- it is just a place to define your
+/// implementation of `{trait_ident}`.
+enum {trait_ident}Impl {{}}
+
+impl {trait_ident} for {trait_ident}Impl {{
+    type {context_ident} = /* context type */;
+
+    // ... trait methods
+}}
+
+#[tokio::main]
+async fn main() {{
+    // Generate the description for `{trait_ident}Impl`.
+    let description = {factory_ident}::api_description::<{trait_ident}Impl>().unwrap();
+
+    // Create a value of the concrete context type.
+    let context = /* some value of type `{trait_ident}Impl::{context_ident}` */;
+
+    // Create a Dropshot server from the description.
+    let config = dropshot::ConfigDropshot::default();
+    let log = /* ... */;
+    let server = dropshot::HttpServerStarter::new(
+        &config,
+        description,
+        context,
+        &log,
+    ).unwrap();
+
+    // Run the server.
+    server.start().await
+}}
+```
+
+[`ApiDescription`]: {dropshot}::ApiDescription
+[`{trait_ident}`]: {trait_ident}
+[`{context_ident}`]: {trait_ident}::{context_ident}
+",
+        );
+
+        let stub_api_description = format!(
+"Generate a _stub_ API description for [`{trait_ident}`], meant for OpenAPI
+generation.
+
+Unlike [`api_description`], this function does not require an implementation
+of [`{trait_ident}`] to be available, instead generating handlers that panic.
+The return value is of type [`ApiDescription`]`<`[`StubContext`]`>`.
+
+The main use of this function is in cases where [`{trait_ident}`] is defined
+in a separate crate from its implementation. The OpenAPI spec can then be
+generated directly from the stub API description.
+
+## Example
+
+A function that prints the OpenAPI spec to standard output:
+
+```rust,ignore
+fn print_openapi_spec() {{
+    let stub = {factory_ident}::stub_api_description().unwrap();
+
+    // Generate OpenAPI spec from `stub`.
+    let spec = stub.openapi(\"{trait_ident}\", \"0.1.0\");
+    spec.write(&mut std::io::stdout()).unwrap();
+}}
+```
+
+[`{trait_ident}`]: {trait_ident}
+[`api_description`]: {factory_ident}::api_description
+[`ApiDescription`]: {dropshot}::ApiDescription
+[`StubContext`]: {dropshot}::StubContext
+");
+
+        FactoryDocComments { outer, api_description, stub_api_description }
+    }
+
+    fn outer(&self) -> TokenStream {
+        string_to_doc_attrs(&self.outer)
+    }
+
+    fn api_description(&self) -> TokenStream {
+        string_to_doc_attrs(&self.api_description)
+    }
+
+    fn stub_api_description(&self) -> TokenStream {
+        string_to_doc_attrs(&self.stub_api_description)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
-enum ApiFactoryKind {
+enum FactoryKind {
     Regular,
     Stub,
 }
@@ -769,6 +952,8 @@ fn strip_attrs_impl(attrs: &mut Vec<syn::Attribute>) {
 mod tests {
     use expectorate::assert_contents;
 
+    use crate::{test_util::assert_banned_idents, util::DROPSHOT};
+
     use super::*;
 
     #[test]
@@ -792,5 +977,40 @@ mod tests {
             "tests/output/server_basic.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
+    }
+
+    #[test]
+    fn test_server_with_custom_params() {
+        // Provide custom parameters and ensure that they are used.
+        let (item, errors) = do_server(
+            quote! {
+                context = Situation,
+                _dropshot_crate = "topspin",
+            },
+            quote! {
+                pub trait MyTrait {
+                    type Situation;
+
+                    #[endpoint { method = GET, path = "/xyz" }]
+                    async fn handler_xyz(
+                        rqctx: RequestContext<Self::Situation>,
+                    ) -> Result<HttpResponseOk<()>, HttpError>;
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+
+        let file = parse_quote! { #item };
+        // Write out the file before checking it, so that we can see what it
+        // looks like.
+        assert_contents(
+            "tests/output/server_with_custom_context.rs",
+            &prettyplease::unparse(&file),
+        );
+
+        // Check banned identifiers.
+        let banned = [ServerMetadata::DEFAULT_CONTEXT_TY, DROPSHOT];
+        assert_banned_idents(&file, banned);
     }
 }

@@ -1,7 +1,7 @@
 pub trait MyTrait: 'static {
-    type Context: dropshot::ServerContext + 'static;
+    type Situation: topspin::ServerContext + 'static;
     fn handler_xyz(
-        rqctx: RequestContext<Self::Context>,
+        rqctx: RequestContext<Self::Situation>,
     ) -> impl ::core::future::Future<
         Output = Result<HttpResponseOk<()>, HttpError>,
     > + Send + 'static;
@@ -38,22 +38,22 @@ impl MyTraitFactory {
     ///
     /// [`MyTrait`]: MyTrait
     /// [`api_description`]: MyTraitFactory::api_description
-    /// [`ApiDescription`]: dropshot::ApiDescription
-    /// [`StubContext`]: dropshot::StubContext
+    /// [`ApiDescription`]: topspin::ApiDescription
+    /// [`StubContext`]: topspin::StubContext
     #[automatically_derived]
     pub fn stub_api_description() -> ::std::result::Result<
-        dropshot::ApiDescription<dropshot::StubContext>,
-        dropshot::ApiDescriptionBuildError,
+        topspin::ApiDescription<topspin::StubContext>,
+        topspin::ApiDescriptionBuildError,
     > {
-        let mut dropshot_api = dropshot::ApiDescription::new();
+        let mut dropshot_api = topspin::ApiDescription::new();
         let mut dropshot_errors: Vec<String> = Vec::new();
         {
-            let endpoint_handler_xyz = dropshot::ApiEndpoint::new_stub::<
+            let endpoint_handler_xyz = topspin::ApiEndpoint::new_stub::<
                 (),
                 Result<HttpResponseOk<()>, HttpError>,
             >(
                 "handler_xyz".to_string(),
-                dropshot::Method::GET,
+                topspin::Method::GET,
                 "application/json",
                 "/xyz",
             );
@@ -62,7 +62,7 @@ impl MyTraitFactory {
             }
         }
         if !dropshot_errors.is_empty() {
-            Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(topspin::ApiDescriptionBuildError::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
@@ -70,9 +70,9 @@ impl MyTraitFactory {
     /// Given an implementation of [`MyTrait`], generate an API description.
     ///
     /// This function accepts a single type argument `ServerImpl`, turning it into a
-    /// Dropshot [`ApiDescription`]`<ServerImpl::`[`Context`]`>`.
+    /// Dropshot [`ApiDescription`]`<ServerImpl::`[`Situation`]`>`.
     /// The returned `ApiDescription` can then be turned into a Dropshot server that
-    /// accepts a concrete `Context`.
+    /// accepts a concrete `Situation`.
     ///
     /// ## Example
     ///
@@ -84,7 +84,7 @@ impl MyTraitFactory {
     /// enum MyTraitImpl {}
     ///
     /// impl MyTrait for MyTraitImpl {
-    ///     type Context = /* context type */;
+    ///     type Situation = /* context type */;
     ///
     ///     // ... trait methods
     /// }
@@ -95,7 +95,7 @@ impl MyTraitFactory {
     ///     let description = MyTraitFactory::api_description::<MyTraitImpl>().unwrap();
     ///
     ///     // Create a value of the concrete context type.
-    ///     let context = /* some value of type `MyTraitImpl::Context` */;
+    ///     let context = /* some value of type `MyTraitImpl::Situation` */;
     ///
     ///     // Create a Dropshot server from the description.
     ///     let config = dropshot::ConfigDropshot::default();
@@ -112,21 +112,21 @@ impl MyTraitFactory {
     /// }
     /// ```
     ///
-    /// [`ApiDescription`]: dropshot::ApiDescription
+    /// [`ApiDescription`]: topspin::ApiDescription
     /// [`MyTrait`]: MyTrait
-    /// [`Context`]: MyTrait::Context
+    /// [`Situation`]: MyTrait::Situation
     #[automatically_derived]
     pub fn api_description<ServerImpl: MyTrait>() -> ::std::result::Result<
-        dropshot::ApiDescription<<ServerImpl as MyTrait>::Context>,
-        dropshot::ApiDescriptionBuildError,
+        topspin::ApiDescription<<ServerImpl as MyTrait>::Situation>,
+        topspin::ApiDescriptionBuildError,
     > {
-        let mut dropshot_api = dropshot::ApiDescription::new();
+        let mut dropshot_api = topspin::ApiDescription::new();
         let mut dropshot_errors: Vec<String> = Vec::new();
         {
-            let endpoint_handler_xyz = dropshot::ApiEndpoint::new(
+            let endpoint_handler_xyz = topspin::ApiEndpoint::new(
                 "handler_xyz".to_string(),
                 <ServerImpl as MyTrait>::handler_xyz,
-                dropshot::Method::GET,
+                topspin::Method::GET,
                 "application/json",
                 "/xyz",
             );
@@ -135,7 +135,7 @@ impl MyTraitFactory {
             }
         }
         if !dropshot_errors.is_empty() {
-            Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(topspin::ApiDescriptionBuildError::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
