@@ -1,10 +1,5 @@
 // Copyright 2024 Oxide Computer Company
 
-// The error messages produced by this test aren't great, with messages like
-// "can't use generic parameters from outer item" which leak implementation
-// details. We should improve this by generating channels directly rather than
-// converting them to endpoints.
-
 #![allow(unused_imports)]
 
 use dropshot::channel;
@@ -19,10 +14,13 @@ trait Stuff {
     protocol = WEBSOCKETS,
     path = "/test",
 }]
-async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
     _rqctx: RequestContext<S>,
     _upgraded: WebsocketConnection,
-) -> dropshot::WebsocketChannelResult {
+) -> dropshot::WebsocketChannelResult
+where
+    usize: 'static,
+{
     S::do_stuff();
     panic!()
 }

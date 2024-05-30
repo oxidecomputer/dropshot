@@ -8,13 +8,16 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint2.rs:13:1
+  --> tests/fail/bad_endpoint21b.rs:24:1
    |
-13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+24 | / async unsafe fn unsafe_endpoint(
+25 | |     _rqctx: RequestContext<()>,
+26 | |     _param1: Query<QueryParams>,
+27 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^
 
-error: endpoint `bad_endpoint` must not have a `self` argument
-  --> tests/fail/bad_endpoint2.rs:13:23
+error: endpoint `unsafe_endpoint` must not be unsafe
+  --> tests/fail/bad_endpoint21b.rs:24:7
    |
-13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
-   |                       ^^^^
+24 | async unsafe fn unsafe_endpoint(
+   |       ^^^^^^

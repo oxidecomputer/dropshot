@@ -1,0 +1,33 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel22.rs:24:1
+   |
+24 | / async fn weird_types<'a>(
+25 | |     _rqctx: RequestContext<T, Self::U>,
+26 | |     _param1: Query<&'a QueryParams>,
+27 | |     _param2: for<'b> TypedBody<&'b ()>,
+28 | | ) -> Result<impl HttpResponse, HttpError> {
+   | |_________________________________________^
+
+error: endpoint `weird_types` must not have generics
+  --> tests/fail/bad_channel22.rs:24:21
+   |
+24 | async fn weird_types<'a>(
+   |                     ^^^^
+
+error: endpoint `weird_types` must accept a RequestContext<T> as its first argument
+  --> tests/fail/bad_channel22.rs:25:13
+   |
+25 |     _rqctx: RequestContext<T, Self::U>,
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: endpoint `weird_types` must not have lifetime parameters in extractor
+  --> tests/fail/bad_channel22.rs:26:21
+   |
+26 |     _param1: Query<&'a QueryParams>,
+   |                     ^^

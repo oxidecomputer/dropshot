@@ -7,6 +7,7 @@ use syn::{
 
 /// Represent an item without concern for its body which may (or may not)
 /// contain syntax errors.
+#[derive(Clone)]
 pub(crate) struct ItemFnForSignature {
     pub attrs: Vec<Attribute>,
     pub vis: Visibility,

@@ -1,0 +1,5 @@
+error: unknown variant `UNKNOWN`, expected `WEBSOCKETS`
+ --> tests/fail/bad_channel20.rs:8:16
+  |
+8 |     protocol = UNKNOWN,
+  |                ^^^^^^^
