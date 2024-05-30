@@ -17,8 +17,8 @@ $ cargo +nightly doc
 
 == Contributing
 
-You can **build and run the whole test suite** with https://nexte.st/[nextest]:
-`cargo nextest run`.  The test suite runs cleanly and should remain clean.
+You can **build and run the whole test suite** with `cargo test`.  The test
+suite runs cleanly and should remain clean.
 
 You can format the code using `cargo fmt`.  CI checks that code is correctly formatted.
 
