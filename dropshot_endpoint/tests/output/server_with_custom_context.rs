@@ -1,5 +1,5 @@
 pub trait MyTrait: 'static {
-    type Situation: topspin::ServerContext + 'static;
+    type Situation: topspin::ServerContext;
     fn handler_xyz(
         rqctx: RequestContext<Self::Situation>,
     ) -> impl ::core::future::Future<

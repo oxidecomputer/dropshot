@@ -1,5 +1,5 @@
 pub trait MyTrait: 'static {
-    type Context: dropshot::ServerContext + 'static;
+    type Context: dropshot::ServerContext;
     fn handler_xyz(
         rqctx: RequestContext<Self::Context>,
     ) -> impl ::core::future::Future<
