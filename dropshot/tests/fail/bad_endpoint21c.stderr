@@ -1,0 +1,23 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_endpoint21c.rs:24:1
+   |
+24 | / const async fn const_endpoint(
+25 | |     _rqctx: RequestContext<()>,
+26 | |     _param1: Query<QueryParams>,
+27 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^
+
+error: endpoint `const_endpoint` must not be a const fn
+  --> tests/fail/bad_endpoint21c.rs:24:1
+   |
+24 | const async fn const_endpoint(
+   | ^^^^^
