@@ -980,10 +980,12 @@ mod tests {
 
     #[test]
     fn test_server_with_custom_params() {
-        // Provide custom parameters and ensure that they are used.
+        // Provide custom parameters and ensure that the original ones are
+        // not used.
         let (item, errors) = do_server(
             quote! {
                 context = Situation,
+                factory = MyMill,
                 _dropshot_crate = "topspin",
             },
             quote! {
@@ -1004,12 +1006,13 @@ mod tests {
         // Write out the file before checking it, so that we can see what it
         // looks like.
         assert_contents(
-            "tests/output/server_with_custom_context.rs",
+            "tests/output/server_with_custom_params.rs",
             &prettyplease::unparse(&file),
         );
 
         // Check banned identifiers.
-        let banned = [ServerMetadata::DEFAULT_CONTEXT_TY, DROPSHOT];
+        let banned =
+            [ServerMetadata::DEFAULT_CONTEXT_TY, DROPSHOT, "MyTraitFactory"];
         assert_banned_idents(&file, banned);
     }
 }
