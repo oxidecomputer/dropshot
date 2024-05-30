@@ -1146,6 +1146,8 @@ mod tests {
     use expectorate::assert_contents;
     use syn::parse_quote;
 
+    use crate::{test_util::assert_banned_idents, util::DROPSHOT};
+
     use super::*;
 
     #[test]
@@ -1391,6 +1393,40 @@ mod tests {
             "tests/output/endpoint_weird_but_ok_arg_types_2.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
+    }
+
+    #[test]
+    fn test_endpoint_with_custom_params() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+                _dropshot_crate = "topspin",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                    query: Query<Q>,
+                    path: Path<P>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+
+        let file = parse_quote! { #item };
+        // Write out the file before checking it for banned idents, so that we
+        // can see what it looks like.
+        assert_contents(
+            "tests/output/endpoint_with_custom_params.rs",
+            &prettyplease::unparse(&file),
+        );
+
+        // Check banned identifiers.
+        let banned = [DROPSHOT];
+        assert_banned_idents(&file, banned);
     }
 
     #[test]
