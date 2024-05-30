@@ -79,6 +79,74 @@ pub fn channel(
     do_output(channel::do_channel(attr.into(), item.into()))
 }
 
+/// Generates a Dropshot server from a trait.
+///
+/// A server trait consists of:
+///
+/// 1. A context type, typically `Self::Context`, values of which are shared
+///    across all the endpoints.
+/// 2. A set of endpoint methods, each of which is an `async fn` defined with
+///    the same constraints, and via the same syntax, as [`macro@endpoint`] or
+///    [`macro@channel`].
+///
+/// Server traits can also have arbitrary non-endpoint items, such as helper
+/// functions.
+///
+/// The macro performs a number of checks on endpoint methods, and produces the
+/// following items:
+///
+/// * The trait itself, with the following modifications to enable use as a
+///   Dropshot server:
+///
+///     1. The trait itself has a `'static` bound added to it.
+///     2. The context type has a `dropshot::ServerContext + 'static` bound
+///        added to it, making it `Send + Sync + 'static`.
+///     3. Each endpoint `async fn` is modified to become a function that
+///        returns a `Send + 'static` future. (Implementations can continue to
+///        define endpoints via the `async fn` syntax.)
+///
+///   Non-endpoint items are left unchanged.
+///
+/// * A _factory_, typically named `<TraitName>Factory`, with two functions:
+///
+///     1. `api_description()`, which accepts an implementation of the trait as
+///        a type argument and generates an `ApiDescription`.
+///     2. `stub_api_description()`, which generates a _stub_ `ApiDescription`
+///        that can be used to generate an OpenAPI spec without having an
+///        implementation of the trait available.
+///
+/// For more information about trait-based servers, see the Dropshot crate-level
+/// documentation.
+///
+/// ## Arguments
+///
+/// The `#[dropshot::server]` macro accepts these arguments:
+///
+/// * `context`: The type of the context on the trait. Optional, and defaults to
+///   `Self::Context`.
+/// * `factory`: The name of the factory struct that will be generated.
+///   Optional, defaulting to `<TraitName>Factory`.
+///
+/// ## Example
+///
+/// With a custom context type:
+///
+/// ```ignore
+/// use dropshot::{RequestContext, HttpResponseUpdatedNoContent, HttpError};
+///
+/// #[dropshot::server { context = MyContext }]
+/// trait MyTrait {
+///     type MyContext;
+///
+///     #[endpoint {
+///         method = PUT,
+///         path = "/test",
+///     }]
+///     async fn put_test(
+///         rqctx: RequestContext<Self::MyContext>,
+///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn server(
     attr: proc_macro::TokenStream,

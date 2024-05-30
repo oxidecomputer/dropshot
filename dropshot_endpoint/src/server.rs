@@ -294,7 +294,6 @@ impl<'ast> Server<'ast> {
         // users specify them and error out if they don't, but this is much
         // easier to do, and also produces better errors.
         bounds.push(parse_quote!(#dropshot::ServerContext));
-        bounds.push(parse_quote!('static));
 
         let out_item = syn::TraitItemType { bounds, ..item.clone() };
         Some(syn::TraitItem::Type(out_item))

@@ -185,11 +185,11 @@
 //! of API endpoints. Each endpoint is defined as a static method on the trait,
 //! and the trait is annotated with `#[dropshot::server]`.
 //!
-//! The advantage of trait servers is that they can be defined in a separate
+//! One advantage of trait servers is that they can be defined in a separate
 //! crate from the implementation. This results in quicker builds for the API,
 //! and also make it easier to deal with changes to circular API dependencies.
 //!
-//! Here's an example of a trait server equivalent to the endpoint above:
+//! Here's an example of a trait server that's equivalent to the endpoint above:
 //!
 //! ```
 //! use dropshot::ApiDescription;
@@ -224,13 +224,21 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
+//! /*
+//! The `dropshot::server` macro generates a type called
+//! "ProjectServerFactory". This type has a method called `api_description`
+//! that, given an implementation of the trait, returns an `ApiDescription`.
+//! The `ApiDescription` can then be used to set up an `HttpServer`.
+//! */
+//!
+//! // --- The following code may be in another crate ---
+//!
 //! /**
 //! Define an empty type to hold the project server context.
-//! This type is never constructed, and is purely to hang the
-//! server impl off of. This type is generally in a different
-//! crate from the server trait.
+//! This type is never constructed, and is purely a way to name
+//! the specific server impl. In larger projects, this type would
+//! live in a different crate from the server trait.
 //! **/
-//!
 //! enum ServerImpl {}
 //!
 //! impl ProjectServer for ServerImpl {
@@ -246,10 +254,9 @@
 //!
 //! fn main() {
 //!     // The type of `api` is provided for clarity -- it is generally inferred.
+//!     // "api" will automatically register all endpoints defined in the trait.
 //!     let mut api: ApiDescription<()> =
-//!         ProjectServer_api_description::<ServerImpl>().unwrap();
-//!
-//!     // This will automatically register the endpoint.
+//!         ProjectServerFactory::api_description::<ServerImpl>().unwrap();
 //!
 //!     /* ... (use `api` to set up an `HttpServer` ) */
 //! }
@@ -419,7 +426,7 @@
 //! describing the API.  See [`ApiDescription::openapi`].
 //!
 //! With trait-based servers, the `#[dropshot::server]` macro generates a helper
-//! function called `*_stub_api_description`, which returns a stub
+//! function called `stub_api_description`, which returns a stub
 //! `ApiDescription`. The stub description can be used to generate an OpenAPI
 //! spec for the trait server. For example:
 //!
@@ -450,7 +457,7 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
-//! let description = ProjectServer_stub_api_description().unwrap();
+//! let description = ProjectServerFactory::stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! ```
