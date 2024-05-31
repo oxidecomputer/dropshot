@@ -440,7 +440,7 @@ impl<'ast> Server<'ast> {
                 ServerItem::Fn(ServerFnItem::Invalid(_)) | ServerItem::Fn(ServerFnItem::NonEndpoint(_)) | ServerItem::Other(_) => None,
             });
 
-            quote_spanned! {self.item_trait.ident.span()=>
+            quote! {
                 let mut dropshot_api = #dropshot::ApiDescription::new();
                 let mut dropshot_errors: Vec<String> = Vec::new();
 

@@ -1,8 +1,8 @@
 error[E0277]: the trait bound `String: SharedExtractor` is not satisfied
-  --> tests/fail/bad_server_endpoint3.rs:15:7
+  --> tests/fail/bad_server_endpoint3.rs:15:5
    |
 15 |     #[endpoint {
-   |       ^^^^^^^^ the trait `SharedExtractor` is not implemented for `String`
+   |     ^ the trait `SharedExtractor` is not implemented for `String`
    |
    = help: the following other types implement trait `SharedExtractor`:
              dropshot::Path<PathType>

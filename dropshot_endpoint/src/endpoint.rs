@@ -1097,12 +1097,16 @@ impl ValidatedEndpointMetadata {
                 }
             }
             ApiEndpointKind::Stub { attr, extractor_types, ret_ty } => {
-                // The attribute path here is "endpoint" or "channel", which is
-                // where we want to point span information at. If span
-                // information is pointed at the function ident, then
-                // rust-analyzer ctrl-click on the function name will produce a
-                // lot of irrelevant results.
-                quote_spanned! {attr.path().span()=>
+                // We need to point at the closest possible span to the actual
+                // error, but we can't point at something nice like the
+                // function name. That's because if we do, rust-analyzer will
+                // produce a lot of irrelevant results when ctrl-clicking on
+                // the function name.
+                //
+                // So we point at the `#`, which seems out-of-the-way enough
+                // for successful generation while being close by for errors.
+                // Seems pretty unobjectionable.
+                quote_spanned! {attr.pound_token.span()=>
                     #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
