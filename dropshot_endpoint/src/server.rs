@@ -408,8 +408,8 @@ impl<'ast> Server<'ast> {
                         FactoryKind::Regular => {
                             // Adding the span information to path_to_name leads
                             // to fewer call_site errors.
-                            let path_to_name =
-                                quote_spanned! {name.span()=> <ServerImpl as #trait_name>::#name };
+                            let path_to_name: TokenStream =
+                                quote_spanned! {e.attr.span()=> <ServerImpl as #trait_name>::#name };
                             e.to_api_endpoint(
                                 &self.dropshot,
                                 &ApiEndpointKind::Regular(&path_to_name),
@@ -422,7 +422,7 @@ impl<'ast> Server<'ast> {
                             e.to_api_endpoint(
                                 dropshot,
                                 &ApiEndpointKind::Stub {
-                                    name,
+                                    attr: &e.attr,
                                     extractor_types,
                                     ret_ty,
                                 },
@@ -768,6 +768,7 @@ fn parse_endpoint_metadata(
 
 struct ServerEndpoint<'ast> {
     f: &'ast TraitItemFnForSignature,
+    attr: &'ast syn::Attribute,
     metadata: ValidatedEndpointMetadata,
     params: EndpointParams<'ast>,
 }
@@ -793,7 +794,7 @@ impl<'ast> ServerEndpoint<'ast> {
 
         match (metadata, params) {
             (Some(metadata), Some(params)) => {
-                Some(Self { f, metadata, params })
+                Some(Self { f, attr, metadata, params })
             }
             // This means that something failed.
             _ => None,
@@ -856,7 +857,7 @@ impl<'ast> ServerEndpoint<'ast> {
         // since all names are prefixed with "endpoint_".
         let endpoint_name = format_ident!("endpoint_{}", name_str);
 
-        quote_spanned! {name.span()=>
+        quote_spanned! {self.attr.span()=>
             {
                 let #endpoint_name = #endpoint_fn;
                 if let Err(error) = dropshot_api.register(#endpoint_name) {

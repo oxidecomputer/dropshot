@@ -1096,8 +1096,13 @@ impl ValidatedEndpointMetadata {
                     )
                 }
             }
-            ApiEndpointKind::Stub { name, extractor_types, ret_ty } => {
-                quote_spanned! {name.span()=>
+            ApiEndpointKind::Stub { attr, extractor_types, ret_ty } => {
+                // The attribute path here is "endpoint" or "channel", which is
+                // where we want to point span information at. If span
+                // information is pointed at the function ident, then
+                // rust-analyzer ctrl-click on the function name will produce a
+                // lot of irrelevant results.
+                quote_spanned! {attr.path().span()=>
                     #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
@@ -1126,12 +1131,8 @@ pub(crate) enum ApiEndpointKind<'ast> {
     Regular(&'ast dyn ToTokens),
     /// A stub API endpoint. This is used for #[server].
     Stub {
-        /// The name of the function, used for span information.
-        ///
-        /// Ideally we'd use the entire function signature here, but as of Rust
-        /// 1.76 that only records the span of the first token (typically
-        /// `async`) rather than the full signature.
-        name: &'ast syn::Ident,
+        /// The attribute, used for span information.
+        attr: &'ast syn::Attribute,
 
         /// The extractor types in use.
         extractor_types: Vec<&'ast syn::Type>,
