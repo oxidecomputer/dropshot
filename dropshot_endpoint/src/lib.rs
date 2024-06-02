@@ -4,6 +4,8 @@
 //! attributes are used both to define an HTTP API and to generate an OpenAPI
 //! Spec (OAS) v3 document that describes the API.
 
+#![forbid(unsafe_code)]
+
 use quote::quote;
 use serde_tokenstream::Error;
 
