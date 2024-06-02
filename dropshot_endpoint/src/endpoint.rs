@@ -265,6 +265,18 @@ impl<'ast> EndpointParams<'ast> {
             ));
         }
 
+        if let Some(where_clause) = &sig.generics.where_clause {
+            // Empty where clauses are no-ops and therefore permitted.
+            if !where_clause.predicates.is_empty() {
+                errors.push(Error::new_spanned(
+                    where_clause,
+                    format!(
+                        "endpoint `{name_str}` must not have a where clause"
+                    ),
+                ));
+            }
+        }
+
         if sig.variadic.is_some() {
             errors.push(Error::new_spanned(
                 &sig.variadic,
@@ -918,6 +930,32 @@ mod tests {
         assert!(errors.is_empty());
         assert_contents(
             "tests/output/endpoint_context_fully_qualified_names.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    /// An empty where clause is a no-op and therefore permitted.
+    #[test]
+    fn test_endpoint_with_empty_where_clause() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                ) -> Result<HttpResponseOk<()>, HttpError>
+                where
+                {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_empty_where_clause.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }

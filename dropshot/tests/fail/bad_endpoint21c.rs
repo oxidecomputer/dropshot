@@ -4,7 +4,6 @@
 
 use dropshot::endpoint;
 use dropshot::HttpError;
-use dropshot::HttpResponse;
 use dropshot::HttpResponseOk;
 use dropshot::Query;
 use dropshot::RequestContext;
@@ -17,15 +16,15 @@ struct QueryParams {
     x: String,
 }
 
+// Test: const fn.
 #[endpoint {
     method = GET,
     path = "/test",
 }]
-async fn weird_types<'a>(
-    _rqctx: RequestContext<T, Self::U>,
-    _param1: Query<&'a QueryParams>,
-    _param2: for<'b> TypedBody<&'b ()>,
-) -> Result<impl HttpResponse, HttpError> {
+const async fn const_endpoint(
+    _rqctx: RequestContext<()>,
+    _param1: Query<QueryParams>,
+) -> Result<HttpResponseOk<()>, HttpError> {
     Ok(HttpResponseOk(()))
 }
 
