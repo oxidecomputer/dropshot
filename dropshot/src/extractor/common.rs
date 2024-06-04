@@ -25,7 +25,7 @@ pub trait ExclusiveExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError>;
 
     fn metadata(
@@ -56,7 +56,7 @@ pub trait SharedExtractor: Send + Sync + Sized {
 impl<S: SharedExtractor> ExclusiveExtractor for S {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        _request: hyper::Request<hyper::Body>,
+        _request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
         <S as SharedExtractor>::from_request(rqctx).await
     }
@@ -96,7 +96,7 @@ pub trait RequestExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError>;
 
     fn metadata(
@@ -109,7 +109,7 @@ pub trait RequestExtractor: Send + Sync + Sized {
 impl RequestExtractor for () {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
-        _request: hyper::Request<hyper::Body>,
+        _request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
         Ok(())
     }
@@ -129,7 +129,7 @@ impl RequestExtractor for () {
 impl<X: ExclusiveExtractor + 'static> RequestExtractor for (X,) {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
         Ok((X::from_request(rqctx, request).await?,))
     }
@@ -162,7 +162,7 @@ macro_rules! impl_rqextractor_for_tuple {
     {
         async fn from_request<Context: ServerContext>(
             rqctx: &RequestContext<Context>,
-            request: hyper::Request<hyper::Body>
+            request: hyper::Request<crate::Body>
         ) -> Result<( $($S,)+ X ), HttpError>
         {
             futures::try_join!(

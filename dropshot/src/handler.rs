@@ -41,6 +41,7 @@ use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
+use crate::body::Body;
 use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
 use crate::schema_util::make_subschema_for;
@@ -51,7 +52,6 @@ use crate::to_map::to_map;
 use async_trait::async_trait;
 use http::HeaderMap;
 use http::StatusCode;
-use hyper::Body;
 use hyper::Response;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -67,8 +67,10 @@ use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
+pub type ResponseBody = Body;
+
 /// Type alias for the result returned by HTTP handler functions.
-pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
+pub type HttpHandlerResult = Result<Response<ResponseBody>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
@@ -139,7 +141,7 @@ impl RequestInfo {
     ///
     /// This is provided for source compatibility.  In previous versions of
     /// Dropshot, `RequestContext.request` was an
-    /// `Arc<Mutex<hyper::Request<hyper::Body>>>`.  Now, it's just
+    /// `Arc<Mutex<hyper::Request<impl Body>>>`.  Now, it's just
     /// `RequestInfo`, which provides many of the same functions as
     /// `hyper::Request` does.  Consumers _should_ just use `rqctx.request`
     /// instead of this function.
@@ -374,7 +376,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> HttpHandlerResult;
 }
 
@@ -437,7 +439,7 @@ where
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> HttpHandlerResult {
         // This is where the magic happens: in the code below, `funcparams` has
         // type `FuncParams`, which is a tuple type describing the extractor
@@ -499,8 +501,8 @@ where
 // See the discussion on macro `impl_HttpHandlerFunc_for_func_with_params` for a
 // great deal of context on this.
 
-/// HttpResponse must produce a `Result<Response<Body>, HttpError>` and generate
-/// the response metadata.  Typically one should use `Response<Body>` or an
+/// HttpResponse must produce a `Result<Response<ResponseBody>, HttpError>` and generate
+/// the response metadata.  Typically one should use `Response<ResponseBody>` or an
 /// implementation of `HttpTypedResponse`.
 pub trait HttpResponse {
     /// Generate the response to the HTTP call.
@@ -513,7 +515,7 @@ pub trait HttpResponse {
 
 /// `Response<Body>` is used for free-form responses. The implementation of
 /// `to_result()` is trivial, and we don't have any typed metadata to return.
-impl HttpResponse for Response<Body> {
+impl HttpResponse for Response<ResponseBody> {
     fn to_result(self) -> HttpHandlerResult {
         Ok(self)
     }
@@ -522,12 +524,12 @@ impl HttpResponse for Response<Body> {
     }
 }
 
-/// Wraps a [hyper::Body] so that it can be used with coded response types such
+/// Wraps a [dropshot::Body] so that it can be used with coded response types such
 /// as [HttpResponseOk].
-pub struct FreeformBody(pub Body);
+pub struct FreeformBody(pub ResponseBody);
 
-impl From<Body> for FreeformBody {
-    fn from(body: Body) -> Self {
+impl From<ResponseBody> for FreeformBody {
+    fn from(body: ResponseBody) -> Self {
         Self(body)
     }
 }

@@ -44,7 +44,7 @@ note: required by a bound in `WebsocketUpgrade::handle`
    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `WebsocketUpgrade::handle`
    = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `fn(RequestContext<()>, WebsocketConnection, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<hyper::body::body::Body>, HttpError>> {<impl From<websocket_channel_not_last> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::websocket_channel_not_last}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(RequestContext<()>, WebsocketConnection, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {<impl From<websocket_channel_not_last> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::websocket_channel_not_last}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_channel18.rs:23:10
    |
 19 | / #[channel {

@@ -13,11 +13,11 @@ use std::fmt::Debug;
 /// [`hyper::Request`].
 #[derive(Debug)]
 pub struct RawRequest {
-    request: hyper::Request<hyper::Body>,
+    request: hyper::Request<crate::Body>,
 }
 
 impl RawRequest {
-    pub fn into_inner(self) -> hyper::Request<hyper::Body> {
+    pub fn into_inner(self) -> hyper::Request<crate::Body> {
         self.request
     }
 }
@@ -26,7 +26,7 @@ impl RawRequest {
 impl ExclusiveExtractor for RawRequest {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<RawRequest, HttpError> {
         Ok(RawRequest { request })
     }

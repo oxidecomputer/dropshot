@@ -275,7 +275,7 @@ impl HttpError {
     pub fn into_response(
         self,
         request_id: &str,
-    ) -> hyper::Response<hyper::Body> {
+    ) -> hyper::Response<crate::handler::ResponseBody> {
         // TODO-hardening: consider handling the operational errors that the
         // Serde serialization fails or the response construction fails.  In
         // those cases, we should probably try to report this as a serious

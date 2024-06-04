@@ -11,6 +11,7 @@ use dropshot::test_util::objects_list_page;
 use dropshot::test_util::ClientTestContext;
 use dropshot::test_util::LogContext;
 use dropshot::ApiDescription;
+use dropshot::Body;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
@@ -25,8 +26,6 @@ use dropshot::ResultsPage;
 use dropshot::WhichPage;
 use http::Method;
 use http::StatusCode;
-use hyper::Body;
-use hyper::Client;
 use hyper::Request;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -832,7 +831,10 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
     let server_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let client = ClientTestContext::new(server_addr, logctx.log.new(o!()));
     let url = client.url("/");
-    let raw_client = Client::new();
+    let raw_client = hyper_util::client::legacy::Client::builder(
+        hyper_util::rt::TokioExecutor::new(),
+    )
+    .build(hyper_util::client::legacy::connect::HttpConnector::new());
     let rv = ExampleContext { child, client, logctx: Some(logctx) };
 
     while start.elapsed().as_secs() < 10 {

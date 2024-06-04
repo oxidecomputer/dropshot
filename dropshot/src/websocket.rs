@@ -7,6 +7,7 @@
 //! which will be spawned to handle the incoming connection.
 
 use crate::api_description::ExtensionMode;
+use crate::body::Body;
 use crate::{
     ApiEndpointBodyContentType, ExclusiveExtractor, ExtractorMetadata,
     HttpError, RequestContext, ServerContext,
@@ -17,7 +18,6 @@ use http::header;
 use http::Response;
 use http::StatusCode;
 use hyper::upgrade::OnUpgrade;
-use hyper::Body;
 use schemars::JsonSchema;
 use serde_json::json;
 use sha1::{Digest, Sha1};
@@ -42,7 +42,8 @@ pub type WebsocketChannelResult =
 /// [WebsocketUpgrade::handle]'s return type.
 /// The `#[endpoint]` handler must return the value returned by
 /// [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
-pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
+pub type WebsocketEndpointResult =
+    Result<Response<crate::handler::ResponseBody>, HttpError>;
 
 /// The upgraded connection passed as the last argument to the websocket
 /// handler function. [`WebsocketConnection::into_inner`] can be used to
@@ -51,11 +52,14 @@ pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 pub struct WebsocketConnection(WebsocketConnectionRaw);
 
 /// A type that implements [tokio::io::AsyncRead] + [tokio::io::AsyncWrite].
-pub type WebsocketConnectionRaw = hyper::upgrade::Upgraded;
+// Not public, since it uses less-stable hyper-util.
+type WebsocketConnectionRaw = hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>;
 
 impl WebsocketConnection {
     /// Consumes `self` and returns the held raw connection.
-    pub fn into_inner(self) -> WebsocketConnectionRaw {
+    pub fn into_inner(
+        self,
+    ) -> impl tokio::io::AsyncRead + tokio::io::AsyncWrite {
         self.0
     }
 }
@@ -87,7 +91,7 @@ fn derive_accept_key(request_key: &[u8]) -> String {
 impl ExclusiveExtractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<Body>,
     ) -> Result<Self, HttpError> {
         if !request
             .headers()
@@ -229,7 +233,8 @@ impl WebsocketUpgrade {
                 tokio::spawn(async move {
                     match upgrade_fut.await {
                         Ok(upgrade) => {
-                            match handler(WebsocketConnection(upgrade)).await {
+                            let io = hyper_util::rt::TokioIo::new(upgrade);
+                            match handler(WebsocketConnection(io)).await {
                                 Ok(x) => Ok(x),
                                 Err(e) => {
                                     error!(
@@ -294,6 +299,7 @@ impl JsonSchema for WebsocketUpgrade {
 
 #[cfg(test)]
 mod tests {
+    use crate::body::Body;
     use crate::config::HandlerTaskMode;
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
@@ -303,7 +309,6 @@ mod tests {
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
-    use hyper::Body;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::num::NonZeroU32;
     use std::sync::Arc;
