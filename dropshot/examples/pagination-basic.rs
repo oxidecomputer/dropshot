@@ -13,6 +13,52 @@
 //!
 //! Try passing different values of the `limit` query parameter.  Try passing the
 //! next page token from the response as a query parameter, too.
+//!
+//! Here's an example first request (again, your port number may be different --
+//! check the log output):
+//!
+//! ```ignore
+//! $ curl -s http://127.0.0.1:62511/projects?limit=3 | json
+//! {
+//!   "next_page": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOiJwcm9qZWN0MDAzIn19",
+//!   "items": [
+//!     {
+//!       "name": "project001"
+//!     },
+//!     {
+//!       "name": "project002"
+//!     },
+//!     {
+//!       "name": "project003"
+//!     }
+//!   ]
+//! }
+//! ```
+//!
+//! This should be pretty self-explanatory: we have three projects here and
+//! they're sorted in ascending order by name.  The "next_page" token is used to
+//! fetch the next page of results as follows:
+//!
+//! ```ignore
+//! $ curl -s http://127.0.0.1:62511/projects?limit=3'&'page_token=eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOiJwcm9qZWN0MDAzIn19 | json
+//! {
+//!   "next_page": "eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOiJwcm9qZWN0MDA2In19",
+//!   "items": [
+//!     {
+//!       "name": "project004"
+//!     },
+//!     {
+//!       "name": "project005"
+//!     },
+//!     {
+//!       "name": "project006"
+//!     }
+//!   ]
+//! }
+//! ```
+//!
+//! Now we have the next three projects and a new token.  We can continue this
+//! way until we've listed all the projects.
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
