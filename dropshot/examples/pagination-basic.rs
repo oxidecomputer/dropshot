@@ -60,7 +60,6 @@
 //! Now we have the next three projects and a new token.  We can continue this
 //! way until we've listed all the projects.
 
-
 use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
