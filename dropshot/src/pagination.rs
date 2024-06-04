@@ -184,9 +184,11 @@ impl<ItemType> ResultsPage<ItemType> {
 /// `PageSelector` types.
 ///
 /// `ScanParams` describes the set of querystring parameters that your endpoint
-/// accepts for the _first_ request of the scan (typically: filters and sort
-/// options).  This must be deserializable from a querystring.  These parameters
-/// usually don't change across the multiple requests that make up a scan.
+/// accepts for the _first_ request of the scan.  This must be deserializable
+/// from a querystring.  These parameters typically describe filters and sort
+/// options that will not change across the multiple request that make up the
+/// scan.  (Clients won't have to pass the scan parameters for subsequent
+/// requests, though; instead, you generally encode them into `PageSelector`.)
 ///
 /// `PageSelector` describes the information your endpoint needs for requests
 /// after the first one.  Typically this would include an id of some sort for the
