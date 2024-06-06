@@ -1,22 +1,17 @@
-error: Endpoint handlers must have the following signature:
+error: channel handlers must have the following signature:
            async fn(
                rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
                [path_params: Path<P>,]
-               [body_param: TypedBody<J>,]
-               [body_param: UntypedBody,]
-               [body_param: StreamingBody,]
-               [raw_request: RawRequest,]
-           ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_channel8.rs:9:1
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel8.rs:13:1
    |
-9  | / #[channel {
-10 | |     protocol = WEBSOCKETS,
-11 | |     path = "/test",
-12 | | }]
-   | |__^
-   |
-   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
+13 | / fn bad_channel(
+14 | |     _rqctx: RequestContext<()>,
+15 | |     _upgraded: WebsocketConnection,
+16 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
 
 error: endpoint handler functions must be async
   --> tests/fail/bad_channel8.rs:13:1

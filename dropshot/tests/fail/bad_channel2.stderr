@@ -1,45 +1,20 @@
-error: Endpoint handlers must have the following signature:
+error: channel handlers must have the following signature:
            async fn(
                rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
                [path_params: Path<P>,]
-               [body_param: TypedBody<J>,]
-               [body_param: UntypedBody,]
-               [body_param: StreamingBody,]
-               [raw_request: RawRequest,]
-           ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_channel2.rs:8:1
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel2.rs:12:1
    |
-8  | / #[channel {
-9  | |     protocol = WEBSOCKETS,
-10 | |     path = "/test",
-11 | | }]
-   | |__^
-   |
-   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
+12 | / async fn bad_channel(
+13 | |     self,
+14 | |     _upgraded: WebsocketConnection,
+15 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
 
 error: Expected a non-receiver argument
   --> tests/fail/bad_channel2.rs:13:5
    |
 13 |     self,
    |     ^^^^
-
-error: `self` parameter is only allowed in associated functions
-  --> tests/fail/bad_channel2.rs:13:5
-   |
-13 |     self,
-   |     ^^^^ not semantically valid as function parameter
-   |
-   = note: associated functions are those in `impl` or `trait` definitions
-
-error[E0401]: can't use generic parameters from outer item
-  --> tests/fail/bad_channel2.rs:13:5
-   |
-8  | #[channel {
-   | --------- `Self` type implicitly declared here, by this `impl`
-...
-13 |     self,
-   |     ^^^^
-   |     |
-   |     use of generic parameter from outer item
-   |     refer to the type directly here instead

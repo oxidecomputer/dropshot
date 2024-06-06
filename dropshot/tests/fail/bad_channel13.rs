@@ -1,10 +1,5 @@
 // Copyright 2024 Oxide Computer Company
 
-// The error messages produced by this test aren't great, with messages like
-// "can't use generic parameters from outer item" which leak implementation
-// details. We should improve this by generating channels directly rather than
-// converting them to endpoints.
-
 #![allow(unused_imports)]
 
 use dropshot::channel;

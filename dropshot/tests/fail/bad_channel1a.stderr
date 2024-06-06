@@ -1,6 +1,17 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel1a.rs:11:1
+   |
+11 | async fn bad_channel() -> dropshot::WebsocketChannelResult {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 error: An argument of type dropshot::WebsocketConnection must be provided last.
- --> tests/fail/bad_channel1a.rs:8:5
-  |
-8 | /     protocol = WEBSOCKETS,
-9 | |     path = "/test",
-  | |___________________^
+  --> tests/fail/bad_channel1a.rs:11:1
+   |
+11 | async fn bad_channel() -> dropshot::WebsocketChannelResult {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

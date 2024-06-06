@@ -20,20 +20,3 @@ error: generics are not permitted for endpoint handlers
    |
 18 | async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_endpoint13.rs:19:23
-   |
-19 |     _: RequestContext<S>,
-   |                       ^ not found in this scope
-   |
-help: you might be missing a type parameter
-   |
-19 |     _: RequestContext<S><S>,
-   |                      +++
-
-error[E0412]: cannot find type `S` in this scope
-  --> tests/fail/bad_endpoint13.rs:19:23
-   |
-19 |     _: RequestContext<S>,
-   |                       ^ not found in this scope
