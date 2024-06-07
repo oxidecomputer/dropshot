@@ -67,10 +67,8 @@ use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-pub type ResponseBody = Body;
-
 /// Type alias for the result returned by HTTP handler functions.
-pub type HttpHandlerResult = Result<Response<ResponseBody>, HttpError>;
+pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
@@ -501,8 +499,8 @@ where
 // See the discussion on macro `impl_HttpHandlerFunc_for_func_with_params` for a
 // great deal of context on this.
 
-/// HttpResponse must produce a `Result<Response<ResponseBody>, HttpError>` and generate
-/// the response metadata.  Typically one should use `Response<ResponseBody>` or an
+/// HttpResponse must produce a `Result<Response<Body>, HttpError>` and generate
+/// the response metadata.  Typically one should use `Response<Body>` or an
 /// implementation of `HttpTypedResponse`.
 pub trait HttpResponse {
     /// Generate the response to the HTTP call.
@@ -515,7 +513,7 @@ pub trait HttpResponse {
 
 /// `Response<Body>` is used for free-form responses. The implementation of
 /// `to_result()` is trivial, and we don't have any typed metadata to return.
-impl HttpResponse for Response<ResponseBody> {
+impl HttpResponse for Response<Body> {
     fn to_result(self) -> HttpHandlerResult {
         Ok(self)
     }
@@ -526,10 +524,10 @@ impl HttpResponse for Response<ResponseBody> {
 
 /// Wraps a [dropshot::Body] so that it can be used with coded response types such
 /// as [HttpResponseOk].
-pub struct FreeformBody(pub ResponseBody);
+pub struct FreeformBody(pub Body);
 
-impl From<ResponseBody> for FreeformBody {
-    fn from(body: ResponseBody) -> Self {
+impl From<Body> for FreeformBody {
+    fn from(body: Body) -> Self {
         Self(body)
     }
 }

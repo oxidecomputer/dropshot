@@ -1,3 +1,5 @@
+// Copyright 2024 Oxide Computer Company
+
 use std::pin::Pin;
 use std::task::{Context, Poll};
 

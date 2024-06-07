@@ -2,11 +2,12 @@
 //! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
+use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
 use super::error::HttpError;
-use super::handler::{RequestContext, ResponseBody};
+use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 use super::ProbeRegistration;
@@ -818,7 +819,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
     request: Request<hyper::body::Incoming>,
-) -> Result<Response<ResponseBody>, GenericError> {
+) -> Result<Response<Body>, GenericError> {
     // This extra level of indirection makes error handling much more
     // straightforward, since the request handling code can simply return early
     // with an error and we'll treat it like an error from any of the endpoints
@@ -947,7 +948,7 @@ async fn http_request_handle<C: ServerContext>(
     request_id: &str,
     request_log: Logger,
     remote_addr: std::net::SocketAddr,
-) -> Result<Response<ResponseBody>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     // TODO-hardening: is it correct to (and do we correctly) read the entire
     // request body even if we decide it's too large and are going to send a 400
     // response?
@@ -1119,7 +1120,7 @@ impl<C: ServerContext> ServerRequestHandler<C> {
 impl<C: ServerContext> Service<Request<hyper::body::Incoming>>
     for ServerRequestHandler<C>
 {
-    type Response = Response<ResponseBody>;
+    type Response = Response<Body>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
