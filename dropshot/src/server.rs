@@ -644,7 +644,6 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-        //let server = Server::builder(https_acceptor).serve(make_service);
 
         Ok((
             InnerHttpsServerStarter(https_acceptor, make_service),
