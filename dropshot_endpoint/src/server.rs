@@ -1,5 +1,26 @@
 // Copyright 2024 Oxide Computer Company
 
+//! Support for the `#[dropshot::server]` attribute macro.
+//!
+//! The server macro tends to follow the same structure as `endpoint.rs`, but is
+//! overall quite a bit more complex than function-based macros. The main source
+//! of complexity comes from having to parse the entire trait which consists of
+//! many endpoints and unmanaged items.
+//!
+//! * Each endpoint item is parsed and validated separately, and it's unhelpful
+//!   to just bail out on the first error -- hence we use a hierarchical error
+//!   collection scheme.
+//! * There are some overall constraints on the trait itself, such as not having
+//!   generics or where clauses.
+//! * Syntax errors within endpoint implementations are passed through as-is,
+//!   through lazy parsing with `crate::syn_parsing::ItemTraitPartParsed`.
+//! * If the trait is valid, a support module is also generated. To generate the
+//!   functions inside this module, we need to mutate the `RequestContext` type
+//!   in particular.
+//!
+//! Code that is common to both the server and endpoint macros lives in
+//! `endpoint.rs`.
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
@@ -46,7 +67,7 @@ pub(crate) fn do_server(
         }
     };
 
-    let output = match (server_metadata, item_trait) {
+    let output = match (server_metadata, item_trait.as_ref()) {
         (Some(server_metadata), Some(item_trait)) => {
             // The happy path.
             let server = Server::new(server_metadata, &item_trait, errors);
@@ -61,15 +82,24 @@ pub(crate) fn do_server(
         }
         (_, None) => {
             // Can't do anything here, just return errors.
-            quote! {}
+            ServerOutput { output: quote! {}, has_endpoint_param_errors: false }
         }
     };
 
-    let errors = error_store.into_inner();
+    let mut errors = error_store.into_inner();
 
-    // XXX: If there are any parameter errors, also provide a usage message.
+    // If there are any errors, we also want to provide a usage message as an error.
+    if output.has_endpoint_param_errors {
+        let item_trait = item_trait
+            .as_ref()
+            .expect("has_endpoint_param_errors is true => item_fn is Some");
+        errors.insert(
+            0,
+            Error::new_spanned(&item_trait.ident, crate::endpoint::USAGE),
+        );
+    }
 
-    (output, errors)
+    (output.output, errors)
 }
 
 #[derive(Deserialize, Debug)]
@@ -264,7 +294,7 @@ impl<'ast> Server<'ast> {
         }
     }
 
-    fn to_output(&self) -> TokenStream {
+    fn to_output(&self) -> ServerOutput {
         let context_item =
             self.make_context_trait_item().map(TraitItemPartParsed::Other);
         let other_items =
@@ -289,11 +319,23 @@ impl<'ast> Server<'ast> {
         // Also generate the support module.
         let module = self.make_module();
 
-        quote! {
+        let output = quote! {
             #out_trait
 
             #module
-        }
+        };
+
+        // Dig through the items to see if any of them have parameter errors.
+        let has_endpoint_param_errors =
+            self.items.iter().any(|item| match item {
+                ServerItem::Fn(ServerFnItem::Invalid {
+                    kind: InvalidServerItemKind::Endpoint(summary),
+                    ..
+                }) => summary.has_param_errors,
+                _ => false,
+            });
+
+        ServerOutput { output, has_endpoint_param_errors }
     }
 
     fn make_context_trait_item(&self) -> Option<syn::TraitItem> {
@@ -319,59 +361,29 @@ impl<'ast> Server<'ast> {
 
         match (item_trait, context_item, module_ident) {
             (Some(item_trait), Some(context_item), Some(module_ident)) => {
-                // Only generate the full support module if the trait and the
-                // context item are valid, and the module ident is available. If
-                // we don't check for these, the error messages become quite
-                // ugly.
-                let trait_ident = &item_trait.ident;
-                let vis = &item_trait.vis;
-
-                let doc_comments = ModuleDocComments::generate(
-                    &self.dropshot,
-                    trait_ident,
-                    &context_item.ident,
+                let module_gen = ServerModuleGenerator {
+                    dropshot: &self.dropshot,
                     module_ident,
-                );
-
-                // Generate two API description functions: one for the real trait, and
-                // one for a stub impl meant for OpenAPI generation.
-                let api = self.make_api_description(
-                    &context_item.ident,
-                    doc_comments.api_description(),
-                );
-                let stub_api = self.make_stub_api_description(
-                    doc_comments.stub_api_description(),
-                );
-                let outer = doc_comments.outer();
-
-                quote! {
-                    #outer
-                    #[automatically_derived]
-                    #vis mod #module_ident {
-                        use super::*;
-
-                        // We don't need to generate type checks the way we do with
-                        // function-based macros, because we get error messages that are
-                        // roughly as good through the stub API description generator.
-                        // (Also, adding type checks would end up duplicating a ton of error
-                        // messages.)
-                        //
-                        // For that reason, put it above the real API description -- that
-                        // way, the best error messages appear first.
-                        #stub_api
-
-                        #api
-                    }
-                }
+                    item_trait,
+                    context_item,
+                    items: &self.items,
+                };
+                module_gen.to_token_stream()
             }
             (_, _, Some(module_ident)) => {
-                // If the module ident is known but one of the other bits is
-                // invalid, then generate an empty support module.
-                let doc = invalid_module_doc(&self.item_trait.item.ident);
+                // If the module ident is known but one of the other parts is
+                // invalid, generate an empty support module. (We can't generate
+                // the API description functions, even ones that immediately
+                // panic, because those depend on the trait and context items
+                // being valid.)
+                let doc = ModuleDocComments::generate_invalid(
+                    &self.item_trait.item.ident,
+                );
+                let outer = doc.outer();
                 let vis = &self.item_trait.item.vis;
 
                 quote! {
-                    #doc
+                    #outer
                     #vis mod #module_ident {}
                 }
             }
@@ -381,136 +393,17 @@ impl<'ast> Server<'ast> {
             }
         }
     }
+}
 
-    fn make_api_description(
-        &self,
-        context_ident: &syn::Ident,
-        doc: TokenStream,
-    ) -> TokenStream {
-        let dropshot = &self.dropshot;
-        let trait_ident = &self.item_trait.item.ident;
-        let vis = &self.item_trait.item.vis;
+/// The result of calling [`Server::to_output`].
+struct ServerOutput {
+    /// The actual output.
+    output: TokenStream,
 
-        let body = self.make_api_factory_body(FactoryKind::Regular);
-
-        quote! {
-            #doc
-            #[automatically_derived]
-            #vis fn api_description<ServerImpl: #trait_ident>() -> ::std::result::Result<
-                #dropshot::ApiDescription<<ServerImpl as #trait_ident>::#context_ident>,
-                #dropshot::ApiDescriptionBuildError,
-            > {
-                #body
-            }
-        }
-    }
-
-    fn make_stub_api_description(&self, doc: TokenStream) -> TokenStream {
-        let dropshot = &self.dropshot;
-        let vis = &self.item_trait.item.vis;
-
-        let body = self.make_api_factory_body(FactoryKind::Stub);
-
-        quote! {
-            #doc
-            #[automatically_derived]
-            #vis fn stub_api_description() -> ::std::result::Result<
-                #dropshot::ApiDescription<#dropshot::StubContext>,
-                #dropshot::ApiDescriptionBuildError,
-            > {
-                #body
-            }
-        }
-    }
-
-    /// Generates the body for the API factory function, as well as the stub
-    /// generator function.
+    /// Whether there were any endpoint parameter-related errors.
     ///
-    /// This code is shared across the real and stub API description functions.
-    fn make_api_factory_body(&self, kind: FactoryKind) -> TokenStream {
-        let dropshot = &self.dropshot;
-        let trait_ident = &self.item_trait.item.ident;
-        let trait_ident_str = trait_ident.to_string();
-
-        if self.is_invalid() {
-            let err_msg = format!(
-                "errors encountered while generating dropshot server `{}`",
-                trait_ident_str
-            );
-            quote! {
-                panic!(#err_msg);
-            }
-        } else {
-            let endpoints = self.items.iter().filter_map(|item| match item {
-                ServerItem::Fn(ServerFnItem::Endpoint(e)) => {
-                    let name = &e.f.sig.ident;
-                    let endpoint = match kind {
-                        FactoryKind::Regular => {
-                            // Adding the span information to path_to_name leads
-                            // to fewer call_site errors.
-                            let path_to_name: TokenStream =
-                                quote_spanned! {e.attr.span()=> <ServerImpl as #trait_ident>::#name };
-                            e.to_api_endpoint(
-                                &self.dropshot,
-                                &ApiEndpointKind::Regular(&path_to_name),
-                            )
-                        }
-                        FactoryKind::Stub => {
-                            let extractor_types =
-                                e.params.extractor_types().collect();
-                            let ret_ty = e.params.ret_ty;
-                            e.to_api_endpoint(
-                                dropshot,
-                                &ApiEndpointKind::Stub {
-                                    attr: &e.attr,
-                                    extractor_types,
-                                    ret_ty,
-                                },
-                            )
-                        }
-                    };
-
-                    Some(endpoint)
-                }
-
-                ServerItem::Fn(ServerFnItem::Channel(_)) => {
-                    todo!("still need to implement channels")
-                }
-
-                ServerItem::Fn(ServerFnItem::Invalid(_)) | ServerItem::Fn(ServerFnItem::NonEndpoint(_)) | ServerItem::Other(_) => None,
-            });
-
-            quote! {
-                let mut dropshot_api = #dropshot::ApiDescription::new();
-                let mut dropshot_errors: Vec<String> = Vec::new();
-
-                #(#endpoints)*
-
-                if !dropshot_errors.is_empty() {
-                    Err(#dropshot::ApiDescriptionBuildError::new(dropshot_errors))
-                } else {
-                    Ok(dropshot_api)
-                }
-            }
-        }
-    }
-
-    /// Returns true if errors were detected while generating the dropshot
-    /// server, and it is invalid as a result.
-    fn is_invalid(&self) -> bool {
-        if !self.item_trait.is_valid {
-            return true;
-        }
-
-        if !self.context_item.is_valid() {
-            return true;
-        }
-
-        self.items.iter().any(|item| match item {
-            ServerItem::Fn(ServerFnItem::Invalid(_)) => true,
-            _ => false,
-        })
-    }
+    /// If there were, then we provide a usage message.
+    has_endpoint_param_errors: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -581,7 +474,7 @@ enum ContextItem<'ast> {
 
     /// The item is missing.
     Missing {
-        /// This is a conjured-up ident for the missing item.
+        /// A conjured-up ident for the missing item.
         ident: syn::Ident,
     },
 }
@@ -655,9 +548,196 @@ impl<'ast> ContextItem<'ast> {
             Self::Invalid(_) | Self::Missing { .. } => None,
         }
     }
+}
 
-    fn is_valid(&self) -> bool {
-        matches!(self, Self::Valid(_))
+/// Code that creates the support module for a server trait.
+///
+/// The support module should only be created in cases where the overall
+/// structure of the trait is valid. (If it isn't, then that leads to some very
+/// bad error messages). This serves as a statically typed guarantee regarding
+/// that.
+struct ServerModuleGenerator<'ast> {
+    dropshot: &'ast TokenStream,
+    module_ident: &'ast syn::Ident,
+
+    // Invariant: the corresponding `ServerItemTrait::is_valid` is true.
+    item_trait: &'ast ItemTraitPartParsed,
+
+    // Invariant: the corresponding `ContextItem::is_valid` is true.
+    context_item: &'ast syn::TraitItemType,
+
+    // These items might or might not be valid individually.
+    items: &'ast [ServerItem<'ast>],
+}
+
+impl<'ast> ServerModuleGenerator<'ast> {
+    fn make_api_description(&self, doc: TokenStream) -> TokenStream {
+        let dropshot = &self.dropshot;
+        let trait_ident = &self.item_trait.ident;
+        let context_ident = &self.context_item.ident;
+        let vis = &self.item_trait.vis;
+
+        let body = self.make_api_factory_body(FactoryKind::Regular);
+
+        quote! {
+            #doc
+            #[automatically_derived]
+            #vis fn api_description<ServerImpl: #trait_ident>() -> ::std::result::Result<
+                #dropshot::ApiDescription<<ServerImpl as #trait_ident>::#context_ident>,
+                #dropshot::ApiDescriptionBuildError,
+            > {
+                #body
+            }
+        }
+    }
+
+    fn make_stub_api_description(&self, doc: TokenStream) -> TokenStream {
+        let dropshot = &self.dropshot;
+        let vis = &self.item_trait.vis;
+
+        let body = self.make_api_factory_body(FactoryKind::Stub);
+
+        quote! {
+            #doc
+            #[automatically_derived]
+            #vis fn stub_api_description() -> ::std::result::Result<
+                #dropshot::ApiDescription<#dropshot::StubContext>,
+                #dropshot::ApiDescriptionBuildError,
+            > {
+                #body
+            }
+        }
+    }
+
+    /// Generates the body for the API factory function, as well as the stub
+    /// generator function.
+    ///
+    /// This code is shared across the real and stub API description functions.
+    fn make_api_factory_body(&self, kind: FactoryKind) -> TokenStream {
+        let dropshot = &self.dropshot;
+        let trait_ident = &self.item_trait.ident;
+        let trait_ident_str = trait_ident.to_string();
+
+        if self.has_invalid_fn_items() {
+            let err_msg = format!(
+                "invalid endpoints encountered while generating Dropshot server `{}`",
+                trait_ident_str
+            );
+            quote! {
+                panic!(#err_msg);
+            }
+        } else {
+            let endpoints = self.items.iter().filter_map(|item| match item {
+                ServerItem::Fn(ServerFnItem::Endpoint(e)) => {
+                    let name = &e.f.sig.ident;
+                    let endpoint = match kind {
+                        FactoryKind::Regular => {
+                            // Adding the span information to path_to_name leads
+                            // to fewer call_site errors.
+                            let path_to_name: TokenStream =
+                                quote_spanned! {e.attr.span()=>
+                                    <ServerImpl as #trait_ident>::#name
+                                };
+                            e.to_api_endpoint(
+                                &self.dropshot,
+                                &ApiEndpointKind::Regular(&path_to_name),
+                            )
+                        }
+                        FactoryKind::Stub => {
+                            let extractor_types =
+                                e.params.extractor_types().collect();
+                            let ret_ty = e.params.ret_ty;
+                            e.to_api_endpoint(
+                                dropshot,
+                                &ApiEndpointKind::Stub {
+                                    attr: &e.attr,
+                                    extractor_types,
+                                    ret_ty,
+                                },
+                            )
+                        }
+                    };
+
+                    Some(endpoint)
+                }
+
+                ServerItem::Fn(ServerFnItem::Channel(_)) => {
+                    todo!("still need to implement channels")
+                }
+
+                ServerItem::Fn(ServerFnItem::Invalid { .. })
+                | ServerItem::Fn(ServerFnItem::Unmanaged(_))
+                | ServerItem::Other(_) => None,
+            });
+
+            quote! {
+                let mut dropshot_api = #dropshot::ApiDescription::new();
+                let mut dropshot_errors: Vec<String> = Vec::new();
+
+                #(#endpoints)*
+
+                if !dropshot_errors.is_empty() {
+                    Err(#dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+                } else {
+                    Ok(dropshot_api)
+                }
+            }
+        }
+    }
+
+    fn make_doc_comments(&self) -> ModuleDocComments {
+        if self.has_invalid_fn_items() {
+            ModuleDocComments::generate_invalid(&self.item_trait.ident)
+        } else {
+            ModuleDocComments::generate(
+                self.dropshot,
+                &self.item_trait.ident,
+                &self.context_item.ident,
+                self.module_ident,
+            )
+        }
+    }
+
+    /// Returns true if errors were detected while generating the dropshot
+    /// server, and it is invalid as a result.
+    fn has_invalid_fn_items(&self) -> bool {
+        self.items.iter().any(|item| item.is_invalid())
+    }
+}
+
+impl<'ast> ToTokens for ServerModuleGenerator<'ast> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let vis = &self.item_trait.vis;
+        let module_ident = self.module_ident;
+
+        let doc_comments = self.make_doc_comments();
+
+        // Generate two API description functions: one for the real trait, and
+        // one for a stub impl meant for OpenAPI generation.
+        let api = self.make_api_description(doc_comments.api_description());
+        let stub_api =
+            self.make_stub_api_description(doc_comments.stub_api_description());
+        let outer = doc_comments.outer();
+
+        tokens.extend(quote! {
+            #outer
+            #[automatically_derived]
+            #vis mod #module_ident {
+                use super::*;
+
+                // We don't need to generate type checks the way we do with
+                // function-based macros, because we get error messages that are
+                // roughly as good through the stub API description generator.
+                // (Also, adding type checks would end up duplicating a ton of error
+                // messages.)
+                //
+                // For that reason, put it above the real API description -- that
+                // way, the best error messages appear first.
+                #stub_api
+
+                #api
+            }
+        });
     }
 }
 
@@ -772,6 +852,29 @@ fn print_openapi_spec() {{
         ModuleDocComments { outer, api_description, stub_api_description }
     }
 
+    fn generate_invalid(trait_ident: &syn::Ident) -> Self {
+        let outer = format!(
+"**Invalid**: Support module for the Dropshot server trait `{trait_ident}`.
+
+Errors were encountered while generating the server.
+");
+
+        let api_description = format!(
+"**Invalid, panics:** Given an implementation of `{trait_ident}`, generate an API description.
+
+Errors were encountered while generating the server, so this function panics.
+");
+
+        let stub_api_description = format!(
+"**Invalid, panics:** Generate a _stub_ API description for `{trait_ident}`, meant for OpenAPI
+generation.
+
+Errors were encountered while generating the server, so this function panics.
+");
+
+        ModuleDocComments { outer, api_description, stub_api_description }
+    }
+
     fn outer(&self) -> TokenStream {
         string_to_doc_attrs(&self.outer)
     }
@@ -783,17 +886,6 @@ fn print_openapi_spec() {{
     fn stub_api_description(&self) -> TokenStream {
         string_to_doc_attrs(&self.stub_api_description)
     }
-}
-
-fn invalid_module_doc(trait_ident: &syn::Ident) -> TokenStream {
-    let outer = format!(
-"Support module for the **invalid** Dropshot server trait `{trait_ident}`.
-
-Errors were encountered while generating the server, so this module is left empty.
-",
-    );
-
-    string_to_doc_attrs(&outer)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -831,6 +923,10 @@ enum ServerItem<'ast> {
 }
 
 impl ServerItem<'_> {
+    fn is_invalid(&self) -> bool {
+        matches!(self, Self::Fn(ServerFnItem::Invalid { .. }))
+    }
+
     fn to_out_trait_item(&self) -> TraitItemPartParsed {
         match self {
             Self::Fn(f) => TraitItemPartParsed::Fn(f.to_out_trait_item()),
@@ -846,10 +942,10 @@ impl ServerItem<'_> {
 enum ServerFnItem<'ast> {
     Endpoint(ServerEndpoint<'ast>),
     Channel(ServerChannel<'ast>),
-    // An endpoint item that was somehow invalid.
-    Invalid(&'ast TraitItemFnForSignature),
-    // A non-endpoint item not managed by the macro.
-    NonEndpoint(&'ast TraitItemFnForSignature),
+    // An item managed by the macro that was somehow invalid.
+    Invalid { f: &'ast TraitItemFnForSignature, kind: InvalidServerItemKind },
+    // A item without an endpoint or channel attribute.
+    Unmanaged(&'ast TraitItemFnForSignature),
 }
 
 impl<'ast> ServerFnItem<'ast> {
@@ -877,26 +973,30 @@ impl<'ast> ServerFnItem<'ast> {
         match attrs.as_slice() {
             [] => {
                 // This is just a normal method.
-                Self::NonEndpoint(f)
+                Self::Unmanaged(f)
             }
             [ServerAttr::Endpoint(eattr)] => {
-                if let Some(endpoint) = ServerEndpoint::new(
+                match ServerEndpoint::new(
                     f,
                     eattr,
                     trait_ident,
                     context_ident,
                     errors,
                 ) {
-                    Self::Endpoint(endpoint)
-                } else {
-                    Self::Invalid(f)
+                    Ok(endpoint) => Self::Endpoint(endpoint),
+                    Err(summary) => Self::Invalid {
+                        f,
+                        kind: InvalidServerItemKind::Endpoint(summary),
+                    },
                 }
             }
             [ServerAttr::Channel(cattr)] => {
-                if let Some(channel) = ServerChannel::new(f, cattr) {
-                    Self::Channel(channel)
-                } else {
-                    Self::Invalid(f)
+                match ServerChannel::new(f, cattr) {
+                    Ok(channel) => Self::Channel(channel),
+                    Err(summary) => Self::Invalid {
+                        f,
+                        kind: InvalidServerItemKind::Channel(summary),
+                    },
                 }
             }
             [first, rest @ ..] => {
@@ -921,7 +1021,7 @@ impl<'ast> ServerFnItem<'ast> {
                     errors.push(Error::new_spanned(attr, msg));
                 }
 
-                Self::Invalid(f)
+                Self::Invalid { f, kind: InvalidServerItemKind::Unknown }
             }
         }
     }
@@ -930,14 +1030,9 @@ impl<'ast> ServerFnItem<'ast> {
         match self {
             Self::Endpoint(e) => e.to_out_trait_item(),
             Self::Channel(c) => c.to_out_trait_item(),
-            Self::Invalid(f) => {
+            Self::Invalid { f, .. } | Self::Unmanaged(f) => {
                 // Strip recognized attributes, retaining all others.
                 let mut f = (*f).clone();
-                f.strip_recognized_attrs();
-                f
-            }
-            Self::NonEndpoint(&ref f) => {
-                let mut f = f.clone();
                 f.strip_recognized_attrs();
                 f
             }
@@ -991,7 +1086,7 @@ impl<'ast> ServerEndpoint<'ast> {
         trait_ident: &syn::Ident,
         context_ident: &syn::Ident,
         errors: &ErrorSink<'_, Error>,
-    ) -> Option<Self> {
+    ) -> Result<Self, ServerItemErrorSummary> {
         let name_str = f.sig.ident.to_string();
 
         let metadata = parse_endpoint_metadata(&name_str, attr, errors);
@@ -1003,10 +1098,12 @@ impl<'ast> ServerEndpoint<'ast> {
 
         match (metadata, params) {
             (Some(metadata), Some(params)) => {
-                Some(Self { f, attr, metadata, params })
+                Ok(Self { f, attr, metadata, params })
             }
             // This means that something failed.
-            _ => None,
+            (_, params) => Err(ServerItemErrorSummary {
+                has_param_errors: params.is_none(),
+            }),
         }
     }
 
@@ -1085,9 +1182,9 @@ impl<'ast> ServerChannel<'ast> {
     fn new(
         orig: &'ast TraitItemFnForSignature,
         _cattr: &'ast syn::Attribute,
-    ) -> Option<Self> {
+    ) -> Result<Self, ServerItemErrorSummary> {
         // TODO: implement channels
-        Some(Self { orig })
+        Ok(Self { orig })
     }
 
     fn to_out_trait_item(&self) -> TraitItemFnForSignature {
@@ -1112,6 +1209,28 @@ impl ToTokens for ServerAttr<'_> {
     }
 }
 
+/// The kind of server item that's invalid, along with potentially the reasons
+/// for it being so.
+#[derive(Clone, Copy, Debug)]
+enum InvalidServerItemKind {
+    /// An invalid endpoint.
+    Endpoint(ServerItemErrorSummary),
+
+    /// An invalid channel.
+    Channel(ServerItemErrorSummary),
+
+    /// We're not sure if it's an endpoint or a channel, or the endpoint/channel
+    /// annotations were provided multiple times.
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ServerItemErrorSummary {
+    // We have no need for a similar "has_metadata_errors" right now, but we
+    // could add it later.
+    has_param_errors: bool,
+}
+
 trait StripRecognizedAttrs {
     fn strip_recognized_attrs(&mut self);
 }
@@ -1127,7 +1246,7 @@ impl StripRecognizedAttrs for TraitItemPartParsed {
 
 impl StripRecognizedAttrs for TraitItemFnForSignature {
     fn strip_recognized_attrs(&mut self) {
-        strip_attrs_impl(&mut self.attrs);
+        self.attrs.strip_recognized_attrs();
     }
 }
 
@@ -1135,26 +1254,29 @@ impl StripRecognizedAttrs for syn::TraitItem {
     fn strip_recognized_attrs(&mut self) {
         match self {
             syn::TraitItem::Const(c) => {
-                strip_attrs_impl(&mut c.attrs);
+                c.attrs.strip_recognized_attrs();
             }
             syn::TraitItem::Fn(f) => {
-                strip_attrs_impl(&mut f.attrs);
+                f.attrs.strip_recognized_attrs();
             }
             syn::TraitItem::Type(t) => {
-                strip_attrs_impl(&mut t.attrs);
+                t.attrs.strip_recognized_attrs();
             }
             syn::TraitItem::Macro(m) => {
-                strip_attrs_impl(&mut m.attrs);
+                m.attrs.strip_recognized_attrs();
             }
             _ => {}
         }
     }
 }
 
-fn strip_attrs_impl(attrs: &mut Vec<syn::Attribute>) {
-    attrs.retain(|a| {
-        !(a.path().is_ident(ENDPOINT_IDENT) || a.path().is_ident(CHANNEL_IDENT))
-    });
+impl StripRecognizedAttrs for Vec<syn::Attribute> {
+    fn strip_recognized_attrs(&mut self) {
+        self.retain(|a| {
+            !(a.path().is_ident(ENDPOINT_IDENT)
+                || a.path().is_ident(CHANNEL_IDENT))
+        });
+    }
 }
 
 #[cfg(test)]

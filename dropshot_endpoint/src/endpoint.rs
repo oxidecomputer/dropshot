@@ -26,7 +26,8 @@ use crate::util::MacroKind;
 use crate::util::ValidContentType;
 
 /// Endpoint usage message, produced if there were parameter errors.
-const USAGE: &str = "endpoint handlers must have the following signature:
+pub(crate) const USAGE: &str =
+    "endpoint handlers must have the following signature:
     async fn(
         rqctx: dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]

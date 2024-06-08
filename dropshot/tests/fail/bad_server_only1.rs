@@ -8,6 +8,7 @@
 use dropshot::HttpError;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::RequestContext;
+use dropshot::WebsocketConnection;
 
 #[dropshot::server]
 trait MyTrait {
@@ -39,6 +40,32 @@ trait MyTrait {
     async fn bad_endpoint2(
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+
+    #[channel {
+        protocol = WEBSOCKETS,
+    }]
+    #[endpoint {
+        method = GET,
+        path = "/test",
+    }]
+    async fn bad_channel(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult;
+
+    #[channel {
+        protocol = WEBSOCKETS,
+    }]
+    #[channel {
+        protocol = WEBSOCKETS,
+    }]
+    #[channel {
+        protocol = WEBSOCKETS,
+    }]
+    async fn bad_channel2(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult;
 }
 
 enum MyImpl {}
@@ -57,6 +84,20 @@ impl MyTrait for MyImpl {
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         Ok(HttpResponseUpdatedNoContent())
+    }
+
+    async fn bad_channel(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult {
+        Ok(())
+    }
+
+    async fn bad_channel2(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult {
+        Ok(())
     }
 }
 
