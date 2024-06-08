@@ -225,8 +225,8 @@
 //! }
 //!
 //! /*
-//! The `dropshot::server` macro generates a type called
-//! "ProjectServerFactory". This type has a method called `api_description`
+//! The `dropshot::server` macro generates a module called
+//! `project_server`. This module has a method called `api_description`
 //! that, given an implementation of the trait, returns an `ApiDescription`.
 //! The `ApiDescription` can then be used to set up an `HttpServer`.
 //! */
@@ -256,7 +256,7 @@
 //!     // The type of `api` is provided for clarity -- it is generally inferred.
 //!     // "api" will automatically register all endpoints defined in the trait.
 //!     let mut api: ApiDescription<()> =
-//!         ProjectServerFactory::api_description::<ServerImpl>().unwrap();
+//!         project_server::api_description::<ServerImpl>().unwrap();
 //!
 //!     /* ... (use `api` to set up an `HttpServer` ) */
 //! }
@@ -457,7 +457,7 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
-//! let description = ProjectServerFactory::stub_api_description().unwrap();
+//! let description = project_server::stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! ```

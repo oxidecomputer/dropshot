@@ -930,10 +930,9 @@ impl ServerItem<'_> {
     fn to_out_trait_item(&self) -> TraitItemPartParsed {
         match self {
             Self::Fn(f) => TraitItemPartParsed::Fn(f.to_out_trait_item()),
-            Self::Other(&ref o) => {
-                let mut o = o.clone();
-                o.strip_recognized_attrs();
-                o
+            Self::Other(o) => {
+                // Strip recognized attributes, retaining all others.
+                o.clone_and_strip_recognized_attrs()
             }
         }
     }
@@ -1032,9 +1031,7 @@ impl<'ast> ServerFnItem<'ast> {
             Self::Channel(c) => c.to_out_trait_item(),
             Self::Invalid { f, .. } | Self::Unmanaged(f) => {
                 // Strip recognized attributes, retaining all others.
-                let mut f = (*f).clone();
-                f.strip_recognized_attrs();
-                f
+                f.clone_and_strip_recognized_attrs()
             }
         }
     }
@@ -1233,6 +1230,15 @@ struct ServerItemErrorSummary {
 
 trait StripRecognizedAttrs {
     fn strip_recognized_attrs(&mut self);
+
+    fn clone_and_strip_recognized_attrs(&self) -> Self
+    where
+        Self: Clone,
+    {
+        let mut cloned = self.clone();
+        cloned.strip_recognized_attrs();
+        cloned
+    }
 }
 
 impl StripRecognizedAttrs for TraitItemPartParsed {

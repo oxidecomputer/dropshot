@@ -1,3 +1,18 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_server_endpoint2.rs:11:7
+   |
+11 | trait MyServer {
+   |       ^^^^^^^^
+
 error: endpoint `ref_self_method` must not have a `self` argument
   --> tests/fail/bad_server_endpoint2.rs:16:9
    |
