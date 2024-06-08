@@ -4,6 +4,8 @@
 
 use dropshot::endpoint;
 use dropshot::HttpError;
+use dropshot::HttpResponse;
+use dropshot::HttpResponseOk;
 use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;

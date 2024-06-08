@@ -886,7 +886,10 @@ mod tests {
     use expectorate::assert_contents;
     use syn::parse_quote;
 
-    use crate::{test_util::assert_banned_idents, util::DROPSHOT};
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
 
     use super::*;
 
@@ -1084,7 +1087,14 @@ mod tests {
         );
     }
 
-    // These argument types are close to being invalid, but are actually valid.
+    // These argument types are close to being invalid, but are either okay or
+    // we're not sure.
+    //
+    // * `MyRequestContext` might be a type alias, which is legal for
+    //   function-based servers.
+    // * We don't support non-'static lifetimes, but 'static is fine.
+    // * We don't support generic types within extractors, but `<X as Y>::Z` is
+    //   actually a concrete, non-generic type.
     #[test]
     fn test_endpoint_weird_but_ok_arg_types_1() {
         let (item, errors) = do_endpoint(
@@ -1096,7 +1106,7 @@ mod tests {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
                     _rqctx: MyRequestContext,
-                    query: Query<&'static str>,
+                    query: Query<QueryParams<'static>>,
                     path: Path<<X as Y>::Z>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
@@ -1111,6 +1121,12 @@ mod tests {
         );
     }
 
+    // These are also close to being invalid.
+    //
+    // * We ban `RequestContext<A, B>` because `RequestContext` can only have
+    //   one type parameter -- but `(A, B)` is a single type. In general, for
+    //   function-based macros we allow any type in that position (but not a
+    //   lifetime).
     #[test]
     fn test_endpoint_weird_but_ok_arg_types_2() {
         let (item, errors) = do_endpoint(
@@ -1137,21 +1153,24 @@ mod tests {
 
     #[test]
     fn test_endpoint_with_custom_params() {
+        let input = quote! {
+            async fn handler_xyz(
+                _rqctx: RequestContext<()>,
+                query: Query<Q>,
+                path: Path<P>,
+            ) -> Result<HttpResponseOk<()>, HttpError> {
+                Ok(())
+            }
+        };
+
+        // With _dropshot_crate, the input should not contain "dropshot".
         let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c",
-                _dropshot_crate = "topspin",
+                _dropshot_crate = "topspin"
             },
-            quote! {
-                async fn handler_xyz(
-                    _rqctx: RequestContext<()>,
-                    query: Query<Q>,
-                    path: Path<P>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
-                    Ok(())
-                }
-            },
+            input.clone(),
         );
 
         assert!(errors.is_empty());
@@ -1167,6 +1186,23 @@ mod tests {
         // Check banned identifiers.
         let banned = [DROPSHOT];
         assert_banned_idents(&file, banned);
+
+        // Without _dropshot_crate, the generated output must contain
+        // "dropshot".
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+            },
+            input,
+        );
+
+        assert!(errors.is_empty());
+        let file = parse_quote! { #item };
+        assert_eq!(
+            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
+            banned
+        );
     }
 
     #[test]

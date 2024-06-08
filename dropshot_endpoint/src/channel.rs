@@ -293,27 +293,32 @@ mod tests {
     use expectorate::assert_contents;
     use syn::parse_quote;
 
-    use crate::{test_util::assert_banned_idents, util::DROPSHOT};
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
 
     use super::*;
 
     #[test]
     fn test_channel_with_custom_params() {
+        let input = quote! {
+            async fn my_channel(
+                rqctx: RequestContext<()>,
+                query: Query<Q>,
+                conn: WebsocketConnection,
+            ) -> WebsocketChannelResult {
+                Ok(())
+            }
+        };
+
         let (item, errors) = do_channel(
             quote! {
                 protocol = WEBSOCKETS,
                 path = "/my/ws/channel",
                 _dropshot_crate = "topspin",
             },
-            quote! {
-                async fn my_channel(
-                    rqctx: RequestContext<()>,
-                    query: Query<Q>,
-                    conn: WebsocketConnection,
-                ) -> WebsocketChannelResult {
-                    Ok(())
-                }
-            },
+            input.clone(),
         );
 
         assert!(errors.is_empty());
@@ -329,5 +334,22 @@ mod tests {
         // Check banned identifiers.
         let banned = [DROPSHOT];
         assert_banned_idents(&file, banned);
+
+        // Without _dropshot_crate, the generated output must contain
+        // "dropshot".
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+            },
+            input,
+        );
+
+        assert!(errors.is_empty());
+        let file = parse_quote! { #item };
+        assert_eq!(
+            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
+            banned
+        );
     }
 }

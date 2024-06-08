@@ -1,79 +1,97 @@
 // Copyright 2024 Oxide Computer Company
 
-//! Handle lists of errors in Dropshot.
+//! Handle lists of errors that occur while generating the proc macro.
+//!
+//! See the documentation of [`ErrorStore`] for more information.
 
 use std::cell::RefCell;
 
+/// Top-level struct that holds all errors encountered during the invocation of
+/// a proc macro.
+///
+/// ## Motivation
+///
+/// Dropshot's proc macros have several components that can all independently
+/// produce errors. We generally would like to make as much progress as possible
+/// within each of the components, because this tends to lead to better errors.
+///
+/// For example, the `endpoint` macro parses two components: the metadata, and
+/// the function signature.
+///
+/// * Failing to parse the metadata should not prevent us from parsing the
+///   function signature, and vice versa.
+/// * Within the signature, each type should be considered separately -- so an
+///   issue in an extractor type shouldn't stop us from parsing the return type.
+/// * But within a section, if there are errors, we should avoid producing the
+///   corresponding output -- because doing so can lead to confusing errors.
+///
+/// So the typical Rust pattern of returning on the first error isn't quite good
+/// enough for us, and what we need is:
+///
+/// * a hierarchical way to collect errors
+/// * with arbitrary nesting -- in other words, a tree of error collectors
+/// * and each node in the tree tracks whether any errors are attributable to
+///   it, or its descendants
+///
+/// This is what `ErrorStore` provides.
+///
+/// * An `ErrorStore` represents a top-level store of errors, and each store can
+/// have one or more [`ErrorSink`] instances.
+/// * Each `ErrorSink` represents a context in which errors can be collected,
+///   and can have its own child `ErrorSink` instances.
+/// * Errors are pushed to `ErrorSink` instances, and the `ErrorStore` tracks
+///   whether any errors were pushed to a given `ErrorSink` or its descendants.
 #[derive(Debug)]
 pub(crate) struct ErrorStore<T> {
-    errors: Vec<T>,
-    // A tree representing error sinks, so that we can track parent-child
-    // relationships across sinks and propagate "has_errors" up the tree.
-    sink_info: Vec<ErrorSinkState>,
+    data: RefCell<ErrorStoreData<T>>,
 }
 
 impl<T> ErrorStore<T> {
+    /// Create a new `ErrorStore`.
     pub(crate) fn new() -> Self {
-        Self { errors: Vec::new(), sink_info: Vec::new() }
+        Self { data: RefCell::new(ErrorStoreData::default()) }
     }
 
+    /// Obtain the list of errors collected by this store.
+    ///
+    /// This consumes the store, and implies that there are no [`ErrorSink`]
+    /// instances that are still alive.
     pub(crate) fn into_inner(self) -> Vec<T> {
-        self.errors
+        std::mem::take(&mut self.data.borrow_mut().errors)
     }
 
+    /// Create a new sink for collecting errors.
+    ///
+    /// This is a top-level sink, i.e. it has no parent.
     pub(crate) fn sink(&mut self) -> ErrorSink<'_, T> {
-        self.sink_inner(None)
-    }
-
-    // --- Internal methods ---
-
-    fn sink_inner(&mut self, parent: Option<usize>) -> ErrorSink<'_, T> {
-        // len is the next ID
-        let id = self.sink_info.len();
-        self.sink_info.push(ErrorSinkState::new(parent));
-        ErrorSink { errors: RefCell::new(self), id }
-    }
-
-    fn push(&mut self, id: usize, error: T) {
-        self.errors.push(error);
-        self.sink_info[id].has_errors = true;
-
-        // Propagate the fact that errors were encountered up the tree.
-        let mut curr = id;
-        while let Some(parent) = self.sink_info[curr].parent {
-            self.sink_info[parent].has_errors = true;
-            curr = parent;
-        }
+        let new_id = self.data.borrow_mut().register_sink(None);
+        ErrorSink { data: &self.data, id: new_id }
     }
 }
 
-#[derive(Debug)]
-struct ErrorSinkState {
-    // The parent ID in the map.
-    parent: Option<usize>,
-    // Whether an error was pushed via this specific context or a descendant.
-    has_errors: bool,
-}
-
-impl ErrorSinkState {
-    fn new(parent: Option<usize>) -> Self {
-        Self { parent, has_errors: false }
-    }
-}
-
+/// A collector for errors.
+///
+/// An `ErrorSink` is a context into which errors can be pushed. It can have
+/// child `ErrorSink` instances, and the [`ErrorStore`] from which it is
+/// ultimately derived tracks whether any errors were pushed to a given
+/// `ErrorSink` or its descendants.
+///
+/// The lifetime parameter `'a` is the lifetime of the `ErrorStore` that the
+/// `ErrorSink` is ultimately derived from. The parameter ensures that
+/// `ErrorSink` instances don't outlive the [`ErrorStore`] -- this means that at
+/// the time an [`ErrorStore`] is consumed, there aren't any outstanding
+/// `ErrorSink` instances.
 #[derive(Debug)]
 pub(crate) struct ErrorSink<'a, T> {
     // It's a bit weird to use both a lifetime parameter and a RefCell, but it
-    // makes sense here. The lifetime parameter ensures that the error context
-    // doesn't outlive the collector, and the RefCell exists so we can
-    // arbitrarily nest contexts.
+    // makes sense here. With `Rc<RefCell<T>>`, there's no way to statically
+    // guarantee that the error collection process is done. The lifetime
+    // parameter statically guarantees that.
     //
-    // (Without interior mutability, it becomes impossible to do so because when
-    // it comes to mutable data, lifetime parameters can only express a static
-    // number of levels of nesting. Note that this is not the case with
-    // *immutable* data, where we can rely on covariance and so just use the
-    // same `'a` everywhere.)
-    errors: RefCell<&'a mut ErrorStore<T>>,
+    // Do we need interior mutability? Because of our nested structure, the only
+    // other alternatives are some kind of `&mut &mut &mut ... T`, or dynamic
+    // dispatch. Both seem worse than just doing this.
+    data: &'a RefCell<ErrorStoreData<T>>,
     id: usize,
 }
 
@@ -81,25 +99,66 @@ impl<'a, T> ErrorSink<'a, T> {
     pub(crate) fn push(&self, error: T) {
         // This is always okay because we only briefly borrow the RefCell at any
         // time.
-        self.errors.borrow_mut().push(self.id, error);
+        self.data.borrow_mut().push(self.id, error);
     }
 
     pub(crate) fn has_errors(&self) -> bool {
         // ErrorStore::push_error propagates has_errors up the tree while
         // writing errors, so we can just check the current ID while reading
         // this information.
-        self.errors.borrow().sink_info[self.id].has_errors
+        self.data.borrow().sinks[self.id].has_errors
     }
 
     pub(crate) fn new(&self) -> ErrorSink<'a, T> {
-        let mut errors = self.errors.borrow_mut();
-        let new = errors.sink_inner(Some(self.id));
+        let mut errors = self.data.borrow_mut();
+        let new_id = errors.register_sink(Some(self.id));
+        Self { data: self.data, id: new_id }
+    }
+}
 
-        // SAFETY: The Rust compiler can't peer past the RefCell, but we know
-        // ourselves that the new ErrorSink contains the same store, and so will
-        // have the same lifetime, as the current one.
-        unsafe {
-            std::mem::transmute::<ErrorSink<'_, T>, ErrorSink<'a, T>>(new)
+#[derive(Debug)]
+struct ErrorStoreData<T> {
+    errors: Vec<T>,
+    sinks: Vec<ErrorSinkData>,
+}
+
+impl<T> Default for ErrorStoreData<T> {
+    fn default() -> Self {
+        Self { errors: Vec::new(), sinks: Vec::new() }
+    }
+}
+
+impl<T> ErrorStoreData<T> {
+    fn push(&mut self, id: usize, error: T) {
+        self.errors.push(error);
+        self.sinks[id].has_errors = true;
+
+        // Propagate the fact that errors were encountered up the tree.
+        let mut curr = id;
+        while let Some(parent) = self.sinks[curr].parent {
+            self.sinks[parent].has_errors = true;
+            curr = parent;
         }
+    }
+
+    fn register_sink(&mut self, parent: Option<usize>) -> usize {
+        // len is the next ID
+        let id = self.sinks.len();
+        self.sinks.push(ErrorSinkData::new(parent));
+        id
+    }
+}
+
+#[derive(Debug)]
+struct ErrorSinkData {
+    // The parent ID in the map.
+    parent: Option<usize>,
+    // Whether an error was pushed via this specific context or a descendant.
+    has_errors: bool,
+}
+
+impl ErrorSinkData {
+    fn new(parent: Option<usize>) -> Self {
+        Self { parent, has_errors: false }
     }
 }

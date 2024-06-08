@@ -8,7 +8,7 @@ const _: fn() = || {
     where
         T: ?Sized + dropshot::SharedExtractor,
     {}
-    need_shared_extractor::<Query<&'static str>>();
+    need_shared_extractor::<Query<QueryParams<'static>>>();
 };
 const _: fn() = || {
     fn need_exclusive_extractor<T>()
@@ -61,7 +61,7 @@ for dropshot::ApiEndpoint<
         /// handle "xyz" requests
         async fn handler_xyz(
             _rqctx: MyRequestContext,
-            query: Query<&'static str>,
+            query: Query<QueryParams<'static>>,
             path: Path<<X as Y>::Z>,
         ) -> Result<HttpResponseOk<()>, HttpError> {
             Ok(())
@@ -70,7 +70,7 @@ for dropshot::ApiEndpoint<
             fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
             fn check_future_bounds(
                 arg0: MyRequestContext,
-                arg1: Query<&'static str>,
+                arg1: Query<QueryParams<'static>>,
                 arg2: Path<<X as Y>::Z>,
             ) {
                 future_endpoint_must_be_send(handler_xyz(arg0, arg1, arg2));
