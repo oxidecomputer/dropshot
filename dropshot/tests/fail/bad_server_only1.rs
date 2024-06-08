@@ -11,7 +11,7 @@ use dropshot::RequestContext;
 use dropshot::WebsocketConnection;
 
 #[dropshot::server]
-trait MyTrait {
+trait MyServer {
     type Context;
 
     #[endpoint {
@@ -71,7 +71,7 @@ trait MyTrait {
 enum MyImpl {}
 
 // This should not produce errors about items being missing.
-impl MyTrait for MyImpl {
+impl MyServer for MyImpl {
     type Context = ();
 
     async fn bad_endpoint(
@@ -101,4 +101,8 @@ impl MyTrait for MyImpl {
     }
 }
 
-fn main() {}
+fn main() {
+    // These items should be generated and accessible.
+    my_server::api_description::<MyImpl>();
+    my_server::stub_api_description();
+}

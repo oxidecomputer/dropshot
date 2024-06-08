@@ -5,7 +5,7 @@
 // Test for a trait with where clauses.
 
 #[dropshot::server]
-trait MyTrait
+trait MyServer
 where
     usize: std::fmt::Debug,
 {
@@ -16,8 +16,13 @@ enum MyImpl {}
 
 // This should not produce errors about the trait or the context type being
 // missing.
-impl MyTrait for MyImpl {
+impl MyServer for MyImpl {
     type Context = ();
 }
 
-fn main() {}
+fn main() {
+    // These items will NOT be present because of the invalid trait, and will
+    // cause errors to be generated.
+    my_server::api_description::<MyImpl>();
+    my_server::stub_api_description();
+}

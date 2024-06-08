@@ -575,14 +575,17 @@ impl<'ast> ServerModuleGenerator<'ast> {
         let dropshot = &self.dropshot;
         let trait_ident = &self.item_trait.ident;
         let context_ident = &self.context_item.ident;
-        let vis = &self.item_trait.vis;
+        // Note we always use "pub" visibility for the items inside, since it
+        // can be tricky to compute the exact visibility required here. The item
+        // won't actually be exported unless the parent module is public, or it
+        // is re-exported.
 
         let body = self.make_api_factory_body(FactoryKind::Regular);
 
         quote! {
             #doc
             #[automatically_derived]
-            #vis fn api_description<ServerImpl: #trait_ident>() -> ::std::result::Result<
+            pub fn api_description<ServerImpl: #trait_ident>() -> ::std::result::Result<
                 #dropshot::ApiDescription<<ServerImpl as #trait_ident>::#context_ident>,
                 #dropshot::ApiDescriptionBuildError,
             > {
@@ -593,14 +596,15 @@ impl<'ast> ServerModuleGenerator<'ast> {
 
     fn make_stub_api_description(&self, doc: TokenStream) -> TokenStream {
         let dropshot = &self.dropshot;
-        let vis = &self.item_trait.vis;
+        // Note we always use "pub" visibility for the items inside. See the
+        // comment in `make_api_description`.
 
         let body = self.make_api_factory_body(FactoryKind::Stub);
 
         quote! {
             #doc
             #[automatically_derived]
-            #vis fn stub_api_description() -> ::std::result::Result<
+            pub fn stub_api_description() -> ::std::result::Result<
                 #dropshot::ApiDescription<#dropshot::StubContext>,
                 #dropshot::ApiDescriptionBuildError,
             > {
@@ -1298,7 +1302,7 @@ mod tests {
         let (item, errors) = do_server(
             quote! {},
             quote! {
-                pub trait MyTrait {
+                trait MyTrait {
                     type Context;
 
                     #[endpoint { method = GET, path = "/xyz" }]
@@ -1364,7 +1368,7 @@ mod tests {
         let (item, errors) = do_server(
             quote! {},
             quote! {
-                pub trait MyTrait {
+                pub(crate) trait MyTrait {
                     type Context;
                 }
             },

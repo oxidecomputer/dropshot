@@ -1,9 +1,9 @@
-pub trait MyTrait: 'static {
+pub(crate) trait MyTrait: 'static {
     type Context: dropshot::ServerContext;
 }
 /// Support module for the Dropshot server trait [`MyTrait`](MyTrait).
 #[automatically_derived]
-pub mod my_trait {
+pub(crate) mod my_trait {
     use super::*;
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
     /// generation.

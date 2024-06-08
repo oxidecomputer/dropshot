@@ -1,5 +1,17 @@
-error: server `MyTrait` must not have generics
- --> tests/fail/bad_server_only9.rs:8:14
+error: server `MyServer` must not have generics
+ --> tests/fail/bad_server_only9.rs:8:15
   |
-8 | trait MyTrait<'a> {
-  |              ^^^^
+8 | trait MyServer<'a> {
+  |               ^^^^
+
+error[E0425]: cannot find function `api_description` in module `my_server`
+  --> tests/fail/bad_server_only9.rs:23:16
+   |
+23 |     my_server::api_description::<MyImpl>();
+   |                ^^^^^^^^^^^^^^^ not found in `my_server`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_server`
+  --> tests/fail/bad_server_only9.rs:24:16
+   |
+24 |     my_server::stub_api_description();
+   |                ^^^^^^^^^^^^^^^^^^^^ not found in `my_server`

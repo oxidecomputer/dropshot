@@ -31,4 +31,8 @@ impl MyServer for MyImpl {
     async fn bad_no_result(_: RequestContext<Self::Context>) {}
 }
 
-fn main() {}
+fn main() {
+    // These items should be generated and accessible.
+    my_server::api_description::<MyImpl>();
+    my_server::stub_api_description();
+}

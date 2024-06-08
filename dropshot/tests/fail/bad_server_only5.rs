@@ -5,15 +5,20 @@
 // Test for a missing custom context type.
 
 #[dropshot::server { context = OtherContext }]
-trait MyTrait {
+trait MyServer {
     type Context;
 }
 
 enum MyImpl {}
 
 // This should not produce errors about the trait or items being missing.
-impl MyTrait for MyImpl {
+impl MyServer for MyImpl {
     type Context = ();
 }
 
-fn main() {}
+fn main() {
+    // These items will NOT be present because of the lack of a context type,
+    // and will cause errors to be generated.
+    my_server::api_description::<MyImpl>();
+    my_server::stub_api_description();
+}

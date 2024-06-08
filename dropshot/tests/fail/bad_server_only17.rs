@@ -12,7 +12,7 @@ macro_rules! life_the_universe_and_everything {
 }
 
 #[dropshot::server]
-trait MyTrait {
+trait MyServer {
     type Context;
 
     #[endpoint { method = GET }]
@@ -23,7 +23,7 @@ enum MyImpl {}
 
 // This should not produce errors about the trait or any of the items within
 // being missing.
-impl MyTrait for MyImpl {
+impl MyServer for MyImpl {
     type Context = ();
 
     fn the_answer() -> u32 {
@@ -31,4 +31,8 @@ impl MyTrait for MyImpl {
     }
 }
 
-fn main() {}
+fn main() {
+    // These items should be generated and accessible.
+    my_server::api_description::<MyImpl>();
+    my_server::stub_api_description();
+}

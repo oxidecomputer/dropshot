@@ -1,6 +1,18 @@
-error: server `MyTrait` does not have associated type `OtherContext`
+error: server `MyServer` does not have associated type `OtherContext`
        (this type specifies the shared context for endpoints)
  --> tests/fail/bad_server_only5.rs:8:7
   |
-8 | trait MyTrait {
-  |       ^^^^^^^
+8 | trait MyServer {
+  |       ^^^^^^^^
+
+error[E0425]: cannot find function `api_description` in module `my_server`
+  --> tests/fail/bad_server_only5.rs:22:16
+   |
+22 |     my_server::api_description::<MyImpl>();
+   |                ^^^^^^^^^^^^^^^ not found in `my_server`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_server`
+  --> tests/fail/bad_server_only5.rs:23:16
+   |
+23 |     my_server::stub_api_description();
+   |                ^^^^^^^^^^^^^^^^^^^^ not found in `my_server`

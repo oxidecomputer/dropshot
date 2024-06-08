@@ -5,7 +5,7 @@
 // Test for an unsafe trait.
 
 #[dropshot::server]
-unsafe trait MyTrait {
+unsafe trait MyServer {
     type Context;
 }
 
@@ -13,8 +13,13 @@ enum MyImpl {}
 
 // This should not produce errors about the trait or the context type being
 // missing.
-unsafe impl MyTrait for MyImpl {
+unsafe impl MyServer for MyImpl {
     type Context = ();
 }
 
-fn main() {}
+fn main() {
+    // These items will NOT be present because of the invalid trait, and will
+    // cause errors to be generated.
+    my_server::api_description::<MyImpl>();
+    my_server::stub_api_description();
+}

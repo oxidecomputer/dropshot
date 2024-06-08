@@ -36,4 +36,8 @@ impl MyServer for MyImpl {
     }
 }
 
-fn main() {}
+fn main() {
+    // The parent `my_server` will NOT be present because of the syntax error,
+    // and will cause errors to be generated.
+    my_server::foo();
+}

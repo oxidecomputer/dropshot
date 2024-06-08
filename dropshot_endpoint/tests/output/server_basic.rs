@@ -1,4 +1,4 @@
-pub trait MyTrait: 'static {
+trait MyTrait: 'static {
     type Context: dropshot::ServerContext;
     fn handler_xyz(
         rqctx: RequestContext<Self::Context>,
@@ -8,7 +8,7 @@ pub trait MyTrait: 'static {
 }
 /// Support module for the Dropshot server trait [`MyTrait`](MyTrait).
 #[automatically_derived]
-pub mod my_trait {
+mod my_trait {
     use super::*;
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
     /// generation.

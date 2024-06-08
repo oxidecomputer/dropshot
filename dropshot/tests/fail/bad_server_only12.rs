@@ -32,4 +32,8 @@ impl MyServer for MyImpl {
     }
 }
 
-fn main() {}
+fn main() {
+    // The parent `my_server` will NOT be present because of the invalid trait,
+    // and will cause errors to be generated.
+    my_server::foo();
+}
