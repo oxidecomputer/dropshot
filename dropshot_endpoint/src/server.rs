@@ -1227,6 +1227,10 @@ mod tests {
     }
 
     // Test output for a server with no endpoints.
+    //
+    // This currently does not produce an error or warning -- this fact is
+    // presented as a snapshot test. If we decide to add a warning or error in
+    // the future, this test will change.
     #[test]
     fn test_server_no_endpoints() {
         let (item, errors) = do_server(
