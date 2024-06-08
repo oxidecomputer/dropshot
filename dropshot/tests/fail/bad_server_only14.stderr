@@ -1,5 +1,5 @@
 error: expected `;`, found `#`
-  --> tests/fail/bad_server_endpoint6c.rs:15:17
+  --> tests/fail/bad_server_only14.rs:15:17
    |
 15 |     type Context
    |                 ^ help: add `;` here
@@ -8,13 +8,13 @@ error: expected `;`, found `#`
    |     - unexpected token
 
 error: expected `;`
-  --> tests/fail/bad_server_endpoint6c.rs:17:5
+  --> tests/fail/bad_server_only14.rs:17:5
    |
 17 |     #[endpoint {
    |     ^
 
 error[E0405]: cannot find trait `MyServer` in this scope
-  --> tests/fail/bad_server_endpoint6c.rs:30:6
+  --> tests/fail/bad_server_only14.rs:29:6
    |
-30 | impl MyServer for MyImpl {
+29 | impl MyServer for MyImpl {
    |      ^^^^^^^^ not found in this scope

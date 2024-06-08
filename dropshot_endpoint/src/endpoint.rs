@@ -703,7 +703,7 @@ impl<'ast> RqctxTy<'ast> {
             // 1. Ensure that the type parameter is exactly Self::{context_ident}.
             // 2. Also generate a transformed type, where the type parameter is
             //    replaced with the unit type.
-            RqctxKind::Trait { context_ident } => {
+            RqctxKind::Trait { trait_ident, context_ident } => {
                 // We must use the _mut variant, because we're going to mutate
                 // the inner type in place as part of our whole deal. ty2 is
                 // going to become the transformed type.
@@ -730,9 +730,11 @@ impl<'ast> RqctxTy<'ast> {
                 };
 
                 // The parameter must be exactly Self::{context_ident}.
-                let required_ty: syn::Type =
+                let self_context: syn::Type =
                     parse_quote! { Self::#context_ident };
-                if param != &required_ty {
+                let self_as_trait_context =
+                    parse_quote! { <Self as #trait_ident>::#context_ident };
+                if param != &self_context && param != &self_as_trait_context {
                     errors.push(Error::new_spanned(
                         param,
                         rqctx_kind.to_error_message(name_str),
@@ -861,7 +863,7 @@ fn extract_rqctx_param_mut(
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum RqctxKind<'a> {
     Function,
-    Trait { context_ident: &'a syn::Ident },
+    Trait { trait_ident: &'a syn::Ident, context_ident: &'a syn::Ident },
 }
 
 impl RqctxKind<'_> {
@@ -873,7 +875,11 @@ impl RqctxKind<'_> {
                      RequestContext<T> as its first argument"
                 )
             }
-            RqctxKind::Trait { context_ident } => {
+            RqctxKind::Trait { context_ident, .. } => {
+                // The <Self as {trait_ident}>::{context_ident} type is too
+                // niche to be worth explaining in the error message -- hope
+                // that users will figure it out. If not, then we'll have to
+                // expand on this.
                 format!(
                     "endpoint `{name_str}` must accept \
                      RequestContext<Self::{context_ident}> as its first \
@@ -1151,7 +1157,10 @@ mod tests {
     use expectorate::assert_contents;
     use syn::parse_quote;
 
-    use crate::{test_util::assert_banned_idents, util::DROPSHOT};
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
 
     use super::*;
 
@@ -1349,7 +1358,14 @@ mod tests {
         );
     }
 
-    // These argument types are close to being invalid, but are actually valid.
+    // These argument types are close to being invalid, but are either okay or
+    // we're not sure.
+    //
+    // * `MyRequestContext` might be a type alias, which is legal for
+    //   function-based servers.
+    // * We don't support non-'static lifetimes, but 'static is fine.
+    // * We don't support generic types within extractors, but `<X as Y>::Z` is
+    //   actually a concrete, non-generic type.
     #[test]
     fn test_endpoint_weird_but_ok_arg_types_1() {
         let (item, errors) = do_endpoint(
@@ -1361,7 +1377,7 @@ mod tests {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
                     _rqctx: MyRequestContext,
-                    query: Query<&'static str>,
+                    query: Query<QueryParams<'static>>,
                     path: Path<<X as Y>::Z>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
@@ -1376,6 +1392,12 @@ mod tests {
         );
     }
 
+    // These are also close to being invalid.
+    //
+    // * We ban `RequestContext<A, B>` because `RequestContext` can only have
+    //   one type parameter -- but `(A, B)` is a single type. In general, for
+    //   function-based macros we allow any type in that position (but not a
+    //   lifetime).
     #[test]
     fn test_endpoint_weird_but_ok_arg_types_2() {
         let (item, errors) = do_endpoint(
@@ -1402,21 +1424,24 @@ mod tests {
 
     #[test]
     fn test_endpoint_with_custom_params() {
+        let input = quote! {
+            async fn handler_xyz(
+                _rqctx: RequestContext<()>,
+                query: Query<Q>,
+                path: Path<P>,
+            ) -> Result<HttpResponseOk<()>, HttpError> {
+                Ok(())
+            }
+        };
+
+        // With _dropshot_crate, the input should not contain "dropshot".
         let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
                 path = "/a/b/c",
-                _dropshot_crate = "topspin",
+                _dropshot_crate = "topspin"
             },
-            quote! {
-                async fn handler_xyz(
-                    _rqctx: RequestContext<()>,
-                    query: Query<Q>,
-                    path: Path<P>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
-                    Ok(())
-                }
-            },
+            input.clone(),
         );
 
         assert!(errors.is_empty());
@@ -1432,6 +1457,23 @@ mod tests {
         // Check banned identifiers.
         let banned = [DROPSHOT];
         assert_banned_idents(&file, banned);
+
+        // Without _dropshot_crate, the generated output must contain
+        // "dropshot".
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+            },
+            input,
+        );
+
+        assert!(errors.is_empty());
+        let file = parse_quote! { #item };
+        assert_eq!(
+            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
+            banned
+        );
     }
 
     #[test]
@@ -1558,6 +1600,8 @@ mod tests {
         let some_type = parse_quote! { SomeType };
         let self_context = parse_quote! { Self::Context };
         let self_some_context = parse_quote! { Self::SomeContext };
+        let self_as_trait_context =
+            parse_quote! { <Self as SomeTrait>::Context };
         let unit = parse_quote! { () };
         let tuple = parse_quote! { (SomeType, OtherType) };
 
@@ -1572,6 +1616,10 @@ mod tests {
             (
                 parse_quote! { RequestContext<Self::SomeContext> },
                 Some(&self_some_context),
+            ),
+            (
+                parse_quote! { RequestContext<<Self as SomeTrait>::Context> },
+                Some(&self_as_trait_context),
             ),
             // Tuple types.
             (parse_quote! { RequestContext<()> }, Some(&unit)),

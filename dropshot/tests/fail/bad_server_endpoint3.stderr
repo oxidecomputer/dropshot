@@ -18,7 +18,7 @@ note: required by a bound in `ApiEndpoint::<StubContext>::new_stub`
    |         FuncParams: RequestExtractor + 'static,
    |                     ^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<StubContext>::new_stub`
 
-error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyServer>::Context>, String) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> + Send + 'static {<ServerImpl as MyServer>::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyServer>::Context>, String) -> impl Future<Output = Result<dropshot::HttpResponseUpdatedNoContent, dropshot::HttpError>> + Send + 'static {<ServerImpl as MyServer>::bad_endpoint}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_server_endpoint3.rs:15:5
    |
 10 |   #[dropshot::server]

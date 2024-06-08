@@ -4,7 +4,7 @@
 
 use dropshot::endpoint;
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
@@ -29,7 +29,7 @@ trait MyServer {
         _rqctx: RequestContext<Self::Context>,
         _param1: String,
         _param2: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -42,8 +42,8 @@ impl MyServer for MyImpl {
         _rqctx: RequestContext<()>,
         _param1: String,
         _param2: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

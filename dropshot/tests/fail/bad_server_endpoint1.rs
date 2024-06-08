@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 
 #[dropshot::server]
 trait MyServer {
@@ -13,7 +13,7 @@ trait MyServer {
         method = GET,
         path = "/test",
     }]
-    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError>;
+    async fn bad_endpoint() -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -22,8 +22,8 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    async fn bad_endpoint() -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

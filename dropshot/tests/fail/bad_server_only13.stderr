@@ -1,5 +1,5 @@
 error[E0449]: visibility qualifiers are not permitted here
-  --> tests/fail/bad_server_endpoint6b.rs:24:5
+  --> tests/fail/bad_server_only13.rs:24:5
    |
 24 |     pub async fn bad_endpoint(
    |     ^^^
@@ -7,7 +7,7 @@ error[E0449]: visibility qualifiers are not permitted here
    = note: trait items always share the visibility of their trait
 
 error: cannot find attribute `endpoint` in this scope
-  --> tests/fail/bad_server_endpoint6b.rs:20:7
+  --> tests/fail/bad_server_only13.rs:20:7
    |
 20 |     #[endpoint {
    |       ^^^^^^^^

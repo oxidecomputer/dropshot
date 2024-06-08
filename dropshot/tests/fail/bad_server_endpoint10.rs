@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::RequestContext;
 
 #[dropshot::server]
@@ -16,7 +16,7 @@ trait MyServer {
     }]
     async fn bad_error_type(
         _rqctx: RequestContext<Self::Context>,
-    ) -> Result<HttpResponseOk<()>, String>;
+    ) -> Result<HttpResponseUpdatedNoContent, String>;
 }
 
 enum MyImpl {}
@@ -28,8 +28,8 @@ impl MyServer for MyImpl {
 
     async fn bad_error_type(
         _rqctx: RequestContext<()>,
-    ) -> Result<HttpResponseOk<()>, String> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, String> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

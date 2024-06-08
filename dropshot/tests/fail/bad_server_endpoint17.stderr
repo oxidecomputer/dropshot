@@ -1,13 +1,13 @@
-error[E0277]: the trait bound `TypedBody<Stuff>: SharedExtractor` is not satisfied
+error[E0277]: the trait bound `dropshot::TypedBody<Stuff>: SharedExtractor` is not satisfied
   --> tests/fail/bad_server_endpoint17.rs:27:5
    |
 27 |     #[endpoint {
-   |     ^ the trait `SharedExtractor` is not implemented for `TypedBody<Stuff>`
+   |     ^ the trait `SharedExtractor` is not implemented for `dropshot::TypedBody<Stuff>`
    |
    = help: the following other types implement trait `SharedExtractor`:
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
-   = note: required for `(TypedBody<Stuff>, UntypedBody)` to implement `dropshot::extractor::common::RequestExtractor`
+   = note: required for `(dropshot::TypedBody<Stuff>, dropshot::UntypedBody)` to implement `dropshot::extractor::common::RequestExtractor`
 note: required by a bound in `ApiEndpoint::<StubContext>::new_stub`
   --> src/api_description.rs
    |
@@ -17,7 +17,7 @@ note: required by a bound in `ApiEndpoint::<StubContext>::new_stub`
    |         FuncParams: RequestExtractor + 'static,
    |                     ^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<StubContext>::new_stub`
 
-error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyServer>::Context>, TypedBody<Stuff>, UntypedBody) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> + Send + 'static {<ServerImpl as MyServer>::two_exclusive_extractors}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyServer>::Context>, dropshot::TypedBody<Stuff>, dropshot::UntypedBody) -> impl Future<Output = Result<dropshot::HttpResponseUpdatedNoContent, dropshot::HttpError>> + Send + 'static {<ServerImpl as MyServer>::two_exclusive_extractors}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_server_endpoint17.rs:27:5
    |
 23 |   #[dropshot::server]

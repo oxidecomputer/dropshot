@@ -1,0 +1,5 @@
+error: context type `Context` must not have generics
+ --> tests/fail/bad_server_only7.rs:9:17
+  |
+9 |     type Context<'a>;
+  |                 ^^^^

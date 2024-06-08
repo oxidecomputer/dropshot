@@ -1,5 +1,5 @@
 error: method `bad_endpoint` marked as both endpoint and channel
-  --> tests/fail/bad_server_endpoint24.rs:20:5
+  --> tests/fail/bad_server_only1.rs:20:5
    |
 20 | /     #[channel {
 21 | |         protocol = WEBSOCKETS,
@@ -7,7 +7,7 @@ error: method `bad_endpoint` marked as both endpoint and channel
    | |______^
 
 error: method `bad_endpoint2` marked as endpoint multiple times
-  --> tests/fail/bad_server_endpoint24.rs:31:5
+  --> tests/fail/bad_server_only1.rs:31:5
    |
 31 | /     #[endpoint {
 32 | |         method = GET,
@@ -16,7 +16,7 @@ error: method `bad_endpoint2` marked as endpoint multiple times
    | |______^
 
 error: method `bad_endpoint2` marked as endpoint multiple times
-  --> tests/fail/bad_server_endpoint24.rs:35:5
+  --> tests/fail/bad_server_only1.rs:35:5
    |
 35 | /     #[endpoint {
 36 | |         method = GET,

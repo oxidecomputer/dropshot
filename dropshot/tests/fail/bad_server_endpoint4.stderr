@@ -94,8 +94,8 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
 38 | /     async fn bad_endpoint(
 39 | |         _rqctx: RequestContext<()>,
 40 | |         _params: Query<QueryParams>,
-41 | |     ) -> Result<HttpResponseOk<()>, HttpError> {
-   | |______________________________________________^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+41 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   | |________________________________________________________^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
    |
    = help: the following other types implement trait `schemars::JsonSchema`:
              bool
@@ -119,8 +119,8 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 38 | /     async fn bad_endpoint(
 39 | |         _rqctx: RequestContext<()>,
 40 | |         _params: Query<QueryParams>,
-41 | |     ) -> Result<HttpResponseOk<()>, HttpError> {
-   | |______________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+41 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   | |________________________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = help: the following other types implement trait `serde::de::Deserialize<'de>`:
              bool

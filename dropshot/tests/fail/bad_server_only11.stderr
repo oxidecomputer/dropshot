@@ -1,0 +1,6 @@
+error: server `MyTrait` must not have a where clause
+  --> tests/fail/bad_server_only11.rs:9:1
+   |
+9  | / where
+10 | |     usize: std::fmt::Debug,
+   | |___________________________^

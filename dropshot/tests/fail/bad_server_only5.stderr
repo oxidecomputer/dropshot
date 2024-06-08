@@ -1,0 +1,6 @@
+error: server `MyTrait` does not have associated type `OtherContext`
+       (this type specifies the shared context for endpoints)
+ --> tests/fail/bad_server_only5.rs:8:7
+  |
+8 | trait MyTrait {
+  |       ^^^^^^^

@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
@@ -31,7 +31,7 @@ trait MyServer {
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
         ...
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 
     // Test: unsafe fn.
     #[endpoint {
@@ -41,7 +41,7 @@ trait MyServer {
     async unsafe fn unsafe_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 
     // Test: const fn.
     #[endpoint {
@@ -51,7 +51,7 @@ trait MyServer {
     const fn const_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 
     // Test: ABI in fn.
     #[endpoint {
@@ -61,7 +61,7 @@ trait MyServer {
     async extern "C" fn abi_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -74,29 +74,29 @@ impl MyServer for MyImpl {
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
         ...
-    ) -> Result<HttpResponseOk<()>, HttpError> {
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         unreachable!()
     }
 
     async unsafe fn unsafe_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 
     const fn const_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 
     async extern "C" fn abi_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

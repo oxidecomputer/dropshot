@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
@@ -26,7 +26,7 @@ trait MyServer {
     async fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _params: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -39,8 +39,8 @@ impl MyServer for MyImpl {
     async fn bad_endpoint(
         _rqctx: RequestContext<()>,
         _params: Query<QueryParams>,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

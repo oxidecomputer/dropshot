@@ -6,11 +6,10 @@ pub trait MyTrait: 'static {
         Output = Result<HttpResponseOk<()>, HttpError>,
     > + Send + 'static;
 }
-/// API description factory for the Dropshot server trait [`MyTrait`](MyTrait).
-#[derive(Copy, Clone, Debug)]
+/// Support module for the Dropshot server trait [`MyTrait`](MyTrait).
 #[automatically_derived]
-pub enum MyMill {}
-impl MyMill {
+pub mod my_support_module {
+    use super::*;
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
     /// generation.
     ///
@@ -28,7 +27,7 @@ impl MyMill {
     ///
     /// ```rust,ignore
     /// fn print_openapi_spec() {
-    ///     let stub = MyMill::stub_api_description().unwrap();
+    ///     let stub = my_support_module::stub_api_description().unwrap();
     ///
     ///     // Generate OpenAPI spec from `stub`.
     ///     let spec = stub.openapi("MyTrait", "0.1.0");
@@ -37,7 +36,7 @@ impl MyMill {
     /// ```
     ///
     /// [`MyTrait`]: MyTrait
-    /// [`api_description`]: MyMill::api_description
+    /// [`api_description`]: my_support_module::api_description
     /// [`ApiDescription`]: topspin::ApiDescription
     /// [`StubContext`]: topspin::StubContext
     #[automatically_derived]
@@ -92,7 +91,7 @@ impl MyMill {
     /// #[tokio::main]
     /// async fn main() {
     ///     // Generate the description for `MyTraitImpl`.
-    ///     let description = MyMill::api_description::<MyTraitImpl>().unwrap();
+    ///     let description = my_support_module::api_description::<MyTraitImpl>().unwrap();
     ///
     ///     // Create a value of the concrete context type.
     ///     let context = /* some value of type `MyTraitImpl::Situation` */;

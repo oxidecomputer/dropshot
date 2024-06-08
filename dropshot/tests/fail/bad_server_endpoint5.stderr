@@ -50,8 +50,8 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 39 | /     async fn bad_endpoint(
 40 | |         _rqctx: RequestContext<()>,
 41 | |         _params: Query<QueryParams>,
-42 | |     ) -> Result<HttpResponseOk<()>, HttpError> {
-   | |______________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+42 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   | |________________________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = help: the following other types implement trait `serde::de::Deserialize<'de>`:
              bool

@@ -1,0 +1,5 @@
+error: server `MyTrait` must not be marked as `unsafe`
+ --> tests/fail/bad_server_only10.rs:8:1
+  |
+8 | unsafe trait MyTrait {
+  | ^^^^^^

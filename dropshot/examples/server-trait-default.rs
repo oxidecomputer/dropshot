@@ -1,14 +1,24 @@
 // Copyright 2024 Oxide Computer Company
 
-//! A basic example demonstrating use of the `dropshot::server` attribute macro
-//! to define a server.
+//! An extended version of `server-trait.rs`, demonstrating use of the
+//! `dropshot::server` attribute macro to define a server with default methods.
 //!
-//! There are two parts: the interface and the implementation. The interface
-//! defines the endpoints and the types used by the server. The implementation
-//! provides the actual behavior of the server.
+//! In this example, all the behavior lives on the context type, and the
+//! Dropshot server is defined as a trait with default methods that delegate to
+//! the context type.
 //!
-//! In production code, the interface and implementation would likely be in
-//! separate crates. This example puts them in separate modules.
+//! There are a number of possible variations of this, including:
+//!
+//! * The base behavior and endpoints are methods on the same trait, allo=wing
+//!   implementations to override the base behavior if desired (similar to std's
+//!   `Read` and `Write`).
+//! * The behavior lives in a base trait, and the server is an extension trait
+//!   on top of it, with a blanket impl prohibiting overrides (similar to
+//!   tokio's `AsyncReadExt` and `AsyncWriteExt`).
+//!
+//! The general degrees of freedom available when dealing with traits in Rust
+//! are almost all available here. The main bit of flexibility that isn't
+//! available is that server traits can't be object-safe.
 
 use dropshot::{ConfigLogging, ConfigLoggingLevel, HttpServerStarter};
 
@@ -21,26 +31,45 @@ mod api {
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
-    /// The Dropshot server.
+    /// Define our base trait.
+    pub(crate) trait CounterBase {
+        fn get_counter_impl(&self) -> u64;
+        fn set_counter_impl(&self, value: u64) -> Result<(), String>;
+    }
+
+    /// The Dropshot server, with default methods.
     #[dropshot::server]
     pub(crate) trait CounterServer {
-        /// By default, the name of the context type is Context. To specify a
-        /// different name, use the { context = ... } attribute on
-        /// `#[dropshot::server]`.
-        type Context;
+        /// Note the additional requirement on `CounterBase` here.
+        type Context: CounterBase;
 
         /// Get the value of the counter.
         #[endpoint { method = GET, path = "/counter" }]
         async fn get_counter(
             rqctx: RequestContext<Self::Context>,
-        ) -> Result<HttpResponseOk<CounterValue>, HttpError>;
+        ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
+            let cx = rqctx.context();
+            Ok(HttpResponseOk(CounterValue { counter: cx.get_counter_impl() }))
+        }
 
         /// Set the value of the counter.
         #[endpoint { method = PUT, path = "/counter" }]
         async fn put_counter(
             rqctx: RequestContext<Self::Context>,
             update: TypedBody<CounterValue>,
-        ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+        ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+            let cx = rqctx.context();
+            cx.set_counter_impl(update.into_inner().counter).map_err(
+                |error| {
+                    HttpError::for_bad_request(
+                        Some(String::from("BadInput")),
+                        error,
+                    )
+                },
+            )?;
+
+            Ok(HttpResponseUpdatedNoContent())
+        }
     }
 
     /// A request and respose type used by `CounterServer` above.
@@ -67,12 +96,7 @@ mod api {
 mod imp {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use dropshot::{
-        HttpError, HttpResponseOk, HttpResponseUpdatedNoContent,
-        RequestContext, TypedBody,
-    };
-
-    use crate::api::{CounterServer, CounterValue};
+    use crate::api::{CounterBase, CounterServer};
 
     /// The context type for our implementation.
     pub(crate) struct AtomicCounter {
@@ -85,45 +109,30 @@ mod imp {
         }
     }
 
-    // Define a type to hold the implementation of `CounterServer`. This type will
-    // never be constructed -- it is just a place to put the implementation of the
-    // trait.
-    //
-    // In this case, it is alternatively possible to `impl CounterServer for
-    // CounterImpl` directly with `type Context = Self`. This is an explicitly
-    // supported option. In general, though, the context may be a foreign type (e.g.
-    // `Arc<T>`) and having the separation between Self and Self::Context is useful.
+    impl CounterBase for AtomicCounter {
+        fn get_counter_impl(&self) -> u64 {
+            self.counter.load(Ordering::Relaxed)
+        }
+
+        fn set_counter_impl(&self, value: u64) -> Result<(), String> {
+            if value == 10 {
+                Err(format!("do not like the number {}", value))
+            } else {
+                self.counter.store(value, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+    }
+
+    /// The type to hold the implementation of `CounterServer`. This could also
+    /// be `AtomicCounter` itself.
     pub(crate) enum CounterImpl {}
 
     impl CounterServer for CounterImpl {
         type Context = AtomicCounter;
 
-        async fn get_counter(
-            rqctx: RequestContext<Self::Context>,
-        ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
-            let cx = rqctx.context();
-            Ok(HttpResponseOk(CounterValue {
-                counter: cx.counter.load(Ordering::Relaxed),
-            }))
-        }
-
-        async fn put_counter(
-            rqctx: RequestContext<Self::Context>,
-            update: TypedBody<CounterValue>,
-        ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-            let cx = rqctx.context();
-            let updated_value = update.into_inner();
-
-            if updated_value.counter == 10 {
-                Err(HttpError::for_bad_request(
-                    Some(String::from("BadInput")),
-                    format!("do not like the number {}", updated_value.counter),
-                ))
-            } else {
-                cx.counter.store(updated_value.counter, Ordering::SeqCst);
-                Ok(HttpResponseUpdatedNoContent())
-            }
-        }
+        // The default methods aren't overridden here, but that can be done if
+        // desired.
     }
 }
 
@@ -135,7 +144,7 @@ async fn main() -> Result<(), String> {
     let config_logging =
         ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
-        .to_logger("example-server-trait")
+        .to_logger("example-server-trait-default")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
     // Print the OpenAPI spec to stdout as an example.

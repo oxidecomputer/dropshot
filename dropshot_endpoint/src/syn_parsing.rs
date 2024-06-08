@@ -1,4 +1,4 @@
-// Copyright 2021-2024 Oxide Computer Company
+// Copyright 2021 Oxide Computer Company
 //
 // Portions of this file are adapted from syn (https://github.com/dtolnay/syn),
 // and are used under the terms of the Apache 2.0 license.

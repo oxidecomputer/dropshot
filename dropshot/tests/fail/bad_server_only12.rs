@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 
 // Check that MyServer is present in the generated output, even though the
 // #[server] annotation is incorrect.
@@ -11,11 +11,14 @@ use dropshot::HttpResponseOk;
 trait MyServer {
     type Context;
 
+    // Note here that the endpoint is incorrect (doesn't have an rqctx
+    // parameter) -- we currently don't perform any validation if the
+    // dropshot::server macro is invalid.
     #[endpoint {
         method = GET,
         path = "/test",
     }]
-    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError>;
+    async fn bad_endpoint() -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -24,8 +27,8 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    async fn bad_endpoint() -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    async fn bad_endpoint() -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

@@ -59,8 +59,8 @@ error[E0658]: C-variadic functions are unstable
 31 | |         _rqctx: RequestContext<Self::Context>,
 32 | |         _param1: Query<QueryParams>,
 33 | |         ...
-34 | |     ) -> Result<HttpResponseOk<()>, HttpError>;
-   | |_______________________________________________^
+34 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+   | |_________________________________________________________^
    |
    = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
 
@@ -71,26 +71,26 @@ error[E0658]: C-variadic functions are unstable
 74 | |         _rqctx: RequestContext<Self::Context>,
 75 | |         _param1: Query<QueryParams>,
 76 | |         ...
-77 | |     ) -> Result<HttpResponseOk<()>, HttpError> {
+77 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
 78 | |         unreachable!()
 79 | |     }
    | |_____^
    |
    = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
 
-error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseOk<()>, HttpError>>` captures lifetime that does not appear in bounds
-  --> tests/fail/bad_server_endpoint21.rs:77:48
+error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseUpdatedNoContent, HttpError>>` captures lifetime that does not appear in bounds
+  --> tests/fail/bad_server_endpoint21.rs:77:58
    |
 73 | /      async fn variadic_argument(
 74 | |          _rqctx: RequestContext<Self::Context>,
 75 | |          _param1: Query<QueryParams>,
 76 | |          ...
-77 | |      ) -> Result<HttpResponseOk<()>, HttpError> {
-   | | ______________________________________________-_^
-   | ||______________________________________________|
-   |  |                                              opaque type defined here
+77 | |      ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   | | ________________________________________________________-_^
+   | ||________________________________________________________|
+   |  |                                                        opaque type defined here
 78 |  |         unreachable!()
 79 |  |     }
    |  |_____^
    |
-   = note: hidden type `{async fn body@$DIR/tests/fail/bad_server_endpoint21.rs:77:48: 79:6}` captures lifetime `'_`
+   = note: hidden type `{async fn body@$DIR/tests/fail/bad_server_endpoint21.rs:77:58: 79:6}` captures lifetime `'_`

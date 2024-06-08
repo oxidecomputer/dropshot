@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use dropshot::HttpError;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
@@ -29,7 +29,7 @@ trait MyServer {
         _rqctx: RequestContext<Self::Context>,
         _param1: TypedBody<Stuff>,
         _param2: Query<Stuff>,
-    ) -> Result<HttpResponseOk<()>, HttpError>;
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -43,8 +43,8 @@ impl MyServer for MyImpl {
         _rqctx: RequestContext<()>,
         _param1: TypedBody<Stuff>,
         _param2: Query<Stuff>,
-    ) -> Result<HttpResponseOk<()>, HttpError> {
-        Ok(HttpResponseOk(()))
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

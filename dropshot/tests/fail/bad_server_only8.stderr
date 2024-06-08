@@ -1,0 +1,5 @@
+error: server `MyTrait` must not have generics
+ --> tests/fail/bad_server_only8.rs:8:14
+  |
+8 | trait MyTrait<T> {
+  |              ^^^
