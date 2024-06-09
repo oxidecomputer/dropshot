@@ -262,6 +262,13 @@
 //! }
 //! ```
 //!
+//! #### Limitations
+//!
+//! Currently, the `#[dropshot::server]` macro is only supported in module
+//! contexts, not function definitions. This is a Rust limitation -- see [Rust
+//! issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+//! details.
+//!
 //! ### `#[endpoint { ... }]` attribute parameters
 //!
 //! The `endpoint` attribute accepts parameters the affect the operation of
@@ -457,9 +464,12 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
+//! # // defining fn main puts the doctest in a module context
+//! # fn main() {
 //! let description = project_server::stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
+//! # }
 //! ```
 //!
 //! A stub description cannot be used for an actual server: all request handlers

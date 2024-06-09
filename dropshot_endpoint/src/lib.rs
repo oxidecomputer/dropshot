@@ -109,7 +109,8 @@ pub fn channel(
 ///
 ///   Non-endpoint items are left unchanged.
 ///
-/// * A _factory_, typically named `<TraitName>Factory`, with two functions:
+/// * A support module, typically with the same name as the trait but in
+///   `snake_case`, with two functions:
 ///
 ///     1. `api_description()`, which accepts an implementation of the trait as
 ///        a type argument and generates an `ApiDescription`.
@@ -128,6 +129,13 @@ pub fn channel(
 ///   `Self::Context`.
 /// * `factory`: The name of the factory struct that will be generated.
 ///   Optional, defaulting to `<TraitName>Factory`.
+///
+/// ## Limitations
+///
+/// Currently, the `#[dropshot::server]` macro is only supported in module
+/// contexts, not function definitions. This is a Rust limitation -- see [Rust
+/// issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+/// details.
 ///
 /// ## Example
 ///
@@ -148,6 +156,8 @@ pub fn channel(
 ///         rqctx: RequestContext<Self::MyContext>,
 ///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 /// }
+/// # // defining fn main puts the doctest in a module context
+/// # fn main() {}
 /// ```
 #[proc_macro_attribute]
 pub fn server(

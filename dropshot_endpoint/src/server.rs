@@ -727,6 +727,27 @@ impl<'ast> ToTokens for ServerModuleGenerator<'ast> {
             #outer
             #[automatically_derived]
             #vis mod #module_ident {
+                // super::* pulls in definitions from the surrounding scope.
+                // This is not ideal because it means that the macro can only be
+                // applied to traits defined in modules, not in functions.
+                //
+                // A much better approach would be to be able to annotate the
+                // module and say "don't create a new scope", similar to
+                // `#[transparent]` as proposed in
+                // https://github.com/rust-lang/rust/issues/79260.
+                //
+                // There does not appear to be a workaround for this, short of
+                // not using a module at all. There are two other options:
+                //
+                // 1. Put the functions below into the parent scope. This adds a
+                //    bunch of items to the scope rather than one, which seems
+                //    worse on balance.
+                // 2. Make these methods on a type rather than free functions in
+                //    a module. This approach works for functions but not other
+                //    items like macros we may wish to define in the future.
+                //
+                // In RFD 479, we determined that on balance, the current
+                // approach has the least practical downsides.
                 use super::*;
 
                 // We don't need to generate type checks the way we do with
