@@ -47,72 +47,31 @@ pub(crate) struct ErrorStore<T> {
 }
 
 impl<T> ErrorStore<T> {
+    /// Create a new `ErrorStore`.
     pub(crate) fn new() -> Self {
         Self { data: RefCell::new(ErrorStoreData::default()) }
     }
 
+    /// Obtain the list of errors collected by this store.
+    ///
+    /// This consumes the store, and implies that there are no [`ErrorSink`]
+    /// instances that are still alive.
     pub(crate) fn into_inner(self) -> Vec<T> {
         std::mem::take(&mut self.data.borrow_mut().errors)
     }
 
+    /// Create a new sink for collecting errors.
+    ///
+    /// This is a top-level sink, i.e. it has no parent.
     pub(crate) fn sink(&mut self) -> ErrorSink<'_, T> {
         let new_id = self.data.borrow_mut().register_sink(None);
         ErrorSink { data: &self.data, id: new_id }
     }
 }
 
-#[derive(Debug)]
-struct ErrorStoreData<T> {
-    errors: Vec<T>,
-    sinks: Vec<ErrorSinkState>,
-}
-
-impl<T> Default for ErrorStoreData<T> {
-    fn default() -> Self {
-        Self { errors: Vec::new(), sinks: Vec::new() }
-    }
-}
-
-impl<T> ErrorStoreData<T> {
-    fn push(&mut self, id: usize, error: T) {
-        self.errors.push(error);
-        self.sinks[id].has_errors = true;
-
-        // Propagate the fact that errors were encountered up the tree.
-        let mut curr = id;
-        while let Some(parent) = self.sinks[curr].parent {
-            self.sinks[parent].has_errors = true;
-            curr = parent;
-        }
-    }
-
-    // --- Internal methods ---
-
-    fn register_sink(&mut self, parent: Option<usize>) -> usize {
-        // len is the next ID
-        let id = self.sinks.len();
-        self.sinks.push(ErrorSinkState::new(parent));
-        id
-    }
-}
-
-#[derive(Debug)]
-struct ErrorSinkState {
-    // The parent ID in the map.
-    parent: Option<usize>,
-    // Whether an error was pushed via this specific context or a descendant.
-    has_errors: bool,
-}
-
-impl ErrorSinkState {
-    fn new(parent: Option<usize>) -> Self {
-        Self { parent, has_errors: false }
-    }
-}
-
 /// A collector for errors.
 ///
-/// An `ErrorSink` is a context into which errors can be collected. It can have
+/// An `ErrorSink` is a context into which errors can be pushed. It can have
 /// child `ErrorSink` instances, and the [`ErrorStore`] from which it is
 /// ultimately derived tracks whether any errors were pushed to a given
 /// `ErrorSink` or its descendants.
@@ -129,9 +88,9 @@ pub(crate) struct ErrorSink<'a, T> {
     // guarantee that the error collection process is done. The lifetime
     // parameter statically guarantees that.
     //
-    // Do we need interior mutability? Because of our nested structure, we'd
-    // have to either use `&mut &mut &mut ... T`, or dynamic dispatch. Both seem
-    // worse than just doing this.
+    // Do we need interior mutability? Because of our nested structure, the only
+    // other alternatives are some kind of `&mut &mut &mut ... T`, or dynamic
+    // dispatch. Both seem worse than just doing this.
     data: &'a RefCell<ErrorStoreData<T>>,
     id: usize,
 }
@@ -154,5 +113,52 @@ impl<'a, T> ErrorSink<'a, T> {
         let mut errors = self.data.borrow_mut();
         let new_id = errors.register_sink(Some(self.id));
         Self { data: self.data, id: new_id }
+    }
+}
+
+#[derive(Debug)]
+struct ErrorStoreData<T> {
+    errors: Vec<T>,
+    sinks: Vec<ErrorSinkData>,
+}
+
+impl<T> Default for ErrorStoreData<T> {
+    fn default() -> Self {
+        Self { errors: Vec::new(), sinks: Vec::new() }
+    }
+}
+
+impl<T> ErrorStoreData<T> {
+    fn push(&mut self, id: usize, error: T) {
+        self.errors.push(error);
+        self.sinks[id].has_errors = true;
+
+        // Propagate the fact that errors were encountered up the tree.
+        let mut curr = id;
+        while let Some(parent) = self.sinks[curr].parent {
+            self.sinks[parent].has_errors = true;
+            curr = parent;
+        }
+    }
+
+    fn register_sink(&mut self, parent: Option<usize>) -> usize {
+        // len is the next ID
+        let id = self.sinks.len();
+        self.sinks.push(ErrorSinkData::new(parent));
+        id
+    }
+}
+
+#[derive(Debug)]
+struct ErrorSinkData {
+    // The parent ID in the map.
+    parent: Option<usize>,
+    // Whether an error was pushed via this specific context or a descendant.
+    has_errors: bool,
+}
+
+impl ErrorSinkData {
+    fn new(parent: Option<usize>) -> Self {
+        Self { parent, has_errors: false }
     }
 }

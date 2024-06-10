@@ -1087,7 +1087,14 @@ mod tests {
         );
     }
 
-    // These argument types are close to being invalid, but are actually valid.
+    // These argument types are close to being invalid, but are either okay or
+    // we're not sure.
+    //
+    // * `MyRequestContext` might be a type alias, which is legal for
+    //   function-based servers.
+    // * We don't support non-'static lifetimes, but 'static is fine.
+    // * We don't support generic types within extractors, but `<X as Y>::Z` is
+    //   actually a concrete, non-generic type.
     #[test]
     fn test_endpoint_weird_but_ok_arg_types_1() {
         let (item, errors) = do_endpoint(
@@ -1099,7 +1106,7 @@ mod tests {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
                     _rqctx: MyRequestContext,
-                    query: Query<&'static str>,
+                    query: Query<QueryParams<'static>>,
                     path: Path<<X as Y>::Z>,
                 ) -> Result<HttpResponseOk<()>, HttpError> {
                     Ok(())
@@ -1114,6 +1121,12 @@ mod tests {
         );
     }
 
+    // These are also close to being invalid.
+    //
+    // * We ban `RequestContext<A, B>` because `RequestContext` can only have
+    //   one type parameter -- but `(A, B)` is a single type. In general, for
+    //   function-based macros we allow any type in that position (but not a
+    //   lifetime).
     #[test]
     fn test_endpoint_weird_but_ok_arg_types_2() {
         let (item, errors) = do_endpoint(
