@@ -1,4 +1,4 @@
-error: paths that contain a wildcard match must include 'unpublished = true'
+error: endpoint `must_be_unpublished` has paths that contain a wildcard match, but is not marked 'unpublished = true'
   --> tests/fail/bad_endpoint14.rs:20:5
    |
 20 | /     method = GET,

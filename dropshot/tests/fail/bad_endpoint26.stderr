@@ -1,0 +1,9 @@
+error: missing field `path`
+  --> tests/fail/bad_endpoint26.rs:12:1
+   |
+12 | / #[endpoint {
+13 | |     method = GET,
+14 | | }]
+   | |__^
+   |
+   = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
