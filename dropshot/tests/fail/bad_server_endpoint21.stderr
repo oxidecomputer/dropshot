@@ -19,53 +19,17 @@ error: endpoint `variadic_argument` must not have a variadic argument
 33 |         ...
    |         ^^^
 
-error: endpoint `unsafe_endpoint` must not be unsafe
-  --> tests/fail/bad_server_endpoint21.rs:41:11
-   |
-41 |     async unsafe fn unsafe_endpoint(
-   |           ^^^^^^
-
-error: endpoint `const_endpoint` must not be a const fn
-  --> tests/fail/bad_server_endpoint21.rs:51:5
-   |
-51 |     const fn const_endpoint(
-   |     ^^^^^
-
-error: endpoint `const_endpoint` must be async
-  --> tests/fail/bad_server_endpoint21.rs:51:11
-   |
-51 |     const fn const_endpoint(
-   |           ^^
-
-error: endpoint `abi_endpoint` must not use an alternate ABI
-  --> tests/fail/bad_server_endpoint21.rs:61:11
-   |
-61 |     async extern "C" fn abi_endpoint(
-   |           ^^^^^^^^^^
-
 error: only foreign or `unsafe extern "C"` functions may be C-variadic
   --> tests/fail/bad_server_endpoint21.rs:33:9
    |
 33 |         ...
    |         ^^^
 
-error[E0379]: functions in traits cannot be declared const
-  --> tests/fail/bad_server_endpoint21.rs:51:5
-   |
-51 |     const fn const_endpoint(
-   |     ^^^^^ functions in traits cannot be const
-
 error: only foreign or `unsafe extern "C"` functions may be C-variadic
-  --> tests/fail/bad_server_endpoint21.rs:76:9
+  --> tests/fail/bad_server_endpoint21.rs:46:9
    |
-76 |         ...
+46 |         ...
    |         ^^^
-
-error[E0379]: functions in traits cannot be declared const
-  --> tests/fail/bad_server_endpoint21.rs:88:5
-   |
-88 |     const fn const_endpoint(
-   |     ^^^^^ functions in traits cannot be const
 
 error[E0658]: C-variadic functions are unstable
   --> tests/fail/bad_server_endpoint21.rs:30:5
@@ -80,32 +44,32 @@ error[E0658]: C-variadic functions are unstable
    = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
 
 error[E0658]: C-variadic functions are unstable
-  --> tests/fail/bad_server_endpoint21.rs:73:5
+  --> tests/fail/bad_server_endpoint21.rs:43:5
    |
-73 | /     async fn variadic_argument(
-74 | |         _rqctx: RequestContext<Self::Context>,
-75 | |         _param1: Query<QueryParams>,
-76 | |         ...
-77 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-78 | |         unreachable!()
-79 | |     }
+43 | /     async fn variadic_argument(
+44 | |         _rqctx: RequestContext<Self::Context>,
+45 | |         _param1: Query<QueryParams>,
+46 | |         ...
+47 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+48 | |         unreachable!()
+49 | |     }
    | |_____^
    |
    = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
 
 error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseUpdatedNoContent, HttpError>>` captures lifetime that does not appear in bounds
-  --> tests/fail/bad_server_endpoint21.rs:77:58
+  --> tests/fail/bad_server_endpoint21.rs:47:58
    |
-73 | /      async fn variadic_argument(
-74 | |          _rqctx: RequestContext<Self::Context>,
-75 | |          _param1: Query<QueryParams>,
-76 | |          ...
-77 | |      ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+43 | /      async fn variadic_argument(
+44 | |          _rqctx: RequestContext<Self::Context>,
+45 | |          _param1: Query<QueryParams>,
+46 | |          ...
+47 | |      ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
    | | ________________________________________________________-_^
    | ||________________________________________________________|
    |  |                                                        opaque type defined here
-78 |  |         unreachable!()
-79 |  |     }
+48 |  |         unreachable!()
+49 |  |     }
    |  |_____^
    |
-   = note: hidden type `{async fn body@$DIR/tests/fail/bad_server_endpoint21.rs:77:58: 79:6}` captures lifetime `'_`
+   = note: hidden type `{async fn body@$DIR/tests/fail/bad_server_endpoint21.rs:47:58: 49:6}` captures lifetime `'_`

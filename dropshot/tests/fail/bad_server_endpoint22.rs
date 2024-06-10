@@ -2,13 +2,10 @@
 
 #![allow(unused_imports)]
 
-use dropshot::endpoint;
 use dropshot::HttpError;
-use dropshot::HttpResponse;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Query;
 use dropshot::RequestContext;
-use dropshot::TypedBody;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -18,23 +15,19 @@ struct QueryParams {
     x: String,
 }
 
-type MyRequestContext<T, U> = RequestContext<U>;
-
 #[dropshot::server]
 trait MyServer {
     type Context;
 
+    // Test: unsafe fn.
     #[endpoint {
         method = GET,
         path = "/test",
     }]
-    async fn weird_types<'a, T>(
-        _rqctx: MyRequestContext<T, Self::Context>,
-        _param1: Query<&'a QueryParams>,
-        _param2: dyn for<'b> TypedBody<&'b ()>,
-    ) -> Result<impl HttpResponse, HttpError> {
-        Ok(HttpResponseOk(()))
-    }
+    async unsafe fn unsafe_endpoint(
+        _rqctx: RequestContext<Self::Context>,
+        _param1: Query<QueryParams>,
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
@@ -43,12 +36,11 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    async fn weird_types<'a, T>(
-        _rqctx: RequestContext<T, Self::Context>,
-        _param1: Query<&'a QueryParams>,
-        _param2: dyn for<'b> TypedBody<&'b ()>,
-    ) -> Result<impl HttpResponse, HttpError> {
-        Ok(HttpResponseOk(()))
+    async unsafe fn unsafe_endpoint(
+        _rqctx: RequestContext<Self::Context>,
+        _param1: Query<QueryParams>,
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
     }
 }
 

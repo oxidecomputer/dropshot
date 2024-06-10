@@ -15,19 +15,16 @@ struct QueryParams {
     x: String,
 }
 
-// In this test, since we always output the server trait warts and all, we'll
-// get errors produced by both the proc-macro and rustc.
-
 #[dropshot::server]
 trait MyServer {
     type Context;
 
-    // Test: const fn.
+    // Test: ABI in fn.
     #[endpoint {
         method = GET,
         path = "/test",
     }]
-    const async fn const_endpoint(
+    async extern "C" fn abi_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
@@ -39,7 +36,7 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    const async fn const_endpoint(
+    async extern "C" fn abi_endpoint(
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {

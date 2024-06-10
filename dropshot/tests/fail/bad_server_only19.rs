@@ -4,44 +4,30 @@
 
 use dropshot::HttpError;
 use dropshot::HttpResponseUpdatedNoContent;
-use dropshot::Query;
 use dropshot::RequestContext;
-use schemars::JsonSchema;
-use serde::Deserialize;
 
-#[allow(dead_code)]
-#[derive(Deserialize, JsonSchema)]
-struct QueryParams {
-    x: String,
-}
-
-// In this test, since we always output the server trait warts and all, we'll
-// get errors produced by both the proc-macro and rustc.
+// Test _dropshot_crate provided in annotations rather than at the
+// `#[dropshot::server]` level.
 
 #[dropshot::server]
 trait MyServer {
     type Context;
 
-    // Test: const fn.
-    #[endpoint {
-        method = GET,
-        path = "/test",
-    }]
-    const async fn const_endpoint(
+    #[endpoint { method = GET, _dropshot_crate = "topspin" }]
+    async fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
 enum MyImpl {}
 
-// This should not produce errors about items being missing.
+// This should not produce errors about the trait or any of the items within
+// being missing.
 impl MyServer for MyImpl {
     type Context = ();
 
-    const async fn const_endpoint(
+    async fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         Ok(HttpResponseUpdatedNoContent())
     }

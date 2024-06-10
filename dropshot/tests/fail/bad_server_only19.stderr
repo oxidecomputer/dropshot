@@ -1,0 +1,7 @@
+error: missing field `path`
+  --> tests/fail/bad_server_only19.rs:12:1
+   |
+12 | #[dropshot::server]
+   | ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `dropshot::server` (in Nightly builds, run with -Z macro-backtrace for more info)

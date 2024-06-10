@@ -2,24 +2,30 @@
 
 #![allow(unused_imports)]
 
-// Check that a reasonable error is produced if `dropshot::channel` is used on
-// a trait method rather than `dropshot::server`.
-
 use dropshot::channel;
+use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::WebsocketConnection;
+use schemars::JsonSchema;
+use serde::Deserialize;
 
-trait MyTrait {
-    type Context;
+#[allow(dead_code)]
+#[derive(Deserialize, JsonSchema)]
+struct QueryParams {
+    x: String,
+}
 
-    #[channel {
-        protocol = WEBSOCKETS,
-        path = "/test",
-    }]
-    async fn bad_channel(
-        _rqctx: RequestContext<Self::Context>,
-        _upgraded: WebsocketConnection,
-    ) -> dropshot::WebsocketChannelResult;
+// Test: const fn.
+#[channel {
+    protocol = WEBSOCKETS,
+    path = "/test",
+}]
+const async fn const_endpoint(
+    _rqctx: RequestContext<()>,
+    _param1: Query<QueryParams>,
+    _upgraded: WebsocketConnection,
+) -> dropshot::WebsocketChannelResult {
+    Ok(())
 }
 
 fn main() {}

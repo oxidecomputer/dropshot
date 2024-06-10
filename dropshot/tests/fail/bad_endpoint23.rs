@@ -2,24 +2,30 @@
 
 #![allow(unused_imports)]
 
-// Check that a reasonable error is produced if `dropshot::endpoint` is used on
-// a trait method rather than `dropshot::server`.
-
 use dropshot::endpoint;
 use dropshot::HttpError;
-use dropshot::HttpResponseUpdatedNoContent;
+use dropshot::HttpResponseOk;
+use dropshot::Query;
 use dropshot::RequestContext;
+use schemars::JsonSchema;
+use serde::Deserialize;
 
-trait MyTrait {
-    type Context;
+#[allow(dead_code)]
+#[derive(Deserialize, JsonSchema)]
+struct QueryParams {
+    x: String,
+}
 
-    #[endpoint {
-        method = GET,
-        path = "/test",
-    }]
-    async fn bad_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+// Test: const fn.
+#[endpoint {
+    method = GET,
+    path = "/test",
+}]
+const async fn const_endpoint(
+    _rqctx: RequestContext<()>,
+    _param1: Query<QueryParams>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    Ok(HttpResponseOk(()))
 }
 
 fn main() {}

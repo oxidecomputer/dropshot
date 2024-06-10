@@ -1,0 +1,45 @@
+error: endpoint `bad_channel` appears to be a trait function
+       note: did you mean to use `#[dropshot::server]` instead?
+  --> tests/fail/bad_channel26.rs:19:5
+   |
+19 | /     async fn bad_channel(
+20 | |         _rqctx: RequestContext<Self::Context>,
+21 | |         _upgraded: WebsocketConnection,
+22 | |     ) -> dropshot::WebsocketChannelResult;
+   | |_________________________________________^
+
+error[E0277]: `<Self as MyTrait>::Context` cannot be sent between threads safely
+  --> tests/fail/bad_channel26.rs:20:17
+   |
+20 |         _rqctx: RequestContext<Self::Context>,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyTrait>::Context` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `<Self as MyTrait>::Context`
+   = note: required for `<Self as MyTrait>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+22 |     ) -> dropshot::WebsocketChannelResult where <Self as MyTrait>::Context: Send;
+   |                                           ++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: `<Self as MyTrait>::Context` cannot be shared between threads safely
+  --> tests/fail/bad_channel26.rs:20:17
+   |
+20 |         _rqctx: RequestContext<Self::Context>,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyTrait>::Context` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `<Self as MyTrait>::Context`
+   = note: required for `<Self as MyTrait>::Context` to implement `ServerContext`
+note: required by a bound in `RequestContext`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |                                    ^^^^^^^^^^^^^ required by this bound in `RequestContext`
+help: consider further restricting the associated type
+   |
+22 |     ) -> dropshot::WebsocketChannelResult where <Self as MyTrait>::Context: Sync;
+   |                                           ++++++++++++++++++++++++++++++++++++++

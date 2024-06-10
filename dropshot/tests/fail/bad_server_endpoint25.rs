@@ -2,10 +2,13 @@
 
 #![allow(unused_imports)]
 
+use dropshot::endpoint;
 use dropshot::HttpError;
-use dropshot::HttpResponseUpdatedNoContent;
+use dropshot::HttpResponse;
+use dropshot::HttpResponseOk;
 use dropshot::Query;
 use dropshot::RequestContext;
+use dropshot::TypedBody;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -15,22 +18,23 @@ struct QueryParams {
     x: String,
 }
 
-// In this test, since we always output the server trait warts and all, we'll
-// get errors produced by both the proc-macro and rustc.
+type MyRequestContext<T, U> = RequestContext<U>;
 
 #[dropshot::server]
 trait MyServer {
     type Context;
 
-    // Test: const fn.
     #[endpoint {
         method = GET,
         path = "/test",
     }]
-    const async fn const_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+    async fn weird_types<'a, T>(
+        _rqctx: MyRequestContext<T, Self::Context>,
+        _param1: Query<&'a QueryParams>,
+        _param2: dyn for<'b> TypedBody<&'b ()>,
+    ) -> Result<impl HttpResponse, HttpError> {
+        Ok(HttpResponseOk(()))
+    }
 }
 
 enum MyImpl {}
@@ -39,11 +43,12 @@ enum MyImpl {}
 impl MyServer for MyImpl {
     type Context = ();
 
-    const async fn const_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-        Ok(HttpResponseUpdatedNoContent())
+    async fn weird_types<'a, T>(
+        _rqctx: RequestContext<T, Self::Context>,
+        _param1: Query<&'a QueryParams>,
+        _param2: dyn for<'b> TypedBody<&'b ()>,
+    ) -> Result<impl HttpResponse, HttpError> {
+        Ok(HttpResponseOk(()))
     }
 }
 

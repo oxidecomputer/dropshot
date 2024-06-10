@@ -22,7 +22,7 @@ struct QueryParams {
 trait MyServer {
     type Context;
 
-    // Test: last parameter is variadic, extern "C", and unsafe.
+    // Test: last parameter is variadic.
     #[endpoint {
         method = GET,
         path = "/test",
@@ -31,36 +31,6 @@ trait MyServer {
         _rqctx: RequestContext<Self::Context>,
         _param1: Query<QueryParams>,
         ...
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
-
-    // Test: unsafe fn.
-    #[endpoint {
-        method = GET,
-        path = "/test",
-    }]
-    async unsafe fn unsafe_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
-
-    // Test: const fn.
-    #[endpoint {
-        method = GET,
-        path = "/test",
-    }]
-    const fn const_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
-
-    // Test: ABI in fn.
-    #[endpoint {
-        method = GET,
-        path = "/test",
-    }]
-    async extern "C" fn abi_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 }
 
@@ -76,27 +46,6 @@ impl MyServer for MyImpl {
         ...
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         unreachable!()
-    }
-
-    async unsafe fn unsafe_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-        Ok(HttpResponseUpdatedNoContent())
-    }
-
-    const fn const_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-        Ok(HttpResponseUpdatedNoContent())
-    }
-
-    async extern "C" fn abi_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-        _param1: Query<QueryParams>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-        Ok(HttpResponseUpdatedNoContent())
     }
 }
 
