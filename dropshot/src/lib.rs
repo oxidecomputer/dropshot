@@ -441,26 +441,21 @@
 //!
 //! ### Dropshot interfaces for pagination
 //!
-//! We can think of pagination in two parts: the input (handling the pagination
-//! query parameters) and the output (emitting a page of results, including the
-//! page token).
+//! The interfaces for pagination include:
 //!
-//! For input, a paginated API endpoint's handler function should accept a
-//! [`Query`]`<`[`PaginationParams`]`<ScanParams, PageSelector>>`, where
-//! `ScanParams` is a consumer-defined type specifying the parameters of the scan
-//! (typically including the sort fields, sort order, and filter options) and
-//! `PageSelector` is a consumer-defined type describing the page token.  The
-//! PageSelector will be serialized to JSON and base64-encoded to construct the
-//! page token.  This will be automatically parsed on the way back in.
+//! * input: your paginated API endpoint's handler function should accept an
+//!   argument of type [`Query`]`<`[`PaginationParams`]`<ScanParams,
+//!   PageSelector>>`, where you define `ScanParams` and `PageSelector` (see
+//!   `PaginationParams` for more on this.)
 //!
-//! For output, a paginated API endpoint's handler function can return
-//! `Result<`[`HttpResponseOk`]<[`ResultsPage`]`<T>, HttpError>` where `T:
-//! Serialize` is the item listed by the endpoint.  You can also use your own
-//! structure that contains a [`ResultsPage`] (possibly using
-//! `#[serde(flatten)]`), if that's the behavior you want.
+//! * output: your paginated API endpoint's handler function can return
+//!   `Result<`[`HttpResponseOk`]<[`ResultsPage`]`<T>, HttpError>` where `T:
+//!   Serialize` is the item listed by the endpoint.  You can also use your own
+//!   structure that contains a [`ResultsPage`] (possibly using
+//!   `#[serde(flatten)]`), if that's the behavior you want.
 //!
-//! There are several complete, documented examples in the "examples" directory.
-//!
+//! See the complete, documented pagination examples in the "examples"
+//! directory for more on how to use these.
 //!
 //! ### Advanced usage notes
 //!
