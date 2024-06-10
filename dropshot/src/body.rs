@@ -9,6 +9,7 @@ use hyper::body::{Body as HttpBody, Bytes, Frame};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
+/// A body type for both requests and responses in Dropshot.
 #[derive(Debug)]
 pub struct Body {
     inner: BoxBody<Bytes, BoxError>,
