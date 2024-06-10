@@ -62,11 +62,11 @@ version = "2.0.0"
 features = [ "skip_serializing_defaults" ]
 
 [dependencies.serde]
-version = "1.0.202"
+version = "1.0.203"
 features = [ "derive" ]
 
 [dependencies.tokio]
-version = "1.37"
+version = "1.38"
 features = [ "full" ]
 
 [dependencies.usdt]
@@ -79,7 +79,7 @@ version = "1.8.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.20"
+version = "0.8.21"
 features = [ "uuid1" ]
 
 [dev-dependencies]
@@ -98,7 +98,7 @@ trybuild = "1.0.96"
 pem = "3.0"
 rcgen = "0.13.1"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
-tokio-tungstenite = "0.21.0"
+tokio-tungstenite = "0.23.0"
 
 [dev-dependencies.rustls-pki-types]
 version = "1.7.0"
@@ -106,7 +106,7 @@ version = "1.7.0"
 features = ["alloc"]
 
 [dev-dependencies.schemars]
-version = "0.8.20"
+version = "0.8.21"
 features = [ "chrono", "uuid1" ]
 
 [dev-dependencies.slog]

@@ -151,6 +151,9 @@ impl<ItemType> ResultsPage<ItemType> {
     /// is a function used to construct the page token that clients will provide
     /// to fetch the next page of results.  `scan_params` is provided to the
     /// `page_selector` function, since the token may depend on the type of scan.
+    ///
+    /// `get_page_selector` accepts arguments aimed at supporting keyset
+    /// pagination.  See [`PaginationParams`].
     pub fn new<F, ScanParams, PageSelector>(
         items: Vec<ItemType>,
         scan_params: &ScanParams,
@@ -181,8 +184,11 @@ impl<ItemType> ResultsPage<ItemType> {
 /// `PageSelector` types.
 ///
 /// `ScanParams` describes the set of querystring parameters that your endpoint
-/// accepts for the _first_ request of the scan (typically: filters and sort
-/// options).  This must be deserializable from a querystring.
+/// accepts for the _first_ request of the scan.  This must be deserializable
+/// from a querystring.  These parameters typically describe filters and sort
+/// options that will not change across the multiple requests that make up the
+/// scan.  (Clients won't have to pass the scan parameters for subsequent
+/// requests, though; instead, you generally encode them into `PageSelector`.)
 ///
 /// `PageSelector` describes the information your endpoint needs for requests
 /// after the first one.  Typically this would include an id of some sort for the
@@ -195,6 +201,10 @@ impl<ItemType> ResultsPage<ItemType> {
 /// (Unlike `ScanParams`, `PageSelector` will not be deserialized directly from
 /// the querystring.)
 ///
+/// [These interfaces here are oriented around "keyset pagination".
+/// "Limit/offset" pagination is possible but not recommended for the usual
+/// reasons that are described elsewhere.][1]
+///
 /// There are several complete, documented examples in `dropshot/examples`.
 ///
 /// **NOTE:** Your choices of `ScanParams` and `PageSelector` determine the
@@ -203,6 +213,8 @@ impl<ItemType> ResultsPage<ItemType> {
 /// interface, though the page token won't appear in the OpenAPI spec.  Be
 /// careful when designing these structures to consider what you might want to
 /// support in the future.
+///
+/// [1]: https://www.citusdata.com/blog/2016/03/30/five-ways-to-paginate/
 #[derive(Debug, Deserialize)]
 pub struct PaginationParams<ScanParams, PageSelector>
 where
