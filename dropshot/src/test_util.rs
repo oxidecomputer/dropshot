@@ -121,7 +121,7 @@ impl ClientTestContext {
         path: &str,
         request_body: Option<RequestBodyType>,
         expected_status: StatusCode,
-    ) -> Result<Response<hyper::body::Incoming>, HttpErrorResponseBody> {
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let body = match request_body {
             None => Body::empty(),
             Some(input) => serde_json::to_string(&input).unwrap().into(),
@@ -141,7 +141,7 @@ impl ClientTestContext {
         path: &str,
         request_body: Option<RequestBodyType>,
         expected_status: StatusCode,
-    ) -> Result<Response<hyper::body::Incoming>, HttpErrorResponseBody> {
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let body: Body = match request_body {
             None => Body::empty(),
             Some(input) => serde_urlencoded::to_string(&input).unwrap().into(),
@@ -161,7 +161,7 @@ impl ClientTestContext {
         method: Method,
         path: &str,
         expected_status: StatusCode,
-    ) -> Result<Response<hyper::body::Incoming>, HttpErrorResponseBody> {
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         self.make_request_with_body(
             method,
             path,
@@ -204,7 +204,7 @@ impl ClientTestContext {
         path: &str,
         body: Body,
         expected_status: StatusCode,
-    ) -> Result<Response<hyper::body::Incoming>, HttpErrorResponseBody> {
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let uri = self.url(path);
         let request = Request::builder()
             .method(method)
@@ -220,7 +220,7 @@ impl ClientTestContext {
         path: &str,
         body: Body,
         expected_status: StatusCode,
-    ) -> Result<Response<hyper::body::Incoming>, HttpErrorResponseBody> {
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let uri = self.url(path);
         let request = Request::builder()
             .method(method)
@@ -235,7 +235,7 @@ impl ClientTestContext {
         &self,
         request: Request<Body>,
         expected_status: StatusCode,
-    ) -> Result<Response<hyper::body::Incoming>, HttpErrorResponseBody> {
+    ) -> Result<Response<Body>, HttpErrorResponseBody> {
         let time_before = chrono::offset::Utc::now().timestamp();
         info!(self.client_log, "client request";
             "method" => %request.method(),
@@ -329,6 +329,7 @@ impl ClientTestContext {
             assert_eq!(0, body_bytes.len());
         }
 
+        let mut response = response.map(Body::wrap);
         // If this was a successful response, there's nothing else to check
         // here.  Return the response so the caller can validate the content if
         // they want.
@@ -522,7 +523,7 @@ impl<Context: ServerContext> TestContext<Context> {
 /// asynchronously read the body of the response and parse it accordingly,
 /// returning a vector of T.
 pub async fn read_ndjson<T: DeserializeOwned>(
-    response: &mut Response<hyper::body::Incoming>,
+    response: &mut Response<Body>,
 ) -> Vec<T> {
     let headers = response.headers();
     assert_eq!(
@@ -556,7 +557,7 @@ pub async fn read_ndjson<T: DeserializeOwned>(
 /// be parseable via Serde as type T, asynchronously read the body of the
 /// response and parse it, returning an instance of T.
 pub async fn read_json<T: DeserializeOwned>(
-    response: &mut Response<hyper::body::Incoming>,
+    response: &mut Response<Body>,
 ) -> T {
     let headers = response.headers();
     assert_eq!(
@@ -576,7 +577,7 @@ pub async fn read_json<T: DeserializeOwned>(
 /// Given a Hyper Response whose body is expected to be a UTF-8-encoded string,
 /// asynchronously read the body.
 pub async fn read_string(
-    response: &mut Response<hyper::body::Incoming>,
+    response: &mut Response<Body>,
 ) -> String {
     let body_bytes = response
         .body_mut()
@@ -590,7 +591,7 @@ pub async fn read_string(
 
 /// Given a Hyper Response, extract and parse the Content-Length header.
 pub fn read_content_length(
-    response: &Response<hyper::body::Incoming>,
+    response: &Response<Body>,
 ) -> usize {
     response
         .headers()
