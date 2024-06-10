@@ -5,7 +5,7 @@ error: channel handlers must have the following signature:
                [path_params: Path<P>,]
                websocket_connection: dropshot::WebsocketConnection,
            ) -> dropshot::WebsocketChannelResult
-  --> tests/fail/bad_channel21c.rs:23:1
+  --> tests/fail/bad_channel23.rs:23:1
    |
 23 | / const async fn const_endpoint(
 24 | |     _rqctx: RequestContext<()>,
@@ -15,7 +15,7 @@ error: channel handlers must have the following signature:
    | |_____________________________________^
 
 error: endpoint `const_endpoint` must not be a const fn
-  --> tests/fail/bad_channel21c.rs:23:1
+  --> tests/fail/bad_channel23.rs:23:1
    |
 23 | const async fn const_endpoint(
    | ^^^^^

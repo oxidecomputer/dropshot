@@ -3,6 +3,8 @@
 #![allow(unused_imports)]
 
 use dropshot::channel;
+use dropshot::HttpError;
+use dropshot::HttpResponse;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::WebsocketConnection;
@@ -15,17 +17,16 @@ struct QueryParams {
     x: String,
 }
 
-// Test: unsafe fn.
 #[channel {
     protocol = WEBSOCKETS,
     path = "/test",
 }]
-async unsafe fn unsafe_endpoint(
-    _rqctx: RequestContext<()>,
-    _param1: Query<QueryParams>,
-    _upgraded: WebsocketConnection,
-) -> dropshot::WebsocketChannelResult {
-    Ok(())
+async fn weird_types<'a>(
+    _rqctx: RequestContext<T, Self::U>,
+    _param1: Query<&'a QueryParams>,
+    _param2: for<'b> TypedBody<&'b ()>,
+) -> Result<impl HttpResponse, HttpError> {
+    Ok(HttpResponseOk(()))
 }
 
 fn main() {}
