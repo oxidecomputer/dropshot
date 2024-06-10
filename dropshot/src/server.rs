@@ -1063,33 +1063,6 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
     }
 }
 
-/* TODO(SEAN)
-impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
-    // Recall that a Service in this context is just something that takes a
-    // request (which could be anything) and produces a response (which could be
-    // anything).  This being a connection handler, the request type is an
-    // AddrStream (which wraps a TCP connection) and the response type is
-    // another Service: one that accepts HTTP requests and produces HTTP
-    // responses.
-    type Response = ServerRequestHandler<T>;
-    type Error = GenericError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn call(&mut self, conn: &AddrStream) -> Self::Future {
-        // We're given a borrowed reference to the AddrStream, but our interface
-        // is async (which is good, so that we can support time-consuming
-        // operations as part of receiving requests).  To avoid having to ensure
-        // that conn's lifetime exceeds that of this async operation, we simply
-        // copy the only useful information out of the conn: the SocketAddr.  We
-        // may want to create our own connection type to encapsulate the socket
-        // address and any other per-connection state that we want to keep.
-        let server = Arc::clone(&self.server);
-        let remote_addr = conn.remote_addr();
-        Box::pin(http_connection_handle(server, remote_addr))
-    }
-}
-*/
-
 /// ServerRequestHandler is a Hyper Service implementation that forwards
 /// incoming requests to `http_request_handle_wrap()`, including as an argument
 /// the backend server state object.  We could use `service_fn` here using a
