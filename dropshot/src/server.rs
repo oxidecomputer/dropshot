@@ -301,6 +301,8 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
     ) -> Result<InnerHttpServerStarterNewReturn<C>, std::io::Error> {
+        // We use `from_std` instead of just calling `bind` here directly
+        // to avoid invoking an async function.
         let std_listener = std::net::TcpListener::bind(&config.bind_address)?;
         std_listener.set_nonblocking(true)?;
         let incoming = TcpListener::from_std(std_listener)?;
