@@ -185,11 +185,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 https.start(rx, log_close)
             }
         };
-        /*
-        .map(|r| {
-            r.map_err(|e| format!("waiting for server: {e}"))?
-                .map_err(|e| format!("server stopped: {e}"))
-        })*/
         info!(self.app_state.log, "listening");
 
         let handler_waitgroup = self.handler_waitgroup;
@@ -322,8 +317,6 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
-        //let builder = hyper::Server::builder(incoming);
-        //let server = builder.serve(make_service);
         Ok((
             InnerHttpServerStarter(incoming, make_service),
             app_state,
