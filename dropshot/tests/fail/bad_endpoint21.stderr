@@ -8,16 +8,17 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint21c.rs:24:1
+  --> tests/fail/bad_endpoint21.rs:24:1
    |
-24 | / const async fn const_endpoint(
+24 | / async fn variadic_argument(
 25 | |     _rqctx: RequestContext<()>,
 26 | |     _param1: Query<QueryParams>,
-27 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+27 | |     ...
+28 | | ) -> Result<HttpResponseOk<()>, HttpError> {
    | |__________________________________________^
 
-error: endpoint `const_endpoint` must not be a const fn
-  --> tests/fail/bad_endpoint21c.rs:24:1
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_endpoint21.rs:27:5
    |
-24 | const async fn const_endpoint(
-   | ^^^^^
+27 |     ...
+   |     ^^^
