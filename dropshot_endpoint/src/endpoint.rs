@@ -2,6 +2,8 @@
 
 //! Support for HTTP `#[endpoint]` macros.
 
+use std::fmt;
+
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
@@ -11,6 +13,7 @@ use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
 use syn::spanned::Spanned;
+use syn::visit::Visit;
 
 use crate::doc::ExtractedDoc;
 use crate::error_store::ErrorSink;
@@ -20,7 +23,7 @@ use crate::util::get_crate;
 use crate::util::ValidContentType;
 
 /// Endpoint usage message, produced if there were parameter errors.
-const USAGE: &str = "Endpoint handlers must have the following signature:
+const USAGE: &str = "endpoint handlers must have the following signature:
     async fn(
         rqctx: dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]
@@ -114,12 +117,13 @@ pub(crate) fn do_endpoint_inner(
 ) -> EndpointOutput {
     let dropshot = metadata.dropshot_crate();
 
-    // Perform validations first.
-    let metadata = metadata.validate(&attr, &errors);
-    let params = EndpointParams::new(&item_fn.sig, &errors);
-
     let name = &item_fn.sig.ident;
     let name_str = name.to_string();
+
+    // Perform validations first.
+    let metadata = metadata.validate(&name_str, &attr, &errors);
+    let params = EndpointParams::new(&item_fn.sig, &errors);
+
     let visibility = &item_fn.vis;
 
     let doc = ExtractedDoc::from_attrs(&item_fn.attrs);
@@ -205,7 +209,7 @@ pub(crate) fn do_endpoint_inner(
 
 /// Request and return types for an endpoint.
 struct EndpointParams<'ast> {
-    rqctx_ty: &'ast syn::Type,
+    rqctx_ty: RqctxTy<'ast>,
     shared_extractors: Vec<&'ast syn::Type>,
     // This is the last request argument -- it could also be a shared extractor,
     // because shared extractors are also exclusive.
@@ -222,47 +226,64 @@ impl<'ast> EndpointParams<'ast> {
         sig: &'ast syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
+        let name_str = sig.ident.to_string();
         let errors = errors.new();
 
         // Perform AST validations.
         if sig.constness.is_some() {
             errors.push(Error::new_spanned(
                 &sig.constness,
-                "endpoint handlers may not be const functions",
+                format!("endpoint `{name_str}` must not be a const fn"),
             ));
         }
 
         if sig.asyncness.is_none() {
             errors.push(Error::new_spanned(
                 &sig.fn_token,
-                "endpoint handler functions must be async",
+                format!("endpoint `{name_str}` must be async"),
             ));
         }
 
         if sig.unsafety.is_some() {
             errors.push(Error::new_spanned(
                 &sig.unsafety,
-                "endpoint handlers may not be unsafe",
+                format!("endpoint `{name_str}` must not be unsafe"),
             ));
         }
 
         if sig.abi.is_some() {
             errors.push(Error::new_spanned(
                 &sig.abi,
-                "endpoint handler may not use an alternate ABI",
+                format!("endpoint `{name_str}` must not use an alternate ABI"),
             ));
         }
 
         if !sig.generics.params.is_empty() {
             errors.push(Error::new_spanned(
                 &sig.generics,
-                "generics are not permitted for endpoint handlers",
+                format!("endpoint `{name_str}` must not have generics"),
             ));
         }
 
+        if let Some(where_clause) = &sig.generics.where_clause {
+            // Empty where clauses are no-ops and therefore permitted.
+            if !where_clause.predicates.is_empty() {
+                errors.push(Error::new_spanned(
+                    where_clause,
+                    format!(
+                        "endpoint `{name_str}` must not have a where clause"
+                    ),
+                ));
+            }
+        }
+
         if sig.variadic.is_some() {
-            errors
-                .push(Error::new_spanned(&sig.variadic, "no language C here"));
+            errors.push(Error::new_spanned(
+                &sig.variadic,
+                format!(
+                    "endpoint `{name_str}` must not have a variadic argument",
+                ),
+            ));
         }
 
         let mut inputs = sig.inputs.iter();
@@ -273,18 +294,23 @@ impl<'ast> EndpointParams<'ast> {
                 pat: _,
                 colon_token: _,
                 ty,
-            })) => Some(&**ty),
+            })) => RqctxTy::new(&name_str, ty, &errors),
             Some(first_arg @ syn::FnArg::Receiver(_)) => {
                 errors.push(Error::new_spanned(
                     first_arg,
-                    "Expected a non-receiver argument",
+                    format!(
+                        "endpoint `{name_str}` must not have a `self` argument"
+                    ),
                 ));
                 None
             }
             None => {
                 errors.push(Error::new(
                     sig.paren_token.span.join(),
-                    "Endpoint requires arguments",
+                    format!(
+                        "endpoint `{name_str}` must have at least one \
+                         RequestContext argument"
+                    ),
                 ));
                 None
             }
@@ -294,7 +320,14 @@ impl<'ast> EndpointParams<'ast> {
         // SharedExtractor.
         let mut shared_extractors = Vec::new();
         while let Some(syn::FnArg::Typed(pat)) = inputs.next() {
-            shared_extractors.push(&*pat.ty);
+            if let Some(ty) = validate_param_ty(
+                &pat.ty,
+                ParamTyKind::Extractor,
+                &name_str,
+                &errors,
+            ) {
+                shared_extractors.push(ty);
+            }
         }
 
         // Pop the last one off the iterator -- it must impl ExclusiveExtractor.
@@ -305,11 +338,13 @@ impl<'ast> EndpointParams<'ast> {
             syn::ReturnType::Default => {
                 errors.push(Error::new_spanned(
                     sig,
-                    "Endpoint must return a Result",
+                    format!("endpoint `{name_str}` must return a Result"),
                 ));
                 None
             }
-            syn::ReturnType::Type(_, ty) => Some(&**ty),
+            syn::ReturnType::Type(_, ty) => {
+                validate_param_ty(ty, ParamTyKind::Return, &name_str, &errors)
+            }
         };
 
         // errors.has_errors() must be checked first, because it's possible for
@@ -331,7 +366,7 @@ impl<'ast> EndpointParams<'ast> {
 
     /// Returns a token stream that obtains the rqctx context type.
     fn rqctx_context(&self, dropshot: &TokenStream) -> TokenStream {
-        let rqctx_ty = self.rqctx_ty;
+        let rqctx_ty = self.rqctx_ty.as_type();
         quote_spanned! { rqctx_ty.span()=>
             <#rqctx_ty as #dropshot::RequestContextArgument>::Context
         }
@@ -350,7 +385,7 @@ impl<'ast> EndpointParams<'ast> {
 
     /// Returns a list of all argument types, including the request context.
     fn arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
-        std::iter::once(self.rqctx_ty)
+        std::iter::once(self.rqctx_ty.as_type())
             .chain(self.shared_extractors.iter().copied())
             .chain(self.exclusive_extractor)
     }
@@ -365,7 +400,7 @@ impl<'ast> EndpointParams<'ast> {
     /// ExclusiveExtractor.
     fn to_type_checks(&self, dropshot: &TokenStream) -> TokenStream {
         let rqctx_context = self.rqctx_context(dropshot);
-        let rqctx_check = quote_spanned! { self.rqctx_ty.span()=>
+        let rqctx_check = quote_spanned! { self.rqctx_ty.as_type().span()=>
             const _: fn() = || {
                 struct NeedRequestContext(#rqctx_context);
             };
@@ -468,6 +503,204 @@ impl<'ast> EndpointParams<'ast> {
     }
 }
 
+/// Perform syntactic validation for an argument or return type.
+///
+/// This returns the input type if it is valid.
+fn validate_param_ty<'ast>(
+    ty: &'ast syn::Type,
+    kind: ParamTyKind,
+    name_str: &str,
+    errors: &ErrorSink<'_, Error>,
+) -> Option<&'ast syn::Type> {
+    // Types can be arbitrarily nested, so to keep these checks simple we use
+    // the visitor pattern.
+
+    let errors = errors.new();
+
+    // This just needs a second 'store lifetime because the one inside ErrorSink
+    // is invariant. Everything else is covariant and can share lifetimes.
+    struct Visitor<'store, 'ast> {
+        kind: ParamTyKind,
+        name_str: &'ast str,
+        errors: &'ast ErrorSink<'store, Error>,
+    }
+
+    impl<'store, 'ast> Visit<'ast> for Visitor<'store, 'ast> {
+        fn visit_bound_lifetimes(&mut self, i: &'ast syn::BoundLifetimes) {
+            let name_str = self.name_str;
+            let kind = self.kind;
+            self.errors.push(Error::new_spanned(
+                i,
+                format!(
+                    "endpoint `{name_str}` must not have lifetime bounds \
+                     in {kind}",
+                ),
+            ));
+        }
+
+        fn visit_lifetime(&mut self, i: &'ast syn::Lifetime) {
+            let name_str = self.name_str;
+            let kind = self.kind;
+            if i.ident != "static" {
+                self.errors.push(Error::new_spanned(
+                    i,
+                    format!(
+                        "endpoint `{name_str}` must not have lifetime parameters \
+                         in {kind}",
+                    ),
+                ));
+            }
+        }
+
+        fn visit_ident(&mut self, i: &'ast syn::Ident) {
+            if i == "Self" {
+                let name_str = self.name_str;
+                let kind = self.kind;
+                self.errors.push(Error::new_spanned(
+                    i,
+                    format!(
+                        "endpoint `{name_str}` must not have `Self` in {kind}",
+                    ),
+                ));
+            }
+        }
+
+        fn visit_type_impl_trait(&mut self, i: &'ast syn::TypeImplTrait) {
+            let name_str = self.name_str;
+            let kind = self.kind;
+            self.errors.push(Error::new_spanned(
+                i,
+                format!(
+                    "endpoint `{name_str}` must not have impl Trait in {kind}",
+                ),
+            ));
+        }
+    }
+
+    let mut visitor = Visitor { kind, name_str, errors: &errors };
+    visitor.visit_type(ty);
+
+    // Don't return the type if there were errors.
+    (!errors.has_errors()).then(|| ty)
+}
+
+/// A representation of the RequestContext type.
+#[derive(Clone, Eq, PartialEq)]
+enum RqctxTy<'ast> {
+    /// This is a function-based macro, with the payload being the full type.
+    Function(&'ast syn::Type),
+}
+
+impl<'ast> RqctxTy<'ast> {
+    /// Ensures that the type parameter for RequestContext is valid.
+    fn new(
+        name_str: &str,
+        ty: &'ast syn::Type,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<Self> {
+        let param = match extract_rqctx_param(ty) {
+            Ok(Some(ty)) => ty,
+            Ok(None) => {
+                return Some(Self::Function(ty));
+            }
+            Err(_) => {
+                // Can't do any further validation on the type.
+                errors.push(Error::new_spanned(
+                    ty,
+                    format!(
+                        "endpoint `{name_str}` must accept a \
+                        RequestContext<T> as its first argument",
+                    ),
+                ));
+                return None;
+            }
+        };
+
+        // Now validate the inner parameter.
+        validate_param_ty(param, ParamTyKind::RequestContext, name_str, errors)
+            .map(|_| Self::Function(ty))
+    }
+
+    fn as_type(&self) -> &'ast syn::Type {
+        match self {
+            RqctxTy::Function(ty) => ty,
+        }
+    }
+}
+
+impl<'ast> fmt::Debug for RqctxTy<'ast> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RqctxTy::Function(ty) => write!(f, "Function({})", quote! { #ty }),
+        }
+    }
+}
+
+/// Extracts and ensures that the type parameter for RequestContext is valid.
+fn extract_rqctx_param<'ast>(
+    ty: &'ast syn::Type,
+) -> Result<Option<&'ast syn::Type>, RqctxTyError> {
+    let syn::Type::Path(p) = &*ty else {
+        return Err(RqctxTyError::NotTypePath);
+    };
+
+    // Inspect the last path segment.
+    let Some(last_segment) = p.path.segments.last() else {
+        return Err(RqctxTyError::NoPathSegments);
+    };
+
+    // It must either not have type arguments at all, or if so then exactly one
+    // argument.
+    let a = match &last_segment.arguments {
+        syn::PathArguments::None => {
+            // This is all right -- hopefully a type alias.
+            return Ok(None);
+        }
+        syn::PathArguments::AngleBracketed(a) => a,
+        syn::PathArguments::Parenthesized(_) => {
+            // This isn't really possible in this position?
+            return Err(RqctxTyError::ArgsNotAngleBracketed);
+        }
+    };
+
+    if a.args.len() != 1 {
+        return Err(RqctxTyError::IncorrectTypeArgCount(a.args.len()));
+    }
+
+    // The argument must be a type.
+    let syn::GenericArgument::Type(tp) = a.args.first().unwrap() else {
+        return Err(RqctxTyError::ArgNotType);
+    };
+
+    Ok(Some(tp))
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum RqctxTyError {
+    NotTypePath,
+    NoPathSegments,
+    ArgsNotAngleBracketed,
+    IncorrectTypeArgCount(usize),
+    ArgNotType,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ParamTyKind {
+    RequestContext,
+    Extractor,
+    Return,
+}
+
+impl fmt::Display for ParamTyKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParamTyKind::RequestContext => write!(f, "RequestContext"),
+            ParamTyKind::Extractor => write!(f, "extractor"),
+            ParamTyKind::Return => write!(f, "return type"),
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
 pub(crate) enum MethodType {
@@ -521,6 +754,7 @@ impl EndpointMetadata {
     /// incorrect span info in error messages.
     pub(crate) fn validate(
         self,
+        name_str: &str,
         attr: &dyn ToTokens,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<ValidatedEndpointMetadata> {
@@ -539,8 +773,10 @@ impl EndpointMetadata {
         if path.contains(":.*}") && !self.unpublished {
             errors.push(Error::new_spanned(
                 attr,
-                "paths that contain a wildcard match must include 'unpublished = \
-                 true'",
+                format!(
+                    "endpoint `{name_str}` has paths that contain \
+                     a wildcard match, but is not marked 'unpublished = true'",
+                ),
             ));
         }
 
@@ -551,7 +787,12 @@ impl EndpointMetadata {
                 Err(_) => {
                     errors.push(Error::new_spanned(
                         attr,
-                        "invalid content type for endpoint",
+                        format!(
+                            "endpoint `{name_str}` has an invalid \
+                            content type\n\
+                            note: supported content types are: {}",
+                            ValidContentType::to_supported_string()
+                        ),
                     ));
                     None
                 }
@@ -645,6 +886,11 @@ mod tests {
     use expectorate::assert_contents;
     use syn::parse_quote;
 
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
+
     use super::*;
 
     #[test]
@@ -689,6 +935,32 @@ mod tests {
         assert!(errors.is_empty());
         assert_contents(
             "tests/output/endpoint_context_fully_qualified_names.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    /// An empty where clause is a no-op and therefore permitted.
+    #[test]
+    fn test_endpoint_with_empty_where_clause() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                ) -> Result<HttpResponseOk<()>, HttpError>
+                where
+                {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_empty_where_clause.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
@@ -815,6 +1087,124 @@ mod tests {
         );
     }
 
+    // These argument types are close to being invalid, but are either okay or
+    // we're not sure.
+    //
+    // * `MyRequestContext` might be a type alias, which is legal for
+    //   function-based servers.
+    // * We don't support non-'static lifetimes, but 'static is fine.
+    // * We don't support generic types within extractors, but `<X as Y>::Z` is
+    //   actually a concrete, non-generic type.
+    #[test]
+    fn test_endpoint_weird_but_ok_arg_types_1() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            },
+            quote! {
+                /** handle "xyz" requests */
+                async fn handler_xyz(
+                    _rqctx: MyRequestContext,
+                    query: Query<QueryParams<'static>>,
+                    path: Path<<X as Y>::Z>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_weird_but_ok_arg_types_1.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    // These are also close to being invalid.
+    //
+    // * We ban `RequestContext<A, B>` because `RequestContext` can only have
+    //   one type parameter -- but `(A, B)` is a single type. In general, for
+    //   function-based macros we allow any type in that position (but not a
+    //   lifetime).
+    #[test]
+    fn test_endpoint_weird_but_ok_arg_types_2() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c"
+            },
+            quote! {
+                /** handle "xyz" requests */
+                async fn handler_xyz(
+                    _rqctx: RequestContext<(A, B)>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_weird_but_ok_arg_types_2.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
+    fn test_endpoint_with_custom_params() {
+        let input = quote! {
+            async fn handler_xyz(
+                _rqctx: RequestContext<()>,
+                query: Query<Q>,
+                path: Path<P>,
+            ) -> Result<HttpResponseOk<()>, HttpError> {
+                Ok(())
+            }
+        };
+
+        // With _dropshot_crate, the input should not contain "dropshot".
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+                _dropshot_crate = "topspin"
+            },
+            input.clone(),
+        );
+
+        assert!(errors.is_empty());
+
+        let file = parse_quote! { #item };
+        // Write out the file before checking it for banned idents, so that we
+        // can see what it looks like.
+        assert_contents(
+            "tests/output/endpoint_with_custom_params.rs",
+            &prettyplease::unparse(&file),
+        );
+
+        // Check banned identifiers.
+        let banned = [DROPSHOT];
+        assert_banned_idents(&file, banned);
+
+        // Without _dropshot_crate, the generated output must contain
+        // "dropshot".
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+            },
+            input,
+        );
+
+        assert!(errors.is_empty());
+        let file = parse_quote! { #item };
+        assert_eq!(
+            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
+            banned
+        );
+    }
+
     #[test]
     fn test_endpoint_invalid_item() {
         let (_, errors) = do_endpoint(
@@ -889,7 +1279,7 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("endpoint handler functions must be async".to_string())
+            Some("endpoint `handler_xyz` must be async".to_string())
         );
     }
 
@@ -908,7 +1298,10 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("Expected a non-receiver argument".to_string())
+            Some(
+                "endpoint `handler_xyz` must not have a `self` argument"
+                    .to_string()
+            )
         );
     }
 
@@ -927,7 +1320,94 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("Endpoint requires arguments".to_string())
+            Some("endpoint `handler_xyz` must have at least one RequestContext argument".to_string())
         );
+    }
+
+    #[test]
+    fn test_extract_rqctx_ty_param() {
+        let some_type = parse_quote! { SomeType };
+        let unit = parse_quote! { () };
+        let tuple = parse_quote! { (SomeType, OtherType) };
+
+        // Valid types.
+        let valid: &[(syn::Type, _)] = &[
+            (parse_quote! { RequestContext<SomeType> }, Some(&some_type)),
+            // Tuple types.
+            (parse_quote! { RequestContext<()> }, Some(&unit)),
+            (
+                parse_quote! { ::path::to::dropshot::RequestContext<(SomeType, OtherType)> },
+                Some(&tuple),
+            ),
+            // Type alias.
+            (parse_quote! { MyRequestContext }, None),
+        ];
+
+        // We can't parse parenthesized generic arguments via parse_quote -- syn
+        // only supports them via trait bounds. So we have to do this ugly thing
+        // to test that case.
+        let paren_generic_type = syn::Type::Path(syn::TypePath {
+            qself: None,
+            path: syn::Path {
+                leading_colon: None,
+                segments: [syn::PathSegment {
+                    ident: format_ident!("RequestContext"),
+                    arguments: syn::PathArguments::Parenthesized(
+                        syn::ParenthesizedGenericArguments {
+                            paren_token: Default::default(),
+                            inputs: Default::default(),
+                            output: syn::ReturnType::Default,
+                        },
+                    ),
+                }]
+                .into_iter()
+                .collect(),
+            },
+        });
+
+        // Invalid types.
+        let invalid: &[(syn::Type, RqctxTyError)] = &[
+            (parse_quote! { &'a MyRequestContext }, RqctxTyError::NotTypePath),
+            (paren_generic_type, RqctxTyError::ArgsNotAngleBracketed),
+            (
+                parse_quote! { RequestContext<SomeType, OtherType> },
+                RqctxTyError::IncorrectTypeArgCount(2),
+            ),
+            (parse_quote! { RequestContext<'a> }, RqctxTyError::ArgNotType),
+        ];
+
+        for (ty, expected) in valid {
+            match extract_rqctx_param(ty) {
+                Ok(actual) => assert_eq!(
+                    *expected,
+                    actual,
+                    "for type {}, expected matches actual",
+                    quote! { #ty },
+                ),
+                Err(error) => {
+                    panic!(
+                        "type {} should have successfully been parsed \
+                         as {expected:?}, but got {error:?}",
+                        quote! { #ty },
+                    )
+                }
+            }
+        }
+
+        for (ty, expected) in invalid {
+            match extract_rqctx_param(ty) {
+                Ok(ret) => panic!(
+                    "type {} should have failed to parse, but succeeded: \
+                    {ret:?}",
+                    quote! { #ty },
+                ),
+                Err(actual) => assert_eq!(
+                    expected,
+                    &actual,
+                    "for invalid type {}, expected error matches actual",
+                    quote! { #ty },
+                ),
+            };
+        }
     }
 }
