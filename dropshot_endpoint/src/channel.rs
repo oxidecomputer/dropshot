@@ -247,7 +247,10 @@ pub(crate) struct ChannelParams<'ast> {
     websocket_conn: &'ast syn::Type,
     ret_ty: &'ast syn::Type,
     adapter_name: syn::Ident,
+
+    // Types used in the adapter function, generated at construction time.
     websocket_upgrade_ty: syn::Type,
+    endpoint_result_ty: syn::Type,
 }
 
 impl<'ast> ChannelParams<'ast> {
@@ -282,6 +285,8 @@ impl<'ast> ChannelParams<'ast> {
         let ret_ty = params.return_type(&errors);
 
         let websocket_upgrade_ty = parse_quote! { #dropshot::WebsocketUpgrade };
+        let endpoint_result_ty =
+            parse_quote! { #dropshot::WebsocketEndpointResult };
 
         // Use the entire function signature as the span for the generated
         // identifier, to avoid confusing rust-analyzer (attributing multiple
@@ -306,6 +311,7 @@ impl<'ast> ChannelParams<'ast> {
                 ret_ty,
                 adapter_name,
                 websocket_upgrade_ty,
+                endpoint_result_ty,
             })
         } else {
             unreachable!(
@@ -455,18 +461,18 @@ impl<'ast> ChannelParams<'ast> {
     /// Currently, channels are implemented as adapters over endpoints. This
     /// function translates channel functions into endpoint functions.
     fn to_adapter_fn(&self) -> TokenStream {
-        let dropshot = &self.dropshot;
         let arg_names = self.arg_names();
         let arg_names_2 = self.arg_names();
         let adapter_arg_types = self.adapter_arg_types();
         let websocket_conn = self.websocket_conn;
         let name = &self.sig.ident;
         let adapter_name = &self.adapter_name;
+        let endpoint_result_ty = &self.endpoint_result_ty;
 
         quote_spanned! {self.sig.span()=>
             async fn #adapter_name(
                 #( #arg_names: #adapter_arg_types ),*
-            ) -> #dropshot::WebsocketEndpointResult {
+            ) -> #endpoint_result_ty {
                 __dropshot_websocket.handle(
                     move | __dropshot_websocket: #websocket_conn | async move {
                         #name(#(#arg_names_2),*).await
