@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 //! Code to manage request and response parameters for Dropshot endpoints.
 
