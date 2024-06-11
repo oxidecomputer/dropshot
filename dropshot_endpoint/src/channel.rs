@@ -159,9 +159,9 @@ fn do_channel_inner(
     // statement.
     let (has_param_errors, type_checks, from_impl) =
         if let Some(params) = &params {
-            let type_checks = params.to_type_checks(&dropshot);
+            let type_checks = params.to_type_checks();
             let impl_checks = params.to_impl_checks(name);
-            let adapter_fn = params.to_adapter_fn(&dropshot);
+            let adapter_fn = params.to_adapter_fn();
 
             // If the metadata is valid, output the corresponding ApiEndpoint.
             let construct = if let Some(metadata) = metadata {
@@ -177,7 +177,7 @@ fn do_channel_inner(
                 }
             };
 
-            let rqctx_context = params.rqctx_ty.rqctx_context(&dropshot);
+            let rqctx_context = params.rqctx_context();
 
             let from_impl = quote! {
                 impl From<#name>
@@ -240,6 +240,7 @@ fn do_channel_inner(
 }
 
 pub(crate) struct ChannelParams<'ast> {
+    dropshot: TokenStream,
     sig: &'ast syn::Signature,
     rqctx_ty: RqctxTy<'ast>,
     shared_extractors: Vec<&'ast syn::Type>,
@@ -297,6 +298,7 @@ impl<'ast> ChannelParams<'ast> {
             (rqctx_ty, websocket_conn, ret_ty)
         {
             Some(Self {
+                dropshot: dropshot.clone(),
                 sig,
                 rqctx_ty,
                 shared_extractors,
@@ -313,8 +315,9 @@ impl<'ast> ChannelParams<'ast> {
         }
     }
 
-    fn to_type_checks(&self, dropshot: &TokenStream) -> TokenStream {
-        let rqctx_context = self.rqctx_ty.rqctx_context(dropshot);
+    fn to_type_checks(&self) -> TokenStream {
+        let dropshot = &self.dropshot;
+        let rqctx_context = self.rqctx_context();
         let rqctx_check = quote_spanned! { self.rqctx_ty.orig_span()=>
             const _: fn() = || {
                 struct NeedRequestContext(#rqctx_context);
@@ -379,6 +382,11 @@ impl<'ast> ChannelParams<'ast> {
 
             #ret_check
         }
+    }
+
+    /// Returns a token stream that obtains the rqctx context type.
+    fn rqctx_context(&self) -> TokenStream {
+        self.rqctx_ty.to_context(&self.dropshot)
     }
 
     /// Returns a list of generated argument names.
@@ -446,7 +454,8 @@ impl<'ast> ChannelParams<'ast> {
     ///
     /// Currently, channels are implemented as adapters over endpoints. This
     /// function translates channel functions into endpoint functions.
-    fn to_adapter_fn(&self, dropshot: &TokenStream) -> TokenStream {
+    fn to_adapter_fn(&self) -> TokenStream {
+        let dropshot = &self.dropshot;
         let arg_names = self.arg_names();
         let arg_names_2 = self.arg_names();
         let adapter_arg_types = self.adapter_arg_types();

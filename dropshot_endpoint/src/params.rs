@@ -432,8 +432,8 @@ impl<'ast> RqctxTy<'ast> {
         }
     }
 
-    /// Returns a token stream that obtains the rqctx context type.
-    pub(crate) fn rqctx_context(&self, dropshot: &TokenStream) -> TokenStream {
+    /// Returns a token stream that obtains the corresponding context type.
+    pub(crate) fn to_context(&self, dropshot: &TokenStream) -> TokenStream {
         let transformed = self.transformed_type();
         quote_spanned! { self.orig_span()=>
             <#transformed as #dropshot::RequestContextArgument>::Context
