@@ -202,6 +202,7 @@ impl<'ast> Server<'ast> {
                 // channels.
                 TraitItemPartParsed::Fn(f) => {
                     items.push(ServerItem::Fn(ServerFnItem::new(
+                        &dropshot,
                         f,
                         trait_ident,
                         context_item.ident(),
@@ -973,6 +974,7 @@ enum ServerFnItem<'ast> {
 
 impl<'ast> ServerFnItem<'ast> {
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
         trait_ident: &syn::Ident,
         context_ident: &syn::Ident,
@@ -1000,6 +1002,7 @@ impl<'ast> ServerFnItem<'ast> {
             }
             [ServerAttr::Endpoint(eattr)] => {
                 match ServerEndpoint::new(
+                    dropshot,
                     f,
                     eattr,
                     trait_ident,
@@ -1109,6 +1112,7 @@ impl<'ast> ServerEndpoint<'ast> {
     ///
     /// If the return value is None, at least one error occurred while parsing.
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
         attr: &'ast syn::Attribute,
         trait_ident: &syn::Ident,
@@ -1119,6 +1123,7 @@ impl<'ast> ServerEndpoint<'ast> {
 
         let metadata = parse_endpoint_metadata(&name_str, attr, errors);
         let params = EndpointParams::new(
+            dropshot,
             &f.sig,
             RqctxKind::Trait { trait_ident, context_ident },
             errors,
@@ -1136,36 +1141,8 @@ impl<'ast> ServerEndpoint<'ast> {
     }
 
     fn to_out_trait_item(&self) -> TraitItemFnForSignature {
-        // Retain all attributes other than the endpoint attribute.
         let mut f = self.f.clone();
-        f.strip_recognized_attrs();
-
-        // Below code adapted from https://github.com/rust-lang/impl-trait-utils
-        // and used under the MIT and Apache 2.0 licenses.
-        let output_ty = {
-            let ret_ty = self.params.ret_ty;
-            let bounds = parse_quote_spanned! {ret_ty.span()=>
-                ::core::future::Future<Output = #ret_ty> + Send + 'static
-            };
-            syn::Type::ImplTrait(syn::TypeImplTrait {
-                impl_token: Default::default(),
-                bounds,
-            })
-        };
-
-        // If there's a block, then surround it with `async move`, to match the
-        // fact that we're going to remove `async` from the signature.
-        let block = f.block.as_ref().map(|block| {
-            let block = block.clone();
-            let tokens = quote_spanned! {block.span()=> async move #block };
-            UnparsedBlock { brace_token: block.brace_token, tokens }
-        });
-
-        f.sig.asyncness = None;
-        f.sig.output =
-            syn::ReturnType::Type(Default::default(), Box::new(output_ty));
-        f.block = block;
-
+        transform_signature(&mut f, &self.params.ret_ty);
         f
     }
 
@@ -1203,24 +1180,56 @@ impl<'ast> ServerEndpoint<'ast> {
 }
 
 struct ServerChannel<'ast> {
-    orig: &'ast TraitItemFnForSignature,
+    f: &'ast TraitItemFnForSignature,
 }
 
 impl<'ast> ServerChannel<'ast> {
     fn new(
-        orig: &'ast TraitItemFnForSignature,
+        f: &'ast TraitItemFnForSignature,
         _cattr: &'ast syn::Attribute,
     ) -> Result<Self, ServerItemErrorSummary> {
         // TODO: implement channels
-        Ok(Self { orig })
+        Ok(Self { f })
     }
 
     fn to_out_trait_item(&self) -> TraitItemFnForSignature {
-        // Retain all attributes other than the channel attribute.
-        let mut f = self.orig.clone();
-        f.strip_recognized_attrs();
-        f
+        // TODO
+        self.f.clone()
     }
+}
+
+/// Transform the signature of an endpoint function to prepare it for output.
+///
+/// * Strip recognized attributes from the function.
+/// * Add `Send + 'static` bounds to the output type, replacing the `async` with
+///   `Future`.
+fn transform_signature(f: &mut TraitItemFnForSignature, ret_ty: &syn::Type) {
+    f.strip_recognized_attrs();
+
+    // Below code adapted from https://github.com/rust-lang/impl-trait-utils
+    // and used under the MIT and Apache 2.0 licenses.
+    let output_ty = {
+        let bounds = parse_quote_spanned! {ret_ty.span()=>
+            ::core::future::Future<Output = #ret_ty> + Send + 'static
+        };
+        syn::Type::ImplTrait(syn::TypeImplTrait {
+            impl_token: Default::default(),
+            bounds,
+        })
+    };
+
+    // If there's a block, then surround it with `async move`, to match the
+    // fact that we're going to remove `async` from the signature.
+    let block = f.block.as_ref().map(|block| {
+        let block = block.clone();
+        let tokens = quote_spanned! {block.span()=> async move #block };
+        UnparsedBlock { brace_token: block.brace_token, tokens }
+    });
+
+    f.sig.asyncness = None;
+    f.sig.output =
+        syn::ReturnType::Type(Default::default(), Box::new(output_ty));
+    f.block = block;
 }
 
 enum ServerAttr<'ast> {

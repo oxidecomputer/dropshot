@@ -146,8 +146,12 @@ pub(crate) fn do_endpoint_inner(
     // Perform validations first.
     let metadata =
         metadata.validate(&name_str, &attr, MacroKind::Function, &errors);
-    let params =
-        EndpointParams::new(&item_fn.sig, RqctxKind::Function, &errors);
+    let params = EndpointParams::new(
+        &dropshot,
+        &item_fn.sig,
+        RqctxKind::Function,
+        &errors,
+    );
 
     let visibility = &item_fn.vis;
 
@@ -176,10 +180,10 @@ pub(crate) fn do_endpoint_inner(
     // statement.
     let (has_param_errors, type_checks, from_impl) =
         if let Some(params) = &params {
-            let type_checks = params.to_type_checks(&dropshot);
+            let type_checks = params.to_type_checks();
             let impl_checks = params.to_impl_checks(name);
 
-            let rqctx_context = params.rqctx_context(&dropshot);
+            let rqctx_context = params.rqctx_context();
 
             let from_impl = quote! {
                 impl From<#name>
@@ -239,6 +243,7 @@ pub(crate) fn do_endpoint_inner(
 
 /// Request and return types for an endpoint.
 pub(crate) struct EndpointParams<'ast> {
+    dropshot: TokenStream,
     rqctx_ty: RqctxTy<'ast>,
     shared_extractors: Vec<&'ast syn::Type>,
     // This is the last request argument -- it could also be a shared extractor,
@@ -253,6 +258,7 @@ impl<'ast> EndpointParams<'ast> {
     /// Validates that the AST looks reasonable and that all the types make
     /// sense, and return None if it does not.
     pub(crate) fn new(
+        dropshot: &TokenStream,
         sig: &'ast syn::Signature,
         rqctx_kind: RqctxKind<'_>,
         errors: &ErrorSink<'_, Error>,
@@ -286,6 +292,7 @@ impl<'ast> EndpointParams<'ast> {
             None
         } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
             Some(Self {
+                dropshot: dropshot.clone(),
                 rqctx_ty,
                 shared_extractors,
                 exclusive_extractor,
@@ -297,12 +304,8 @@ impl<'ast> EndpointParams<'ast> {
     }
 
     /// Returns a token stream that obtains the rqctx context type.
-    fn rqctx_context(&self, dropshot: &TokenStream) -> TokenStream {
-        let rqctx_ty = &self.rqctx_ty;
-        let transformed = rqctx_ty.transformed_type();
-        quote_spanned! { rqctx_ty.orig_span()=>
-            <#transformed as #dropshot::RequestContextArgument>::Context
-        }
+    fn rqctx_context(&self) -> TokenStream {
+        self.rqctx_ty.to_context(&self.dropshot)
     }
 
     /// Returns a list of generated argument names.
@@ -337,8 +340,9 @@ impl<'ast> EndpointParams<'ast> {
     /// types of the various parameters. We do this by calling dummy functions
     /// that require a type that satisfies SharedExtractor or
     /// ExclusiveExtractor.
-    pub(crate) fn to_type_checks(&self, dropshot: &TokenStream) -> TokenStream {
-        let rqctx_context = self.rqctx_context(dropshot);
+    pub(crate) fn to_type_checks(&self) -> TokenStream {
+        let dropshot = &self.dropshot;
+        let rqctx_context = self.rqctx_context();
         let rqctx_check = quote_spanned! { self.rqctx_ty.orig_span()=>
             const _: fn() = || {
                 struct NeedRequestContext(#rqctx_context);
@@ -763,6 +767,32 @@ mod tests {
         assert_eq!(
             find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
             banned
+        );
+    }
+
+    #[test]
+    fn test_endpoint_with_unnamed_params() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                    _: Query<Q>,
+                    _: Path<P>,
+                    _: TypedBody<T>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_unnamed_params.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
 
