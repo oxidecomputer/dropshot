@@ -1008,6 +1008,32 @@ mod tests {
     }
 
     #[test]
+    fn test_endpoint_with_unnamed_params() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                    _: Query<Q>,
+                    _: Path<P>,
+                    _: TypedBody<T>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_unnamed_params.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
     fn test_endpoint_invalid_item() {
         let (_, errors) = do_endpoint(
             quote! {
