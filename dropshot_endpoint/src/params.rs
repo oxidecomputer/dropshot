@@ -365,6 +365,7 @@ impl fmt::Display for ParamTyKind {
 
 #[cfg(test)]
 mod tests {
+    use quote::format_ident;
     use syn::parse_quote;
 
     use super::*;
