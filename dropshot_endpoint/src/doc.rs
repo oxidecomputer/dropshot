@@ -1,5 +1,8 @@
 // Copyright 2024 Oxide Computer Company
 
+use proc_macro2::TokenStream;
+use quote::quote;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExtractedDoc {
     pub(crate) summary: Option<String>,
@@ -98,6 +101,20 @@ fn normalize_comment_string(s: String) -> Vec<String> {
         })
         .map(ToString::to_string)
         .collect()
+}
+
+pub(crate) fn string_to_doc_attrs(s: &str) -> TokenStream {
+    let lines = s.lines().map(|line| {
+        // Add a preceding space to make it look nice.
+        let line = format!(" {line}");
+        quote! {
+            #[doc = #line]
+        }
+    });
+
+    quote! {
+        #(#lines)*
+    }
 }
 
 #[cfg(test)]

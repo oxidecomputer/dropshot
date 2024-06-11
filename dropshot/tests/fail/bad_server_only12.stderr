@@ -1,0 +1,20 @@
+error: expected a string, but found `123`
+  --> tests/fail/bad_server_only12.rs:10:32
+   |
+10 | #[dropshot::server { context = 123 }]
+   |                                ^^^
+
+error[E0433]: failed to resolve: use of undeclared crate or module `my_server`
+  --> tests/fail/bad_server_only12.rs:38:5
+   |
+38 |     my_server::foo();
+   |     ^^^^^^^^^ use of undeclared crate or module `my_server`
+   |
+help: a trait with a similar name exists
+   |
+38 |     MyServer::foo();
+   |     ~~~~~~~~
+help: there is a crate or module with a similar name
+   |
+38 |     MyServer::foo();
+   |     ~~~~~~~~

@@ -3,11 +3,15 @@
 //! Support for WebSocket `#[channel]` macros.
 
 use crate::endpoint;
-use crate::endpoint::EndpointMetadata;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
+use crate::metadata::EndpointMetadata;
+use crate::metadata::MethodType;
 use crate::syn_parsing::ItemFnForSignature;
+use crate::syn_parsing::TraitItemFnForSignature;
+use crate::util::get_crate;
 use crate::util::APPLICATION_JSON;
+use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
 use serde::Deserialize;
@@ -31,6 +35,27 @@ pub(crate) fn do_channel(
 ) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
+
+    // Attempt to parse the function as a trait function. If this is successful
+    // and there's no block, then it's likely that the user has imported
+    // `dropshot::endpoint` and is using that.
+    if let Ok(trait_item_fn) =
+        syn::parse2::<TraitItemFnForSignature>(item.clone())
+    {
+        if trait_item_fn.block.is_none() {
+            let name = &trait_item_fn.sig.ident;
+            errors.push(Error::new_spanned(
+                &trait_item_fn.sig,
+                format!(
+                    "endpoint `{name}` appears to be a trait function\n\
+                     note: did you mean to use `#[dropshot::server]` \
+                     instead?",
+                ),
+            ));
+            // Don't do any further validation -- just return the original item.
+            return (quote! { #item }, error_store.into_inner());
+        }
+    }
 
     // Parse attributes. (Do this before parsing the function since that's the
     // order they're in, in source code.)
@@ -117,6 +142,8 @@ impl ParsedChannel {
         item: ItemFnForSignature,
         errors: ErrorSink<'_, Error>,
     ) -> Option<Self> {
+        let dropshot = metadata.dropshot_crate();
+
         let ChannelMetadata {
             // protocol was already used to determine the type of channel
             protocol,
@@ -134,6 +161,7 @@ impl ParsedChannel {
                 // an extractor, with WebsocketUpgrade, which is.
                 let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
                     item;
+                let name_str = sig.ident.to_string();
 
                 let inner_args = sig.inputs.clone();
                 let inner_output = sig.output.clone();
@@ -166,7 +194,7 @@ impl ParsedChannel {
                                 span,
                             );
                             *ty = Box::new(syn::Type::Verbatim(
-                                quote! { dropshot::WebsocketUpgrade },
+                                quote! { #dropshot::WebsocketUpgrade },
                             ));
                             return Some((conn_name, conn_type));
                         }
@@ -177,15 +205,18 @@ impl ParsedChannel {
                     Some(f) => f,
                     None => {
                         errors.push(Error::new_spanned(
-                    &sig,
-                    "An argument of type dropshot::WebsocketConnection must be provided last.",
-                ));
+                            &sig,
+                            format!(
+                                "endpoint `{name_str}` must have a \
+                                 WebsocketConnection as its last argument",
+                            ),
+                        ));
                         return None;
                     }
                 };
 
                 sig.output =
-                    syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))
+                    syn::parse2(quote!(-> #dropshot::WebsocketEndpointResult))
                         .expect("valid ReturnType");
 
                 let endpoint_item = quote! {
@@ -210,8 +241,8 @@ impl ParsedChannel {
                     }
                 };
 
-                let metadata = endpoint::EndpointMetadata {
-                    method: endpoint::MethodType::GET,
+                let metadata = EndpointMetadata {
+                    method: MethodType::GET,
                     path,
                     tags,
                     unpublished,
@@ -271,4 +302,109 @@ struct ChannelMetadata {
     #[serde(default)]
     deprecated: bool,
     _dropshot_crate: Option<String>,
+}
+
+impl ChannelMetadata {
+    /// Returns the dropshot crate value as a TokenStream.
+    fn dropshot_crate(&self) -> TokenStream {
+        get_crate(self._dropshot_crate.as_deref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use expectorate::assert_contents;
+    use syn::parse_quote;
+
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_channel_with_custom_params() {
+        let input = quote! {
+            async fn my_channel(
+                rqctx: RequestContext<()>,
+                query: Query<Q>,
+                conn: WebsocketConnection,
+            ) -> WebsocketChannelResult {
+                Ok(())
+            }
+        };
+
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+                _dropshot_crate = "topspin",
+            },
+            input.clone(),
+        );
+
+        assert!(errors.is_empty());
+
+        let file = parse_quote! { #item };
+        // Write out the file before checking it for banned idents, so that we
+        // can see what it looks like.
+        assert_contents(
+            "tests/output/channel_with_custom_params.rs",
+            &prettyplease::unparse(&file),
+        );
+
+        // Check banned identifiers.
+        let banned = [DROPSHOT];
+        assert_banned_idents(&file, banned);
+
+        // Without _dropshot_crate, the generated output must contain
+        // "dropshot".
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+            },
+            input,
+        );
+
+        assert!(errors.is_empty());
+        let file = parse_quote! { #item };
+        assert_eq!(
+            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
+            banned
+        );
+    }
+
+    #[test]
+    fn test_channel_with_unnamed_params() {
+        // XXX: This test currently generates BROKEN code. A future PR will fix
+        // it.
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                    _: Query<Q>,
+                    _: Path<P>,
+                    // Currently, this argument is checked -- but the others
+                    // aren't.
+                    conn: WebsocketConnection,
+                ) -> WebsocketChannelResult {
+                    Ok(())
+                }
+            },
+        );
+
+        println!("{:?}", errors);
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/channel_with_unnamed_params.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
 }

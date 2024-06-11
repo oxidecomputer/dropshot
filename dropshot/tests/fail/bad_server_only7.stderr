@@ -1,0 +1,17 @@
+error: context type `Context` must not have generics
+ --> tests/fail/bad_server_only7.rs:9:17
+  |
+9 |     type Context<'a>;
+  |                 ^^^^
+
+error[E0425]: cannot find function `api_description` in module `my_server`
+  --> tests/fail/bad_server_only7.rs:23:16
+   |
+23 |     my_server::api_description::<MyImpl>();
+   |                ^^^^^^^^^^^^^^^ not found in `my_server`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_server`
+  --> tests/fail/bad_server_only7.rs:24:16
+   |
+24 |     my_server::stub_api_description();
+   |                ^^^^^^^^^^^^^^^^^^^^ not found in `my_server`
