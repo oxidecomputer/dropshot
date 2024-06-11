@@ -2,18 +2,25 @@
 
 //! Support for WebSocket `#[channel]` macros.
 
-use crate::endpoint;
-use crate::endpoint::EndpointMetadata;
+use crate::doc::ExtractedDoc;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
+use crate::metadata::ApiEndpointKind;
+use crate::metadata::ChannelMetadata;
+use crate::params::validate_fn_ast;
+use crate::params::ParamValidator;
+use crate::params::RqctxKind;
+use crate::params::RqctxTy;
 use crate::syn_parsing::ItemFnForSignature;
-use crate::util::APPLICATION_JSON;
+use crate::syn_parsing::TraitItemFnForSignature;
+use crate::util::MacroKind;
+use proc_macro2::TokenStream;
+use quote::format_ident;
 use quote::quote;
-use quote::ToTokens;
-use serde::Deserialize;
+use quote::quote_spanned;
 use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
-use std::ops::DerefMut;
+use syn::parse_quote;
 use syn::spanned::Spanned;
 
 /// Channel usage message, produced if there were parameter errors.
@@ -31,6 +38,27 @@ pub(crate) fn do_channel(
 ) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
+
+    // Attempt to parse the function as a trait function. If this is successful
+    // and there's no block, then it's likely that the user has imported
+    // `dropshot::endpoint` and is using that.
+    if let Ok(trait_item_fn) =
+        syn::parse2::<TraitItemFnForSignature>(item.clone())
+    {
+        if trait_item_fn.block.is_none() {
+            let name = &trait_item_fn.sig.ident;
+            errors.push(Error::new_spanned(
+                &trait_item_fn.sig,
+                format!(
+                    "endpoint `{name}` appears to be a trait function\n\
+                     note: did you mean to use `#[dropshot::server]` \
+                     instead?",
+                ),
+            ));
+            // Don't do any further validation -- just return the original item.
+            return (quote! { #item }, error_store.into_inner());
+        }
+    }
 
     // Parse attributes. (Do this before parsing the function since that's the
     // order they're in, in source code.)
@@ -55,27 +83,18 @@ pub(crate) fn do_channel(
 
     let output = match (metadata, item_fn.as_ref()) {
         (Some(metadata), Some(item_fn)) => {
-            match ParsedChannel::new(metadata, attr, item_fn.clone(), errors) {
-                Some(channel) => {
-                    // The happy path.
-                    let errors = error_store.sink();
-                    do_channel_inner(channel, errors)
-                }
-                None => {
-                    // For now, None always means that there was a parameter
-                    // error. Generate the original function (but not the
-                    // attribute proc macro).
-                    ChannelOutput {
-                        output: quote! { #item },
-                        has_param_errors: true,
-                    }
-                }
-            }
+            // The happy path.
+            do_channel_inner(metadata, attr, item, &item_fn, errors)
         }
         (None, Some(_)) => {
             // In this case, continue to generate the original function (but not
             // the attribute proc macro).
-            ChannelOutput { output: quote! { #item }, has_param_errors: false }
+            ChannelOutput {
+                output: quote! { #item },
+                // We don't validate parameters, so we don't know if there are
+                // errors in them.
+                has_param_errors: false,
+            }
         }
         (_, None) => {
             // Can't do anything here, just return errors.
@@ -84,6 +103,8 @@ pub(crate) fn do_channel(
     };
 
     let mut errors = error_store.into_inner();
+
+    // If there are any errors, we also want to provide a usage message as an error.
     if output.has_param_errors {
         let item_fn = item_fn
             .as_ref()
@@ -94,139 +115,7 @@ pub(crate) fn do_channel(
     (output.output, errors)
 }
 
-/// Parsed output of a `#[channel]` macro.
-///
-/// Currently, we implement channels by turning them into endpoints and calling
-/// the endpoint machinery. This struct contains this transformed form, ready
-/// for the endpoint machinery to be called.
-///
-/// (This scheme, while convenient, leads to suboptimal error reporting -- so we
-/// should consider doing our own, completely separate, implementation at some
-/// point.)
-struct ParsedChannel {
-    metadata: EndpointMetadata,
-    attr: proc_macro2::TokenStream,
-    endpoint_item: proc_macro2::TokenStream,
-    endpoint_fn: ItemFnForSignature,
-}
-
-impl ParsedChannel {
-    fn new(
-        metadata: ChannelMetadata,
-        attr: proc_macro2::TokenStream,
-        item: ItemFnForSignature,
-        errors: ErrorSink<'_, Error>,
-    ) -> Option<Self> {
-        let ChannelMetadata {
-            // protocol was already used to determine the type of channel
-            protocol,
-            path,
-            tags,
-            unpublished,
-            deprecated,
-            _dropshot_crate,
-        } = metadata;
-
-        match protocol {
-            ChannelProtocol::WEBSOCKETS => {
-                // Here we construct a wrapper function and mutate the arguments a bit
-                // for the outer layer: we replace WebsocketConnection, which is not
-                // an extractor, with WebsocketUpgrade, which is.
-                let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
-                    item;
-
-                let inner_args = sig.inputs.clone();
-                let inner_output = sig.output.clone();
-
-                let arg_names: Vec<_> = inner_args
-                    .iter()
-                    .map(|arg: &syn::FnArg| match arg {
-                        syn::FnArg::Receiver(r) => {
-                            r.self_token.to_token_stream()
-                        }
-                        syn::FnArg::Typed(syn::PatType { pat, .. }) => {
-                            pat.to_token_stream()
-                        }
-                    })
-                    .collect();
-                let found = sig.inputs.iter_mut().last().and_then(|arg| {
-                    if let syn::FnArg::Typed(syn::PatType { pat, ty, .. }) = arg
-                    {
-                        if let syn::Pat::Ident(syn::PatIdent {
-                            ident,
-                            by_ref: None,
-                            ..
-                        }) = pat.deref_mut()
-                        {
-                            let conn_type = ty.clone();
-                            let conn_name = ident.clone();
-                            let span = ident.span();
-                            *ident = syn::Ident::new(
-                                "__dropshot_websocket_upgrade",
-                                span,
-                            );
-                            *ty = Box::new(syn::Type::Verbatim(
-                                quote! { dropshot::WebsocketUpgrade },
-                            ));
-                            return Some((conn_name, conn_type));
-                        }
-                    }
-                    return None;
-                });
-                let (conn_name, conn_type) = match found {
-                    Some(f) => f,
-                    None => {
-                        errors.push(Error::new_spanned(
-                    &sig,
-                    "An argument of type dropshot::WebsocketConnection must be provided last.",
-                ));
-                        return None;
-                    }
-                };
-
-                sig.output =
-                    syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))
-                        .expect("valid ReturnType");
-
-                let endpoint_item = quote! {
-                    #(#attrs)*
-                    #vis #sig {
-                        async fn __dropshot_websocket_handler(#inner_args) #inner_output #body
-                        __dropshot_websocket_upgrade.handle(move | #conn_name: #conn_type | async move {
-                            __dropshot_websocket_handler(#(#arg_names),*).await
-                        })
-                    }
-                };
-
-                // Attempt to parse the new item immediately. This should always
-                // work, but if it doesn't, error out right away.
-                let endpoint_fn = match syn::parse2::<ItemFnForSignature>(
-                    endpoint_item.clone(),
-                ) {
-                    Ok(endpoint_fn) => endpoint_fn,
-                    Err(e) => {
-                        errors.push(e);
-                        return None;
-                    }
-                };
-
-                let metadata = endpoint::EndpointMetadata {
-                    method: endpoint::MethodType::GET,
-                    path,
-                    tags,
-                    unpublished,
-                    deprecated,
-                    content_type: Some(APPLICATION_JSON.to_string()),
-                    _dropshot_crate,
-                };
-
-                Some(Self { metadata, attr, endpoint_item, endpoint_fn })
-            }
-        }
-    }
-}
-
-/// The result of calling [`ParsedChannel::to_output`].
+/// The result of calling [`do_channel`].
 struct ChannelOutput {
     /// The actual output.
     output: proc_macro2::TokenStream,
@@ -236,39 +125,425 @@ struct ChannelOutput {
 }
 
 fn do_channel_inner(
-    parsed: ParsedChannel,
+    metadata: ChannelMetadata,
+    attr: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+    item_fn: &ItemFnForSignature,
     errors: ErrorSink<'_, Error>,
 ) -> ChannelOutput {
-    let ParsedChannel { metadata, attr, endpoint_item, endpoint_fn } = parsed;
-    let endpoint = endpoint::do_endpoint_inner(
-        metadata,
-        attr,
-        endpoint_item,
-        &endpoint_fn,
-        errors,
-    );
+    let dropshot = metadata.dropshot_crate();
 
-    ChannelOutput {
-        output: endpoint.output,
-        has_param_errors: endpoint.has_param_errors,
+    let name = &item_fn.sig.ident;
+    let name_str = name.to_string();
+
+    // Perform validations first.
+    let metadata =
+        metadata.validate(&name_str, &attr, MacroKind::Function, &errors);
+    let params = ChannelParams::new(&item_fn.sig, RqctxKind::Function, &errors);
+
+    let visibility = &item_fn.vis;
+
+    let doc = ExtractedDoc::from_attrs(&item_fn.attrs);
+    let comment_text = doc.comment_text(&name_str);
+
+    let description_doc_comment = quote! {
+        #[doc = #comment_text]
+    };
+
+    // If the params are valid, output the corresponding type checks and impl
+    // statement.
+    let (has_param_errors, type_checks, from_impl) =
+        if let Some(params) = &params {
+            let type_checks = params.to_type_checks(&dropshot);
+            let impl_checks = params.to_impl_checks(name);
+            let adapter_fn = params.to_adapter_fn(&dropshot);
+
+            // If the metadata is valid, output the corresponding ApiEndpoint.
+            let construct = if let Some(metadata) = metadata {
+                metadata.to_api_endpoint_fn(
+                    &dropshot,
+                    &name_str,
+                    &ApiEndpointKind::Regular(&params.adapter_name),
+                    &doc,
+                )
+            } else {
+                quote! {
+                    unreachable!()
+                }
+            };
+
+            let rqctx_context = params.rqctx_ty.rqctx_context(&dropshot);
+
+            let from_impl = quote! {
+                impl From<#name>
+                    for #dropshot::ApiEndpoint< #rqctx_context >
+                {
+                    fn from(_: #name) -> Self {
+                        #[allow(clippy::unused_async)]
+                        #item
+
+                        // The checks on the implementation require #name to be in
+                        // scope, which is provided by #item, hence we place these
+                        // checks here instead of above with the others.
+                        #impl_checks
+
+                        // Generate the adapter function after the checks so
+                        // that errors from the checks show up first.
+                        #adapter_fn
+
+                        #construct
+                    }
+                }
+            };
+
+            (false, type_checks, from_impl)
+        } else {
+            (true, quote! {}, quote! {})
+        };
+
+    // For reasons that are not well understood unused constants that use the
+    // (default) call_site() Span do not trigger the dead_code lint. Because
+    // defining but not using an endpoint is likely a programming error, we
+    // want to be sure to have the compiler flag this. We force this by using
+    // the span from the name of the function to which this macro was applied.
+    let span = item_fn.sig.ident.span();
+    let const_struct = quote_spanned! {span=>
+        #visibility const #name: #name = #name {};
+    };
+
+    // The final TokenStream returned will have a few components that reference
+    // `#name`, the name of the function to which this macro was applied...
+    let stream = quote! {
+        // ... type validation for parameter and return types
+        #type_checks
+
+        // ... a struct type called `#name` that has no members
+        #[allow(non_camel_case_types, missing_docs)]
+        #description_doc_comment
+        #visibility struct #name {}
+        // ... a constant of type `#name` whose identifier is also #name
+        #[allow(non_upper_case_globals, missing_docs)]
+        #description_doc_comment
+        #const_struct
+
+        // ... an impl of `From<#name>` for ApiEndpoint that allows the constant
+        // `#name` to be passed into `ApiDescription::register()`
+        #from_impl
+    };
+
+    ChannelOutput { output: stream, has_param_errors }
+}
+
+pub(crate) struct ChannelParams<'ast> {
+    sig: &'ast syn::Signature,
+    rqctx_ty: RqctxTy<'ast>,
+    shared_extractors: Vec<&'ast syn::Type>,
+    websocket_conn: &'ast syn::Type,
+    ret_ty: &'ast syn::Type,
+    adapter_name: syn::Ident,
+}
+
+impl<'ast> ChannelParams<'ast> {
+    pub(crate) fn new(
+        sig: &'ast syn::Signature,
+        rqctx_kind: RqctxKind<'_>,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<Self> {
+        let name_str = sig.ident.to_string();
+        let errors = errors.new();
+
+        validate_fn_ast(sig, &name_str, &errors);
+
+        let mut params = ParamValidator::new(sig, &name_str);
+        params.maybe_discard_self_arg(&errors);
+
+        let (rqctx_ty, websocket_conn_ty) = params
+            .next_rqctx_and_last_websocket_args(
+                rqctx_kind,
+                &sig.paren_token.span,
+                &errors,
+            );
+
+        // All other parameters must impl SharedExtractor.
+        let shared_extractors = params.rest_extractor_args(&errors);
+
+        // Validate the websocket connection type.
+        let websocket_conn =
+            websocket_conn_ty.and_then(|ty| ty.validate(&name_str, &errors));
+
+        let ret_ty = params.return_type(&errors);
+
+        // Use the entire function signature as the span for the generated
+        // identifier, to avoid confusing rust-analyzer (attributing multiple
+        // items to a single function make makes ctrl-click worse).
+        let adapter_name =
+            format_ident!("{}_adapter", sig.ident, span = sig.span());
+
+        // errors.has_errors() must be checked first, because it's possible for
+        // the below variables to all be Some, but one of the extractors to have
+        // errored out.
+        if errors.has_errors() {
+            None
+        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) =
+            (rqctx_ty, websocket_conn, ret_ty)
+        {
+            Some(Self {
+                sig,
+                rqctx_ty,
+                shared_extractors,
+                websocket_conn,
+                ret_ty,
+                adapter_name,
+            })
+        } else {
+            unreachable!(
+                "no param errors, but rqctx_ty, \
+                 websocket_upgrade or ret_ty is None"
+            );
+        }
+    }
+
+    fn to_type_checks(&self, dropshot: &TokenStream) -> TokenStream {
+        let rqctx_context = self.rqctx_ty.rqctx_context(dropshot);
+        let rqctx_check = quote_spanned! { self.rqctx_ty.orig_span()=>
+            const _: fn() = || {
+                struct NeedRequestContext(#rqctx_context);
+            };
+        };
+
+        let shared_extractor_checks = self.shared_extractors.iter().map(|ty| {
+            quote_spanned! { ty.span()=>
+                const _: fn() = || {
+                    fn need_shared_extractor<T>()
+                    where
+                        T: ?Sized + #dropshot::SharedExtractor,
+                    {
+                    }
+                    need_shared_extractor::<#ty>();
+                };
+            }
+        });
+
+        let websocket_conn = self.websocket_conn;
+        let websocket_conn_check = quote_spanned! { websocket_conn.span()=>
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_websocket_connection_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = #dropshot::WebsocketConnection>,
+                {
+                }
+                validate_websocket_connection_type::<#websocket_conn>();
+            };
+        };
+
+        let ret_ty = self.ret_ty;
+        let ret_check = quote_spanned! { ret_ty.span()=>
+            const _: fn() = || {
+                trait TypeEq {
+                    type This: ?Sized;
+                }
+                impl<T: ?Sized> TypeEq for T {
+                    type This = Self;
+                }
+                fn validate_result_type<T>()
+                where
+                    T: ?Sized + TypeEq<This = #dropshot::WebsocketChannelResult>,
+                {
+                }
+                validate_result_type::<#ret_ty>();
+            };
+        };
+
+        quote! {
+            #rqctx_check
+
+            #(#shared_extractor_checks)*
+
+            #websocket_conn_check
+
+            #ret_check
+        }
+    }
+
+    /// Returns a list of generated argument names.
+    fn arg_names(&self) -> impl Iterator<Item = syn::Ident> + '_ {
+        // The total number of arguments is 1 (rqctx) + the number of shared
+        // extractors + 1 (websocket_upgrade). The last argument we'll name
+        // specially so it can be referred to below.
+        let arg_count = 1 + self.shared_extractors.len();
+
+        (0..arg_count)
+            .map(|i| format_ident!("arg{}", i))
+            .chain(std::iter::once(format_ident!("__dropshot_websocket")))
+    }
+
+    /// Returns a list of all argument types, including the request context.
+    fn arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
+        std::iter::once(self.rqctx_ty.transformed_type())
+            .chain(self.shared_extractors.iter().copied())
+            .chain(std::iter::once(self.websocket_conn))
+    }
+
+    /// Returns a list of all the argument types as they should show up in the
+    /// handler.
+    fn handler_arg_types(
+        &self,
+        dropshot: &TokenStream,
+    ) -> impl Iterator<Item = syn::Type> + '_ {
+        std::iter::once(self.rqctx_ty.transformed_type().clone())
+            .chain(self.shared_extractors.iter().copied().cloned())
+            .chain(std::iter::once(
+                parse_quote! { #dropshot::WebsocketUpgrade },
+            ))
+    }
+
+    /// Constructs implementation checks for the endpoint.
+    ///
+    /// These checks are placed in the same scope as the definition of the
+    /// endpoint.
+    fn to_impl_checks(&self, name: &syn::Ident) -> TokenStream {
+        // We want to construct a function that will call the user's endpoint,
+        // so we can check the future it returns for bounds that otherwise
+        // produce inscrutable error messages (like returning a non-`Send`
+        // future). We produce a wrapper function that takes all the same
+        // argument types, which requires building up a list of argument names:
+        // we can't use the original definition's argument names since they
+        // could have multiple args named `_`, so we use "arg0", "arg1", etc.
+        let arg_names: Vec<_> = self.arg_names().collect();
+        let arg_types = self.arg_types();
+
+        quote! {
+            const _: fn() = || {
+                fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
+                fn check_future_bounds(#( #arg_names: #arg_types ),*) {
+                    future_endpoint_must_be_send(#name(#(#arg_names),*));
+                }
+            };
+        }
+    }
+
+    /// Constructs the adapter function that will call the user's endpoint.
+    ///
+    /// Currently, channels are implemented as adapters over endpoints. This
+    /// function translates channel functions into endpoint functions.
+    fn to_adapter_fn(&self, dropshot: &TokenStream) -> TokenStream {
+        let arg_names = self.arg_names();
+        let arg_names_2 = self.arg_names();
+        let handler_arg_types = self.handler_arg_types(dropshot);
+        let websocket_conn = self.websocket_conn;
+        let name = &self.sig.ident;
+        let adapter_fn_name = &self.adapter_name;
+
+        quote_spanned! {self.sig.span()=>
+            async fn #adapter_fn_name(
+                #( #arg_names: #handler_arg_types ),*
+            ) -> #dropshot::WebsocketEndpointResult {
+                __dropshot_websocket.handle(
+                    move | __dropshot_websocket: #websocket_conn | async move {
+                        #name(#(#arg_names_2),*).await
+                    },
+                )
+            }
+        }
     }
 }
 
-#[allow(non_snake_case)]
-#[derive(Deserialize, Debug)]
-enum ChannelProtocol {
-    WEBSOCKETS,
-}
+#[cfg(test)]
+mod tests {
+    use expectorate::assert_contents;
+    use syn::parse_quote;
 
-#[derive(Deserialize, Debug)]
-struct ChannelMetadata {
-    protocol: ChannelProtocol,
-    path: String,
-    #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
-    unpublished: bool,
-    #[serde(default)]
-    deprecated: bool,
-    _dropshot_crate: Option<String>,
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_channel_with_custom_params() {
+        let input = quote! {
+            async fn my_channel(
+                rqctx: RequestContext<()>,
+                query: Query<Q>,
+                conn: WebsocketConnection,
+            ) -> WebsocketChannelResult {
+                Ok(())
+            }
+        };
+
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+                _dropshot_crate = "topspin",
+            },
+            input.clone(),
+        );
+
+        assert!(errors.is_empty());
+
+        let file = parse_quote! { #item };
+        // Write out the file before checking it for banned idents, so that we
+        // can see what it looks like.
+        assert_contents(
+            "tests/output/channel_with_custom_params.rs",
+            &prettyplease::unparse(&file),
+        );
+
+        // Check banned identifiers.
+        let banned = [DROPSHOT];
+        assert_banned_idents(&file, banned);
+
+        // Without _dropshot_crate, the generated output must contain
+        // "dropshot".
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+            },
+            input,
+        );
+
+        assert!(errors.is_empty());
+        let file = parse_quote! { #item };
+        assert_eq!(
+            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
+            banned
+        );
+    }
+
+    #[test]
+    fn test_channel_with_unnamed_params() {
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                    _: Query<Q>,
+                    _: Path<P>,
+                    _: WebsocketConnection,
+                ) -> WebsocketChannelResult {
+                    Ok(())
+                }
+            },
+        );
+
+        println!("{:?}", errors);
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/channel_with_unnamed_params.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
 }

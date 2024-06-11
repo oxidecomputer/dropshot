@@ -10,8 +10,8 @@ error: channel handlers must have the following signature:
 11 | async fn bad_channel() -> dropshot::WebsocketChannelResult {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: An argument of type dropshot::WebsocketConnection must be provided last.
-  --> tests/fail/bad_channel1a.rs:11:1
+error: endpoint `bad_channel` must have at least two arguments: RequestContext and WebsocketConnection
+  --> tests/fail/bad_channel1a.rs:11:21
    |
 11 | async fn bad_channel() -> dropshot::WebsocketChannelResult {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                     ^^

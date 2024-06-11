@@ -24,7 +24,7 @@ features = [ "derive" ]
 
 [dependencies.syn]
 version = "2.0"
-features = [ "full" ]
+features = [ "full", "visit" ]
 
 [dev-dependencies]
 expectorate = "1.1.0"

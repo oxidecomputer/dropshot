@@ -1,0 +1,21 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel23.rs:23:1
+   |
+23 | / const async fn const_endpoint(
+24 | |     _rqctx: RequestContext<()>,
+25 | |     _param1: Query<QueryParams>,
+26 | |     _upgraded: WebsocketConnection,
+27 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
+
+error: endpoint `const_endpoint` must not be a const fn
+  --> tests/fail/bad_channel23.rs:23:1
+   |
+23 | const async fn const_endpoint(
+   | ^^^^^

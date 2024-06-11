@@ -9,6 +9,12 @@ pub(crate) const APPLICATION_X_WWW_FORM_URLENCODED: &str =
 pub(crate) const MULTIPART_FORM_DATA: &str = "multipart/form-data";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MacroKind {
+    Function,
+    Trait,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ValidContentType {
     ApplicationJson,
     ApplicationXWwwFormUrlencoded,
@@ -24,6 +30,15 @@ impl ValidContentType {
             }
             ValidContentType::MultipartFormData => MULTIPART_FORM_DATA,
         }
+    }
+
+    pub(crate) fn to_supported_string() -> String {
+        format!(
+            "{}, {}, {}",
+            APPLICATION_JSON,
+            APPLICATION_X_WWW_FORM_URLENCODED,
+            MULTIPART_FORM_DATA,
+        )
     }
 }
 
@@ -52,14 +67,19 @@ impl ToTokens for ValidContentType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct InvalidContentTypeError;
 
+pub(crate) const DROPSHOT: &str = "dropshot";
+
 /// Given an optional string, returns the crate name as a token stream.
 pub(crate) fn get_crate(var: Option<&str>) -> proc_macro2::TokenStream {
-    const DROPSHOT: &str = "dropshot";
-
     if let Some(s) = var {
         if let Ok(ts) = syn::parse_str(s) {
             return ts;
         }
     }
     syn::Ident::new(DROPSHOT, proc_macro2::Span::call_site()).to_token_stream()
+}
+
+/// Returns true if the path provided has a wildcard match.
+pub(crate) fn is_wildcard_path(path: &str) -> bool {
+    path.contains(":.*}")
 }

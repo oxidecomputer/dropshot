@@ -15,9 +15,12 @@ trait Stuff {
     method = GET,
     path = "/test",
 }]
-async fn bad_response_type<S: Stuff + Sync + Send + 'static>(
+async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
     _: RequestContext<S>,
-) -> Result<HttpResponseOk<String>, HttpError> {
+) -> Result<HttpResponseOk<String>, HttpError>
+where
+    usize: 'static,
+{
     S::do_stuff();
     panic!()
 }

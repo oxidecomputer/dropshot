@@ -6,6 +6,7 @@ use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
+use crate::handler::StubRouteHandler;
 use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
@@ -13,6 +14,7 @@ use crate::schema_util::j2oas_schema;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
+use crate::HttpError;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
@@ -27,7 +29,15 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
+
+/// A type used for stub implementations.
+///
+/// This type is never constructed, and is used only as a type parameter to
+/// `ApiEndpoint::new_stub`.
+#[derive(Copy, Clone, Debug)]
+pub enum StubContext {}
 
 /// ApiEndpoint represents a single API endpoint associated with an
 /// ApiDescription. It has a handler, HTTP method (e.g. GET, POST), and a path--
@@ -109,6 +119,89 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         self.deprecated = deprecated;
         self
     }
+}
+
+impl<'a> ApiEndpoint<StubContext> {
+    /// Create a new API endpoint without an actual handler behind it, which
+    /// panics if called.
+    ///
+    /// This is useful for generating OpenAPI documentation without having to
+    /// implement the actual handler function. In that capacity, it is used for
+    /// trait-based dropshot servers.
+    ///
+    /// # Example
+    ///
+    /// This must be invoked by specifying the request and response types as
+    /// type parameters.
+    ///
+    /// ```rust
+    /// use dropshot::{ApiDescription, ApiEndpoint, HttpError, HttpResponseOk, Query, StubContext};
+    /// use schemars::JsonSchema;
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Debug, Deserialize, JsonSchema)]
+    /// struct GetValueParams {
+    ///     key: String,
+    /// }
+    ///
+    /// let mut api: ApiDescription<StubContext> = ApiDescription::new();
+    /// let endpoint = ApiEndpoint::new_stub::<
+    ///     // The request type is always a tuple. Note the 1-tuple syntax.
+    ///     (Query<GetValueParams>,),
+    ///     // The response type is always Result<T, HttpError> where T implements
+    ///     // HttpResponse.
+    ///     Result<HttpResponseOk<String>, HttpError>,
+    /// >(
+    ///     "get_value".to_string(),
+    ///     http::Method::GET,
+    ///     "application/json",
+    ///     "/value",
+    /// );
+    /// api.register(endpoint).unwrap();
+    /// ```
+    pub fn new_stub<FuncParams, ResultType>(
+        operation_id: String,
+        method: Method,
+        content_type: &'a str,
+        path: &'a str,
+    ) -> Self
+    where
+        FuncParams: RequestExtractor + 'static,
+        ResultType: HttpResultType,
+    {
+        let body_content_type =
+            ApiEndpointBodyContentType::from_mime_type(content_type)
+                .expect("unsupported mime type");
+        let func_parameters = FuncParams::metadata(body_content_type.clone());
+        let response = ResultType::Response::response_metadata();
+        let handler = StubRouteHandler::new_with_name(&operation_id);
+        ApiEndpoint {
+            operation_id,
+            handler,
+            method,
+            path: path.to_string(),
+            parameters: func_parameters.parameters,
+            body_content_type,
+            response,
+            summary: None,
+            description: None,
+            tags: vec![],
+            extension_mode: func_parameters.extension_mode,
+            visible: true,
+            deprecated: false,
+        }
+    }
+}
+
+pub trait HttpResultType {
+    type Response: HttpResponse + Send + Sync + 'static;
+}
+
+impl<T> HttpResultType for Result<T, HttpError>
+where
+    T: HttpResponse + Send + Sync + 'static,
+{
+    type Response = T;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a
@@ -875,6 +968,34 @@ impl<Context: ServerContext> ApiDescription<Context> {
     // do this.
     pub fn into_router(self) -> HttpRouter<Context> {
         self.router
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiDescriptionBuildError {
+    errors: Vec<String>,
+}
+
+impl ApiDescriptionBuildError {
+    /// Create a new `ApiDescriptionBuildError` with the given errors.
+    pub fn new(errors: Vec<String>) -> Self {
+        Self { errors }
+    }
+
+    /// Return a list of the errors that occurred while building an
+    /// `ApiDescription`.
+    pub fn errors(&self) -> &[String] {
+        &self.errors
+    }
+}
+
+impl fmt::Display for ApiDescriptionBuildError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "failed to register endpoints: \n")?;
+        for error in &self.errors {
+            write!(f, "  - {}\n", error)?;
+        }
+        Ok(())
     }
 }
 
