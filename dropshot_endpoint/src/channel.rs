@@ -139,7 +139,12 @@ fn do_channel_inner(
     // Perform validations first.
     let metadata =
         metadata.validate(&name_str, &attr, MacroKind::Function, &errors);
-    let params = ChannelParams::new(&item_fn.sig, RqctxKind::Function, &errors);
+    let params = ChannelParams::new(
+        &dropshot,
+        &item_fn.sig,
+        RqctxKind::Function,
+        &errors,
+    );
 
     let visibility = &item_fn.vis;
 
@@ -241,10 +246,12 @@ pub(crate) struct ChannelParams<'ast> {
     websocket_conn: &'ast syn::Type,
     ret_ty: &'ast syn::Type,
     adapter_name: syn::Ident,
+    websocket_upgrade_ty: syn::Type,
 }
 
 impl<'ast> ChannelParams<'ast> {
     pub(crate) fn new(
+        dropshot: &TokenStream,
         sig: &'ast syn::Signature,
         rqctx_kind: RqctxKind<'_>,
         errors: &ErrorSink<'_, Error>,
@@ -273,6 +280,8 @@ impl<'ast> ChannelParams<'ast> {
 
         let ret_ty = params.return_type(&errors);
 
+        let websocket_upgrade_ty = parse_quote! { #dropshot::WebsocketUpgrade };
+
         // Use the entire function signature as the span for the generated
         // identifier, to avoid confusing rust-analyzer (attributing multiple
         // items to a single function make makes ctrl-click worse).
@@ -294,6 +303,7 @@ impl<'ast> ChannelParams<'ast> {
                 websocket_conn,
                 ret_ty,
                 adapter_name,
+                websocket_upgrade_ty,
             })
         } else {
             unreachable!(
@@ -392,24 +402,19 @@ impl<'ast> ChannelParams<'ast> {
 
     /// Returns a list of all the argument types as they should show up in the
     /// adapter function.
-    fn adapter_arg_types(
-        &self,
-        dropshot: &TokenStream,
-    ) -> impl Iterator<Item = syn::Type> + '_ {
-        std::iter::once(self.rqctx_ty.transformed_type().clone())
-            .chain(self.extractor_types(dropshot))
+    fn adapter_arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
+        std::iter::once(self.rqctx_ty.transformed_type())
+            .chain(self.extractor_types())
     }
 
     /// Returns a list of the extractor types.
     ///
     /// The exclusive extractor in this situation is `WebsocketUpgrade`.
-    fn extractor_types(
-        &self,
-        dropshot: &TokenStream,
-    ) -> impl Iterator<Item = syn::Type> + '_ {
-        self.shared_extractors.iter().map(|&x| x.clone()).chain(
-            std::iter::once(parse_quote! { #dropshot::WebsocketUpgrade }),
-        )
+    fn extractor_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
+        self.shared_extractors
+            .iter()
+            .copied()
+            .chain(std::iter::once(&self.websocket_upgrade_ty))
     }
 
     /// Constructs implementation checks for the endpoint.
@@ -444,7 +449,7 @@ impl<'ast> ChannelParams<'ast> {
     fn to_adapter_fn(&self, dropshot: &TokenStream) -> TokenStream {
         let arg_names = self.arg_names();
         let arg_names_2 = self.arg_names();
-        let adapter_arg_types = self.adapter_arg_types(dropshot);
+        let adapter_arg_types = self.adapter_arg_types();
         let websocket_conn = self.websocket_conn;
         let name = &self.sig.ident;
         let adapter_name = &self.adapter_name;
