@@ -4,8 +4,8 @@
 
 use std::{fmt, iter::Peekable};
 
-use proc_macro2::extra::DelimSpan;
-use quote::quote;
+use proc_macro2::{extra::DelimSpan, TokenStream};
+use quote::{quote, quote_spanned};
 use syn::{parse_quote, spanned::Spanned, visit::Visit, Error};
 
 use crate::error_store::ErrorSink;
@@ -363,6 +363,14 @@ impl<'ast> RqctxTy<'ast> {
 
                 Some(Self::Trait { orig: ty, transformed: ty2 })
             }
+        }
+    }
+
+    /// Returns a token stream that obtains the corresponding context type.
+    pub(crate) fn to_context(&self, dropshot: &TokenStream) -> TokenStream {
+        let transformed = self.transformed_type();
+        quote_spanned! { self.orig_span()=>
+            <#transformed as #dropshot::RequestContextArgument>::Context
         }
     }
 

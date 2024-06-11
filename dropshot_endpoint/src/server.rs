@@ -202,6 +202,7 @@ impl<'ast> Server<'ast> {
                 // channels.
                 TraitItemPartParsed::Fn(f) => {
                     items.push(ServerItem::Fn(ServerFnItem::new(
+                        &dropshot,
                         f,
                         trait_ident,
                         context_item.ident(),
@@ -973,6 +974,7 @@ enum ServerFnItem<'ast> {
 
 impl<'ast> ServerFnItem<'ast> {
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
         trait_ident: &syn::Ident,
         context_ident: &syn::Ident,
@@ -1000,6 +1002,7 @@ impl<'ast> ServerFnItem<'ast> {
             }
             [ServerAttr::Endpoint(eattr)] => {
                 match ServerEndpoint::new(
+                    dropshot,
                     f,
                     eattr,
                     trait_ident,
@@ -1109,6 +1112,7 @@ impl<'ast> ServerEndpoint<'ast> {
     ///
     /// If the return value is None, at least one error occurred while parsing.
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
         attr: &'ast syn::Attribute,
         trait_ident: &syn::Ident,
@@ -1119,6 +1123,7 @@ impl<'ast> ServerEndpoint<'ast> {
 
         let metadata = parse_endpoint_metadata(&name_str, attr, errors);
         let params = EndpointParams::new(
+            dropshot,
             &f.sig,
             RqctxKind::Trait { trait_ident, context_ident },
             errors,
