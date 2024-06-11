@@ -8,13 +8,13 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_server_endpoint24.rs:22:7
+  --> tests/fail/bad_server_endpoint24.rs:19:7
    |
-22 | trait MyServer {
+19 | trait MyServer {
    |       ^^^^^^^^
 
 error: endpoint `abi_endpoint` must not use an alternate ABI
-  --> tests/fail/bad_server_endpoint24.rs:30:11
+  --> tests/fail/bad_server_endpoint24.rs:27:11
    |
-30 |     async extern "C" fn abi_endpoint(
+27 |     async extern "C" fn abi_endpoint(
    |           ^^^^^^^^^^

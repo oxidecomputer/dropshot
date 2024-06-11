@@ -1,25 +1,21 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2020 Oxide Computer Company
 
 #![allow(unused_imports)]
-
-// Check that a reasonable error is produced if `dropshot::endpoint` is used on
-// a trait method rather than `dropshot::server`.
 
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::RequestContext;
 
-trait MyTrait {
-    type Context;
+// Test: missing, required `path` attribute.
 
-    #[endpoint {
-        method = GET,
-        path = "/test",
-    }]
-    async fn bad_endpoint(
-        _rqctx: RequestContext<Self::Context>,
-    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+#[endpoint {
+    method = GET,
+}]
+async fn bad_endpoint(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    Ok(HttpResponseUpdatedNoContent())
 }
 
 fn main() {}

@@ -1082,10 +1082,17 @@ fn parse_endpoint_metadata(
         }
     };
 
+    // TODO: Switch to from_tokenstream_spanned one
+    // https://github.com/oxidecomputer/serde_tokenstream/pull/194 is available.
     match from_tokenstream::<EndpointMetadata>(&l.tokens) {
         Ok(m) => m.validate(name_str, attr, MacroKind::Trait, errors),
         Err(error) => {
-            errors.push(error);
+            errors.push(Error::new(
+                error.span(),
+                format!(
+                    "endpoint `{name_str}` has invalid attributes: {error}"
+                ),
+            ));
             return None;
         }
     }

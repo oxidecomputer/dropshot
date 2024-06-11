@@ -1,25 +1,21 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2020 Oxide Computer Company
 
 #![allow(unused_imports)]
 
-// Check that a reasonable error is produced if `dropshot::channel` is used on
-// a trait method rather than `dropshot::server`.
-
 use dropshot::channel;
 use dropshot::RequestContext;
-use dropshot::WebsocketConnection;
+use dropshot::WebsocketUpgrade;
 
-trait MyTrait {
-    type Context;
+// Test: missing, required `path` attribute.
 
-    #[channel {
-        protocol = WEBSOCKETS,
-        path = "/test",
-    }]
-    async fn bad_channel(
-        _rqctx: RequestContext<Self::Context>,
-        _upgraded: WebsocketConnection,
-    ) -> dropshot::WebsocketChannelResult;
+#[channel {
+    protocol = WEBSOCKETS,
+}]
+async fn bad_channel(
+    _rqctx: RequestContext<()>,
+    _upgraded: WebsocketUpgrade,
+) -> dropshot::WebsocketChannelResult {
+    Ok(())
 }
 
 fn main() {}

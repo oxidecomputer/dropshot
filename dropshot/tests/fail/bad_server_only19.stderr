@@ -1,7 +1,6 @@
-error: missing field `path`
-  --> tests/fail/bad_server_only19.rs:12:1
+error: endpoint `bad_endpoint` must not specify `_dropshot_crate`
+       note: specify this as an argument to `#[server]` instead
+  --> tests/fail/bad_server_only19.rs:16:5
    |
-12 | #[dropshot::server]
-   | ^^^^^^^^^^^^^^^^^^^
-   |
-   = note: this error originates in the attribute macro `dropshot::server` (in Nightly builds, run with -Z macro-backtrace for more info)
+16 |     #[endpoint { method = GET, path = "/test", _dropshot_crate = "dropshot" }]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

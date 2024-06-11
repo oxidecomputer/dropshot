@@ -13,7 +13,7 @@ use dropshot::RequestContext;
 trait MyServer {
     type Context;
 
-    #[endpoint { method = GET, _dropshot_crate = "topspin" }]
+    #[endpoint { method = GET, path = "/test", _dropshot_crate = "dropshot" }]
     async fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
