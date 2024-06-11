@@ -162,20 +162,6 @@ pub(crate) fn do_endpoint_inner(
         #[doc = #comment_text]
     };
 
-    // If the metadata is valid, output the corresponding ApiEndpoint.
-    let construct = if let Some(metadata) = metadata {
-        metadata.to_api_endpoint_fn(
-            &dropshot,
-            &name_str,
-            &ApiEndpointKind::Regular(name),
-            &doc,
-        )
-    } else {
-        quote! {
-            unreachable!()
-        }
-    };
-
     // If the params are valid, output the corresponding type checks and impl
     // statement.
     let (has_param_errors, type_checks, from_impl) =
@@ -184,6 +170,20 @@ pub(crate) fn do_endpoint_inner(
             let impl_checks = params.to_impl_checks(name);
 
             let rqctx_context = params.rqctx_context();
+
+            // If the metadata is valid, output the corresponding ApiEndpoint.
+            let construct = if let Some(metadata) = metadata {
+                metadata.to_api_endpoint_fn(
+                    &dropshot,
+                    &name_str,
+                    &ApiEndpointKind::Regular(name),
+                    &doc,
+                )
+            } else {
+                quote! {
+                    unreachable!()
+                }
+            };
 
             let from_impl = quote! {
                 impl From<#name>
