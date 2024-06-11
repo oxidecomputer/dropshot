@@ -391,16 +391,25 @@ impl<'ast> ChannelParams<'ast> {
     }
 
     /// Returns a list of all the argument types as they should show up in the
-    /// handler.
-    fn handler_arg_types(
+    /// adapter function.
+    fn adapter_arg_types(
         &self,
         dropshot: &TokenStream,
     ) -> impl Iterator<Item = syn::Type> + '_ {
         std::iter::once(self.rqctx_ty.transformed_type().clone())
-            .chain(self.shared_extractors.iter().copied().cloned())
-            .chain(std::iter::once(
-                parse_quote! { #dropshot::WebsocketUpgrade },
-            ))
+            .chain(self.extractor_types(dropshot))
+    }
+
+    /// Returns a list of the extractor types.
+    ///
+    /// The exclusive extractor in this situation is `WebsocketUpgrade`.
+    fn extractor_types(
+        &self,
+        dropshot: &TokenStream,
+    ) -> impl Iterator<Item = syn::Type> + '_ {
+        self.shared_extractors.iter().map(|&x| x.clone()).chain(
+            std::iter::once(parse_quote! { #dropshot::WebsocketUpgrade }),
+        )
     }
 
     /// Constructs implementation checks for the endpoint.
@@ -435,14 +444,14 @@ impl<'ast> ChannelParams<'ast> {
     fn to_adapter_fn(&self, dropshot: &TokenStream) -> TokenStream {
         let arg_names = self.arg_names();
         let arg_names_2 = self.arg_names();
-        let handler_arg_types = self.handler_arg_types(dropshot);
+        let adapter_arg_types = self.adapter_arg_types(dropshot);
         let websocket_conn = self.websocket_conn;
         let name = &self.sig.ident;
-        let adapter_fn_name = &self.adapter_name;
+        let adapter_name = &self.adapter_name;
 
         quote_spanned! {self.sig.span()=>
-            async fn #adapter_fn_name(
-                #( #arg_names: #handler_arg_types ),*
+            async fn #adapter_name(
+                #( #arg_names: #adapter_arg_types ),*
             ) -> #dropshot::WebsocketEndpointResult {
                 __dropshot_websocket.handle(
                     move | __dropshot_websocket: #websocket_conn | async move {
