@@ -13,7 +13,7 @@ error: channel handlers must have the following signature:
 16 | | ) -> dropshot::WebsocketChannelResult {
    | |_____________________________________^
 
-error: endpoint handler functions must be async
+error: endpoint `bad_channel` must be async
   --> tests/fail/bad_channel8.rs:13:1
    |
 13 | fn bad_channel(

@@ -3,10 +3,12 @@
 //! Support for WebSocket `#[channel]` macros.
 
 use crate::endpoint;
-use crate::endpoint::EndpointMetadata;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
+use crate::metadata::EndpointMetadata;
+use crate::metadata::MethodType;
 use crate::syn_parsing::ItemFnForSignature;
+use crate::syn_parsing::TraitItemFnForSignature;
 use crate::util::APPLICATION_JSON;
 use quote::quote;
 use quote::ToTokens;
@@ -31,6 +33,27 @@ pub(crate) fn do_channel(
 ) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
+
+    // Attempt to parse the function as a trait function. If this is successful
+    // and there's no block, then it's likely that the user has imported
+    // `dropshot::endpoint` and is using that.
+    if let Ok(trait_item_fn) =
+        syn::parse2::<TraitItemFnForSignature>(item.clone())
+    {
+        if trait_item_fn.block.is_none() {
+            let name = &trait_item_fn.sig.ident;
+            errors.push(Error::new_spanned(
+                &trait_item_fn.sig,
+                format!(
+                    "endpoint `{name}` appears to be a trait function\n\
+                     note: did you mean to use `#[dropshot::server]` \
+                     instead?",
+                ),
+            ));
+            // Don't do any further validation -- just return the original item.
+            return (quote! { #item }, error_store.into_inner());
+        }
+    }
 
     // Parse attributes. (Do this before parsing the function since that's the
     // order they're in, in source code.)
@@ -134,6 +157,7 @@ impl ParsedChannel {
                 // an extractor, with WebsocketUpgrade, which is.
                 let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
                     item;
+                let name_str = sig.ident.to_string();
 
                 let inner_args = sig.inputs.clone();
                 let inner_output = sig.output.clone();
@@ -177,9 +201,12 @@ impl ParsedChannel {
                     Some(f) => f,
                     None => {
                         errors.push(Error::new_spanned(
-                    &sig,
-                    "An argument of type dropshot::WebsocketConnection must be provided last.",
-                ));
+                            &sig,
+                            format!(
+                                "endpoint `{name_str}` must have a \
+                                 WebsocketConnection as its last argument",
+                            ),
+                        ));
                         return None;
                     }
                 };
@@ -210,8 +237,8 @@ impl ParsedChannel {
                     }
                 };
 
-                let metadata = endpoint::EndpointMetadata {
-                    method: endpoint::MethodType::GET,
+                let metadata = EndpointMetadata {
+                    method: MethodType::GET,
                     path,
                     tags,
                     unpublished,

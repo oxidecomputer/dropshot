@@ -1,0 +1,9 @@
+error: missing field `path`
+  --> tests/fail/bad_channel26.rs:11:1
+   |
+11 | / #[channel {
+12 | |     protocol = WEBSOCKETS,
+13 | | }]
+   | |__^
+   |
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)

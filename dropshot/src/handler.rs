@@ -41,6 +41,7 @@ use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
+use crate::api_description::StubContext;
 use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
 use crate::schema_util::make_subschema_for;
@@ -491,6 +492,39 @@ where
             handler,
             phantom: PhantomData,
         })
+    }
+}
+
+/// An unimplemented [`RouteHandler`] that panics when invoked.
+///
+/// The main use for this is when users would like to generate an OpenAPI spec
+/// for an endpoint that is not yet implemented.
+#[derive(Debug)]
+pub(crate) struct StubRouteHandler {
+    label: String,
+}
+
+#[async_trait]
+impl RouteHandler<StubContext> for StubRouteHandler {
+    fn label(&self) -> &str {
+        &self.label
+    }
+
+    async fn handle_request(
+        &self,
+        _: RequestContext<StubContext>,
+        _: hyper::Request<hyper::Body>,
+    ) -> HttpHandlerResult {
+        unimplemented!("stub handler called, not implemented: {}", self.label)
+    }
+}
+
+impl StubRouteHandler {
+    /// Returns a new `StubRouteHandler` with the given label.
+    pub(crate) fn new_with_name(
+        label: &str,
+    ) -> Arc<dyn RouteHandler<StubContext>> {
+        Arc::new(StubRouteHandler { label: label.to_string() })
     }
 }
 
