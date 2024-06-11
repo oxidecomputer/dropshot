@@ -7,9 +7,7 @@ use crate::endpoint::EndpointMetadata;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
 use crate::syn_parsing::ItemFnForSignature;
-use crate::util::get_crate;
 use crate::util::APPLICATION_JSON;
-use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
 use serde::Deserialize;
@@ -119,8 +117,6 @@ impl ParsedChannel {
         item: ItemFnForSignature,
         errors: ErrorSink<'_, Error>,
     ) -> Option<Self> {
-        let dropshot = metadata.dropshot_crate();
-
         let ChannelMetadata {
             // protocol was already used to determine the type of channel
             protocol,
@@ -171,7 +167,7 @@ impl ParsedChannel {
                                 span,
                             );
                             *ty = Box::new(syn::Type::Verbatim(
-                                quote! { #dropshot::WebsocketUpgrade },
+                                quote! { dropshot::WebsocketUpgrade },
                             ));
                             return Some((conn_name, conn_type));
                         }
@@ -193,7 +189,7 @@ impl ParsedChannel {
                 };
 
                 sig.output =
-                    syn::parse2(quote!(-> #dropshot::WebsocketEndpointResult))
+                    syn::parse2(quote!(-> dropshot::WebsocketEndpointResult))
                         .expect("valid ReturnType");
 
                 let endpoint_item = quote! {
@@ -279,77 +275,4 @@ struct ChannelMetadata {
     #[serde(default)]
     deprecated: bool,
     _dropshot_crate: Option<String>,
-}
-
-impl ChannelMetadata {
-    /// Returns the dropshot crate value as a TokenStream.
-    pub(crate) fn dropshot_crate(&self) -> TokenStream {
-        get_crate(self._dropshot_crate.as_deref())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use expectorate::assert_contents;
-    use syn::parse_quote;
-
-    use crate::{
-        test_util::{assert_banned_idents, find_idents},
-        util::DROPSHOT,
-    };
-
-    use super::*;
-
-    #[test]
-    fn test_channel_with_custom_params() {
-        let input = quote! {
-            async fn my_channel(
-                rqctx: RequestContext<()>,
-                query: Query<Q>,
-                conn: WebsocketConnection,
-            ) -> WebsocketChannelResult {
-                Ok(())
-            }
-        };
-
-        let (item, errors) = do_channel(
-            quote! {
-                protocol = WEBSOCKETS,
-                path = "/my/ws/channel",
-                _dropshot_crate = "topspin",
-            },
-            input.clone(),
-        );
-
-        assert!(errors.is_empty());
-
-        let file = parse_quote! { #item };
-        // Write out the file before checking it for banned idents, so that we
-        // can see what it looks like.
-        assert_contents(
-            "tests/output/channel_with_custom_params.rs",
-            &prettyplease::unparse(&file),
-        );
-
-        // Check banned identifiers.
-        let banned = [DROPSHOT];
-        assert_banned_idents(&file, banned);
-
-        // Without _dropshot_crate, the generated output must contain
-        // "dropshot".
-        let (item, errors) = do_channel(
-            quote! {
-                protocol = WEBSOCKETS,
-                path = "/my/ws/channel",
-            },
-            input,
-        );
-
-        assert!(errors.is_empty());
-        let file = parse_quote! { #item };
-        assert_eq!(
-            find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
-            banned
-        );
-    }
 }
