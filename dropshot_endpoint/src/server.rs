@@ -30,10 +30,11 @@ use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 use crate::{
     doc::{string_to_doc_attrs, ExtractedDoc},
     endpoint::{
-        ApiEndpointKind, EndpointMetadata, EndpointParams, RqctxKind,
+        ApiEndpointKind, EndpointMetadata, EndpointParams,
         ValidatedEndpointMetadata,
     },
     error_store::{ErrorSink, ErrorStore},
+    params::RqctxKind,
     syn_parsing::{
         ItemTraitPartParsed, TraitItemFnForSignature, TraitItemPartParsed,
         UnparsedBlock,
