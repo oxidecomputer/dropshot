@@ -83,7 +83,11 @@ pub(crate) fn do_server(
         }
         (_, None) => {
             // Can't do anything here, just return errors.
-            ServerOutput { output: quote! {}, has_endpoint_param_errors: false }
+            ServerOutput {
+                output: quote! {},
+                context: "Self::Context".to_string(),
+                has_endpoint_param_errors: false,
+            }
         }
     };
 
@@ -96,7 +100,10 @@ pub(crate) fn do_server(
             .expect("has_endpoint_param_errors is true => item_fn is Some");
         errors.insert(
             0,
-            Error::new_spanned(&item_trait.ident, crate::endpoint::USAGE),
+            Error::new_spanned(
+                &item_trait.ident,
+                crate::endpoint::usage_str(&output.context),
+            ),
         );
     }
 
@@ -296,6 +303,7 @@ impl<'ast> Server<'ast> {
     }
 
     fn to_output(&self) -> ServerOutput {
+        let context = format!("Self::{}", self.context_item.ident());
         let context_item =
             self.make_context_trait_item().map(TraitItemPartParsed::Other);
         let other_items =
@@ -336,7 +344,7 @@ impl<'ast> Server<'ast> {
                 _ => false,
             });
 
-        ServerOutput { output, has_endpoint_param_errors }
+        ServerOutput { output, context, has_endpoint_param_errors }
     }
 
     fn make_context_trait_item(&self) -> Option<syn::TraitItem> {
@@ -400,6 +408,9 @@ impl<'ast> Server<'ast> {
 struct ServerOutput {
     /// The actual output.
     output: TokenStream,
+
+    /// The context type (typically `Self::Context`), provided as a string.
+    context: String,
 
     /// Whether there were any endpoint parameter-related errors.
     ///

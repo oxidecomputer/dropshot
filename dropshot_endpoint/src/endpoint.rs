@@ -26,17 +26,20 @@ use crate::util::MacroKind;
 use crate::util::ValidContentType;
 
 /// Endpoint usage message, produced if there were parameter errors.
-pub(crate) const USAGE: &str =
-    "endpoint handlers must have the following signature:
+pub(crate) fn usage_str(context: &str) -> String {
+    format!(
+        "endpoint handlers must have the following signature:
     async fn(
-        rqctx: dropshot::RequestContext<MyContext>,
+        rqctx: dropshot::RequestContext<{context}>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody,]
         [body_param: StreamingBody,]
         [raw_request: RawRequest,]
-    ) -> Result<HttpResponse*, HttpError>";
+    ) -> Result<HttpResponse*, HttpError>"
+    )
+}
 
 pub(crate) fn do_endpoint(
     attr: proc_macro2::TokenStream,
@@ -115,7 +118,10 @@ pub(crate) fn do_endpoint(
         let item_fn = item_fn
             .as_ref()
             .expect("has_param_errors is true => item_fn is Some");
-        errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
+        errors.insert(
+            0,
+            Error::new_spanned(&item_fn.sig, usage_str("MyContext")),
+        );
     }
 
     (output.output, errors)

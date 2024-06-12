@@ -1,6 +1,6 @@
 error: endpoint handlers must have the following signature:
            async fn(
-               rqctx: dropshot::RequestContext<MyContext>,
+               rqctx: dropshot::RequestContext<Self::MyContext>,
                [query_params: Query<Q>,]
                [path_params: Path<P>,]
                [body_param: TypedBody<J>,]
