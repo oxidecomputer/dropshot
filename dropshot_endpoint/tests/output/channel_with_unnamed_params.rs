@@ -30,19 +30,6 @@ const _: fn() = || {
     {}
     validate_websocket_connection_type::<WebsocketConnection>();
 };
-const _: fn() = || {
-    trait TypeEq {
-        type This: ?Sized;
-    }
-    impl<T: ?Sized> TypeEq for T {
-        type This = Self;
-    }
-    fn validate_result_type<T>()
-    where
-        T: ?Sized + TypeEq<This = dropshot::WebsocketChannelResult>,
-    {}
-    validate_result_type::<WebsocketChannelResult>();
-};
 #[allow(non_camel_case_types, missing_docs)]
 ///API Endpoint: handler_xyz
 struct handler_xyz {}

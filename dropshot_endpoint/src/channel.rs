@@ -361,23 +361,10 @@ impl<'ast> ChannelParams<'ast> {
             };
         };
 
-        let ret_ty = self.ret_ty;
-        let ret_check = quote_spanned! { ret_ty.span()=>
-            const _: fn() = || {
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_type<T>()
-                where
-                    T: ?Sized + TypeEq<This = #dropshot::WebsocketChannelResult>,
-                {
-                }
-                validate_result_type::<#ret_ty>();
-            };
-        };
+        // Checking the return type doesn't appear to be necessary, because the
+        // `WebsocketUpgrade::handle` function produces a decent error message
+        // if it's wrong. (In any case, an explicit check doesn't do a better
+        // job and just produces noise.)
 
         quote! {
             #rqctx_check
@@ -385,8 +372,6 @@ impl<'ast> ChannelParams<'ast> {
             #(#shared_extractor_checks)*
 
             #websocket_conn_check
-
-            #ret_check
         }
     }
 
