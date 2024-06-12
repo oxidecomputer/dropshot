@@ -13,6 +13,7 @@ mod channel;
 mod doc;
 mod endpoint;
 mod error_store;
+mod params;
 mod syn_parsing;
 #[cfg(test)]
 mod test_util;

@@ -283,7 +283,7 @@ struct ChannelMetadata {
 
 impl ChannelMetadata {
     /// Returns the dropshot crate value as a TokenStream.
-    pub(crate) fn dropshot_crate(&self) -> TokenStream {
+    fn dropshot_crate(&self) -> TokenStream {
         get_crate(self._dropshot_crate.as_deref())
     }
 }
@@ -350,6 +350,38 @@ mod tests {
         assert_eq!(
             find_idents(&file, banned).into_iter().collect::<Vec<_>>(),
             banned
+        );
+    }
+
+    #[test]
+    fn test_channel_with_unnamed_params() {
+        // XXX: This test currently generates BROKEN code. A future PR will fix
+        // it.
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                    _: Query<Q>,
+                    _: Path<P>,
+                    // Currently, this argument is checked -- but the others
+                    // aren't.
+                    conn: WebsocketConnection,
+                ) -> WebsocketChannelResult {
+                    Ok(())
+                }
+            },
+        );
+
+        println!("{:?}", errors);
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/channel_with_unnamed_params.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
 }
