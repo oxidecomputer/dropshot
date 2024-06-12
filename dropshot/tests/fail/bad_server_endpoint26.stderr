@@ -1,7 +1,8 @@
 error: endpoint `bad_endpoint` has invalid attributes: missing field `path`
-  --> tests/fail/bad_server_endpoint26.rs:12:1
+  --> tests/fail/bad_server_endpoint26.rs:16:16
    |
-12 | #[dropshot::server]
-   | ^^^^^^^^^^^^^^^^^^^
-   |
-   = note: this error originates in the attribute macro `dropshot::server` (in Nightly builds, run with -Z macro-backtrace for more info)
+16 |       #[endpoint {
+   |  ________________^
+17 | |         method = GET,
+18 | |     }]
+   | |_____^

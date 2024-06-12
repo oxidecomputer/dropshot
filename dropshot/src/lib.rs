@@ -185,10 +185,6 @@
 //! of API endpoints. Each endpoint is defined as a static method on the trait,
 //! and the trait is annotated with `#[dropshot::server]`.
 //!
-//! One advantage of trait servers is that they can be defined in a separate
-//! crate from the implementation. This results in quicker builds for the API,
-//! and also make it easier to deal with changes to circular API dependencies.
-//!
 //! Here's an example of a trait server that's equivalent to the endpoint above:
 //!
 //! ```
@@ -201,20 +197,20 @@
 //! use serde::Serialize;
 //! use std::sync::Arc;
 //!
-//! /** Represents a project in our API */
+//! /// Represents a project in our API.
 //! #[derive(Serialize, JsonSchema)]
 //! struct Project {
-//!     /** name of the project */
+//!     /// Name of the project.
 //!     name: String,
 //! }
 //!
-//! /** Defines the trait that captures all the methods */
+//! /// Defines the trait that captures all the methods.
 //! #[dropshot::server]
 //! trait ProjectServer {
-//!     /** The context type used within endpoints. */
+//!     /// The context type used within endpoints.
 //!     type Context;
 //!
-//!     /** Fetch a project. */
+//!     /// Fetch a project.
 //!     #[endpoint {
 //!         method = GET,
 //!         path = "/projects/project1",
@@ -224,21 +220,17 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
-//! /*
-//! The `dropshot::server` macro generates a module called
-//! `project_server`. This module has a method called `api_description`
-//! that, given an implementation of the trait, returns an `ApiDescription`.
-//! The `ApiDescription` can then be used to set up an `HttpServer`.
-//! */
+//! // The `dropshot::server` macro generates a module called
+//! // `project_server`. This module has a method called `api_description`
+//! // that, given an implementation of the trait, returns an `ApiDescription`.
+//! // The `ApiDescription` can then be used to set up an `HttpServer`.
 //!
 //! // --- The following code may be in another crate ---
 //!
-//! /**
-//! Define an empty type to hold the project server context.
-//! This type is never constructed, and is purely a way to name
-//! the specific server impl. In larger projects, this type would
-//! live in a different crate from the server trait.
-//! **/
+//! /// An empty type to hold the project server context.
+//! ///
+//! /// This type is never constructed, and is purely a way to name
+//! /// the specific server impl.
 //! enum ServerImpl {}
 //!
 //! impl ProjectServer for ServerImpl {
@@ -258,14 +250,38 @@
 //!     let mut api: ApiDescription<()> =
 //!         project_server::api_description::<ServerImpl>().unwrap();
 //!
-//!     /* ... (use `api` to set up an `HttpServer` ) */
+//!     // ... (use `api` to set up an `HttpServer` )
 //! }
 //! ```
+//!
+//! See [`server-trait.rs`] and [`server-trait-alternate.rs`] for working
+//! examples.
+//!
+//! [`server-trait.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/server-trait.rs
+//! [`server-trait-alternate.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/server-trait-alternate.rs
+//!
+//! #### Where to put the implementation
+//!
+//! Implementations can be in one of two places:
+//!
+//! 1. In a separate crate from the API. This allows the OpenAPI spec to be
+//!    generated without the implementation having to be compiled (or even exist
+//!    in the first place).
+//!
+//!    This is recommended for production APIs, where the implementation is
+//!    large and slow to compile. This is especially recommended for situations
+//!    where multiple services have inherent circular dependencies with each
+//!    other.
+//!
+//! 2. In the same crate as the API. This is a reasonable option for tests and
+//!    mock servers.
 //!
 //! #### Limitations
 //!
 //! Currently, the `#[dropshot::server]` macro is only supported in module
-//! contexts, not function definitions. This is a Rust limitation -- see [Rust
+//! contexts, not within function bodies. This is a Rust limitation -- see [Rust
 //! issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
 //! details.
 //!
@@ -472,8 +488,8 @@
 //! # }
 //! ```
 //!
-//! A stub description cannot be used for an actual server: all request handlers
-//! will panic.
+//! A stub description should not be used for an actual server: all request
+//! handlers will panic.
 //!
 //! ## Support for paginated resources
 //!

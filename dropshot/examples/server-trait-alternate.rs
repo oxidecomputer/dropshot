@@ -3,22 +3,76 @@
 //! An extended version of `server-trait.rs`, demonstrating use of the
 //! `dropshot::server` attribute macro to define a server with default methods.
 //!
-//! In this example, all the behavior lives on the context type, and the
+//! In this example, all the server logic lives on the context type, and the
 //! Dropshot server is defined as a trait with default methods that delegate to
 //! the context type.
 //!
-//! There are a number of possible variations of this, including:
-//!
-//! * The base behavior and endpoints are methods on the same trait, allo=wing
-//!   implementations to override the base behavior if desired (similar to std's
-//!   `Read` and `Write`).
-//! * The behavior lives in a base trait, and the server is an extension trait
-//!   on top of it, with a blanket impl prohibiting overrides (similar to
-//!   tokio's `AsyncReadExt` and `AsyncWriteExt`).
+//! ## Variations
 //!
 //! The general degrees of freedom available when dealing with traits in Rust
 //! are almost all available here. The main bit of flexibility that isn't
 //! available is that server traits can't be object-safe.
+//!
+//! ### Same trait with default methods
+//!
+//! For example:
+//!
+//! ```rust,ignore
+//! #[dropshot::server]
+//! trait CounterServer {
+//!      type Context;
+//!
+//!      fn get_counter_impl(&self) -> impl Future<Output = u64> + Send;
+//!      fn set_counter_impl(
+//!          &self,
+//!          value: u64,
+//!      ) -> impl Future<Output = Result<(), String>> + Send;
+//!
+//!      #[endpoint { method = GET, path = "/counter" }
+//!      async fn get_counter() {} // as below
+//!
+//!      #[endpoint { method = PUT, path = "/counter" }
+//!      async fn put_counter() {} // as below
+//! }
+//! ```
+//!
+//! Implementations of `CounterServer` can override `get_counter` and
+//! `put_counter`.
+//!
+//! This is similar to how [`std::io::Write`]'s `write_all` method is defined as
+//! a default method over the required `write`. Implementations of `Write` can
+//! override `write_all` if they wish.
+//!
+//! ### Supertrait
+//!
+//! ```rust,ignore
+//! trait CounterBase {
+//!     fn get_counter_impl(&self) -> impl Future<Output = u64> + Send;
+//!     fn set_counter_impl(
+//!         &self,
+//!         value: u64,
+//!     ) -> impl Future<Output = Result<(), String>> + Send;
+//! }
+//!
+//! #[dropshot::server]
+//! trait CounterServer: CounterBase {
+//!     #[endpoint { method = GET, path = "/counter" }
+//!     async fn get_counter() {} // as below
+//!
+//!     #[endpoint { method = PUT, path = "/counter" }
+//!     async fn put_counter() {} // as below
+//! }
+//!
+//! // And optionally, a blanket impl.
+//! impl<T: CounterBase> CounterServer for T {}
+//! ```
+//!
+//! With the optional blanket impl, implementations cannot override the default
+//! `CounterServer` methods.
+//!
+//! This is similar to how [`tokio::io::AsyncWriteExt`] extends
+//! [`AsyncWrite`](tokio::io::AsyncWrite) with a blanket impl. In that case, the
+//! behavior of methods like `AsyncWriteExt::write_all` cannot be overridden.
 
 use dropshot::{ConfigLogging, ConfigLoggingLevel, HttpServerStarter};
 
@@ -28,13 +82,22 @@ mod api {
         HttpError, HttpResponseOk, HttpResponseUpdatedNoContent,
         RequestContext, TypedBody,
     };
+    use futures::Future;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
     /// Define our base trait.
+    ///
+    /// If the methods are async, it is required that they be `Send`. You can
+    /// use `async_trait` or `trait-variant` for this, or explicitly use `impl
+    /// Future<...> + Send`. (Implementations can write `async fn` and
+    /// automatically get the `Send` bound.)
     pub(crate) trait CounterBase {
-        fn get_counter_impl(&self) -> u64;
-        fn set_counter_impl(&self, value: u64) -> Result<(), String>;
+        fn get_counter_impl(&self) -> impl Future<Output = u64> + Send;
+        fn set_counter_impl(
+            &self,
+            value: u64,
+        ) -> impl Future<Output = Result<(), String>> + Send;
     }
 
     /// The Dropshot server, with default methods.
@@ -49,7 +112,9 @@ mod api {
             rqctx: RequestContext<Self::Context>,
         ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
             let cx = rqctx.context();
-            Ok(HttpResponseOk(CounterValue { counter: cx.get_counter_impl() }))
+            Ok(HttpResponseOk(CounterValue {
+                counter: cx.get_counter_impl().await,
+            }))
         }
 
         /// Set the value of the counter.
@@ -59,7 +124,7 @@ mod api {
             update: TypedBody<CounterValue>,
         ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
             let cx = rqctx.context();
-            cx.set_counter_impl(update.into_inner().counter).map_err(
+            cx.set_counter_impl(update.into_inner().counter).await.map_err(
                 |error| {
                     HttpError::for_bad_request(
                         Some(String::from("BadInput")),
@@ -110,11 +175,11 @@ mod imp {
     }
 
     impl CounterBase for AtomicCounter {
-        fn get_counter_impl(&self) -> u64 {
+        async fn get_counter_impl(&self) -> u64 {
             self.counter.load(Ordering::Relaxed)
         }
 
-        fn set_counter_impl(&self, value: u64) -> Result<(), String> {
+        async fn set_counter_impl(&self, value: u64) -> Result<(), String> {
             if value == 10 {
                 Err(format!("do not like the number {}", value))
             } else {

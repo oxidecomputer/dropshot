@@ -32,7 +32,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-/// A type used for stub implementations.
+/// A type used to produce an `ApiDescription` without a concrete implementation
+/// of a trait-based server.
 ///
 /// This type is never constructed, and is used only as a type parameter to
 /// `ApiEndpoint::new_stub`.

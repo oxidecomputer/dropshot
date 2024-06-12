@@ -24,7 +24,7 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
-use serde_tokenstream::from_tokenstream;
+use serde_tokenstream::{from_tokenstream, from_tokenstream_spanned};
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
@@ -1065,9 +1065,10 @@ fn parse_endpoint_metadata(
         }
     };
 
-    // TODO: Switch to from_tokenstream_spanned one
-    // https://github.com/oxidecomputer/serde_tokenstream/pull/194 is available.
-    match from_tokenstream::<EndpointMetadata>(&l.tokens) {
+    match from_tokenstream_spanned::<EndpointMetadata>(
+        l.delimiter.span(),
+        &l.tokens,
+    ) {
         Ok(m) => m.validate(name_str, attr, MacroKind::Trait, errors),
         Err(error) => {
             errors.push(Error::new(

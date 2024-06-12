@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-serde_tokenstream = "0.2"
+serde_tokenstream = "0.2.1"
 
 [dependencies.serde]
 version = "1.0"

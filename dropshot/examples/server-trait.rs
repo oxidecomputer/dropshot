@@ -8,7 +8,12 @@
 //! provides the actual behavior of the server.
 //!
 //! In production code, the interface and implementation would likely be in
-//! separate crates. This example puts them in separate modules.
+//! separate crates. This allows the OpenAPI spec to be generated without the
+//! implementation having to be compiled (or even exist in the first place). See
+//! the note on "Where to put the implementation" in the crate `lib.rs` for more
+//! details.
+//!
+//! This example puts the interface and implementation in separate modules.
 
 use dropshot::{ConfigLogging, ConfigLoggingLevel, HttpServerStarter};
 
