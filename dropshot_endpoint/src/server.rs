@@ -634,36 +634,7 @@ impl<'ast> ServerModuleGenerator<'ast> {
         } else {
             let endpoints = self.items.iter().filter_map(|item| match item {
                 ServerItem::Fn(ServerFnItem::Endpoint(e)) => {
-                    let name = &e.f.sig.ident;
-                    let endpoint = match kind {
-                        FactoryKind::Regular => {
-                            // Adding the span information to path_to_name leads
-                            // to fewer call_site errors.
-                            let path_to_name: TokenStream =
-                                quote_spanned! {e.attr.span()=>
-                                    <ServerImpl as #trait_ident>::#name
-                                };
-                            e.to_api_endpoint(
-                                &self.dropshot,
-                                &ApiEndpointKind::Regular(&path_to_name),
-                            )
-                        }
-                        FactoryKind::Stub => {
-                            let extractor_types =
-                                e.params.extractor_types().collect();
-                            let ret_ty = e.params.ret_ty;
-                            e.to_api_endpoint(
-                                dropshot,
-                                &ApiEndpointKind::Stub {
-                                    attr: &e.attr,
-                                    extractor_types,
-                                    ret_ty,
-                                },
-                            )
-                        }
-                    };
-
-                    Some(endpoint)
+                    Some(e.to_api_endpoint(&self.dropshot, kind))
                 }
 
                 ServerItem::Fn(ServerFnItem::Channel(_)) => {
@@ -976,7 +947,7 @@ enum ServerFnItem<'ast> {
 impl<'ast> ServerFnItem<'ast> {
     fn new(
         f: &'ast TraitItemFnForSignature,
-        trait_ident: &syn::Ident,
+        trait_ident: &'ast syn::Ident,
         context_ident: &syn::Ident,
         errors: &ErrorSink<'_, Error>,
     ) -> Self {
@@ -1102,6 +1073,7 @@ fn parse_endpoint_metadata(
 struct ServerEndpoint<'ast> {
     f: &'ast TraitItemFnForSignature,
     attr: &'ast syn::Attribute,
+    trait_ident: &'ast syn::Ident,
     metadata: ValidatedEndpointMetadata,
     params: EndpointParams<'ast>,
 }
@@ -1113,7 +1085,7 @@ impl<'ast> ServerEndpoint<'ast> {
     fn new(
         f: &'ast TraitItemFnForSignature,
         attr: &'ast syn::Attribute,
-        trait_ident: &syn::Ident,
+        trait_ident: &'ast syn::Ident,
         context_ident: &syn::Ident,
         errors: &ErrorSink<'_, Error>,
     ) -> Result<Self, ServerItemErrorSummary> {
@@ -1128,7 +1100,7 @@ impl<'ast> ServerEndpoint<'ast> {
 
         match (metadata, params) {
             (Some(metadata), Some(params)) => {
-                Ok(Self { f, attr, metadata, params })
+                Ok(Self { f, attr, trait_ident, metadata, params })
             }
             // This means that something failed.
             (_, params) => Err(ServerItemErrorSummary {
@@ -1144,6 +1116,40 @@ impl<'ast> ServerEndpoint<'ast> {
     }
 
     fn to_api_endpoint(
+        &self,
+        dropshot: &TokenStream,
+        kind: FactoryKind,
+    ) -> TokenStream {
+        match kind {
+            FactoryKind::Regular => {
+                let name = &self.f.sig.ident;
+                let trait_ident = self.trait_ident;
+                // Adding the span information to path_to_name leads to fewer
+                // call_site errors.
+                let path_to_name = quote_spanned! {self.attr.span()=>
+                    <ServerImpl as #trait_ident>::#name
+                };
+                self.to_api_endpoint_impl(
+                    dropshot,
+                    &ApiEndpointKind::Regular(&path_to_name),
+                )
+            }
+            FactoryKind::Stub => {
+                let extractor_types = self.params.extractor_types().collect();
+                let ret_ty = self.params.ret_ty;
+                self.to_api_endpoint_impl(
+                    dropshot,
+                    &ApiEndpointKind::Stub {
+                        attr: &self.attr,
+                        extractor_types,
+                        ret_ty,
+                    },
+                )
+            }
+        }
+    }
+
+    fn to_api_endpoint_impl(
         &self,
         dropshot: &TokenStream,
         kind: &ApiEndpointKind<'_>,

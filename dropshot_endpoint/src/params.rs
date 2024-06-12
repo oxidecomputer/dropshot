@@ -101,9 +101,9 @@ pub(crate) enum RqctxTy<'ast> {
         /// The original type.
         orig: &'ast syn::Type,
 
-        /// The transformed type, with the type parameter replaced with the unit
+        /// A transformed type, with the type parameter replaced with the unit
         /// type.
-        transformed: syn::Type,
+        transformed_unit: syn::Type,
     },
 }
 
@@ -154,8 +154,9 @@ impl<'ast> RqctxTy<'ast> {
                 // We must use the _mut variant, because we're going to mutate
                 // the inner type in place as part of our whole deal. ty2 is
                 // going to become the transformed type.
-                let mut ty2 = ty.clone();
-                let param = match extract_rqctx_param_mut(&mut ty2) {
+                let mut transformed_unit = ty.clone();
+                let param = match extract_rqctx_param_mut(&mut transformed_unit)
+                {
                     Ok(Some(ty)) => ty,
                     Ok(None) => {
                         // For trait-based macros, this isn't supported -- we
@@ -192,17 +193,17 @@ impl<'ast> RqctxTy<'ast> {
                 // Now replace the type parameter with the unit type.
                 *param = parse_quote! { () };
 
-                Some(Self::Trait { orig: ty, transformed: ty2 })
+                Some(Self::Trait { orig: ty, transformed_unit })
             }
         }
     }
 
-    /// Returns the transformed type if this is a trait-based RequestContext,
-    /// otherwise returns the original type.
-    pub(crate) fn transformed_type(&self) -> &syn::Type {
+    /// Returns the transformed-to-unit type if this is a trait-based
+    /// RequestContext, otherwise returns the original type.
+    pub(crate) fn transformed_unit_type(&self) -> &syn::Type {
         match self {
             RqctxTy::Function(ty) => ty,
-            RqctxTy::Trait { transformed, .. } => transformed,
+            RqctxTy::Trait { transformed_unit, .. } => transformed_unit,
         }
     }
 
@@ -219,12 +220,12 @@ impl<'ast> fmt::Debug for RqctxTy<'ast> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RqctxTy::Function(ty) => write!(f, "Function({})", quote! { #ty }),
-            RqctxTy::Trait { orig, transformed } => {
+            RqctxTy::Trait { orig, transformed_unit } => {
                 write!(
                     f,
-                    "Trait {{ orig: {}, transformed: {} }}",
+                    "Trait {{ orig: {}, transformed_unit: {} }}",
                     quote! { #orig },
-                    quote! { #transformed },
+                    quote! { #transformed_unit },
                 )
             }
         }
