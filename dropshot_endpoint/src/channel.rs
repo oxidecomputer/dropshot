@@ -3,9 +3,10 @@
 //! Support for WebSocket `#[channel]` macros.
 
 use crate::endpoint;
-use crate::endpoint::EndpointMetadata;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
+use crate::metadata::EndpointMetadata;
+use crate::metadata::MethodType;
 use crate::syn_parsing::ItemFnForSignature;
 use crate::syn_parsing::TraitItemFnForSignature;
 use crate::util::get_crate;
@@ -240,8 +241,8 @@ impl ParsedChannel {
                     }
                 };
 
-                let metadata = endpoint::EndpointMetadata {
-                    method: endpoint::MethodType::GET,
+                let metadata = EndpointMetadata {
+                    method: MethodType::GET,
                     path,
                     tags,
                     unpublished,

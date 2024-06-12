@@ -13,6 +13,7 @@ mod channel;
 mod doc;
 mod endpoint;
 mod error_store;
+mod metadata;
 mod params;
 mod server;
 mod syn_parsing;
