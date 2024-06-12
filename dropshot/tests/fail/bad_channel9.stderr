@@ -1,8 +1,8 @@
 error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgument` is not satisfied
-  --> tests/fail/bad_channel9.rs:24:14
+  --> tests/fail/bad_channel9.rs:24:8
    |
-24 |     _params: Query<QueryParams>,
-   |              ^^^^^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
+24 |     _: Query<QueryParams>,
+   |        ^^^^^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
    |
    = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
 

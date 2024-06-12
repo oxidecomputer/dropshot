@@ -21,8 +21,8 @@ struct QueryParams {
     path = "/test",
 }]
 async fn bad_channel(
-    _params: Query<QueryParams>,
-    _upgraded: WebsocketConnection,
+    _: Query<QueryParams>,
+    _: WebsocketConnection,
 ) -> dropshot::WebsocketChannelResult {
     Ok(())
 }

@@ -18,3 +18,13 @@ error: endpoint `bad_channel` must not have a `self` argument
    |
 13 |     self,
    |     ^^^^
+
+error: endpoint `bad_channel` must have at least two arguments: RequestContext and WebsocketConnection
+  --> tests/fail/bad_channel2.rs:12:21
+   |
+12 |   async fn bad_channel(
+   |  _____________________^
+13 | |     self,
+14 | |     _upgraded: WebsocketConnection,
+15 | | ) -> dropshot::WebsocketChannelResult {
+   | |_^

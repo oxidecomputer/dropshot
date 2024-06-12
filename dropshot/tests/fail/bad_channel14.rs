@@ -1,8 +1,5 @@
 // Copyright 2024 Oxide Computer Company
 
-// XXX: There's probably no good reason to support wildcards in channel
-// endpoints. We should just ban them.
-
 #![allow(unused_imports)]
 
 use dropshot::channel;
@@ -17,11 +14,15 @@ struct PathParams {
     stuff: Vec<String>,
 }
 
+// Wildcard endpoints require unpublished = true. Wildcard channels aren't
+// supported at all, so this should fail even with unpublished = true.
+
 #[channel {
     protocol = WEBSOCKETS,
     path = "/assets/{stuff:.*}",
+    unpublished = true,
 }]
-async fn must_be_unpublished(
+async fn channel_with_wildcard(
     _rqctx: RequestContext<()>,
     _path: Path<PathParams>,
     _upgraded: WebsocketConnection,
