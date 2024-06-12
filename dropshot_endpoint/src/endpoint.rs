@@ -420,7 +420,7 @@ impl<'ast> EndpointParams<'ast> {
     /// Returns a token stream that obtains the rqctx context type.
     fn rqctx_context(&self, dropshot: &TokenStream) -> TokenStream {
         let rqctx_ty = &self.rqctx_ty;
-        let transformed = rqctx_ty.transformed_type();
+        let transformed = rqctx_ty.transformed_unit_type();
         quote_spanned! { rqctx_ty.orig_span()=>
             <#transformed as #dropshot::RequestContextArgument>::Context
         }
@@ -439,7 +439,7 @@ impl<'ast> EndpointParams<'ast> {
 
     /// Returns a list of all argument types, including the request context.
     fn arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
-        std::iter::once(self.rqctx_ty.transformed_type())
+        std::iter::once(self.rqctx_ty.transformed_unit_type())
             .chain(self.extractor_types())
     }
 
