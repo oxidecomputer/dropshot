@@ -1,4 +1,4 @@
-error: Endpoint handlers must have the following signature:
+error: endpoint handlers must have the following signature:
            async fn(
                rqctx: dropshot::RequestContext<MyContext>,
                [query_params: Query<Q>,]
@@ -15,7 +15,7 @@ error: Endpoint handlers must have the following signature:
 20 | | ) -> Result<HttpResponseOk<String>, HttpError> {
    | |______________________________________________^
 
-error: generics are not permitted for endpoint handlers
+error: endpoint `bad_response_type` must not have generics
   --> tests/fail/bad_endpoint13.rs:18:27
    |
 18 | async fn bad_response_type<S: Stuff + Sync + Send + 'static>(

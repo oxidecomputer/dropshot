@@ -20,7 +20,7 @@ use crate::util::get_crate;
 use crate::util::ValidContentType;
 
 /// Endpoint usage message, produced if there were parameter errors.
-const USAGE: &str = "Endpoint handlers must have the following signature:
+const USAGE: &str = "endpoint handlers must have the following signature:
     async fn(
         rqctx: dropshot::RequestContext<MyContext>,
         [query_params: Query<Q>,]
@@ -114,12 +114,13 @@ pub(crate) fn do_endpoint_inner(
 ) -> EndpointOutput {
     let dropshot = metadata.dropshot_crate();
 
-    // Perform validations first.
-    let metadata = metadata.validate(&attr, &errors);
-    let params = EndpointParams::new(&item_fn.sig, &errors);
-
     let name = &item_fn.sig.ident;
     let name_str = name.to_string();
+
+    // Perform validations first.
+    let metadata = metadata.validate(&name_str, &attr, &errors);
+    let params = EndpointParams::new(&item_fn.sig, &errors);
+
     let visibility = &item_fn.vis;
 
     let doc = ExtractedDoc::from_attrs(&item_fn.attrs);
@@ -222,47 +223,52 @@ impl<'ast> EndpointParams<'ast> {
         sig: &'ast syn::Signature,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<Self> {
+        let name_str = sig.ident.to_string();
         let errors = errors.new();
 
         // Perform AST validations.
         if sig.constness.is_some() {
             errors.push(Error::new_spanned(
                 &sig.constness,
-                "endpoint handlers may not be const functions",
+                format!("endpoint `{name_str}` must not be a const fn"),
             ));
         }
 
         if sig.asyncness.is_none() {
             errors.push(Error::new_spanned(
                 &sig.fn_token,
-                "endpoint handler functions must be async",
+                format!("endpoint `{name_str}` must be async"),
             ));
         }
 
         if sig.unsafety.is_some() {
             errors.push(Error::new_spanned(
                 &sig.unsafety,
-                "endpoint handlers may not be unsafe",
+                format!("endpoint `{name_str}` must not be unsafe"),
             ));
         }
 
         if sig.abi.is_some() {
             errors.push(Error::new_spanned(
                 &sig.abi,
-                "endpoint handler may not use an alternate ABI",
+                format!("endpoint `{name_str}` must not use an alternate ABI"),
             ));
         }
 
         if !sig.generics.params.is_empty() {
             errors.push(Error::new_spanned(
                 &sig.generics,
-                "generics are not permitted for endpoint handlers",
+                format!("endpoint `{name_str}` must not have generics"),
             ));
         }
 
         if sig.variadic.is_some() {
-            errors
-                .push(Error::new_spanned(&sig.variadic, "no language C here"));
+            errors.push(Error::new_spanned(
+                &sig.variadic,
+                format!(
+                    "endpoint `{name_str}` must not have a variadic argument",
+                ),
+            ));
         }
 
         let mut inputs = sig.inputs.iter();
@@ -277,14 +283,19 @@ impl<'ast> EndpointParams<'ast> {
             Some(first_arg @ syn::FnArg::Receiver(_)) => {
                 errors.push(Error::new_spanned(
                     first_arg,
-                    "Expected a non-receiver argument",
+                    format!(
+                        "endpoint `{name_str}` must not have a `self` argument"
+                    ),
                 ));
                 None
             }
             None => {
                 errors.push(Error::new(
                     sig.paren_token.span.join(),
-                    "Endpoint requires arguments",
+                    format!(
+                        "endpoint `{name_str}` must have at least one \
+                         RequestContext argument"
+                    ),
                 ));
                 None
             }
@@ -305,7 +316,7 @@ impl<'ast> EndpointParams<'ast> {
             syn::ReturnType::Default => {
                 errors.push(Error::new_spanned(
                     sig,
-                    "Endpoint must return a Result",
+                    format!("endpoint `{name_str}` must return a Result"),
                 ));
                 None
             }
@@ -521,6 +532,7 @@ impl EndpointMetadata {
     /// incorrect span info in error messages.
     pub(crate) fn validate(
         self,
+        name_str: &str,
         attr: &dyn ToTokens,
         errors: &ErrorSink<'_, Error>,
     ) -> Option<ValidatedEndpointMetadata> {
@@ -539,8 +551,10 @@ impl EndpointMetadata {
         if path.contains(":.*}") && !self.unpublished {
             errors.push(Error::new_spanned(
                 attr,
-                "paths that contain a wildcard match must include 'unpublished = \
-                 true'",
+                format!(
+                    "endpoint `{name_str}` has paths that contain \
+                     a wildcard match, but is not marked 'unpublished = true'",
+                ),
             ));
         }
 
@@ -551,7 +565,12 @@ impl EndpointMetadata {
                 Err(_) => {
                     errors.push(Error::new_spanned(
                         attr,
-                        "invalid content type for endpoint",
+                        format!(
+                            "endpoint `{name_str}` has an invalid \
+                            content type\n\
+                            note: supported content types are: {}",
+                            ValidContentType::to_supported_string()
+                        ),
                     ));
                     None
                 }
@@ -889,7 +908,7 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("endpoint handler functions must be async".to_string())
+            Some("endpoint `handler_xyz` must be async".to_string())
         );
     }
 
@@ -908,7 +927,10 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("Expected a non-receiver argument".to_string())
+            Some(
+                "endpoint `handler_xyz` must not have a `self` argument"
+                    .to_string()
+            )
         );
     }
 
@@ -927,7 +949,7 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(1).map(ToString::to_string),
-            Some("Endpoint requires arguments".to_string())
+            Some("endpoint `handler_xyz` must have at least one RequestContext argument".to_string())
         );
     }
 }

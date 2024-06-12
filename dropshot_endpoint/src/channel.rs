@@ -134,6 +134,7 @@ impl ParsedChannel {
                 // an extractor, with WebsocketUpgrade, which is.
                 let ItemFnForSignature { attrs, vis, mut sig, _block: body } =
                     item;
+                let name_str = sig.ident.to_string();
 
                 let inner_args = sig.inputs.clone();
                 let inner_output = sig.output.clone();
@@ -177,9 +178,12 @@ impl ParsedChannel {
                     Some(f) => f,
                     None => {
                         errors.push(Error::new_spanned(
-                    &sig,
-                    "An argument of type dropshot::WebsocketConnection must be provided last.",
-                ));
+                            &sig,
+                            format!(
+                                "endpoint `{name_str}` must have a \
+                                 WebsocketConnection as its last argument",
+                            ),
+                        ));
                         return None;
                     }
                 };
