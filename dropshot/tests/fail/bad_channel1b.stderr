@@ -1,11 +1,22 @@
-error[E0277]: the trait bound `WebsocketUpgrade: RequestContextArgument` is not satisfied
-  --> tests/fail/bad_channel1b.rs:8:1
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel1b.rs:12:1
    |
-8  | / #[channel {
-9  | |     protocol = WEBSOCKETS,
-10 | |     path = "/test",
-11 | | }]
-   | |__^ the trait `RequestContextArgument` is not implemented for `WebsocketUpgrade`
+12 | / async fn bad_channel(
+13 | |     _upgraded: WebsocketConnection,
+14 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
+
+error: endpoint `bad_channel` must have at least two arguments: RequestContext and WebsocketConnection
+  --> tests/fail/bad_channel1b.rs:12:21
    |
-   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
-   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
+12 |   async fn bad_channel(
+   |  _____________________^
+13 | |     _upgraded: WebsocketConnection,
+14 | | ) -> dropshot::WebsocketChannelResult {
+   | |_^

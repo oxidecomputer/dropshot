@@ -1,0 +1,5 @@
+error: const `MY_CONSTANT` marked as endpoint is not a method
+  --> tests/fail/bad_server_only16.rs:11:5
+   |
+11 |     #[endpoint { method = GET }]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

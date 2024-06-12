@@ -21,9 +21,9 @@ struct QueryParams {
     path = "/test",
 }]
 async fn non_extractor_as_last_argument(
-    _rqctx: RequestContext<()>,
-    _param: String,
-    _upgraded: WebsocketConnection,
+    _: RequestContext<()>,
+    _: String,
+    _: WebsocketConnection,
 ) -> dropshot::WebsocketChannelResult {
     Ok(())
 }

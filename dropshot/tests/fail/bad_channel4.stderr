@@ -44,10 +44,14 @@ note: required by a bound in `dropshot::Query`
    |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
 
 error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
-  --> tests/fail/bad_channel4.rs:22:5
+  --> tests/fail/bad_channel4.rs:20:1
    |
-22 |     _params: Query<QueryParams>,
-   |     ^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+20 | / async fn bad_channel(
+21 | |     _rqctx: RequestContext<()>,
+22 | |     _params: Query<QueryParams>,
+23 | |     _upgraded: WebsocketConnection,
+24 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
    |
    = help: the following other types implement trait `schemars::JsonSchema`:
              bool
@@ -66,10 +70,14 @@ note: required by a bound in `dropshot::Query`
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
 error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
-  --> tests/fail/bad_channel4.rs:22:5
+  --> tests/fail/bad_channel4.rs:20:1
    |
-22 |     _params: Query<QueryParams>,
-   |     ^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+20 | / async fn bad_channel(
+21 | |     _rqctx: RequestContext<()>,
+22 | |     _params: Query<QueryParams>,
+23 | |     _upgraded: WebsocketConnection,
+24 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = help: the following other types implement trait `serde::de::Deserialize<'de>`:
              bool
@@ -112,6 +120,7 @@ note: required by a bound in `dropshot::Query`
    |
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `Query`
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_channel4.rs:16:1
@@ -138,3 +147,4 @@ note: required by a bound in `dropshot::Query`
    |
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
+   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
