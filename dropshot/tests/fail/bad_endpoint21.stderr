@@ -8,13 +8,17 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, HttpError>
-  --> tests/fail/bad_endpoint2.rs:13:1
+  --> tests/fail/bad_endpoint21.rs:24:1
    |
-13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+24 | / async fn variadic_argument(
+25 | |     _rqctx: RequestContext<()>,
+26 | |     _param1: Query<QueryParams>,
+27 | |     ...
+28 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^
 
-error: endpoint `bad_endpoint` must not have a `self` argument
-  --> tests/fail/bad_endpoint2.rs:13:23
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_endpoint21.rs:27:5
    |
-13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
-   |                       ^^^^
+27 |     ...
+   |     ^^^
