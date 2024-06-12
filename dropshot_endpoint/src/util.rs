@@ -25,6 +25,15 @@ impl ValidContentType {
             ValidContentType::MultipartFormData => MULTIPART_FORM_DATA,
         }
     }
+
+    pub(crate) fn to_supported_string() -> String {
+        format!(
+            "{}, {}, {}",
+            APPLICATION_JSON,
+            APPLICATION_X_WWW_FORM_URLENCODED,
+            MULTIPART_FORM_DATA,
+        )
+    }
 }
 
 impl FromStr for ValidContentType {
