@@ -910,7 +910,7 @@ mod tests {
                     _rqctx: MyRequestContext,
                     query: Query<QueryParams<'static>>,
                     path: Path<<X as Y>::Z>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
                     Ok(())
                 }
             },
@@ -940,7 +940,7 @@ mod tests {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
                     _rqctx: RequestContext<(A, B)>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
                     Ok(())
                 }
             },

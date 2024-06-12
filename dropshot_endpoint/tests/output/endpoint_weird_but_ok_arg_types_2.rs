@@ -15,7 +15,9 @@ const _: fn() = || {
         type T = TT;
         type E = EE;
     }
-    struct NeedHttpResponse(<Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T);
+    struct NeedHttpResponse(
+        <Result<HttpResponseUpdatedNoContent, HttpError> as ResultTrait>::T,
+    );
     trait TypeEq {
         type This: ?Sized;
     }
@@ -27,7 +29,7 @@ const _: fn() = || {
         T: ?Sized + TypeEq<This = dropshot::HttpError>,
     {}
     validate_result_error_type::<
-        <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E,
+        <Result<HttpResponseUpdatedNoContent, HttpError> as ResultTrait>::E,
     >();
 };
 #[allow(non_camel_case_types, missing_docs)]
@@ -47,7 +49,7 @@ for dropshot::ApiEndpoint<
         /// handle "xyz" requests
         async fn handler_xyz(
             _rqctx: RequestContext<(A, B)>,
-        ) -> Result<HttpResponseOk<()>, HttpError> {
+        ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
             Ok(())
         }
         const _: fn() = || {
