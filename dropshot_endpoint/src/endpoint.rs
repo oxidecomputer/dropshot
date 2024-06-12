@@ -321,7 +321,7 @@ impl<'ast> EndpointParams<'ast> {
 
     /// Returns a list of all argument types, including the request context.
     fn arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
-        std::iter::once(self.rqctx_ty.transformed_type())
+        std::iter::once(self.rqctx_ty.transformed_unit_type())
             .chain(self.extractor_types())
     }
 
