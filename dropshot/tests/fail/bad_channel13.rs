@@ -14,10 +14,13 @@ trait Stuff {
     protocol = WEBSOCKETS,
     path = "/test",
 }]
-async fn bad_channel<S: Stuff + Sync + Send + 'static>(
+async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
     _rqctx: RequestContext<S>,
     _upgraded: WebsocketConnection,
-) -> dropshot::WebsocketChannelResult {
+) -> dropshot::WebsocketChannelResult
+where
+    usize: 'static,
+{
     S::do_stuff();
     panic!()
 }
