@@ -15,6 +15,8 @@ mod endpoint;
 mod error_store;
 mod params;
 mod syn_parsing;
+#[cfg(test)]
+mod test_util;
 mod util;
 
 /// This attribute transforms a handler function into a Dropshot endpoint
