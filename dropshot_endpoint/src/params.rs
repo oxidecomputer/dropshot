@@ -143,10 +143,10 @@ impl<'ast> fmt::Debug for RqctxTy<'ast> {
 }
 
 /// Extracts and ensures that the type parameter for RequestContext is valid.
-fn extract_rqctx_param<'ast>(
-    ty: &'ast syn::Type,
-) -> Result<Option<&'ast syn::Type>, RqctxTyError> {
-    let syn::Type::Path(p) = &*ty else {
+fn extract_rqctx_param(
+    ty: &syn::Type,
+) -> Result<Option<&syn::Type>, RqctxTyError> {
+    let syn::Type::Path(p) = ty else {
         return Err(RqctxTyError::NotTypePath);
     };
 
