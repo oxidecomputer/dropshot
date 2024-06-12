@@ -1,0 +1,30 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_server_channel13.rs:14:7
+   |
+14 | trait MyServer {
+   |       ^^^^^^^^
+
+error: endpoint `generics_and_where_clause` must not have generics
+  --> tests/fail/bad_server_channel13.rs:21:39
+   |
+21 |     async fn generics_and_where_clause<S: Stuff + Sync + Send + 'static>(
+   |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: endpoint `generics_and_where_clause` must not have a where clause
+  --> tests/fail/bad_server_channel13.rs:25:5
+   |
+25 | /     where
+26 | |         usize: 'static;
+   | |______________________^
+
+error: endpoint `generics_and_where_clause` must accept RequestContext<Self::Context> as its first argument
+  --> tests/fail/bad_server_channel13.rs:22:32
+   |
+22 |         _rqctx: RequestContext<S>,
+   |                                ^

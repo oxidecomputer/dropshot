@@ -1,0 +1,5 @@
+error: endpoint `bad_endpoint` has invalid attributes: unknown variant `UNKNOWN`, expected one of `DELETE`, `GET`, `HEAD`, `PATCH`, `POST`, `PUT`, `OPTIONS`
+  --> tests/fail/bad_server_endpoint20.rs:16:18
+   |
+16 |         method = UNKNOWN,
+   |                  ^^^^^^^

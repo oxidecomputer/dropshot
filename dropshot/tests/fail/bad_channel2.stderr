@@ -13,8 +13,18 @@ error: channel handlers must have the following signature:
 15 | | ) -> dropshot::WebsocketChannelResult {
    | |_____________________________________^
 
-error: Expected a non-receiver argument
+error: endpoint `bad_channel` must not have a `self` argument
   --> tests/fail/bad_channel2.rs:13:5
    |
 13 |     self,
    |     ^^^^
+
+error: endpoint `bad_channel` must have at least two arguments: RequestContext and WebsocketConnection
+  --> tests/fail/bad_channel2.rs:12:21
+   |
+12 |   async fn bad_channel(
+   |  _____________________^
+13 | |     self,
+14 | |     _upgraded: WebsocketConnection,
+15 | | ) -> dropshot::WebsocketChannelResult {
+   | |_^

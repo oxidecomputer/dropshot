@@ -1,0 +1,14 @@
+error: future cannot be sent between threads safely
+  --> tests/fail/bad_server_channel15.rs:10:1
+   |
+10 | #[dropshot::server]
+   | ^^^^^^^^^^^^^^^^^^^ future created by async block is not `Send`
+   |
+   = help: within `{async block@$DIR/tests/fail/bad_server_channel15.rs:21:43: 27:6}`, the trait `Send` is not implemented for `Rc<i32>`
+note: future is not `Send` as this value is used across an await
+  --> tests/fail/bad_server_channel15.rs:25:54
+   |
+24 |         let _non_send_type = Rc::new(0);
+   |             -------------- has type `Rc<i32>` which is not `Send`
+25 |         tokio::time::sleep(Duration::from_millis(1)).await;
+   |                                                      ^^^^^ await occurs here, with `_non_send_type` maybe used later

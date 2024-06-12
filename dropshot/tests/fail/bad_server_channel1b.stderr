@@ -1,0 +1,20 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+ --> tests/fail/bad_server_channel1b.rs:8:7
+  |
+8 | trait MyServer {
+  |       ^^^^^^^^
+
+error: endpoint `bad_channel` must have at least two arguments: RequestContext and WebsocketConnection
+  --> tests/fail/bad_server_channel1b.rs:15:25
+   |
+15 |       async fn bad_channel(
+   |  _________________________^
+16 | |         _upgraded: WebsocketConnection,
+17 | |     ) -> dropshot::WebsocketChannelResult {
+   | |_____^

@@ -1,0 +1,11 @@
+error: type `MyType` marked as endpoint is not a method
+  --> tests/fail/bad_server_only15.rs:12:5
+   |
+12 |     #[endpoint { method = GET }]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: type `MyType2` marked as channel is not a method
+  --> tests/fail/bad_server_only15.rs:15:5
+   |
+15 |     #[channel { protocol = WEBSOCKETS }]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
