@@ -1,0 +1,17 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_server_channel24.rs:18:7
+   |
+18 | trait MyServer {
+   |       ^^^^^^^^
+
+error: endpoint `abi_endpoint` must not use an alternate ABI
+  --> tests/fail/bad_server_channel24.rs:26:11
+   |
+26 |     async extern "C" fn abi_endpoint(
+   |           ^^^^^^^^^^

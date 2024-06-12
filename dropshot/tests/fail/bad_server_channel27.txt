@@ -1,0 +1,3 @@
+bad_server_endpoint27.rs checks that a reeasonable error is produced if
+`dropshot::server` is used on a function rather than a trait. There's nothing
+more to check with channels.

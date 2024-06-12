@@ -28,10 +28,14 @@ use serde_tokenstream::from_tokenstream;
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
+    channel::ChannelParams,
     doc::{string_to_doc_attrs, ExtractedDoc},
     endpoint::EndpointParams,
     error_store::{ErrorSink, ErrorStore},
-    metadata::{ApiEndpointKind, EndpointMetadata, ValidatedEndpointMetadata},
+    metadata::{
+        ApiEndpointKind, ChannelMetadata, EndpointMetadata,
+        ValidatedChannelMetadata, ValidatedEndpointMetadata,
+    },
     params::RqctxKind,
     syn_parsing::{
         ItemTraitPartParsed, TraitItemFnForSignature, TraitItemPartParsed,
@@ -85,6 +89,7 @@ pub(crate) fn do_server(
                 output: quote! {},
                 context: "Self::Context".to_string(),
                 has_endpoint_param_errors: false,
+                has_channel_param_errors: false,
             }
         }
     };
@@ -101,6 +106,18 @@ pub(crate) fn do_server(
             Error::new_spanned(
                 &item_trait.ident,
                 crate::endpoint::usage_str(&output.context),
+            ),
+        );
+    }
+    if output.has_channel_param_errors {
+        let item_trait = item_trait
+            .as_ref()
+            .expect("has_channel_param_errors is true => item_fn is Some");
+        errors.insert(
+            0,
+            Error::new_spanned(
+                &item_trait.ident,
+                crate::channel::usage_str(&output.context),
             ),
         );
     }
@@ -342,8 +359,21 @@ impl<'ast> Server<'ast> {
                 }) => summary.has_param_errors,
                 _ => false,
             });
+        let has_channel_param_errors =
+            self.items.iter().any(|item| match item {
+                ServerItem::Fn(ServerFnItem::Invalid {
+                    kind: InvalidServerItemKind::Channel(summary),
+                    ..
+                }) => summary.has_param_errors,
+                _ => false,
+            });
 
-        ServerOutput { output, context, has_endpoint_param_errors }
+        ServerOutput {
+            output,
+            context,
+            has_endpoint_param_errors,
+            has_channel_param_errors,
+        }
     }
 
     fn make_context_trait_item(&self) -> Option<syn::TraitItem> {
@@ -415,6 +445,11 @@ struct ServerOutput {
     ///
     /// If there were, then we provide a usage message.
     has_endpoint_param_errors: bool,
+
+    /// Whether there were any channel parameter-related errors.
+    ///
+    /// If there were, then we provide a usage message.
+    has_channel_param_errors: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -646,11 +681,9 @@ impl<'ast> ServerModuleGenerator<'ast> {
                 ServerItem::Fn(ServerFnItem::Endpoint(e)) => {
                     Some(e.to_api_endpoint(&self.dropshot, kind))
                 }
-
-                ServerItem::Fn(ServerFnItem::Channel(_)) => {
-                    todo!("still need to implement channels")
+                ServerItem::Fn(ServerFnItem::Channel(c)) => {
+                    Some(c.to_api_endpoint(&self.dropshot, kind))
                 }
-
                 ServerItem::Fn(ServerFnItem::Invalid { .. })
                 | ServerItem::Fn(ServerFnItem::Unmanaged(_))
                 | ServerItem::Other(_) => None,
@@ -684,6 +717,26 @@ impl<'ast> ServerModuleGenerator<'ast> {
         }
     }
 
+    fn make_type_checks(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.items.iter().filter_map(|item| match item {
+            ServerItem::Fn(ServerFnItem::Endpoint(_)) => {
+                // We don't need to generate type checks the way we do with
+                // function-based macros, because we get error messages that are
+                // roughly as good through the stub API description generator.
+                // (Also, adding type checks would end up duplicating a ton of
+                // error messages.)
+                None
+            }
+            ServerItem::Fn(ServerFnItem::Channel(c)) => {
+                // Since we use an adapter function, the stub function doesn't
+                // quite capture all the type checks desired. We do need to
+                // generate a subset of the typechecks.
+                Some(c.params.to_trait_type_checks())
+            }
+            _ => None,
+        })
+    }
+
     /// Returns true if errors were detected while generating the dropshot
     /// server, and it is invalid as a result.
     fn has_invalid_fn_items(&self) -> bool {
@@ -703,6 +756,9 @@ impl<'ast> ToTokens for ServerModuleGenerator<'ast> {
         let api = self.make_api_description(doc_comments.api_description());
         let stub_api =
             self.make_stub_api_description(doc_comments.stub_api_description());
+
+        let type_checks = self.make_type_checks();
+
         let outer = doc_comments.outer();
 
         tokens.extend(quote! {
@@ -731,6 +787,8 @@ impl<'ast> ToTokens for ServerModuleGenerator<'ast> {
                 // In RFD 479, we determined that on balance, the current
                 // approach has the least practical downsides.
                 use super::*;
+
+                #(#type_checks)*
 
                 // We don't need to generate type checks the way we do with
                 // function-based macros, because we get error messages that are
@@ -999,7 +1057,14 @@ impl<'ast> ServerFnItem<'ast> {
                 }
             }
             [ServerAttr::Channel(cattr)] => {
-                match ServerChannel::new(f, cattr) {
+                match ServerChannel::new(
+                    dropshot,
+                    f,
+                    cattr,
+                    trait_ident,
+                    context_ident,
+                    errors,
+                ) {
                     Ok(channel) => Self::Channel(channel),
                     Err(summary) => Self::Invalid {
                         f,
@@ -1196,22 +1261,165 @@ impl<'ast> ServerEndpoint<'ast> {
     }
 }
 
+fn parse_channel_metadata(
+    name_str: &str,
+    attr: &syn::Attribute,
+    errors: &ErrorSink<'_, Error>,
+) -> Option<ValidatedChannelMetadata> {
+    // Attempt to parse the metadata -- it must be a list.
+    let l = match &attr.meta {
+        syn::Meta::List(l) => l,
+        _ => {
+            errors.push(Error::new_spanned(
+                &attr,
+                format!(
+                    "endpoint `{name_str}` must be of the form \
+                     #[channel {{ protocol = WEBSOCKETS, path = \"/path\", ... }}]"
+                ),
+            ));
+            return None;
+        }
+    };
+
+    // TODO: Switch to from_tokenstream_spanned once
+    // https://github.com/oxidecomputer/serde_tokenstream/pull/194 is available.
+    match from_tokenstream::<ChannelMetadata>(&l.tokens) {
+        Ok(m) => m.validate(name_str, attr, MacroKind::Trait, errors),
+        Err(error) => {
+            errors.push(Error::new(
+                error.span(),
+                format!(
+                    "endpoint `{name_str}` has invalid attributes: {error}"
+                ),
+            ));
+            return None;
+        }
+    }
+}
+
 struct ServerChannel<'ast> {
     f: &'ast TraitItemFnForSignature,
+    attr: &'ast syn::Attribute,
+    trait_ident: &'ast syn::Ident,
+    metadata: ValidatedChannelMetadata,
+    params: ChannelParams<'ast>,
 }
 
 impl<'ast> ServerChannel<'ast> {
+    /// Parses endpoint metadata to create a new `ServerEndpoint`.
+    ///
+    /// If the return value is None, at least one error occurred while parsing.
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
-        _cattr: &'ast syn::Attribute,
+        attr: &'ast syn::Attribute,
+        trait_ident: &'ast syn::Ident,
+        context_ident: &syn::Ident,
+        errors: &ErrorSink<'_, Error>,
     ) -> Result<Self, ServerItemErrorSummary> {
-        // TODO: implement channels
-        Ok(Self { f })
+        let name_str = f.sig.ident.to_string();
+
+        let metadata = parse_channel_metadata(&name_str, attr, errors);
+        let params = ChannelParams::new(
+            dropshot,
+            &f.sig,
+            RqctxKind::Trait { trait_ident, context_ident },
+            errors,
+        );
+
+        match (metadata, params) {
+            (Some(metadata), Some(params)) => {
+                Ok(Self { f, attr, trait_ident, metadata, params })
+            }
+            // This means that something failed.
+            (_, params) => Err(ServerItemErrorSummary {
+                has_param_errors: params.is_none(),
+            }),
+        }
     }
 
     fn to_out_trait_item(&self) -> TraitItemFnForSignature {
-        // TODO
-        self.f.clone()
+        let mut f = self.f.clone();
+        transform_signature(&mut f, &self.params.ret_ty);
+        f
+    }
+
+    fn to_api_endpoint(
+        &self,
+        dropshot: &TokenStream,
+        kind: FactoryKind,
+    ) -> TokenStream {
+        match kind {
+            FactoryKind::Regular => {
+                // For channels, generate the adapter function here.
+                let adapter_fn =
+                    self.params.to_trait_adapter_fn(self.trait_ident);
+                // In this case, the adapter name needs to have its type
+                // parameter specified.
+                let adapter_name = &self.params.adapter_name;
+                let path_to_name = quote_spanned! {self.attr.span()=>
+                    #adapter_name::<ServerImpl>
+                };
+
+                let endpoint = self.to_api_endpoint_impl(
+                    &dropshot,
+                    &ApiEndpointKind::Regular(&path_to_name),
+                );
+
+                quote_spanned! {self.attr.span()=>
+                    {
+                        #adapter_fn
+                        #endpoint
+                    }
+                }
+            }
+            FactoryKind::Stub => {
+                let extractor_types = self.params.extractor_types().collect();
+                // The stub receives the adapter function's
+                // signature.
+                let ret_ty = &self.params.endpoint_result_ty;
+                self.to_api_endpoint_impl(
+                    dropshot,
+                    &ApiEndpointKind::Stub {
+                        attr: &self.attr,
+                        extractor_types,
+                        ret_ty,
+                    },
+                )
+            }
+        }
+    }
+
+    fn to_api_endpoint_impl(
+        &self,
+        dropshot: &TokenStream,
+        kind: &ApiEndpointKind<'_>,
+    ) -> TokenStream {
+        let name = &self.f.sig.ident;
+        let name_str = name.to_string();
+
+        let doc = ExtractedDoc::from_attrs(&self.f.attrs);
+
+        let endpoint_fn =
+            self.metadata.to_api_endpoint_fn(dropshot, &name_str, kind, &doc);
+
+        // Note that we use name_str (string) rather than name (ident) here
+        // because we deliberately want to lose the span information. If we
+        // don't do that, then rust-analyzer will get confused and believe that
+        // the name is both a method and a variable.
+        //
+        // Note that there isn't any possible variable name collision here,
+        // since all names are prefixed with "endpoint_".
+        let endpoint_name = format_ident!("endpoint_{}", name_str);
+
+        quote_spanned! {self.attr.span()=>
+            {
+                let #endpoint_name = #endpoint_fn;
+                if let Err(error) = dropshot_api.register(#endpoint_name) {
+                    dropshot_errors.push(error);
+                }
+            }
+        }
     }
 }
 
@@ -1362,6 +1570,12 @@ mod tests {
                     async fn handler_xyz(
                         rqctx: RequestContext<Self::Context>,
                     ) -> Result<HttpResponseOk<()>, HttpError>;
+
+                    #[channel { protocol = WEBSOCKETS, path = "/ws" }]
+                    async fn handler_ws(
+                        rqctx: RequestContext<Self::Context>,
+                        upgraded: WebsocketConnection,
+                    ) -> WebsocketChannelResult;
                 }
             },
         );
@@ -1391,6 +1605,12 @@ mod tests {
                     async fn handler_xyz(
                         rqctx: RequestContext<Self::Situation>,
                     ) -> Result<HttpResponseOk<()>, HttpError>;
+
+                    #[channel { protocol = WEBSOCKETS, path = "/ws" }]
+                    async fn handler_ws(
+                        rqctx: RequestContext<Self::Situation>,
+                        upgraded: WebsocketConnection,
+                    ) -> WebsocketChannelResult;
                 }
             },
         );
