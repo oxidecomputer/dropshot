@@ -559,33 +559,22 @@ pub async fn read_json<T: DeserializeOwned>(
 
 /// Given a Hyper Response whose body is expected to be a UTF-8-encoded string,
 /// asynchronously read the body.
-pub async fn read_string(
-    response: &mut Response<Body>,
-) -> String {
+pub async fn read_string(response: &mut Response<Body>) -> String {
     let body_bytes = read_bytes(response).await;
     String::from_utf8(body_bytes.as_ref().into())
         .expect("response contained non-UTF-8 bytes")
 }
 
-async fn read_bytes<B>(
-    response: &mut Response<B>,
-) -> hyper::body::Bytes
+async fn read_bytes<B>(response: &mut Response<B>) -> hyper::body::Bytes
 where
     B: hyper::body::Body + Unpin,
     B::Error: std::fmt::Debug,
 {
-    response
-        .body_mut()
-        .collect()
-        .await
-        .expect("error reading body")
-        .to_bytes()
+    response.body_mut().collect().await.expect("error reading body").to_bytes()
 }
 
 /// Given a Hyper Response, extract and parse the Content-Length header.
-pub fn read_content_length(
-    response: &Response<Body>,
-) -> usize {
+pub fn read_content_length(response: &Response<Body>) -> usize {
     response
         .headers()
         .get(http::header::CONTENT_LENGTH)

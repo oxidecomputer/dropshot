@@ -1039,7 +1039,10 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
     /// This is invoked by Hyper when a new connection is accepted.  This function
     /// must return a Hyper Service object that will handle requests for this
     /// connection.
-    fn make_http_request_handler(&self, remote_addr: SocketAddr) -> ServerRequestHandler<C> {
+    fn make_http_request_handler(
+        &self,
+        remote_addr: SocketAddr,
+    ) -> ServerRequestHandler<C> {
         info!(self.server.log, "accepted connection"; "remote_addr" => %remote_addr);
         ServerRequestHandler::new(self.server.clone(), remote_addr)
     }
