@@ -237,8 +237,8 @@ async fn test_tls_only() {
     )
     .build(hyper_util::client::legacy::connect::HttpConnector::new());
     let _error = http_client.request(http_request).await.unwrap_err();
-    // cannot check if parse error...
-    //assert!(error.is_parse());
+    // cannot check if it is a "hyper parse error", but would like to if
+    // hyper::Error gains the ability in the future
 
     // Make an HTTPS request again, to make sure the HTTP client didn't
     // interfere with HTTPS request processing
