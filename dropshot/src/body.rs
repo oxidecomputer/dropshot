@@ -27,8 +27,8 @@ impl Body {
         Body { inner }
     }
 
-    /// Create a full body from a specific buffer.
-    pub fn full(buf: impl Into<Bytes>) -> Self {
+    /// Create a body with content from a specific buffer.
+    pub fn with_content(buf: impl Into<Bytes>) -> Self {
         let inner = http_body_util::Full::new(buf.into())
             .map_err(|never| match never {})
             .boxed();
@@ -59,25 +59,25 @@ impl Default for Body {
 
 impl From<Bytes> for Body {
     fn from(b: Bytes) -> Body {
-        Body::full(b)
+        Body::with_content(b)
     }
 }
 
 impl From<Vec<u8>> for Body {
     fn from(s: Vec<u8>) -> Body {
-        Body::full(s)
+        Body::with_content(s)
     }
 }
 
 impl From<String> for Body {
     fn from(s: String) -> Body {
-        Body::full(s)
+        Body::with_content(s)
     }
 }
 
 impl From<&'static str> for Body {
     fn from(s: &'static str) -> Body {
-        Body::full(s)
+        Body::with_content(s)
     }
 }
 
