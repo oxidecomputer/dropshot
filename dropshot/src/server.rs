@@ -241,7 +241,7 @@ enum WrappedHttpServerStarter<C: ServerContext> {
 }
 
 struct InnerHttpServerStarter<C: ServerContext>(
-    TcpListener,
+    HttpAcceptor,
     ServerConnectionHandler<C>,
 );
 
@@ -305,8 +305,10 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         // to avoid invoking an async function.
         let std_listener = std::net::TcpListener::bind(&config.bind_address)?;
         std_listener.set_nonblocking(true)?;
-        let incoming = TcpListener::from_std(std_listener)?;
-        let local_addr = incoming.local_addr()?;
+        let tcp = TcpListener::from_std(std_listener)?;
+        let local_addr = tcp.local_addr()?;
+        let incoming =
+            HttpAcceptor { tcp, log: log.new(o!("local_addr" => local_addr)) };
 
         let app_state = Arc::new(DropshotState {
             private,
@@ -324,6 +326,39 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             app_state,
             local_addr,
         ))
+    }
+}
+
+/// This accepts connections more gracefully from a TcpListener.
+struct HttpAcceptor {
+    tcp: TcpListener,
+    log: slog::Logger,
+}
+
+impl HttpAcceptor {
+    async fn accept(&self) -> std::io::Result<(TcpStream, SocketAddr)> {
+        loop {
+            match self.tcp.accept().await {
+                Ok((socket, addr)) => return Ok((socket, addr)),
+                Err(e) => match e.kind() {
+                    // These are errors on the individual socket that we
+                    // tried to accept, and so can be ignored.
+                    std::io::ErrorKind::ConnectionRefused
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::ConnectionReset => (),
+
+                    // This could EMFILE implying resource exhaustion.
+                    // Sleep a little bit and try again.
+                    _ => {
+                        warn!(self.log, "accept error"; "error" => e);
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            100,
+                        ))
+                        .await;
+                    }
+                },
+            }
+        }
     }
 }
 
@@ -400,13 +435,13 @@ impl HttpsAcceptor {
     pub fn new(
         log: slog::Logger,
         tls_acceptor: Arc<Mutex<TlsAcceptor>>,
-        tcp_listener: TcpListener,
+        http_acceptor: HttpAcceptor,
     ) -> HttpsAcceptor {
         HttpsAcceptor {
             stream: Box::new(Box::pin(Self::new_stream(
                 log,
                 tls_acceptor,
-                tcp_listener,
+                http_acceptor,
             ))),
         }
     }
@@ -418,7 +453,7 @@ impl HttpsAcceptor {
     fn new_stream(
         log: slog::Logger,
         tls_acceptor: Arc<Mutex<TlsAcceptor>>,
-        tcp_listener: TcpListener,
+        http_acceptor: HttpAcceptor,
     ) -> impl Stream<Item = std::io::Result<TlsConn>> {
         stream! {
             let mut tls_negotiations = futures::stream::FuturesUnordered::new();
@@ -444,26 +479,14 @@ impl HttpsAcceptor {
                             },
                         }
                     },
-                    accept_result = tcp_listener.accept() => {
+                    accept_result = http_acceptor.accept() => {
                         let (socket, addr) = match accept_result {
                             Ok(v) => v,
                             Err(e) => {
-                                match e.kind() {
-                                    std::io::ErrorKind::ConnectionAborted => {
-                                        continue;
-                                    },
-                                    // The other errors that can be returned
-                                    // under POSIX are all programming errors or
-                                    // resource exhaustion. For now, handle
-                                    // these by no longer accepting new
-                                    // connections.
-                                    // TODO-robustness: Consider handling these
-                                    // more gracefully.
-                                    _ => {
-                                        yield Err(e);
-                                        break;
-                                    }
-                                }
+                                // The HttpAcceptor already handled transient errors.
+                                // At this point, it's a bad one.
+                                yield Err(e);
+                                break;
                             }
                         };
 
@@ -625,6 +648,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
 
         let local_addr = tcp.local_addr()?;
         let logger = log.new(o!("local_addr" => local_addr));
+        let tcp = HttpAcceptor { tcp, log: logger.clone() };
         let https_acceptor =
             HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
 
