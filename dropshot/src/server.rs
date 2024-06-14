@@ -271,7 +271,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
                     Ok((sock, remote_addr)) = self.0.accept() => {
                         let fut = builder.serve_connection_with_upgrades(
                             TokioIo::new(sock),
-                            self.1.make_svc(remote_addr),
+                            self.1.make_http_request_handler(remote_addr),
                         );
                         let fut = graceful.watch(fut.into_owned());
                         tokio::spawn(fut);
@@ -583,7 +583,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
                         let remote_addr = sock.remote_addr();
                         let fut = builder.serve_connection_with_upgrades(
                             TokioIo::new(sock),
-                            self.1.make_svc(remote_addr),
+                            self.1.make_http_request_handler(remote_addr),
                         );
                         let fut = graceful.watch(fut.into_owned());
                         tokio::spawn(fut);
@@ -645,18 +645,6 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             app_state,
             local_addr,
         ))
-    }
-}
-
-impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
-    type Response = ServerRequestHandler<C>;
-    type Error = GenericError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn call(&self, conn: &TlsConn) -> Self::Future {
-        let server = Arc::clone(&self.server);
-        let remote_addr = conn.remote_addr();
-        Box::pin(http_connection_handle(server, remote_addr))
     }
 }
 
@@ -791,18 +779,6 @@ impl<C: ServerContext> FusedFuture for HttpServer<C> {
     fn is_terminated(&self) -> bool {
         self.join_future.is_terminated()
     }
-}
-
-/// Initial entry point for handling a new connection to the HTTP server.
-/// This is invoked by Hyper when a new connection is accepted.  This function
-/// must return a Hyper Service object that will handle requests for this
-/// connection.
-async fn http_connection_handle<C: ServerContext>(
-    server: Arc<DropshotState<C>>,
-    remote_addr: SocketAddr,
-) -> Result<ServerRequestHandler<C>, GenericError> {
-    info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
-    Ok(ServerRequestHandler::new(server, remote_addr))
 }
 
 /// Initial entry point for handling a new request to the HTTP server.  This is
@@ -1059,7 +1035,11 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
         ServerConnectionHandler { server }
     }
 
-    fn make_svc(&self, remote_addr: SocketAddr) -> ServerRequestHandler<C> {
+    /// Initial entry point for handling a new connection to the HTTP server.
+    /// This is invoked by Hyper when a new connection is accepted.  This function
+    /// must return a Hyper Service object that will handle requests for this
+    /// connection.
+    fn make_http_request_handler(&self, remote_addr: SocketAddr) -> ServerRequestHandler<C> {
         info!(self.server.log, "accepted connection"; "remote_addr" => %remote_addr);
         ServerRequestHandler::new(self.server.clone(), remote_addr)
     }
