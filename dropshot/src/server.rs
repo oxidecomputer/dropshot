@@ -263,6 +263,9 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             // http/1 settings
             builder.http1().timer(TokioTimer::new());
 
+            // Use a graceful watcher to keep track of all existing connections,
+            // and when the close_signal is trigger, force all known conns
+            // to start a graceful shutdown.
             let graceful =
                 hyper_util::server::graceful::GracefulShutdown::new();
 
@@ -597,6 +600,9 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             // http/1 settings
             builder.http1().timer(TokioTimer::new());
 
+            // Use a graceful watcher to keep track of all existing connections,
+            // and when the close_signal is trigger, force all known conns
+            // to start a graceful shutdown.
             let graceful =
                 hyper_util::server::graceful::GracefulShutdown::new();
 
