@@ -139,7 +139,7 @@ impl RequestInfo {
     ///
     /// This is provided for source compatibility.  In previous versions of
     /// Dropshot, `RequestContext.request` was an
-    /// `Arc<Mutex<hyper::Request<impl Body>>>`.  Now, it's just
+    /// `Arc<Mutex<hyper::Request<hyper::Body>>>`.  Now, it's just
     /// `RequestInfo`, which provides many of the same functions as
     /// `hyper::Request` does.  Consumers _should_ just use `rqctx.request`
     /// instead of this function.
