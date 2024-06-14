@@ -320,12 +320,7 @@ impl ClientTestContext {
         // For "204 No Content" responses, validate that we got no content in
         // the body.
         if status == StatusCode::NO_CONTENT {
-            let body_bytes = response
-                .body_mut()
-                .collect()
-                .await
-                .expect("error reading body")
-                .to_bytes();
+            let body_bytes = read_bytes(&mut response).await;
             assert_eq!(0, body_bytes.len());
         }
 
@@ -530,14 +525,7 @@ pub async fn read_ndjson<T: DeserializeOwned>(
         crate::CONTENT_TYPE_NDJSON,
         headers.get(http::header::CONTENT_TYPE).expect("missing content-type")
     );
-    let body_bytes = response
-        .body_mut()
-        .collect()
-        .await
-        .expect("error reading body")
-        .to_bytes();
-    let body_string = String::from_utf8(body_bytes.as_ref().into())
-        .expect("response contained non-UTF-8 bytes");
+    let body_string = read_string(response).await;
 
     // TODO-cleanup: Consider using serde_json::StreamDeserializer or maybe
     // implementing an NDJSON-based Serde type?
@@ -564,12 +552,7 @@ pub async fn read_json<T: DeserializeOwned>(
         crate::CONTENT_TYPE_JSON,
         headers.get(http::header::CONTENT_TYPE).expect("missing content-type")
     );
-    let body_bytes = response
-        .body_mut()
-        .collect()
-        .await
-        .expect("error reading body")
-        .to_bytes();
+    let body_bytes = read_bytes(response).await;
     serde_json::from_slice(body_bytes.as_ref())
         .expect("failed to parse server body as expected type")
 }
@@ -579,14 +562,24 @@ pub async fn read_json<T: DeserializeOwned>(
 pub async fn read_string(
     response: &mut Response<Body>,
 ) -> String {
-    let body_bytes = response
+    let body_bytes = read_bytes(response).await;
+    String::from_utf8(body_bytes.as_ref().into())
+        .expect("response contained non-UTF-8 bytes")
+}
+
+async fn read_bytes<B>(
+    response: &mut Response<B>,
+) -> hyper::body::Bytes
+where
+    B: hyper::body::Body + Unpin,
+    B::Error: std::fmt::Debug,
+{
+    response
         .body_mut()
         .collect()
         .await
         .expect("error reading body")
-        .to_bytes();
-    String::from_utf8(body_bytes.as_ref().into())
-        .expect("response contained non-UTF-8 bytes")
+        .to_bytes()
 }
 
 /// Given a Hyper Response, extract and parse the Content-Length header.
