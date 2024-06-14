@@ -666,6 +666,7 @@ pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};
 pub use websocket::WebsocketChannelResult;
 pub use websocket::WebsocketConnection;
+pub use websocket::WebsocketConnectionRaw;
 pub use websocket::WebsocketEndpointResult;
 pub use websocket::WebsocketUpgrade;
 

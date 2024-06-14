@@ -23,6 +23,9 @@ use serde_json::json;
 use sha1::{Digest, Sha1};
 use slog::Logger;
 use std::future::Future;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
 /// WebsocketUpgrade is an ExclusiveExtractor used to upgrade and handle an HTTP
 /// request as a websocket when present in a Dropshot endpoint's function
@@ -51,14 +54,14 @@ pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 pub struct WebsocketConnection(WebsocketConnectionRaw);
 
 /// A type that implements [tokio::io::AsyncRead] + [tokio::io::AsyncWrite].
-// Not public, since it uses less-stable hyper-util.
-type WebsocketConnectionRaw = hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>;
+// A newtype so as to not expose the less-stable hyper-util type.
+pub struct WebsocketConnectionRaw(
+    hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>,
+);
 
 impl WebsocketConnection {
     /// Consumes `self` and returns the held raw connection.
-    pub fn into_inner(
-        self,
-    ) -> impl tokio::io::AsyncRead + tokio::io::AsyncWrite {
+    pub fn into_inner(self) -> WebsocketConnectionRaw {
         self.0
     }
 }
@@ -233,7 +236,8 @@ impl WebsocketUpgrade {
                     match upgrade_fut.await {
                         Ok(upgrade) => {
                             let io = hyper_util::rt::TokioIo::new(upgrade);
-                            match handler(WebsocketConnection(io)).await {
+                            let raw = WebsocketConnectionRaw(io);
+                            match handler(WebsocketConnection(raw)).await {
                                 Ok(x) => Ok(x),
                                 Err(e) => {
                                     error!(
@@ -293,6 +297,52 @@ impl JsonSchema for WebsocketUpgrade {
             .extensions
             .insert(WEBSOCKET_PARAM_SENTINEL.to_string(), json!(true));
         schemars::schema::Schema::Object(schema)
+    }
+}
+
+impl tokio::io::AsyncRead for WebsocketConnectionRaw {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_read(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for WebsocketConnectionRaw {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write(cx, buf)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.0.is_write_vectored()
+    }
+
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[std::io::IoSlice<'_>],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write_vectored(cx, bufs)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_shutdown(cx)
     }
 }
 
