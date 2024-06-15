@@ -36,7 +36,7 @@ use std::sync::Arc;
 /// of an API trait.
 ///
 /// This type is never constructed, and is used only as a type parameter to
-/// `ApiEndpoint::new_stub`.
+/// [`ApiEndpoint::new_for_types`].
 #[derive(Copy, Clone, Debug)]
 pub enum StubContext {}
 
@@ -146,7 +146,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// }
     ///
     /// let mut api: ApiDescription<StubContext> = ApiDescription::new();
-    /// let endpoint = ApiEndpoint::new_stub::<
+    /// let endpoint = ApiEndpoint::new_for_types::<
     ///     // The request type is always a tuple. Note the 1-tuple syntax.
     ///     (Query<GetValueParams>,),
     ///     // The response type is always Result<T, HttpError> where T implements
