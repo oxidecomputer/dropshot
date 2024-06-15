@@ -192,7 +192,8 @@
 //! allow for multiple implementations, such as a mock implementation for
 //! testing.
 //!
-//! Here's an example of an API trait that's equivalent to the endpoint above:
+//! Here's an example of an API trait that's equivalent to the function-based
+//! server above:
 //!
 //! ```
 //! use dropshot::ApiDescription;
