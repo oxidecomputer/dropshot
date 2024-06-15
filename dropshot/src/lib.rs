@@ -1,4 +1,5 @@
 // Copyright 2023 Oxide Computer Company
+
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
 //!
@@ -112,9 +113,9 @@
 //!
 //! ### As a free function
 //!
-//! The simplest way to get started is by defining an endpoint as a top-level
-//! function, annotated with the [`endpoint`] macro. Here's an example of a
-//! single endpoint that lists a hardcoded project:
+//! The simplest Dropshot server defines an endpoint as a function, annotated
+//! with the [`endpoint`] macro. Here's an example of a single endpoint that
+//! lists a hardcoded project:
 //!
 //! ```
 //! use dropshot::endpoint;
@@ -127,14 +128,14 @@
 //! use serde::Serialize;
 //! use std::sync::Arc;
 //!
-//! /** Represents a project in our API */
+//! /// Represents a project in our API.
 //! #[derive(Serialize, JsonSchema)]
 //! struct Project {
-//!     /** name of the project */
+//!     /// Name of the project.
 //!     name: String,
 //! }
 //!
-//! /** Fetch a project. */
+//! /// Fetch a project.
 //! #[endpoint {
 //!     method = GET,
 //!     path = "/projects/project1",
@@ -150,14 +151,12 @@
 //! fn main() {
 //!     let mut api = ApiDescription::new();
 //!
-//!     /*
-//!      * Register our endpoint and its handler function.  The "endpoint" macro
-//!      * specifies the HTTP method and URI path that identify the endpoint,
-//!      * allowing this metadata to live right alongside the handler function.
-//!      */
+//!     // Register our endpoint and its handler function.  The "endpoint" macro
+//!     // specifies the HTTP method and URI path that identify the endpoint,
+//!     // allowing this metadata to live right alongside the handler function.
 //!     api.register(myapi_projects_get_project).unwrap();
 //!
-//!     /* ... (use `api` to set up an `HttpServer` ) */
+//!     // ... (use `api` to set up an `HttpServer` )
 //! }
 //! ```
 //!
@@ -180,10 +179,18 @@
 //!
 //! ### As an API trait
 //!
-//! With Rust 1.75 and above, it is also possible to define a Dropshot API using
-//! an *API trait*. An API trait is a Rust trait that represents a collection of
-//! API endpoints. Each endpoint is defined as a static method on the trait, and
-//! the trait as a whole is annotated with `#[dropshot::api_description]`.
+//! An **API trait** is a Rust trait that represents a collection of API
+//! endpoints. Each endpoint is defined as a static method on the trait, and the
+//! trait as a whole is annotated with `#[dropshot::api_description]`. (Rust
+//! 1.75 or later is required.)
+//!
+//! While slightly more complex than the function-based server, API traits
+//! separate the interface definition from the implementation. Keeping the
+//! definition and implementation in different crates can allow for faster
+//! iteration of the interface, and simplifies multi-service repos with clients
+//! generated from the OpenAPI output of interfaces. In addition, API traits
+//! allow for multiple implementations, such as a mock implementation for
+//! testing.
 //!
 //! Here's an example of an API trait that's equivalent to the endpoint above:
 //!
@@ -262,28 +269,35 @@
 //! [`api-trait-alternate.rs`]:
 //!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait-alternate.rs
 //!
-//! #### Where to put the implementation
-//!
-//! Implementations can be in one of two places:
-//!
-//! 1. In a separate crate from the API. This allows the OpenAPI spec to be
-//!    generated without the implementation having to be compiled (or even exist
-//!    in the first place).
-//!
-//!    This is recommended for production APIs, where the implementation is
-//!    large and slow to compile. This is especially recommended for situations
-//!    where multiple services have inherent circular dependencies with each
-//!    other.
-//!
-//! 2. In the same crate as the API. This is a reasonable option for tests and
-//!    mock servers.
-//!
 //! #### Limitations
 //!
 //! Currently, the `#[dropshot::api_description]` macro is only supported in module
 //! contexts, not within function bodies. This is a Rust limitation -- see [Rust
 //! issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
 //! details.
+//!
+//! ### Choosing between functions and traits
+//!
+//! *Prototyping:* If you're prototyping with a small number of endpoints,
+//! functions provide an easier way to get started. The downside to traits is
+//! that endpoints signatures are defined at least twice, once in the trait and
+//! once in the implementation.
+//!
+//! *Small services:* For a service that is relatively isolated and quick to
+//! compile, traits and functions are both good options.
+//!
+//! *APIs with multiple implementations:* For services that are large enough to
+//! have a second, simpler implementation (of potentially parts of them), a
+//! trait is best.
+//!
+#![cfg_attr(
+    feature = "internal-docs",
+    doc = "Here's an archetypal way to organize code for a large service with a \
+         real and an in-memory test implementation. Each rounded node \
+         represents a binary and each rectangular node represents a library \
+         crate (or more than one for \"logic\").\n"
+)]
+#![cfg_attr(feature = "internal-docs", doc = simple_mermaid::mermaid!("../large-service-dep-graph.mmd"))]
 //!
 //! ### `#[endpoint { ... }]` attribute parameters
 //!
