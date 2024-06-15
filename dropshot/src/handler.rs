@@ -497,8 +497,8 @@ where
 
 /// An unimplemented [`RouteHandler`] that panics when invoked.
 ///
-/// This may be used to generate an OpenAPI document for trait-based servers
-/// without requiring a concrete implementation.
+/// This may be used to generate an OpenAPI document for API traits without
+/// requiring a concrete implementation.
 #[derive(Debug)]
 pub(crate) struct StubRouteHandler {
     label: String,

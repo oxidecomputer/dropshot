@@ -178,14 +178,14 @@
 //! for each type of response (which can also include documentation).  This is
 //! largely known statically, though generated at runtime.
 //!
-//! ### As a trait server
+//! ### As an API trait
 //!
-//! With Rust 1.75 and above, it is also possible to define an API using a
-//! *trait server*. A trait server is a trait that represents a collection
-//! of API endpoints. Each endpoint is defined as a static method on the trait,
-//! and the trait is annotated with `#[dropshot::server]`.
+//! With Rust 1.75 and above, it is also possible to define a Dropshot API using
+//! an *API trait*. An API trait is a Rust trait that represents a collection of
+//! API endpoints. Each endpoint is defined as a static method on the trait, and
+//! the trait as a whole is annotated with `#[dropshot::api_description]`.
 //!
-//! Here's an example of a trait server that's equivalent to the endpoint above:
+//! Here's an example of an API trait that's equivalent to the endpoint above:
 //!
 //! ```
 //! use dropshot::ApiDescription;
@@ -205,8 +205,8 @@
 //! }
 //!
 //! /// Defines the trait that captures all the methods.
-//! #[dropshot::server]
-//! trait ProjectServer {
+//! #[dropshot::api_description]
+//! trait ProjectApi {
 //!     /// The context type used within endpoints.
 //!     type Context;
 //!
@@ -220,8 +220,8 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
-//! // The `dropshot::server` macro generates a module called
-//! // `project_server`. This module has a method called `api_description`
+//! // The `dropshot::api_description` macro generates a module called
+//! // `project_api`. This module has a method called `api_description`
 //! // that, given an implementation of the trait, returns an `ApiDescription`.
 //! // The `ApiDescription` can then be used to set up an `HttpServer`.
 //!
@@ -233,7 +233,7 @@
 //! /// the specific server impl.
 //! enum ServerImpl {}
 //!
-//! impl ProjectServer for ServerImpl {
+//! impl ProjectApi for ServerImpl {
 //!     type Context = ();
 //!
 //!     async fn myapi_projects_get_project(
@@ -248,19 +248,19 @@
 //!     // The type of `api` is provided for clarity -- it is generally inferred.
 //!     // "api" will automatically register all endpoints defined in the trait.
 //!     let mut api: ApiDescription<()> =
-//!         project_server::api_description::<ServerImpl>().unwrap();
+//!         project_api::api_description::<ServerImpl>().unwrap();
 //!
 //!     // ... (use `api` to set up an `HttpServer` )
 //! }
 //! ```
 //!
-//! See [`server-trait.rs`] and [`server-trait-alternate.rs`] for working
+//! See [`api-trait.rs`] and [`api-trait-alternate.rs`] for working
 //! examples.
 //!
-//! [`server-trait.rs`]:
-//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/server-trait.rs
-//! [`server-trait-alternate.rs`]:
-//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/server-trait-alternate.rs
+//! [`api-trait.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait.rs
+//! [`api-trait-alternate.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait-alternate.rs
 //!
 //! #### Where to put the implementation
 //!
@@ -280,7 +280,7 @@
 //!
 //! #### Limitations
 //!
-//! Currently, the `#[dropshot::server]` macro is only supported in module
+//! Currently, the `#[dropshot::api_description]` macro is only supported in module
 //! contexts, not within function bodies. This is a Rust limitation -- see [Rust
 //! issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
 //! details.
@@ -448,10 +448,10 @@
 //! For a given `ApiDescription`, you can also print out an OpenAPI spec
 //! describing the API.  See [`ApiDescription::openapi`].
 //!
-//! With trait-based servers, the `#[dropshot::server]` macro generates a helper
-//! function called `stub_api_description`, which returns a stub
-//! `ApiDescription`. The stub description can be used to generate an OpenAPI
-//! spec for the trait server. For example:
+//! With API traits, the `#[dropshot::api_description]` macro generates a helper
+//! function called `stub_api_description`, which returns an `ApiDescription`
+//! not backed by an implementation. This _stub description_ can be used to
+//! generate an OpenAPI spec for the trait. For example:
 //!
 //! ```
 //! # use dropshot::ApiDescription;
@@ -467,9 +467,9 @@
 //! # struct Project {
 //! #     name: String,
 //! # }
-//! /** This is the server trait defined above. */
-//! #[dropshot::server]
-//! trait ProjectServer {
+//! /// This is the API trait defined above.
+//! #[dropshot::api_description]
+//! trait ProjectApi {
 //!     type Context;
 //!     #[endpoint {
 //!         method = GET,
@@ -482,14 +482,14 @@
 //!
 //! # // defining fn main puts the doctest in a module context
 //! # fn main() {
-//! let description = project_server::stub_api_description().unwrap();
+//! let description = project_api::stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! # }
 //! ```
 //!
-//! A stub description should not be used for an actual server: all request
-//! handlers will panic.
+//! A stub description must not be used for an actual server: all request
+//! handlers will immediately panic.
 //!
 //! ## Support for paginated resources
 //!
@@ -828,6 +828,6 @@ pub use handler::RequestContextArgument;
 pub use http::Method;
 
 extern crate dropshot_endpoint;
+pub use dropshot_endpoint::api_description;
 pub use dropshot_endpoint::channel;
 pub use dropshot_endpoint::endpoint;
-pub use dropshot_endpoint::server;

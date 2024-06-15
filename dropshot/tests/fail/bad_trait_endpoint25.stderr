@@ -1,0 +1,62 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_trait_endpoint25.rs:24:7
+   |
+24 | trait MyApi {
+   |       ^^^^^
+
+error: endpoint `weird_types` must not have generics
+  --> tests/fail/bad_trait_endpoint25.rs:31:25
+   |
+31 |     async fn weird_types<'a, T>(
+   |                         ^^^^^^^
+
+error: endpoint `weird_types` must accept RequestContext<Self::Context> as its first argument
+  --> tests/fail/bad_trait_endpoint25.rs:32:17
+   |
+32 |         _rqctx: MyRequestContext<T, Self::Context>,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: endpoint `weird_types` must not have lifetime parameters in extractor
+  --> tests/fail/bad_trait_endpoint25.rs:33:25
+   |
+33 |         _param1: Query<&'a QueryParams>,
+   |                         ^^
+
+error: endpoint `weird_types` must not have lifetime bounds in extractor
+  --> tests/fail/bad_trait_endpoint25.rs:34:22
+   |
+34 |         _param2: dyn for<'b> TypedBody<&'b ()>,
+   |                      ^^^^^^^
+
+error: endpoint `weird_types` must not have lifetime parameters in extractor
+  --> tests/fail/bad_trait_endpoint25.rs:34:41
+   |
+34 |         _param2: dyn for<'b> TypedBody<&'b ()>,
+   |                                         ^^
+
+error: endpoint `weird_types` must not have impl Trait in return type
+  --> tests/fail/bad_trait_endpoint25.rs:35:17
+   |
+35 |     ) -> Result<impl HttpResponse, HttpError> {
+   |                 ^^^^^^^^^^^^^^^^^
+
+error[E0404]: expected trait, found struct `TypedBody`
+  --> tests/fail/bad_trait_endpoint25.rs:34:30
+   |
+34 |         _param2: dyn for<'b> TypedBody<&'b ()>,
+   |                              ^^^^^^^^^^^^^^^^^ not a trait
+
+error[E0404]: expected trait, found struct `TypedBody`
+  --> tests/fail/bad_trait_endpoint25.rs:49:30
+   |
+49 |         _param2: dyn for<'b> TypedBody<&'b ()>,
+   |                              ^^^^^^^^^^^^^^^^^ not a trait

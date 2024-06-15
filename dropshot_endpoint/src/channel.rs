@@ -47,7 +47,7 @@ pub(crate) fn do_channel(
                 &trait_item_fn.sig,
                 format!(
                     "endpoint `{name}` appears to be a trait function\n\
-                     note: did you mean to use `#[dropshot::server]` \
+                     note: did you mean to use `#[dropshot::api_description]` \
                      instead?",
                 ),
             ));

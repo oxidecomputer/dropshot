@@ -1,5 +1,5 @@
 error: endpoint `bad_endpoint` appears to be a trait function
-       note: did you mean to use `#[dropshot::server]` instead?
+       note: did you mean to use `#[dropshot::api_description]` instead?
   --> tests/fail/bad_endpoint27.rs:20:5
    |
 20 | /     async fn bad_endpoint(

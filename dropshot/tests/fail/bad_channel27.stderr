@@ -1,5 +1,5 @@
 error: endpoint `bad_channel` appears to be a trait function
-       note: did you mean to use `#[dropshot::server]` instead?
+       note: did you mean to use `#[dropshot::api_description]` instead?
   --> tests/fail/bad_channel27.rs:19:5
    |
 19 | /     async fn bad_channel(

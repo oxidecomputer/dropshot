@@ -33,7 +33,7 @@ use std::fmt;
 use std::sync::Arc;
 
 /// A type used to produce an `ApiDescription` without a concrete implementation
-/// of a trait-based server.
+/// of an API trait.
 ///
 /// This type is never constructed, and is used only as a type parameter to
 /// `ApiEndpoint::new_stub`.
@@ -128,7 +128,7 @@ impl<'a> ApiEndpoint<StubContext> {
     ///
     /// This is useful for generating OpenAPI documentation without having to
     /// implement the actual handler function. In that capacity, it is used for
-    /// trait-based dropshot servers.
+    /// trait-based dropshot APIs.
     ///
     /// # Example
     ///
@@ -160,7 +160,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
-    pub fn new_stub<FuncParams, ResultType>(
+    pub fn new_for_types<FuncParams, ResultType>(
         operation_id: String,
         method: Method,
         content_type: &'a str,

@@ -60,7 +60,7 @@ pub(crate) fn do_endpoint(
                 &trait_item_fn.sig,
                 format!(
                     "endpoint `{name}` appears to be a trait function\n\
-                     note: did you mean to use `#[dropshot::server]` \
+                     note: did you mean to use `#[dropshot::api_description]` \
                      instead?",
                 ),
             ));
@@ -766,7 +766,7 @@ impl ValidatedEndpointMetadata {
                 // for successful generation while being close by for errors.
                 // Seems pretty unobjectionable.
                 quote_spanned! {attr.pound_token.span()=>
-                    #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
+                    #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
                         #content_type,

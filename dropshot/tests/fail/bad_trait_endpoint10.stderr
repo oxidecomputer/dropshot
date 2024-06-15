@@ -1,0 +1,37 @@
+error[E0277]: the trait bound `Result<dropshot::HttpResponseUpdatedNoContent, String>: dropshot::api_description::HttpResultType` is not satisfied
+  --> tests/fail/bad_trait_endpoint10.rs:19:10
+   |
+19 |     ) -> Result<HttpResponseUpdatedNoContent, String>;
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `dropshot::api_description::HttpResultType` is not implemented for `Result<dropshot::HttpResponseUpdatedNoContent, String>`
+   |
+   = help: the trait `dropshot::api_description::HttpResultType` is implemented for `Result<T, HttpError>`
+note: required by a bound in `ApiEndpoint::<StubContext>::new_for_types`
+  --> src/api_description.rs
+   |
+   |     pub fn new_for_types<FuncParams, ResultType>(
+   |            ------------- required by a bound in this associated function
+...
+   |         ResultType: HttpResultType,
+   |                     ^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<StubContext>::new_for_types`
+
+error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyApi>::Context>) -> impl Future<Output = Result<dropshot::HttpResponseUpdatedNoContent, String>> + Send + 'static {<ServerImpl as MyApi>::bad_error_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+  --> tests/fail/bad_trait_endpoint10.rs:13:5
+   |
+9  |   #[dropshot::api_description]
+   |   ---------------------------- required by a bound introduced by this call
+...
+13 | /     #[endpoint {
+14 | |         method = GET,
+15 | |         path = "/test",
+16 | |     }]
+17 | |     async fn bad_error_type(
+   | |___________________________^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<<ServerImpl as MyApi>::Context>) -> ... {<... as MyApi>::bad_error_type}`
+   |
+note: required by a bound in `ApiEndpoint::<Context>::new`
+  --> src/api_description.rs
+   |
+   |     pub fn new<HandlerType, FuncParams, ResponseType>(
+   |            --- required by a bound in this associated function
+...
+   |         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`
