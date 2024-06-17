@@ -15,6 +15,10 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...HEAD[Full list of commits]
 
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/1028[#1028] Upgraded to hyper v1.0. This means types from the `http` must come from v1.x. Dropshot no longer expects requests and responses to use the `hyper::Body` type, but rather `dropshot::Body`. It behaves very similar.
+
 == 0.10.1 (released 2024-05-15)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.0\...v0.10.1[Full list of commits]
