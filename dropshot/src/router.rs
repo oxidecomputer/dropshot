@@ -385,7 +385,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         }
 
         let methodname = method.as_str().to_uppercase();
-        if node.methods.get(&methodname).is_some() {
+        if node.methods.contains_key(&methodname) {
             panic!(
                 "URI path \"{}\": attempted to create duplicate route for \
                  method \"{}\"",

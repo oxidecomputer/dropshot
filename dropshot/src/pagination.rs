@@ -139,11 +139,13 @@ where
 
 /// A single page of results
 #[derive(JsonSchema)]
-pub struct ResultsPageSchema<ItemType> {
+struct ResultsPageSchema<ItemType> {
+    #[allow(dead_code)]
     /// token used to fetch the next page of results (if any)
-    pub next_page: Option<String>,
+    next_page: Option<String>,
+    #[allow(dead_code)]
     /// list of items on this page of results
-    pub items: Vec<ItemType>,
+    items: Vec<ItemType>,
 }
 
 impl<ItemType> ResultsPage<ItemType> {
@@ -821,10 +823,7 @@ mod test {
                 .into_object();
 
         assert_eq!(
-            *schema
-                .extensions
-                .get(&(PAGINATION_PARAM_SENTINEL.to_string()))
-                .unwrap(),
+            *schema.extensions.get(PAGINATION_PARAM_SENTINEL).unwrap(),
             json!({
                 "required": [
                     "name"

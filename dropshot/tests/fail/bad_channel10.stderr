@@ -7,8 +7,8 @@ error[E0271]: expected `{async block@$DIR/tests/fail/bad_channel10.rs:9:1: 12:3}
 12 | | }]
    | |__^ expected `Result<(), Box<...>>`, found `Result<(), String>`
    |
-   = note: expected enum `Result<_, Box<(dyn std::error::Error + Send + Sync + 'static)>>`
-              found enum `Result<_, String>`
+   = note: expected enum `Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>`
+              found enum `Result<(), String>`
 note: required by a bound in `WebsocketUpgrade::handle`
   --> src/websocket.rs
    |
