@@ -262,6 +262,8 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             let mut builder = auto::Builder::new(TokioExecutor::new());
             // http/1 settings
             builder.http1().timer(TokioTimer::new());
+            // http/2 settings
+            builder.http2().timer(TokioTimer::new());
 
             // Use a graceful watcher to keep track of all existing connections,
             // and when the close_signal is trigger, force all known conns
@@ -271,7 +273,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
 
             loop {
                 tokio::select! {
-                    Ok((sock, remote_addr)) = self.0.accept() => {
+                    (sock, remote_addr) = self.0.accept() => {
                         let fut = builder.serve_connection_with_upgrades(
                             TokioIo::new(sock),
                             self.1.make_http_request_handler(remote_addr),
@@ -339,10 +341,10 @@ struct HttpAcceptor {
 }
 
 impl HttpAcceptor {
-    async fn accept(&self) -> std::io::Result<(TcpStream, SocketAddr)> {
+    async fn accept(&self) -> (TcpStream, SocketAddr) {
         loop {
             match self.tcp.accept().await {
-                Ok((socket, addr)) => return Ok((socket, addr)),
+                Ok((socket, addr)) => return (socket, addr),
                 Err(e) => match e.kind() {
                     // These are errors on the individual socket that we
                     // tried to accept, and so can be ignored.
@@ -482,17 +484,7 @@ impl HttpsAcceptor {
                             },
                         }
                     },
-                    accept_result = http_acceptor.accept() => {
-                        let (socket, addr) = match accept_result {
-                            Ok(v) => v,
-                            Err(e) => {
-                                // The HttpAcceptor already handled transient errors.
-                                // At this point, it's a bad one.
-                                yield Err(e);
-                                break;
-                            }
-                        };
-
+                    (socket, addr) = http_acceptor.accept() => {
                         let tls_negotiation = tls_acceptor
                             .lock()
                             .await
