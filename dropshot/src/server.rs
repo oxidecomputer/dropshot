@@ -332,7 +332,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
     }
 }
 
-/// This accepts connections more gracefully from a TcpListener.
+/// Accepts TCP connections like a `TcpListener`, but ignores transient errors rather than propagating them to the caller
 struct HttpAcceptor {
     tcp: TcpListener,
     log: slog::Logger,
