@@ -1204,4 +1204,29 @@ mod test {
         let (server, _) = create_test_server();
         std::mem::drop(server);
     }
+
+    #[tokio::test]
+    async fn test_http_acceptor_happy_path() {
+        const TOTAL: usize = 100;
+        let tcp =
+            tokio::net::TcpListener::bind("0.0.0.0:0").await.expect("bind");
+        let addr = tcp.local_addr().expect("local_addr");
+        let acceptor =
+            HttpAcceptor { log: slog::Logger::root(slog::Discard, o!()), tcp };
+
+        let t1 = tokio::spawn(async move {
+            for _ in 0..TOTAL {
+                let _ = acceptor.accept().await;
+            }
+        });
+
+        let t2 = tokio::spawn(async move {
+            for _ in 0..TOTAL {
+                tokio::net::TcpStream::connect(&addr).await.expect("connect");
+            }
+        });
+
+        t1.await.expect("task 1");
+        t2.await.expect("task 2");
+    }
 }
