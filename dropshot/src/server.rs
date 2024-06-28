@@ -1209,7 +1209,7 @@ mod test {
     async fn test_http_acceptor_happy_path() {
         const TOTAL: usize = 100;
         let tcp =
-            tokio::net::TcpListener::bind("0.0.0.0:0").await.expect("bind");
+            tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
         let addr = tcp.local_addr().expect("local_addr");
         let acceptor =
             HttpAcceptor { log: slog::Logger::root(slog::Discard, o!()), tcp };
