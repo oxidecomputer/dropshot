@@ -2,10 +2,10 @@
 
 //! Test cases for streaming requests.
 
+use dropshot::Body;
 use dropshot::{endpoint, ApiDescription, HttpError, RequestContext};
 use http::{Method, Response, StatusCode};
-use hyper::{body::HttpBody, Body};
-use hyper_staticfile::FileBytesStream;
+use http_body_util::BodyExt;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 extern crate slog;
@@ -46,10 +46,10 @@ async fn api_streaming(
     }
     file.seek(std::io::SeekFrom::Start(0)).await.unwrap();
 
-    let file_stream = FileBytesStream::new(file);
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .body(file_stream.into_body())?)
+    let file_access = hyper_staticfile::vfs::TokioFileAccess::new(file);
+    let file_stream = hyper_staticfile::util::FileBytesStream::new(file_access);
+    let body = Body::wrap(hyper_staticfile::Body::Full(file_stream));
+    Ok(Response::builder().status(StatusCode::OK).body(body)?)
 }
 
 #[endpoint {
@@ -64,8 +64,8 @@ async fn api_not_streaming(
         .body(serde_json::to_string("not-streaming").unwrap().into())?)
 }
 
-fn check_has_transfer_encoding(
-    response: &Response<Body>,
+fn check_has_transfer_encoding<B>(
+    response: &Response<B>,
     expected_value: Option<&str>,
 ) {
     let transfer_encoding_header = response.headers().get("transfer-encoding");
@@ -96,10 +96,12 @@ async fn test_streaming_server_streaming_client() {
 
     let mut chunk_count = 0;
     let mut byte_count = 0;
-    while let Some(chunk) = response.body_mut().data().await {
+    while let Some(chunk) = response.body_mut().frame().await {
         let chunk = chunk.expect("Should have received chunk without error");
-        byte_count += chunk.len();
-        chunk_count += 1;
+        if let Ok(chunk) = chunk.into_data() {
+            byte_count += chunk.len();
+            chunk_count += 1;
+        }
     }
 
     assert!(
@@ -128,9 +130,12 @@ async fn test_streaming_server_buffered_client() {
         .expect("Expected GET request to succeed");
     check_has_transfer_encoding(&response, Some("chunked"));
 
-    let body_bytes = hyper::body::to_bytes(response.body_mut())
+    let body_bytes = response
+        .body_mut()
+        .collect()
         .await
-        .expect("Error reading body");
+        .expect("Error reading body")
+        .to_bytes();
     assert_eq!(
         BUF_SIZE * BUF_COUNT,
         body_bytes.len(),

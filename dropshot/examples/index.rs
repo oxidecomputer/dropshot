@@ -2,6 +2,7 @@
 //! Example use of Dropshot for matching wildcard paths to serve static content.
 
 use dropshot::ApiDescription;
+use dropshot::Body;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -10,7 +11,6 @@ use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
 use dropshot::{endpoint, Path};
 use http::{Response, StatusCode};
-use hyper::Body;
 use schemars::JsonSchema;
 use serde::Deserialize;
 

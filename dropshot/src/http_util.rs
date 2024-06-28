@@ -2,7 +2,8 @@
 //! General-purpose HTTP-related facilities
 
 use bytes::Bytes;
-use hyper::body::HttpBody;
+use http_body_util::BodyExt;
+use hyper::body::Body as HttpBody;
 use serde::de::DeserializeOwned;
 
 use super::error::HttpError;
@@ -35,9 +36,11 @@ where
     // TODO better understand pin_mut!()
     // TODO do we need to use saturating_add() here?
     let mut nbytesread: usize = 0;
-    while let Some(maybebuf) = body.data().await {
-        let buf = maybebuf?;
-        nbytesread += buf.len();
+    while let Some(maybefr) = body.frame().await {
+        let fr = maybefr?;
+        if let Ok(buf) = fr.into_data() {
+            nbytesread += buf.len();
+        }
     }
 
     // TODO-correctness why does the is_end_stream() assertion fail?

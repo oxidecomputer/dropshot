@@ -6,7 +6,7 @@ error[E0277]: the trait bound `String: HttpResponse` is not satisfied
    |
    = help: the following other types implement trait `HttpResponse`:
              HttpResponseHeaders<T, H>
-             http::response::Response<hyper::body::body::Body>
+             http::response::Response<Body>
    = note: required for `String` to implement `HttpResponse`
 note: required for `Result<String, HttpError>` to implement `ResultTrait`
   --> tests/fail/bad_endpoint12.rs:15:6

@@ -3,6 +3,7 @@
 //! Tests for configuration file.
 
 use dropshot::test_util::read_config;
+use dropshot::Body;
 use dropshot::{
     ConfigDropshot, ConfigTls, HandlerTaskMode, HttpError, HttpResponseOk,
     RequestContext,
@@ -118,11 +119,15 @@ fn make_config(
 // test logic
 trait TestConfigBindServer<C>
 where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+    C: hyper_util::client::legacy::connect::Connect
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     type Context: Send + Sync + 'static;
 
-    fn make_client(&self) -> hyper::Client<C>;
+    fn make_client(&self) -> hyper_util::client::legacy::Client<C, Body>;
     fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context>;
     fn make_uri(&self, bind_port: u16) -> hyper::Uri;
 }
@@ -131,7 +136,11 @@ where
 // it binds to ports as expected.
 async fn test_config_bind_server<C, T>(test_config: T, bind_port: u16)
 where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+    C: hyper_util::client::legacy::connect::Connect
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     T: TestConfigBindServer<C>,
 {
     let client = test_config.make_client();
@@ -184,15 +193,22 @@ async fn test_config_bind_address_http() {
     struct ConfigBindServerHttp {
         log: slog::Logger,
     }
-    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+    impl
+        TestConfigBindServer<hyper_util::client::legacy::connect::HttpConnector>
         for ConfigBindServerHttp
     {
         type Context = i32;
 
         fn make_client(
             &self,
-        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
-            hyper::Client::new()
+        ) -> hyper_util::client::legacy::Client<
+            hyper_util::client::legacy::connect::HttpConnector,
+            Body,
+        > {
+            hyper_util::client::legacy::Client::builder(
+                hyper_util::rt::TokioExecutor::new(),
+            )
+            .build(hyper_util::client::legacy::connect::HttpConnector::new())
         }
 
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
@@ -227,15 +243,20 @@ async fn test_config_bind_address_https() {
 
     impl<'a>
         TestConfigBindServer<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
         > for ConfigBindServerHttps<'a>
     {
         type Context = i32;
 
         fn make_client(
             &self,
-        ) -> hyper::Client<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        ) -> hyper_util::client::legacy::Client<
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
+            Body,
         > {
             // Configure TLS to trust the self-signed cert
             let mut root_store = rustls::RootCertStore { roots: vec![] };
@@ -251,7 +272,10 @@ async fn test_config_bind_address_https() {
                 .https_only()
                 .enable_http1()
                 .build();
-            hyper::Client::builder().build(https_connector)
+            hyper_util::client::legacy::Client::builder(
+                hyper_util::rt::TokioExecutor::new(),
+            )
+            .build(https_connector)
         }
 
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
@@ -299,15 +323,20 @@ async fn test_config_bind_address_https_buffer() {
 
     impl<'a>
         TestConfigBindServer<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
         > for ConfigBindServerHttps<'a>
     {
         type Context = i32;
 
         fn make_client(
             &self,
-        ) -> hyper::Client<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        ) -> hyper_util::client::legacy::Client<
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
+            Body,
         > {
             // Configure TLS to trust the self-signed cert
             let mut root_store = rustls::RootCertStore { roots: vec![] };
@@ -323,7 +352,11 @@ async fn test_config_bind_address_https_buffer() {
                 .https_only()
                 .enable_http1()
                 .build();
-            hyper::Client::builder().build(https_connector)
+
+            hyper_util::client::legacy::Client::builder(
+                hyper_util::rt::TokioExecutor::new(),
+            )
+            .build(https_connector)
         }
 
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
@@ -395,15 +428,21 @@ struct ConfigHandlerTaskModeHttp {
     log: slog::Logger,
 }
 
-impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+impl TestConfigBindServer<hyper_util::client::legacy::connect::HttpConnector>
     for ConfigHandlerTaskModeHttp
 {
     type Context = HandlerTaskModeContext;
 
     fn make_client(
         &self,
-    ) -> hyper::Client<hyper::client::connect::HttpConnector> {
-        hyper::Client::new()
+    ) -> hyper_util::client::legacy::Client<
+        hyper_util::client::legacy::connect::HttpConnector,
+        Body,
+    > {
+        hyper_util::client::legacy::Client::builder(
+            hyper_util::rt::TokioExecutor::new(),
+        )
+        .build(hyper_util::client::legacy::connect::HttpConnector::new())
     }
 
     fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context> {

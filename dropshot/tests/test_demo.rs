@@ -25,6 +25,7 @@ use dropshot::test_util::read_string;
 use dropshot::test_util::TEST_HEADER_1;
 use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
+use dropshot::Body;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
 use dropshot::HttpResponseFound;
@@ -47,7 +48,6 @@ use futures::stream::StreamExt;
 use futures::SinkExt;
 use futures::TryStreamExt;
 use http::StatusCode;
-use hyper::Body;
 use hyper::Method;
 use hyper::Response;
 use schemars::JsonSchema;
@@ -1255,12 +1255,14 @@ async fn demo_handler_raw_request(
     _rqctx: RequestContext<usize>,
     raw_request: RawRequest,
 ) -> Result<HttpResponseOk<DemoRaw>, HttpError> {
+    use http_body_util::BodyExt;
+
     let request = raw_request.into_inner();
 
     let (parts, body) = request.into_parts();
     // This is not generally a good pattern because it allows untrusted
     // consumers to use up all memory.  This is just a narrow test.
-    let whole_body = hyper::body::to_bytes(body).await.unwrap();
+    let whole_body = body.collect().await.unwrap().to_bytes();
     Ok(HttpResponseOk(DemoRaw {
         nbytes: whole_body.len(),
         method: parts.method.to_string(),

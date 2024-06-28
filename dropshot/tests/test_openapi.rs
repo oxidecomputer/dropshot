@@ -1,5 +1,6 @@
 // Copyright 2023 Oxide Computer Company
 
+use dropshot::Body;
 use dropshot::{
     endpoint, http_response_found, http_response_see_other,
     http_response_temporary_redirect, ApiDescription, FreeformBody, HttpError,
@@ -9,7 +10,6 @@ use dropshot::{
     HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
 };
-use hyper::Body;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor, str::from_utf8};
@@ -361,7 +361,7 @@ async fn handler17(
 async fn handler18(
     _rqctx: RequestContext<()>,
 ) -> Result<HttpResponseOk<FreeformBody>, HttpError> {
-    let (_, body) = Body::channel();
+    let body = Body::empty();
     Ok(HttpResponseOk(body.into()))
 }
 

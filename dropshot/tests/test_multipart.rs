@@ -4,10 +4,9 @@
 
 use dropshot::test_util::read_string;
 use dropshot::{
-    endpoint, ApiDescription, HttpError, MultipartBody, RequestContext,
+    endpoint, ApiDescription, Body, HttpError, MultipartBody, RequestContext,
 };
 use http::{Method, Response, StatusCode};
-use hyper::Body;
 
 extern crate slog;
 
