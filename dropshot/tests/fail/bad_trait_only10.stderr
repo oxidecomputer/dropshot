@@ -1,0 +1,17 @@
+error: API trait `MyApi` must not be marked as `unsafe`
+ --> tests/fail/bad_trait_only10.rs:8:1
+  |
+8 | unsafe trait MyApi {
+  | ^^^^^^
+
+error[E0425]: cannot find function `api_description` in module `my_api`
+  --> tests/fail/bad_trait_only10.rs:23:13
+   |
+23 |     my_api::api_description::<MyImpl>();
+   |             ^^^^^^^^^^^^^^^ not found in `my_api`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_api`
+  --> tests/fail/bad_trait_only10.rs:24:13
+   |
+24 |     my_api::stub_api_description();
+   |             ^^^^^^^^^^^^^^^^^^^^ not found in `my_api`

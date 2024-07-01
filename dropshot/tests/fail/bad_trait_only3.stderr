@@ -1,0 +1,26 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_trait_only3.rs:13:7
+   |
+13 | trait MyApi {
+   |       ^^^^^
+
+error: endpoint `bad_endpoint` must accept RequestContext<Self::MyContext> as its first argument
+  --> tests/fail/bad_trait_only3.rs:30:32
+   |
+30 |         _rqctx: RequestContext<()>,
+   |                                ^^
+
+error: endpoint `bad_endpoint2` must accept RequestContext<Self::MyContext> as its first argument
+  --> tests/fail/bad_trait_only3.rs:38:32
+   |
+38 |         _rqctx: RequestContext<Self::Context>,
+   |                                ^^^^^^^^^^^^^

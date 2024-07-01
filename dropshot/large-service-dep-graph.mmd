@@ -1,0 +1,22 @@
+flowchart LR
+    openapi_generator([OpenAPI generator]) --> api
+    types[base types]
+    stateless_logic[stateless logic]
+    api[Dropshot API trait] --> types
+    test_lib --> stateless_logic
+    test_lib --> api
+    top_level_lib --> api
+    stateless_logic --> types
+    stateful_logic --> stateless_logic
+
+    subgraph production_impl [real implementation]
+    production_binary([production binary]) --> top_level_lib
+    top_level_lib[top-level library]
+    top_level_lib --> stateful_logic
+    stateful_logic[stateful logic]
+    end
+
+    subgraph test_impl [test implementation]
+    test_bin([test binary]) --> test_lib
+    test_lib[test library]
+    end

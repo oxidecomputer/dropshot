@@ -1,0 +1,70 @@
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_trait_endpoint7.rs:41:27
+   |
+41 |         Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
+   |            -------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |            |
+   |            required by a bound introduced by this call
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `dropshot::HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `dropshot::HttpResponseOk`
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_trait_endpoint7.rs:41:9
+   |
+41 |         Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
+   |         ^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `dropshot::HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_trait_endpoint7.rs:41:9
+   |
+41 |         Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             bool
+             char
+             isize
+             i8
+             i16
+             i32
+             i64
+             i128
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `dropshot::HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`

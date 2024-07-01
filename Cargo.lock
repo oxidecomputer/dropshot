@@ -379,6 +379,7 @@ dependencies = [
  "serde_path_to_error",
  "serde_urlencoded",
  "sha1",
+ "simple-mermaid",
  "slog",
  "slog-async",
  "slog-bunyan",
@@ -1627,6 +1628,12 @@ name = "similar"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "420acb44afdae038210c99e69aae24109f32f15500aa708e81d46c9f29d55fcf"
+
+[[package]]
+name = "simple-mermaid"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "620a1d43d70e142b1d46a929af51d44f383db9c7a2ec122de2cd992ccfcf3c18"
 
 [[package]]
 name = "slab"

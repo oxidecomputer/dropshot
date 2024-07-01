@@ -1,0 +1,8 @@
+error: endpoint `bad_endpoint` has invalid attributes: missing field `path`
+  --> tests/fail/bad_trait_endpoint26.rs:16:16
+   |
+16 |       #[endpoint {
+   |  ________________^
+17 | |         method = GET,
+18 | |     }]
+   | |_____^

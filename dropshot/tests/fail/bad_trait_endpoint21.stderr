@@ -1,0 +1,75 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_trait_endpoint21.rs:22:7
+   |
+22 | trait MyApi {
+   |       ^^^^^
+
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_trait_endpoint21.rs:33:9
+   |
+33 |         ...
+   |         ^^^
+
+error: only foreign or `unsafe extern "C"` functions may be C-variadic
+  --> tests/fail/bad_trait_endpoint21.rs:33:9
+   |
+33 |         ...
+   |         ^^^
+
+error: only foreign or `unsafe extern "C"` functions may be C-variadic
+  --> tests/fail/bad_trait_endpoint21.rs:46:9
+   |
+46 |         ...
+   |         ^^^
+
+error[E0658]: C-variadic functions are unstable
+  --> tests/fail/bad_trait_endpoint21.rs:30:5
+   |
+30 | /     async fn variadic_argument(
+31 | |         _rqctx: RequestContext<Self::Context>,
+32 | |         _param1: Query<QueryParams>,
+33 | |         ...
+34 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+   | |_________________________________________________________^
+   |
+   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
+
+error[E0658]: C-variadic functions are unstable
+  --> tests/fail/bad_trait_endpoint21.rs:43:5
+   |
+43 | /     async fn variadic_argument(
+44 | |         _rqctx: RequestContext<Self::Context>,
+45 | |         _param1: Query<QueryParams>,
+46 | |         ...
+47 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+48 | |         unreachable!()
+49 | |     }
+   | |_____^
+   |
+   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
+
+error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseUpdatedNoContent, HttpError>>` captures lifetime that does not appear in bounds
+  --> tests/fail/bad_trait_endpoint21.rs:47:58
+   |
+43 | /      async fn variadic_argument(
+44 | |          _rqctx: RequestContext<Self::Context>,
+45 | |          _param1: Query<QueryParams>,
+46 | |          ...
+47 | |      ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   | | ________________________________________________________-_^
+   | ||________________________________________________________|
+   |  |                                                        opaque type defined here
+48 |  |         unreachable!()
+49 |  |     }
+   |  |_____^
+   |
+   = note: hidden type `{async fn body@$DIR/tests/fail/bad_trait_endpoint21.rs:47:58: 49:6}` captures lifetime `'_`

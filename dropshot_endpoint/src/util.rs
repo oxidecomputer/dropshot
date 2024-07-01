@@ -9,6 +9,12 @@ pub(crate) const APPLICATION_X_WWW_FORM_URLENCODED: &str =
 pub(crate) const MULTIPART_FORM_DATA: &str = "multipart/form-data";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MacroKind {
+    Function,
+    Trait,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ValidContentType {
     ApplicationJson,
     ApplicationXWwwFormUrlencoded,
