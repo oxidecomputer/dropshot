@@ -1,5 +1,0 @@
-error: type `MyType` marked as endpoint is not a method
-  --> tests/fail/bad_server_only15.rs:12:5
-   |
-12 |     #[endpoint { method = GET }]
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

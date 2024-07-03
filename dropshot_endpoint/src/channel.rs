@@ -51,7 +51,7 @@ pub(crate) fn do_channel(
                 &trait_item_fn.sig,
                 format!(
                     "endpoint `{name}` appears to be a trait function\n\
-                     note: did you mean to use `#[dropshot::server]` \
+                     note: did you mean to use `#[dropshot::api_description]` \
                      instead?",
                 ),
             ));
@@ -245,7 +245,6 @@ pub(crate) struct ChannelParams<'ast> {
     rqctx_ty: RqctxTy<'ast>,
     shared_extractors: Vec<&'ast syn::Type>,
     websocket_conn: &'ast syn::Type,
-    ret_ty: &'ast syn::Type,
     adapter_name: syn::Ident,
 
     // Types used in the adapter function, generated at construction time.
@@ -299,7 +298,7 @@ impl<'ast> ChannelParams<'ast> {
         // errored out.
         if errors.has_errors() {
             None
-        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) =
+        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(_)) =
             (rqctx_ty, websocket_conn, ret_ty)
         {
             Some(Self {
@@ -308,7 +307,6 @@ impl<'ast> ChannelParams<'ast> {
                 rqctx_ty,
                 shared_extractors,
                 websocket_conn,
-                ret_ty,
                 adapter_name,
                 websocket_upgrade_ty,
                 endpoint_result_ty,

@@ -5,7 +5,7 @@
 use std::{fmt, iter::Peekable};
 
 use proc_macro2::{extra::DelimSpan, TokenStream};
-use quote::{quote, quote_spanned};
+use quote::{quote_spanned, ToTokens};
 use syn::{parse_quote, spanned::Spanned, visit::Visit, Error};
 
 use crate::error_store::ErrorSink;
@@ -72,7 +72,8 @@ pub(crate) fn validate_fn_ast(
 
 /// Processor and validator for parameters in a function signature.
 ///
-/// The caller is responsible for calling functions in the right order.
+/// The caller is responsible for calling the functions on this struct in the
+/// correct order (typically top-to-bottom).
 pub(crate) struct ParamValidator<'ast> {
     sig: &'ast syn::Signature,
     inputs: Peekable<syn::punctuated::Iter<'ast, syn::FnArg>>,
@@ -462,13 +463,15 @@ impl<'ast> RqctxTy<'ast> {
 impl<'ast> fmt::Debug for RqctxTy<'ast> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RqctxTy::Function(ty) => write!(f, "Function({})", quote! { #ty }),
+            RqctxTy::Function(ty) => {
+                write!(f, "Function({})", ty.to_token_stream())
+            }
             RqctxTy::Trait { orig, transformed_unit } => {
                 write!(
                     f,
                     "Trait {{ orig: {}, transformed_unit: {} }}",
-                    quote! { #orig },
-                    quote! { #transformed_unit },
+                    orig.to_token_stream(),
+                    transformed_unit.to_token_stream(),
                 )
             }
         }
@@ -611,7 +614,7 @@ impl fmt::Display for ParamTyKind {
 
 #[cfg(test)]
 mod tests {
-    use quote::format_ident;
+    use quote::{format_ident, quote};
     use syn::parse_quote;
 
     use super::*;

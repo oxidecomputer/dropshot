@@ -1,5 +1,0 @@
-error: macro `life_the_universe_and_everything` marked as endpoint is not a method
-  --> tests/fail/bad_server_only17.rs:18:5
-   |
-18 |     #[endpoint { method = GET }]
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

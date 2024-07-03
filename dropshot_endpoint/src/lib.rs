@@ -9,13 +9,13 @@
 use quote::quote;
 use serde_tokenstream::Error;
 
+mod api_trait;
 mod channel;
 mod doc;
 mod endpoint;
 mod error_store;
 mod metadata;
 mod params;
-mod server;
 mod syn_parsing;
 #[cfg(test)]
 mod test_util;
@@ -83,9 +83,9 @@ pub fn channel(
     do_output(channel::do_channel(attr.into(), item.into()))
 }
 
-/// Generates a Dropshot server from a trait.
+/// Generates a Dropshot API description from a trait.
 ///
-/// A server trait consists of:
+/// An API trait consists of:
 ///
 /// 1. A context type, typically `Self::Context`, values of which are shared
 ///    across all the endpoints.
@@ -93,14 +93,14 @@ pub fn channel(
 ///    the same constraints, and via the same syntax, as [`macro@endpoint`] or
 ///    [`macro@channel`].
 ///
-/// Server traits can also have arbitrary non-endpoint items, such as helper
+/// API traits can also have arbitrary non-endpoint items, such as helper
 /// functions.
 ///
 /// The macro performs a number of checks on endpoint methods, and produces the
 /// following items:
 ///
 /// * The trait itself, with the following modifications to enable use as a
-///   Dropshot server:
+///   Dropshot API:
 ///
 ///     1. The trait itself has a `'static` bound added to it.
 ///     2. The context type has a `dropshot::ServerContext + 'static` bound
@@ -120,12 +120,12 @@ pub fn channel(
 ///        that can be used to generate an OpenAPI spec without having an
 ///        implementation of the trait available.
 ///
-/// For more information about trait-based servers, see the Dropshot crate-level
+/// For more information about API traits, see the Dropshot crate-level
 /// documentation.
 ///
 /// ## Arguments
 ///
-/// The `#[dropshot::server]` macro accepts these arguments:
+/// The `#[dropshot::api_description]` macro accepts these arguments:
 ///
 /// * `context`: The type of the context on the trait. Optional, and defaults to
 ///   `Self::Context`.
@@ -134,9 +134,9 @@ pub fn channel(
 ///
 /// ## Limitations
 ///
-/// Currently, the `#[dropshot::server]` macro is only supported in module
-/// contexts, not function definitions. This is a Rust limitation -- see [Rust
-/// issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+/// Currently, the `#[dropshot::api_description]` macro is only supported in
+/// module contexts, not function definitions. This is a Rust limitation -- see
+/// [Rust issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
 /// details.
 ///
 /// ## Example
@@ -146,7 +146,7 @@ pub fn channel(
 /// ```ignore
 /// use dropshot::{RequestContext, HttpResponseUpdatedNoContent, HttpError};
 ///
-/// #[dropshot::server { context = MyContext }]
+/// #[dropshot::api_description { context = MyContext }]
 /// trait MyTrait {
 ///     type MyContext;
 ///
@@ -161,12 +161,17 @@ pub fn channel(
 /// # // defining fn main puts the doctest in a module context
 /// # fn main() {}
 /// ```
+///
+/// ## More information
+///
+/// For more information about the design decisions behind API traits, see
+/// [Oxide RFD 479](https://rfd.shared.oxide.computer/rfd/0479)
 #[proc_macro_attribute]
-pub fn server(
+pub fn api_description(
     attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    do_output(server::do_server(attr.into(), item.into()))
+    do_output(api_trait::do_trait(attr.into(), item.into()))
 }
 
 fn do_output(

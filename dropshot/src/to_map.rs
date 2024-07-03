@@ -54,9 +54,9 @@ macro_rules! ser_err {
 
 macro_rules! ser_t_err {
     ($i:ident $(, $p:ident : $t:ty )*) => {
-        fn $i<T: ?Sized>(self $(, $p: $t)*) -> Result<Self::Ok, Self::Error>
+        fn $i<T>(self $(, $p: $t)*) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize,
+            T: Serialize + ?Sized,
         {
             Err(MapError(format!("invalid type: {}",
                 stringify!($i).trim_start_matches("serialize_"))))
@@ -181,13 +181,13 @@ impl SerializeStruct for MapSerializeStruct {
     type Ok = BTreeMap<String, String>;
     type Error = MapError;
 
-    fn serialize_field<T: ?Sized>(
+    fn serialize_field<T>(
         &mut self,
         key: &'static str,
         value: &T,
     ) -> Result<(), Self::Error>
     where
-        T: Serialize,
+        T: Serialize + ?Sized,
     {
         let mut serializer = StringSerializer;
         let value = value.serialize(&mut serializer)?;
