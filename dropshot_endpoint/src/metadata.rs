@@ -306,8 +306,8 @@ impl ChannelMetadata {
             // endpoint metadata.
             let inner = ValidatedEndpointMetadata {
                 method: MethodType::GET,
-                path: path,
-                tags: tags,
+                path,
+                tags,
                 unpublished,
                 deprecated,
                 content_type: ValidContentType::ApplicationJson,
