@@ -2,17 +2,187 @@
 
 //! Code to manage request and response parameters for Dropshot endpoints.
 
-use std::fmt;
+use std::{fmt, iter::Peekable};
 
-use quote::ToTokens;
+use proc_macro2::{extra::DelimSpan, TokenStream};
+use quote::{quote_spanned, ToTokens};
 use syn::{parse_quote, spanned::Spanned, visit::Visit, Error};
 
 use crate::error_store::ErrorSink;
 
+/// Validate general properties of a function signature, not including the
+/// parameters.
+pub(crate) fn validate_fn_ast(
+    sig: &syn::Signature,
+    name_str: &str,
+    errors: &ErrorSink<'_, Error>,
+) {
+    if sig.constness.is_some() {
+        errors.push(Error::new_spanned(
+            &sig.constness,
+            format!("endpoint `{name_str}` must not be a const fn"),
+        ));
+    }
+
+    if sig.asyncness.is_none() {
+        errors.push(Error::new_spanned(
+            &sig.fn_token,
+            format!("endpoint `{name_str}` must be async"),
+        ));
+    }
+
+    if sig.unsafety.is_some() {
+        errors.push(Error::new_spanned(
+            &sig.unsafety,
+            format!("endpoint `{name_str}` must not be unsafe"),
+        ));
+    }
+
+    if sig.abi.is_some() {
+        errors.push(Error::new_spanned(
+            &sig.abi,
+            format!("endpoint `{name_str}` must not use an alternate ABI"),
+        ));
+    }
+
+    if !sig.generics.params.is_empty() {
+        errors.push(Error::new_spanned(
+            &sig.generics,
+            format!("endpoint `{name_str}` must not have generics"),
+        ));
+    }
+
+    if let Some(where_clause) = &sig.generics.where_clause {
+        // Empty where clauses are no-ops and therefore permitted.
+        if !where_clause.predicates.is_empty() {
+            errors.push(Error::new_spanned(
+                where_clause,
+                format!("endpoint `{name_str}` must not have a where clause"),
+            ));
+        }
+    }
+
+    if sig.variadic.is_some() {
+        errors.push(Error::new_spanned(
+            &sig.variadic,
+            format!("endpoint `{name_str}` must not have a variadic argument",),
+        ));
+    }
+}
+
+/// Processor and validator for parameters in a function signature.
+///
+/// The caller is responsible for calling the functions on this struct in the
+/// correct order (typically top-to-bottom).
+pub(crate) struct ParamValidator<'ast> {
+    sig: &'ast syn::Signature,
+    inputs: Peekable<syn::punctuated::Iter<'ast, syn::FnArg>>,
+    name_str: String,
+}
+
+impl<'ast> ParamValidator<'ast> {
+    pub(crate) fn new(sig: &'ast syn::Signature, name_str: &str) -> Self {
+        Self {
+            sig,
+            inputs: sig.inputs.iter().peekable(),
+            name_str: name_str.to_string(),
+        }
+    }
+
+    pub(crate) fn maybe_discard_self_arg(
+        &mut self,
+        errors: &ErrorSink<'_, Error>,
+    ) {
+        // If there's a self argument, the second argument is often a
+        // `RequestContext`, so consume the first argument.
+        if let Some(syn::FnArg::Receiver(_)) = self.inputs.peek() {
+            // Consume this argument.
+            let self_arg = self.inputs.next();
+            errors.push(Error::new_spanned(
+                self_arg,
+                format!(
+                    "endpoint `{}` must not have a `self` argument",
+                    self.name_str,
+                ),
+            ));
+        }
+    }
+
+    pub(crate) fn next_rqctx_arg(
+        &mut self,
+        rqctx_kind: RqctxKind<'_>,
+        paren_span: &DelimSpan,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<RqctxTy<'ast>> {
+        match self.inputs.next() {
+            Some(syn::FnArg::Typed(syn::PatType {
+                attrs: _,
+                pat: _,
+                colon_token: _,
+                ty,
+            })) => RqctxTy::new(&self.name_str, rqctx_kind, ty, &errors),
+            _ => {
+                errors.push(Error::new(
+                    paren_span.join(),
+                    format!(
+                        "endpoint `{}` must have at least one \
+                         RequestContext argument",
+                        self.name_str,
+                    ),
+                ));
+                None
+            }
+        }
+    }
+
+    pub(crate) fn rest_extractor_args(
+        &mut self,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Vec<&'ast syn::Type> {
+        let mut extractors = Vec::with_capacity(self.inputs.len());
+        while let Some(syn::FnArg::Typed(pat)) = self.inputs.next() {
+            if let Some(ty) = validate_param_ty(
+                &pat.ty,
+                ParamTyKind::Extractor,
+                &self.name_str,
+                errors,
+            ) {
+                extractors.push(ty);
+            }
+        }
+
+        extractors
+    }
+
+    pub(crate) fn return_type(
+        &self,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<&'ast syn::Type> {
+        match &self.sig.output {
+            syn::ReturnType::Default => {
+                errors.push(Error::new_spanned(
+                    self.sig,
+                    format!(
+                        "endpoint `{}` must return a Result",
+                        self.name_str,
+                    ),
+                ));
+                None
+            }
+            syn::ReturnType::Type(_, ty) => validate_param_ty(
+                ty,
+                ParamTyKind::Return,
+                &self.name_str,
+                errors,
+            ),
+        }
+    }
+}
+
 /// Perform syntactic validation for an argument or return type.
 ///
 /// This returns the input type if it is valid.
-pub(crate) fn validate_param_ty<'ast>(
+fn validate_param_ty<'ast>(
     ty: &'ast syn::Type,
     kind: ParamTyKind,
     name_str: &str,
@@ -207,6 +377,14 @@ impl<'ast> RqctxTy<'ast> {
         }
     }
 
+    /// Returns a token stream that obtains the corresponding context type.
+    pub(crate) fn to_context(&self, dropshot: &TokenStream) -> TokenStream {
+        let transformed = self.transformed_unit_type();
+        quote_spanned! { self.orig_span()=>
+            <#transformed as #dropshot::RequestContextArgument>::Context
+        }
+    }
+
     /// Returns the original span.
     pub(crate) fn orig_span(&self) -> proc_macro2::Span {
         match self {
@@ -350,7 +528,7 @@ enum RqctxTyError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ParamTyKind {
+enum ParamTyKind {
     RequestContext,
     Extractor,
     Return,

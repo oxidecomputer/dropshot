@@ -14,6 +14,7 @@ mod channel;
 mod doc;
 mod endpoint;
 mod error_store;
+mod metadata;
 mod params;
 mod syn_parsing;
 #[cfg(test)]

@@ -30,11 +30,9 @@ use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
     doc::{string_to_doc_attrs, ExtractedDoc},
-    endpoint::{
-        ApiEndpointKind, EndpointMetadata, EndpointParams,
-        ValidatedEndpointMetadata,
-    },
+    endpoint::EndpointParams,
     error_store::{ErrorSink, ErrorStore},
+    metadata::{ApiEndpointKind, EndpointMetadata, ValidatedEndpointMetadata},
     params::RqctxKind,
     syn_parsing::{
         ItemTraitPartParsed, TraitItemFnForSignature, TraitItemPartParsed,
@@ -200,6 +198,7 @@ impl<'ast> ApiParser<'ast> {
                 // channels.
                 TraitItemPartParsed::Fn(f) => {
                     items.push(ApiItem::Fn(ApiFnItem::new(
+                        &dropshot,
                         f,
                         trait_ident,
                         context_item.ident(),
@@ -944,6 +943,7 @@ enum ApiFnItem<'ast> {
 
 impl<'ast> ApiFnItem<'ast> {
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
         trait_ident: &'ast syn::Ident,
         context_ident: &syn::Ident,
@@ -971,6 +971,7 @@ impl<'ast> ApiFnItem<'ast> {
             }
             [ApiAttr::Endpoint(eattr)] => {
                 match ApiEndpoint::new(
+                    dropshot,
                     f,
                     eattr,
                     trait_ident,
@@ -1080,6 +1081,7 @@ impl<'ast> ApiEndpoint<'ast> {
     ///
     /// If the return value is None, at least one error occurred while parsing.
     fn new(
+        dropshot: &TokenStream,
         f: &'ast TraitItemFnForSignature,
         attr: &'ast syn::Attribute,
         trait_ident: &'ast syn::Ident,
@@ -1090,6 +1092,7 @@ impl<'ast> ApiEndpoint<'ast> {
 
         let metadata = parse_endpoint_metadata(&name_str, attr, errors);
         let params = EndpointParams::new(
+            dropshot,
             &f.sig,
             RqctxKind::Trait { trait_ident, context_ident },
             errors,
