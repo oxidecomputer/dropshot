@@ -497,8 +497,8 @@ where
 
 /// An unimplemented [`RouteHandler`] that panics when invoked.
 ///
-/// The main use for this is when users would like to generate an OpenAPI spec
-/// for an endpoint that is not yet implemented.
+/// This may be used to generate an OpenAPI document for API traits without
+/// requiring a concrete implementation.
 #[derive(Debug)]
 pub(crate) struct StubRouteHandler {
     label: String,

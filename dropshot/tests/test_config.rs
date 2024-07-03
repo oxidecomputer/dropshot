@@ -125,8 +125,6 @@ where
     fn make_client(&self) -> hyper::Client<C>;
     fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context>;
     fn make_uri(&self, bind_port: u16) -> hyper::Uri;
-
-    fn log(&self) -> &slog::Logger;
 }
 
 // Validate that we can create a server with the given configuration and that
@@ -208,10 +206,6 @@ async fn test_config_bind_address_http() {
             );
             make_server(0, &config, &self.log, None, None).start()
         }
-
-        fn log(&self) -> &slog::Logger {
-            &self.log
-        }
     }
 
     let test_config = ConfigBindServerHttp { log };
@@ -275,10 +269,6 @@ async fn test_config_bind_address_https() {
                 HandlerTaskMode::CancelOnDisconnect,
             );
             make_server(0, &config, &self.log, tls, None).start()
-        }
-
-        fn log(&self) -> &Logger {
-            &self.log
         }
     }
 
@@ -351,10 +341,6 @@ async fn test_config_bind_address_https_buffer() {
                 HandlerTaskMode::CancelOnDisconnect,
             );
             make_server(0, &config, &self.log, tls, None).start()
-        }
-
-        fn log(&self) -> &Logger {
-            &self.log
         }
     }
 
@@ -488,10 +474,6 @@ impl TestConfigBindServer<hyper::client::connect::HttpConnector>
     fn make_uri(&self, _bind_port: u16) -> hyper::Uri {
         let bind_port = self.bound_port.load(Ordering::SeqCst);
         format!("http://localhost:{}/", bind_port).parse().unwrap()
-    }
-
-    fn log(&self) -> &slog::Logger {
-        &self.log
     }
 }
 

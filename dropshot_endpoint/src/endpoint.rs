@@ -26,17 +26,20 @@ use crate::util::MacroKind;
 use crate::util::ValidContentType;
 
 /// Endpoint usage message, produced if there were parameter errors.
-pub(crate) const USAGE: &str =
-    "endpoint handlers must have the following signature:
+pub(crate) fn usage_str(context: &str) -> String {
+    format!(
+        "endpoint handlers must have the following signature:
     async fn(
-        rqctx: dropshot::RequestContext<MyContext>,
+        rqctx: dropshot::RequestContext<{context}>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         [body_param: TypedBody<J>,]
         [body_param: UntypedBody,]
         [body_param: StreamingBody,]
         [raw_request: RawRequest,]
-    ) -> Result<HttpResponse*, HttpError>";
+    ) -> Result<HttpResponse*, HttpError>"
+    )
+}
 
 pub(crate) fn do_endpoint(
     attr: proc_macro2::TokenStream,
@@ -57,7 +60,7 @@ pub(crate) fn do_endpoint(
                 &trait_item_fn.sig,
                 format!(
                     "endpoint `{name}` appears to be a trait function\n\
-                     note: did you mean to use `#[dropshot::server]` \
+                     note: did you mean to use `#[dropshot::api_description]` \
                      instead?",
                 ),
             ));
@@ -115,7 +118,10 @@ pub(crate) fn do_endpoint(
         let item_fn = item_fn
             .as_ref()
             .expect("has_param_errors is true => item_fn is Some");
-        errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
+        errors.insert(
+            0,
+            Error::new_spanned(&item_fn.sig, usage_str("MyContext")),
+        );
     }
 
     (output.output, errors)
@@ -760,7 +766,7 @@ impl ValidatedEndpointMetadata {
                 // for successful generation while being close by for errors.
                 // Seems pretty unobjectionable.
                 quote_spanned! {attr.pound_token.span()=>
-                    #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
+                    #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
                         #content_type,
@@ -1026,7 +1032,7 @@ mod tests {
                     _rqctx: MyRequestContext,
                     query: Query<QueryParams<'static>>,
                     path: Path<<X as Y>::Z>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
                     Ok(())
                 }
             },
@@ -1056,7 +1062,7 @@ mod tests {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
                     _rqctx: RequestContext<(A, B)>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
                     Ok(())
                 }
             },

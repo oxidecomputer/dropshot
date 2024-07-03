@@ -1,0 +1,5 @@
+error: expected `trait`
+  --> tests/fail/bad_trait_endpoint27.rs:13:1
+   |
+13 | fn bad_server() {}
+   | ^^

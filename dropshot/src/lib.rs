@@ -1,4 +1,5 @@
 // Copyright 2023 Oxide Computer Company
+
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
 //!
@@ -112,9 +113,9 @@
 //!
 //! ### As a free function
 //!
-//! The simplest way to get started is by defining an endpoint as a top-level
-//! function, annotated with the [`endpoint`] macro. Here's an example of a
-//! single endpoint that lists a hardcoded project:
+//! The simplest Dropshot server defines an endpoint as a function, annotated
+//! with the [`endpoint`] macro. Here's an example of a single endpoint that
+//! lists a hardcoded project:
 //!
 //! ```
 //! use dropshot::endpoint;
@@ -127,14 +128,14 @@
 //! use serde::Serialize;
 //! use std::sync::Arc;
 //!
-//! /** Represents a project in our API */
+//! /// Represents a project in our API.
 //! #[derive(Serialize, JsonSchema)]
 //! struct Project {
-//!     /** name of the project */
+//!     /// Name of the project.
 //!     name: String,
 //! }
 //!
-//! /** Fetch a project. */
+//! /// Fetch a project.
 //! #[endpoint {
 //!     method = GET,
 //!     path = "/projects/project1",
@@ -150,14 +151,12 @@
 //! fn main() {
 //!     let mut api = ApiDescription::new();
 //!
-//!     /*
-//!      * Register our endpoint and its handler function.  The "endpoint" macro
-//!      * specifies the HTTP method and URI path that identify the endpoint,
-//!      * allowing this metadata to live right alongside the handler function.
-//!      */
+//!     // Register our endpoint and its handler function.  The "endpoint" macro
+//!     // specifies the HTTP method and URI path that identify the endpoint,
+//!     // allowing this metadata to live right alongside the handler function.
 //!     api.register(myapi_projects_get_project).unwrap();
 //!
-//!     /* ... (use `api` to set up an `HttpServer` ) */
+//!     // ... (use `api` to set up an `HttpServer` )
 //! }
 //! ```
 //!
@@ -178,18 +177,23 @@
 //! for each type of response (which can also include documentation).  This is
 //! largely known statically, though generated at runtime.
 //!
-//! ### As a trait server
+//! ### As an API trait
 //!
-//! With Rust 1.75 and above, it is also possible to define an API using a
-//! *trait server*. A trait server is a trait that represents a collection
-//! of API endpoints. Each endpoint is defined as a static method on the trait,
-//! and the trait is annotated with `#[dropshot::server]`.
+//! An **API trait** is a Rust trait that represents a collection of API
+//! endpoints. Each endpoint is defined as a static method on the trait, and the
+//! trait as a whole is annotated with `#[dropshot::api_description]`. (Rust
+//! 1.75 or later is required.)
 //!
-//! One advantage of trait servers is that they can be defined in a separate
-//! crate from the implementation. This results in quicker builds for the API,
-//! and also make it easier to deal with changes to circular API dependencies.
+//! While slightly more complex than the function-based server, API traits
+//! separate the interface definition from the implementation. Keeping the
+//! definition and implementation in different crates can allow for faster
+//! iteration of the interface, and simplifies multi-service repos with clients
+//! generated from the OpenAPI output of interfaces. In addition, API traits
+//! allow for multiple implementations, such as a mock implementation for
+//! testing.
 //!
-//! Here's an example of a trait server that's equivalent to the endpoint above:
+//! Here's an example of an API trait that's equivalent to the function-based
+//! server above:
 //!
 //! ```
 //! use dropshot::ApiDescription;
@@ -201,20 +205,20 @@
 //! use serde::Serialize;
 //! use std::sync::Arc;
 //!
-//! /** Represents a project in our API */
+//! /// Represents a project in our API.
 //! #[derive(Serialize, JsonSchema)]
 //! struct Project {
-//!     /** name of the project */
+//!     /// Name of the project.
 //!     name: String,
 //! }
 //!
-//! /** Defines the trait that captures all the methods */
-//! #[dropshot::server]
-//! trait ProjectServer {
-//!     /** The context type used within endpoints. */
+//! /// Defines the trait that captures all the methods.
+//! #[dropshot::api_description]
+//! trait ProjectApi {
+//!     /// The context type used within endpoints.
 //!     type Context;
 //!
-//!     /** Fetch a project. */
+//!     /// Fetch a project.
 //!     #[endpoint {
 //!         method = GET,
 //!         path = "/projects/project1",
@@ -224,24 +228,20 @@
 //!     ) -> Result<HttpResponseOk<Project>, HttpError>;
 //! }
 //!
-//! /*
-//! The `dropshot::server` macro generates a module called
-//! `project_server`. This module has a method called `api_description`
-//! that, given an implementation of the trait, returns an `ApiDescription`.
-//! The `ApiDescription` can then be used to set up an `HttpServer`.
-//! */
+//! // The `dropshot::api_description` macro generates a module called
+//! // `project_api`. This module has a method called `api_description`
+//! // that, given an implementation of the trait, returns an `ApiDescription`.
+//! // The `ApiDescription` can then be used to set up an `HttpServer`.
 //!
 //! // --- The following code may be in another crate ---
 //!
-//! /**
-//! Define an empty type to hold the project server context.
-//! This type is never constructed, and is purely a way to name
-//! the specific server impl. In larger projects, this type would
-//! live in a different crate from the server trait.
-//! **/
+//! /// An empty type to hold the project server context.
+//! ///
+//! /// This type is never constructed, and is purely a way to name
+//! /// the specific server impl.
 //! enum ServerImpl {}
 //!
-//! impl ProjectServer for ServerImpl {
+//! impl ProjectApi for ServerImpl {
 //!     type Context = ();
 //!
 //!     async fn myapi_projects_get_project(
@@ -256,18 +256,49 @@
 //!     // The type of `api` is provided for clarity -- it is generally inferred.
 //!     // "api" will automatically register all endpoints defined in the trait.
 //!     let mut api: ApiDescription<()> =
-//!         project_server::api_description::<ServerImpl>().unwrap();
+//!         project_api::api_description::<ServerImpl>().unwrap();
 //!
-//!     /* ... (use `api` to set up an `HttpServer` ) */
+//!     // ... (use `api` to set up an `HttpServer` )
 //! }
 //! ```
 //!
+//! See [`api-trait.rs`] and [`api-trait-alternate.rs`] for working
+//! examples.
+//!
+//! [`api-trait.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait.rs
+//! [`api-trait-alternate.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait-alternate.rs
+//!
 //! #### Limitations
 //!
-//! Currently, the `#[dropshot::server]` macro is only supported in module
-//! contexts, not function definitions. This is a Rust limitation -- see [Rust
+//! Currently, the `#[dropshot::api_description]` macro is only supported in module
+//! contexts, not within function bodies. This is a Rust limitation -- see [Rust
 //! issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
 //! details.
+//!
+//! ### Choosing between functions and traits
+//!
+//! *Prototyping:* If you're prototyping with a small number of endpoints,
+//! functions provide an easier way to get started. The downside to traits is
+//! that endpoints signatures are defined at least twice, once in the trait and
+//! once in the implementation.
+//!
+//! *Small services:* For a service that is relatively isolated and quick to
+//! compile, traits and functions are both good options.
+//!
+//! *APIs with multiple implementations:* For services that are large enough to
+//! have a second, simpler implementation (of potentially parts of them), a
+//! trait is best.
+//!
+#![cfg_attr(
+    feature = "internal-docs",
+    doc = "Here's an archetypal way to organize code for a large service with a \
+         real and an in-memory test implementation. Each rounded node \
+         represents a binary and each rectangular node represents a library \
+         crate (or more than one for \"logic\").\n"
+)]
+#![cfg_attr(feature = "internal-docs", doc = simple_mermaid::mermaid!("../large-service-dep-graph.mmd"))]
 //!
 //! ### `#[endpoint { ... }]` attribute parameters
 //!
@@ -427,15 +458,17 @@
 //! users commonize code using regular Rust functions and calling them.  See the
 //! design notes in the README for more on this.
 //!
-//! ### Generating OpenAPI descriptions
+//! ### Generating OpenAPI documents
 //!
-//! For a given `ApiDescription`, you can also print out an OpenAPI spec
-//! describing the API.  See [`ApiDescription::openapi`].
+//! For a given `ApiDescription`, you can also print out an [OpenAPI
+//! document](https://spec.openapis.org/oas/v3.1.0#openapi-document) describing
+//! the API.  See [`ApiDescription::openapi`].
 //!
-//! With trait-based servers, the `#[dropshot::server]` macro generates a helper
-//! function called `stub_api_description`, which returns a stub
-//! `ApiDescription`. The stub description can be used to generate an OpenAPI
-//! spec for the trait server. For example:
+//! With API traits, the `#[dropshot::api_description]` macro generates a helper
+//! function called `stub_api_description`, which returns an `ApiDescription`
+//! not backed by an implementation. This _stub description_ can be used to
+//! generate an OpenAPI document for the trait without requiring an
+//! implementation of the trait. For example:
 //!
 //! ```
 //! # use dropshot::ApiDescription;
@@ -451,9 +484,9 @@
 //! # struct Project {
 //! #     name: String,
 //! # }
-//! /** This is the server trait defined above. */
-//! #[dropshot::server]
-//! trait ProjectServer {
+//! /// This is the API trait defined above.
+//! #[dropshot::api_description]
+//! trait ProjectApi {
 //!     type Context;
 //!     #[endpoint {
 //!         method = GET,
@@ -466,14 +499,14 @@
 //!
 //! # // defining fn main puts the doctest in a module context
 //! # fn main() {
-//! let description = project_server::stub_api_description().unwrap();
+//! let description = project_api::stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! # }
 //! ```
 //!
-//! A stub description cannot be used for an actual server: all request handlers
-//! will panic.
+//! A stub description must not be used for an actual server: all request
+//! handlers will immediately panic.
 //!
 //! ## Support for paginated resources
 //!
@@ -812,6 +845,6 @@ pub use handler::RequestContextArgument;
 pub use http::Method;
 
 extern crate dropshot_endpoint;
+pub use dropshot_endpoint::api_description;
 pub use dropshot_endpoint::channel;
 pub use dropshot_endpoint::endpoint;
-pub use dropshot_endpoint::server;

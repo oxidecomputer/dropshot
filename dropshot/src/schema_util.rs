@@ -480,9 +480,9 @@ fn j2oas_schema_object(
     }
 
     if let Some(metadata) = &obj.metadata {
-        data.title = metadata.title.clone();
-        data.description = metadata.description.clone();
-        data.default = metadata.default.clone();
+        data.title.clone_from(&metadata.title);
+        data.description.clone_from(&metadata.description);
+        data.default.clone_from(&metadata.default);
         data.deprecated = metadata.deprecated;
         data.read_only = metadata.read_only;
         data.write_only = metadata.write_only;
