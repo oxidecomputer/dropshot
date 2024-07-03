@@ -1,0 +1,66 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_trait_endpoint23.rs:22:7
+   |
+22 | trait MyApi {
+   |       ^^^^^
+
+error: endpoint `const_endpoint` must not be a const fn
+  --> tests/fail/bad_trait_endpoint23.rs:30:5
+   |
+30 |     const async fn const_endpoint(
+   |     ^^^^^
+
+error[E0379]: functions in traits cannot be declared const
+  --> tests/fail/bad_trait_endpoint23.rs:30:5
+   |
+30 |     const async fn const_endpoint(
+   |     ^^^^^-
+   |     |
+   |     functions in traits cannot be const
+   |     help: remove the `const`
+
+error: functions cannot be both `const` and `async`
+  --> tests/fail/bad_trait_endpoint23.rs:30:5
+   |
+30 |       const async fn const_endpoint(
+   |       -^^^^ ^^^^^ `async` because of this
+   |       |
+   |  _____`const` because of this
+   | |
+31 | |         _rqctx: RequestContext<Self::Context>,
+32 | |         _param1: Query<QueryParams>,
+33 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+   | |_________________________________________________________-
+
+error[E0379]: functions in trait impls cannot be declared const
+  --> tests/fail/bad_trait_endpoint23.rs:42:5
+   |
+42 |     const async fn const_endpoint(
+   |     ^^^^^-
+   |     |
+   |     functions in trait impls cannot be const
+   |     help: remove the `const`
+
+error: functions cannot be both `const` and `async`
+  --> tests/fail/bad_trait_endpoint23.rs:42:5
+   |
+42 |       const async fn const_endpoint(
+   |       -^^^^ ^^^^^ `async` because of this
+   |       |
+   |  _____`const` because of this
+   | |
+43 | |         _rqctx: RequestContext<Self::Context>,
+44 | |         _param1: Query<QueryParams>,
+45 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+46 | |         Ok(HttpResponseUpdatedNoContent())
+47 | |     }
+   | |_____-

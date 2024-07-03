@@ -7,6 +7,7 @@ use crate::endpoint::EndpointMetadata;
 use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
 use crate::syn_parsing::ItemFnForSignature;
+use crate::syn_parsing::TraitItemFnForSignature;
 use crate::util::get_crate;
 use crate::util::APPLICATION_JSON;
 use proc_macro2::TokenStream;
@@ -33,6 +34,27 @@ pub(crate) fn do_channel(
 ) -> (proc_macro2::TokenStream, Vec<Error>) {
     let mut error_store = ErrorStore::new();
     let errors = error_store.sink();
+
+    // Attempt to parse the function as a trait function. If this is successful
+    // and there's no block, then it's likely that the user has imported
+    // `dropshot::endpoint` and is using that.
+    if let Ok(trait_item_fn) =
+        syn::parse2::<TraitItemFnForSignature>(item.clone())
+    {
+        if trait_item_fn.block.is_none() {
+            let name = &trait_item_fn.sig.ident;
+            errors.push(Error::new_spanned(
+                &trait_item_fn.sig,
+                format!(
+                    "endpoint `{name}` appears to be a trait function\n\
+                     note: did you mean to use `#[dropshot::api_description]` \
+                     instead?",
+                ),
+            ));
+            // Don't do any further validation -- just return the original item.
+            return (quote! { #item }, error_store.into_inner());
+        }
+    }
 
     // Parse attributes. (Do this before parsing the function since that's the
     // order they're in, in source code.)

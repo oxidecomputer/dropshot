@@ -9,6 +9,7 @@
 use quote::quote;
 use serde_tokenstream::Error;
 
+mod api_trait;
 mod channel;
 mod doc;
 mod endpoint;
@@ -79,6 +80,97 @@ pub fn channel(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     do_output(channel::do_channel(attr.into(), item.into()))
+}
+
+/// Generates a Dropshot API description from a trait.
+///
+/// An API trait consists of:
+///
+/// 1. A context type, typically `Self::Context`, values of which are shared
+///    across all the endpoints.
+/// 2. A set of endpoint methods, each of which is an `async fn` defined with
+///    the same constraints, and via the same syntax, as [`macro@endpoint`] or
+///    [`macro@channel`].
+///
+/// API traits can also have arbitrary non-endpoint items, such as helper
+/// functions.
+///
+/// The macro performs a number of checks on endpoint methods, and produces the
+/// following items:
+///
+/// * The trait itself, with the following modifications to enable use as a
+///   Dropshot API:
+///
+///     1. The trait itself has a `'static` bound added to it.
+///     2. The context type has a `dropshot::ServerContext + 'static` bound
+///        added to it, making it `Send + Sync + 'static`.
+///     3. Each endpoint `async fn` is modified to become a function that
+///        returns a `Send + 'static` future. (Implementations can continue to
+///        define endpoints via the `async fn` syntax.)
+///
+///   Non-endpoint items are left unchanged.
+///
+/// * A support module, typically with the same name as the trait but in
+///   `snake_case`, with two functions:
+///
+///     1. `api_description()`, which accepts an implementation of the trait as
+///        a type argument and generates an `ApiDescription`.
+///     2. `stub_api_description()`, which generates a _stub_ `ApiDescription`
+///        that can be used to generate an OpenAPI spec without having an
+///        implementation of the trait available.
+///
+/// For more information about API traits, see the Dropshot crate-level
+/// documentation.
+///
+/// ## Arguments
+///
+/// The `#[dropshot::api_description]` macro accepts these arguments:
+///
+/// * `context`: The type of the context on the trait. Optional, and defaults to
+///   `Self::Context`.
+/// * `factory`: The name of the factory struct that will be generated.
+///   Optional, defaulting to `<TraitName>Factory`.
+///
+/// ## Limitations
+///
+/// Currently, the `#[dropshot::api_description]` macro is only supported in
+/// module contexts, not function definitions. This is a Rust limitation -- see
+/// [Rust issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+/// details.
+///
+/// ## Example
+///
+/// With a custom context type:
+///
+/// ```ignore
+/// use dropshot::{RequestContext, HttpResponseUpdatedNoContent, HttpError};
+///
+/// #[dropshot::api_description { context = MyContext }]
+/// trait MyTrait {
+///     type MyContext;
+///
+///     #[endpoint {
+///         method = PUT,
+///         path = "/test",
+///     }]
+///     async fn put_test(
+///         rqctx: RequestContext<Self::MyContext>,
+///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+/// }
+/// # // defining fn main puts the doctest in a module context
+/// # fn main() {}
+/// ```
+///
+/// ## More information
+///
+/// For more information about the design decisions behind API traits, see
+/// [Oxide RFD 479](https://rfd.shared.oxide.computer/rfd/0479)
+#[proc_macro_attribute]
+pub fn api_description(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    do_output(api_trait::do_trait(attr.into(), item.into()))
 }
 
 fn do_output(

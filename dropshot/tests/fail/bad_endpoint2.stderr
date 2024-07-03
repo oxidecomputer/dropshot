@@ -18,3 +18,9 @@ error: endpoint `bad_endpoint` must not have a `self` argument
    |
 13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
    |                       ^^^^
+
+error: endpoint `bad_endpoint` must have at least one RequestContext argument
+  --> tests/fail/bad_endpoint2.rs:13:22
+   |
+13 | async fn bad_endpoint(self) -> Result<HttpResponseOk<()>, HttpError> {
+   |                      ^^^^^^

@@ -379,6 +379,7 @@ dependencies = [
  "serde_path_to_error",
  "serde_urlencoded",
  "sha1",
+ "simple-mermaid",
  "slog",
  "slog-async",
  "slog-bunyan",
@@ -402,6 +403,7 @@ name = "dropshot_endpoint"
 version = "0.10.2-dev"
 dependencies = [
  "expectorate",
+ "heck",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -669,6 +671,12 @@ name = "hashbrown"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dfda62a12f55daeae5015f81b0baea145391cb4520f86c248fc615d72640d12"
+
+[[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hermit-abi"
@@ -1627,6 +1635,12 @@ name = "similar"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "420acb44afdae038210c99e69aae24109f32f15500aa708e81d46c9f29d55fcf"
+
+[[package]]
+name = "simple-mermaid"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "620a1d43d70e142b1d46a929af51d44f383db9c7a2ec122de2cd992ccfcf3c18"
 
 [[package]]
 name = "slab"
