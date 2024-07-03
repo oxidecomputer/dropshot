@@ -72,7 +72,8 @@ pub(crate) fn validate_fn_ast(
 
 /// Processor and validator for parameters in a function signature.
 ///
-/// The caller is responsible for calling functions in the right order.
+/// The caller is responsible for calling the functions on this struct in the
+/// correct order (typically top-to-bottom).
 pub(crate) struct ParamValidator<'ast> {
     sig: &'ast syn::Signature,
     inputs: Peekable<syn::punctuated::Iter<'ast, syn::FnArg>>,
