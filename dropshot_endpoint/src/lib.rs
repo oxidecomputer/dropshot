@@ -133,9 +133,9 @@ pub fn channel(
 ///
 /// ## Limitations
 ///
-/// Currently, the `#[dropshot::api_description]` macro is only supported in module
-/// contexts, not function definitions. This is a Rust limitation -- see [Rust
-/// issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+/// Currently, the `#[dropshot::api_description]` macro is only supported in
+/// module contexts, not function definitions. This is a Rust limitation -- see
+/// [Rust issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
 /// details.
 ///
 /// ## Example
@@ -160,6 +160,11 @@ pub fn channel(
 /// # // defining fn main puts the doctest in a module context
 /// # fn main() {}
 /// ```
+///
+/// ## More information
+///
+/// For more information about the design decisions behind API traits, see
+/// [Oxide RFD 479](https://rfd.shared.oxide.computer/rfd/0479)
 #[proc_macro_attribute]
 pub fn api_description(
     attr: proc_macro::TokenStream,

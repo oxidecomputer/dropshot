@@ -713,21 +713,21 @@ impl<'ast> ToTokens for SupportModuleGenerator<'ast> {
                 //    bunch of items to the scope rather than one, which seems
                 //    worse on balance.
                 // 2. Make these methods on a type rather than free functions in
-                //    a module. This approach works for functions but not other
+                //    a module. This approach works for functions, but not other
                 //    items like macros we may wish to define in the future.
                 //
                 // In RFD 479, we determined that on balance, the current
-                // approach has the least practical downsides.
+                // approach has the fewest downsides.
                 use super::*;
 
                 // We don't need to generate type checks the way we do with
                 // function-based macros, because we get error messages that are
                 // roughly as good through the stub API description generator.
-                // (Also, adding type checks would end up duplicating a ton of error
-                // messages.)
+                // (Also, adding type checks would end up duplicating a ton of
+                // error messages.)
                 //
-                // For that reason, put it above the real API description -- that
-                // way, the best error messages appear first.
+                // For that reason, put it above the real API description --
+                // that way, the best error messages appear first.
                 #stub_api
 
                 #api
