@@ -31,6 +31,12 @@ error: expected identifier, found `0x220`
    |                           while parsing this struct
 
 error[E0063]: missing fields `x` and `y` in initializer of `Ret`
+  --> tests/fail/bad_trait_endpoint6.rs:31:27
+   |
+31 |         Ok(HttpResponseOk(Ret { "Oxide".to_string(), 0x1de }))
+   |                           ^^^ missing `x` and `y`
+
+error[E0063]: missing fields `x` and `y` in initializer of `Ret`
   --> tests/fail/bad_trait_endpoint6.rs:46:27
    |
 46 |         Ok(HttpResponseOk(Ret { "220".to_string(), 0x220 }))

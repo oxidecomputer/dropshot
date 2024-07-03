@@ -72,4 +72,4 @@ error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseUpdatedNo
 49 |  |     }
    |  |_____^
    |
-   = note: hidden type `{async fn body@$DIR/tests/fail/bad_trait_endpoint21.rs:47:58: 49:6}` captures lifetime `'_`
+   = note: hidden type `{async fn body of <MyImpl as MyApi>::variadic_argument()}` captures lifetime `'_`

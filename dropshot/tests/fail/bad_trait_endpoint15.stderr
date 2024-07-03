@@ -4,7 +4,7 @@ error: future cannot be sent between threads safely
 11 | #[dropshot::api_description]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ future created by async block is not `Send`
    |
-   = help: within `{async block@$DIR/tests/fail/bad_trait_endpoint15.rs:21:49: 27:6}`, the trait `Send` is not implemented for `Rc<i32>`
+   = help: within `{async block@$DIR/tests/fail/bad_trait_endpoint15.rs:21:49: 27:6}`, the trait `Send` is not implemented for `Rc<i32>`, which is required by `{async block@$DIR/tests/fail/bad_trait_endpoint15.rs:21:49: 27:6}: Send`
 note: future is not `Send` as this value is used across an await
   --> tests/fail/bad_trait_endpoint15.rs:25:54
    |

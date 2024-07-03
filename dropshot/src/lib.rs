@@ -458,15 +458,17 @@
 //! users commonize code using regular Rust functions and calling them.  See the
 //! design notes in the README for more on this.
 //!
-//! ### Generating OpenAPI descriptions
+//! ### Generating OpenAPI documents
 //!
-//! For a given `ApiDescription`, you can also print out an OpenAPI spec
-//! describing the API.  See [`ApiDescription::openapi`].
+//! For a given `ApiDescription`, you can also print out an [OpenAPI
+//! document](https://spec.openapis.org/oas/v3.1.0#openapi-document) describing
+//! the API.  See [`ApiDescription::openapi`].
 //!
 //! With API traits, the `#[dropshot::api_description]` macro generates a helper
 //! function called `stub_api_description`, which returns an `ApiDescription`
 //! not backed by an implementation. This _stub description_ can be used to
-//! generate an OpenAPI spec for the trait. For example:
+//! generate an OpenAPI document for the trait without requiring an
+//! implementation of the trait. For example:
 //!
 //! ```
 //! # use dropshot::ApiDescription;

@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use quote::quote;
+use quote::ToTokens;
 use syn::{parse_quote, spanned::Spanned, visit::Visit, Error};
 
 use crate::error_store::ErrorSink;
@@ -219,13 +219,15 @@ impl<'ast> RqctxTy<'ast> {
 impl<'ast> fmt::Debug for RqctxTy<'ast> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RqctxTy::Function(ty) => write!(f, "Function({})", quote! { #ty }),
+            RqctxTy::Function(ty) => {
+                write!(f, "Function({})", ty.to_token_stream())
+            }
             RqctxTy::Trait { orig, transformed_unit } => {
                 write!(
                     f,
                     "Trait {{ orig: {}, transformed_unit: {} }}",
-                    quote! { #orig },
-                    quote! { #transformed_unit },
+                    orig.to_token_stream(),
+                    transformed_unit.to_token_stream(),
                 )
             }
         }
@@ -366,7 +368,7 @@ impl fmt::Display for ParamTyKind {
 
 #[cfg(test)]
 mod tests {
-    use quote::format_ident;
+    use quote::{format_ident, quote};
     use syn::parse_quote;
 
     use super::*;

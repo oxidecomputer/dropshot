@@ -552,7 +552,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     }
                 }
                 ApiEndpointParameterMetadata::Query(ref name) => {
-                    if path_segments.get(name).is_some() {
+                    if path_segments.contains_key(name) {
                         return Err(format!(
                             "the parameter '{}' is specified for both query \
                              and path parameters",
@@ -667,9 +667,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
             };
             let mut operation = openapiv3::Operation::default();
             operation.operation_id = Some(endpoint.operation_id.clone());
-            operation.summary = endpoint.summary.clone();
-            operation.description = endpoint.description.clone();
-            operation.tags = endpoint.tags.clone();
+            operation.summary.clone_from(&endpoint.summary);
+            operation.description.clone_from(&endpoint.description);
+            operation.tags.clone_from(&endpoint.tags);
             operation.deprecated = endpoint.deprecated;
 
             operation.parameters = endpoint

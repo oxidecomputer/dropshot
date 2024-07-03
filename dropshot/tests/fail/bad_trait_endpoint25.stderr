@@ -60,3 +60,26 @@ error[E0404]: expected trait, found struct `TypedBody`
    |
 49 |         _param2: dyn for<'b> TypedBody<&'b ()>,
    |                              ^^^^^^^^^^^^^^^^^ not a trait
+
+error[E0091]: type parameter `T` is never used
+  --> tests/fail/bad_trait_endpoint25.rs:21:23
+   |
+21 | type MyRequestContext<T, U> = RequestContext<U>;
+   |                       ^ unused type parameter
+   |
+   = help: consider removing `T` or referring to it in the body of the type alias
+   = help: if you intended `T` to be a const parameter, use `const T: /* Type */` instead
+
+error[E0107]: struct takes 1 generic argument but 2 generic arguments were supplied
+  --> tests/fail/bad_trait_endpoint25.rs:47:17
+   |
+47 |         _rqctx: RequestContext<T, Self::Context>,
+   |                 ^^^^^^^^^^^^^^    ------------- help: remove this generic argument
+   |                 |
+   |                 expected 1 generic argument
+   |
+note: struct defined here, with 1 generic parameter: `Context`
+  --> src/handler.rs
+   |
+   | pub struct RequestContext<Context: ServerContext> {
+   |            ^^^^^^^^^^^^^^ -------

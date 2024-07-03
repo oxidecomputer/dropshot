@@ -23,7 +23,10 @@ error[E0379]: functions in traits cannot be declared const
   --> tests/fail/bad_trait_endpoint23.rs:30:5
    |
 30 |     const async fn const_endpoint(
-   |     ^^^^^ functions in traits cannot be const
+   |     ^^^^^-
+   |     |
+   |     functions in traits cannot be const
+   |     help: remove the `const`
 
 error: functions cannot be both `const` and `async`
   --> tests/fail/bad_trait_endpoint23.rs:30:5
@@ -38,11 +41,14 @@ error: functions cannot be both `const` and `async`
 33 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
    | |_________________________________________________________-
 
-error[E0379]: functions in traits cannot be declared const
+error[E0379]: functions in trait impls cannot be declared const
   --> tests/fail/bad_trait_endpoint23.rs:42:5
    |
 42 |     const async fn const_endpoint(
-   |     ^^^^^ functions in traits cannot be const
+   |     ^^^^^-
+   |     |
+   |     functions in trait impls cannot be const
+   |     help: remove the `const`
 
 error: functions cannot be both `const` and `async`
   --> tests/fail/bad_trait_endpoint23.rs:42:5

@@ -21,6 +21,7 @@
 //! Code that is common to both the server and endpoint macros lives in
 //! `endpoint.rs`.
 
+use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
@@ -134,20 +135,8 @@ impl ApiMetadata {
     fn module_name(&self, trait_ident: &syn::Ident) -> String {
         self.module
             .clone()
-            .unwrap_or_else(|| to_snake_case(&trait_ident.to_string()))
+            .unwrap_or_else(|| trait_ident.to_string().to_snake_case())
     }
-}
-
-fn to_snake_case(s: &str) -> String {
-    let mut ret = String::new();
-    for (i, ch) in s.char_indices() {
-        if i > 0 && ch.is_uppercase() {
-            ret.push('_');
-        }
-        ret.push(ch.to_ascii_lowercase());
-    }
-
-    ret
 }
 
 struct ApiParser<'ast> {
@@ -1204,7 +1193,7 @@ impl<'ast> ApiChannel<'ast> {
     }
 
     fn to_out_trait_item(&self) -> TraitItemFnForSignature {
-        // TODO
+        // TODO: https://github.com/oxidecomputer/dropshot/pull/1038
         self.f.clone()
     }
 }
@@ -1264,8 +1253,8 @@ enum InvalidApiItemKind {
     /// An invalid endpoint.
     Endpoint(ApiItemErrorSummary),
 
-    /// An invalid channel.
-    Channel(ApiItemErrorSummary),
+    /// An invalid channel. (The error summary inside will be used soon.)
+    Channel(#[allow(dead_code)] ApiItemErrorSummary),
 
     /// We're not sure if it's an endpoint or a channel, or the endpoint/channel
     /// annotations were provided multiple times.
