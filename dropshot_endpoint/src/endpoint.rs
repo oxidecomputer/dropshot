@@ -137,7 +137,7 @@ pub(crate) struct EndpointOutput {
 }
 
 // The return value is the ItemFnForSignature and the TokenStream.
-pub(crate) fn do_endpoint_inner(
+fn do_endpoint_inner(
     metadata: EndpointMetadata,
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,

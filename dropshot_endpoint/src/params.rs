@@ -135,6 +135,54 @@ impl<'ast> ParamValidator<'ast> {
         }
     }
 
+    /// Get both the next RequestContext argument and the last
+    /// WebsocketConnection argument. However, the WebsocketConnection argument
+    /// is not validated!
+    ///
+    /// Obtaining both at the same time leads to better errors when only one
+    /// parameter is present. Delaying validation of the WebsocketConnection
+    /// parameter until the end means that errors in extractor types can be
+    /// provided in the right order.
+    pub(crate) fn next_rqctx_and_last_websocket_args(
+        &mut self,
+        rqctx_kind: RqctxKind<'_>,
+        paren_span: &DelimSpan,
+        errors: &ErrorSink<'_, Error>,
+    ) -> (Option<RqctxTy<'ast>>, Option<UnvalidatedWebsocketTy<'ast>>) {
+        // Check that at least two arguments are present.
+        let rqctx = self.inputs.next();
+        let websocket = self.inputs.next_back();
+
+        match (rqctx, websocket) {
+            (
+                Some(syn::FnArg::Typed(rqctx_pat)),
+                Some(syn::FnArg::Typed(websocket_pat)),
+            ) => {
+                // If both arguments are present, validate them.
+                let rqctx = RqctxTy::new(
+                    &self.name_str,
+                    rqctx_kind,
+                    &rqctx_pat.ty,
+                    &errors,
+                );
+                // websocket_ty is NOT validated here.
+
+                (rqctx, Some(UnvalidatedWebsocketTy::new(&websocket_pat.ty)))
+            }
+            _ => {
+                errors.push(Error::new(
+                    paren_span.join(),
+                    format!(
+                        "endpoint `{}` must have at least two arguments: \
+                         RequestContext and WebsocketConnection",
+                        self.name_str,
+                    ),
+                ));
+                (None, None)
+            }
+        }
+    }
+
     pub(crate) fn rest_extractor_args(
         &mut self,
         errors: &ErrorSink<'_, Error>,
@@ -176,6 +224,24 @@ impl<'ast> ParamValidator<'ast> {
                 errors,
             ),
         }
+    }
+}
+
+pub(crate) struct UnvalidatedWebsocketTy<'ast> {
+    ty: &'ast syn::Type,
+}
+
+impl<'ast> UnvalidatedWebsocketTy<'ast> {
+    pub(crate) fn new(ty: &'ast syn::Type) -> Self {
+        Self { ty }
+    }
+
+    pub(crate) fn validate(
+        self,
+        name_str: &str,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<&'ast syn::Type> {
+        validate_param_ty(self.ty, ParamTyKind::WebsocketConn, name_str, errors)
     }
 }
 
@@ -532,6 +598,7 @@ enum ParamTyKind {
     RequestContext,
     Extractor,
     Return,
+    WebsocketConn,
 }
 
 impl fmt::Display for ParamTyKind {
@@ -540,6 +607,7 @@ impl fmt::Display for ParamTyKind {
             ParamTyKind::RequestContext => write!(f, "RequestContext"),
             ParamTyKind::Extractor => write!(f, "extractor"),
             ParamTyKind::Return => write!(f, "return type"),
+            ParamTyKind::WebsocketConn => write!(f, "WebsocketConnection"),
         }
     }
 }

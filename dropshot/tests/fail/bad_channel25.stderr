@@ -31,3 +31,21 @@ error: endpoint `weird_types` must not have lifetime parameters in extractor
    |
 27 |     _param1: Query<&'a QueryParams>,
    |                     ^^
+
+error: endpoint `weird_types` must not have lifetime bounds in WebsocketConnection
+  --> tests/fail/bad_channel25.rs:28:14
+   |
+28 |     _param2: for<'b> TypedBody<&'b ()>,
+   |              ^^^^^^^
+
+error: endpoint `weird_types` must not have lifetime parameters in WebsocketConnection
+  --> tests/fail/bad_channel25.rs:28:33
+   |
+28 |     _param2: for<'b> TypedBody<&'b ()>,
+   |                                 ^^
+
+error: endpoint `weird_types` must not have impl Trait in return type
+  --> tests/fail/bad_channel25.rs:29:13
+   |
+29 | ) -> Result<impl HttpResponse, HttpError> {
+   |             ^^^^^^^^^^^^^^^^^

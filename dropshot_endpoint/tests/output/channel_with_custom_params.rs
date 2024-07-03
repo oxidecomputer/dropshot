@@ -11,36 +11,17 @@ const _: fn() = || {
     need_shared_extractor::<Query<Q>>();
 };
 const _: fn() = || {
-    fn need_exclusive_extractor<T>()
-    where
-        T: ?Sized + topspin::ExclusiveExtractor,
-    {}
-    need_exclusive_extractor::<topspin::WebsocketUpgrade>();
-};
-const _: fn() = || {
-    trait ResultTrait {
-        type T;
-        type E;
-    }
-    impl<TT, EE> ResultTrait for Result<TT, EE>
-    where
-        TT: topspin::HttpResponse,
-    {
-        type T = TT;
-        type E = EE;
-    }
-    struct NeedHttpResponse(<topspin::WebsocketEndpointResult as ResultTrait>::T);
     trait TypeEq {
         type This: ?Sized;
     }
     impl<T: ?Sized> TypeEq for T {
         type This = Self;
     }
-    fn validate_result_error_type<T>()
+    fn validate_websocket_connection_type<T>()
     where
-        T: ?Sized + TypeEq<This = topspin::HttpError>,
+        T: ?Sized + TypeEq<This = topspin::WebsocketConnection>,
     {}
-    validate_result_error_type::<<topspin::WebsocketEndpointResult as ResultTrait>::E>();
+    validate_websocket_connection_type::<WebsocketConnection>();
 };
 #[allow(non_camel_case_types, missing_docs)]
 ///API Endpoint: my_channel
@@ -57,33 +38,35 @@ for topspin::ApiEndpoint<
         async fn my_channel(
             rqctx: RequestContext<()>,
             query: Query<Q>,
-            __dropshot_websocket_upgrade: topspin::WebsocketUpgrade,
-        ) -> topspin::WebsocketEndpointResult {
-            async fn __dropshot_websocket_handler(
-                rqctx: RequestContext<()>,
-                query: Query<Q>,
-                conn: WebsocketConnection,
-            ) -> WebsocketChannelResult {
-                Ok(())
-            }
-            __dropshot_websocket_upgrade
-                .handle(move |conn: WebsocketConnection| async move {
-                    __dropshot_websocket_handler(rqctx, query, conn).await
-                })
+            conn: WebsocketConnection,
+        ) -> WebsocketChannelResult {
+            Ok(())
         }
         const _: fn() = || {
             fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
             fn check_future_bounds(
                 arg0: RequestContext<()>,
                 arg1: Query<Q>,
-                arg2: topspin::WebsocketUpgrade,
+                __dropshot_websocket: WebsocketConnection,
             ) {
-                future_endpoint_must_be_send(my_channel(arg0, arg1, arg2));
+                future_endpoint_must_be_send(
+                    my_channel(arg0, arg1, __dropshot_websocket),
+                );
             }
         };
+        async fn my_channel_adapter(
+            arg0: RequestContext<()>,
+            arg1: Query<Q>,
+            __dropshot_websocket: topspin::WebsocketUpgrade,
+        ) -> topspin::WebsocketEndpointResult {
+            __dropshot_websocket
+                .handle(move |__dropshot_websocket: WebsocketConnection| async move {
+                    my_channel(arg0, arg1, __dropshot_websocket).await
+                })
+        }
         topspin::ApiEndpoint::new(
             "my_channel".to_string(),
-            my_channel,
+            my_channel_adapter,
             topspin::Method::GET,
             "application/json",
             "/my/ws/channel",

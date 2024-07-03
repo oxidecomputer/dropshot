@@ -10,7 +10,7 @@ use syn::{spanned::Spanned, Error};
 use crate::{
     doc::ExtractedDoc,
     error_store::ErrorSink,
-    util::{get_crate, MacroKind, ValidContentType},
+    util::{get_crate, is_wildcard_path, MacroKind, ValidContentType},
 };
 
 #[allow(non_snake_case)]
@@ -231,11 +231,120 @@ impl ValidatedEndpointMetadata {
     }
 }
 
+#[allow(non_snake_case)]
+#[derive(Deserialize, Debug)]
+pub(crate) enum ChannelProtocol {
+    WEBSOCKETS,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct ChannelMetadata {
+    pub(crate) protocol: ChannelProtocol,
+    pub(crate) path: String,
+    #[serde(default)]
+    pub(crate) tags: Vec<String>,
+    #[serde(default)]
+    pub(crate) unpublished: bool,
+    #[serde(default)]
+    pub(crate) deprecated: bool,
+    pub(crate) _dropshot_crate: Option<String>,
+}
+
+impl ChannelMetadata {
+    /// Returns the dropshot crate value as a TokenStream.
+    pub(crate) fn dropshot_crate(&self) -> TokenStream {
+        get_crate(self._dropshot_crate.as_deref())
+    }
+
+    /// Validates metadata, returning a `ValidatedChannelMetadata` is valid.
+    ///
+    /// Note: the only reason we pass in attr here is to provide a span for
+    /// error reporting. As of Rust 1.76, just passing in `attr.span()` produces
+    /// incorrect span info in error messages.
+    pub(crate) fn validate(
+        self,
+        name_str: &str,
+        attr: &dyn ToTokens,
+        kind: MacroKind,
+        errors: &ErrorSink<'_, Error>,
+    ) -> Option<ValidatedChannelMetadata> {
+        let errors = errors.new();
+
+        let ChannelMetadata {
+            protocol: ChannelProtocol::WEBSOCKETS,
+            path,
+            tags,
+            unpublished,
+            deprecated,
+            _dropshot_crate,
+        } = self;
+
+        if kind == MacroKind::Trait && _dropshot_crate.is_some() {
+            errors.push(Error::new_spanned(
+                attr,
+                format!(
+                    "channel `{name_str}` must not specify `_dropshot_crate`\n\
+                     note: specify this as an argument to `#[server]` instead",
+                ),
+            ));
+        }
+
+        // Wildcard paths are not allowed.
+        if is_wildcard_path(&path) {
+            errors.push(Error::new_spanned(
+                attr,
+                format!(
+                    "channel `{name_str}` has a wildcard path, which is not allowed",
+                )
+            ));
+        }
+
+        if errors.has_errors() {
+            None
+        } else {
+            // Validating channel metadata also validates the corresponding
+            // endpoint metadata.
+            let inner = ValidatedEndpointMetadata {
+                method: MethodType::GET,
+                path,
+                tags,
+                unpublished,
+                deprecated,
+                content_type: ValidContentType::ApplicationJson,
+            };
+
+            Some(ValidatedChannelMetadata { inner })
+        }
+    }
+}
+
+pub(crate) struct ValidatedChannelMetadata {
+    // Currently just a wrapper around endpoint metadata, but provided as a
+    // separate type to be less surprising, and in case more custom
+    // functionality is desired.
+    inner: ValidatedEndpointMetadata,
+}
+
+impl ValidatedChannelMetadata {
+    pub(crate) fn to_api_endpoint_fn(
+        &self,
+        dropshot: &TokenStream,
+        endpoint_name: &str,
+        kind: &ApiEndpointKind<'_>,
+        doc: &ExtractedDoc,
+    ) -> TokenStream {
+        // Just forward to the inner endpoint -- any differences are captured in
+        // `kind`.
+        self.inner.to_api_endpoint_fn(dropshot, endpoint_name, kind, doc)
+    }
+}
+
 /// The kind of API endpoint call to generate.
 #[derive(Clone)]
 pub(crate) enum ApiEndpointKind<'ast> {
     /// A regular API endpoint. The argument is the function identifier or path.
     Regular(&'ast dyn ToTokens),
+
     /// A stub API endpoint. This is used for #[server].
     Stub {
         /// The attribute, used for span information.
