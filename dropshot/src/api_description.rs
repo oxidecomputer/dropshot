@@ -32,10 +32,11 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-/// A type used for stub implementations.
+/// A type used to produce an `ApiDescription` without a concrete implementation
+/// of an API trait.
 ///
 /// This type is never constructed, and is used only as a type parameter to
-/// `ApiEndpoint::new_stub`.
+/// [`ApiEndpoint::new_for_types`].
 #[derive(Copy, Clone, Debug)]
 pub enum StubContext {}
 
@@ -127,7 +128,7 @@ impl<'a> ApiEndpoint<StubContext> {
     ///
     /// This is useful for generating OpenAPI documentation without having to
     /// implement the actual handler function. In that capacity, it is used for
-    /// trait-based dropshot servers.
+    /// trait-based dropshot APIs.
     ///
     /// # Example
     ///
@@ -145,7 +146,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// }
     ///
     /// let mut api: ApiDescription<StubContext> = ApiDescription::new();
-    /// let endpoint = ApiEndpoint::new_stub::<
+    /// let endpoint = ApiEndpoint::new_for_types::<
     ///     // The request type is always a tuple. Note the 1-tuple syntax.
     ///     (Query<GetValueParams>,),
     ///     // The response type is always Result<T, HttpError> where T implements
@@ -159,7 +160,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
-    pub fn new_stub<FuncParams, ResultType>(
+    pub fn new_for_types<FuncParams, ResultType>(
         operation_id: String,
         method: Method,
         content_type: &'a str,
@@ -551,7 +552,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     }
                 }
                 ApiEndpointParameterMetadata::Query(ref name) => {
-                    if path_segments.get(name).is_some() {
+                    if path_segments.contains_key(name) {
                         return Err(format!(
                             "the parameter '{}' is specified for both query \
                              and path parameters",
@@ -666,9 +667,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
             };
             let mut operation = openapiv3::Operation::default();
             operation.operation_id = Some(endpoint.operation_id.clone());
-            operation.summary = endpoint.summary.clone();
-            operation.description = endpoint.description.clone();
-            operation.tags = endpoint.tags.clone();
+            operation.summary.clone_from(&endpoint.summary);
+            operation.description.clone_from(&endpoint.description);
+            operation.tags.clone_from(&endpoint.tags);
             operation.deprecated = endpoint.deprecated;
 
             operation.parameters = endpoint

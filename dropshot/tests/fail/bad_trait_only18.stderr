@@ -1,0 +1,5 @@
+error: endpoint `bad_endpoint` must be of the form #[endpoint { method = GET, path = "/path", ... }]
+  --> tests/fail/bad_trait_only18.rs:15:5
+   |
+15 |     #[endpoint = "strange"]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^

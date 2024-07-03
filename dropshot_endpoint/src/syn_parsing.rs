@@ -37,6 +37,7 @@ impl Parse for ItemFnForSignature {
 /// Only function signatures are parsed, not their bodies.
 #[derive(Clone)]
 pub(crate) struct ItemTraitPartParsed {
+    // Adapted from syn.
     pub attrs: Vec<Attribute>,
     pub vis: Visibility,
     pub unsafety: Option<Token![unsafe]>,
@@ -258,6 +259,7 @@ pub(crate) struct TraitItemFnForSignature {
 
 impl Parse for TraitItemFnForSignature {
     fn parse(input: ParseStream) -> Result<Self> {
+        // Adapted from syn.
         let mut attrs = input.call(Attribute::parse_outer)?;
         let sig: Signature = input.parse()?;
 
@@ -313,6 +315,7 @@ impl ToTokens for UnparsedBlock {
 // --- Helper functions, all adapted from syn. ---
 
 fn peek_signature(input: ParseStream) -> bool {
+    // Adapted from syn.
     let fork = input.fork();
     fork.parse::<Option<Token![const]>>().is_ok()
         && fork.parse::<Option<Token![async]>>().is_ok()

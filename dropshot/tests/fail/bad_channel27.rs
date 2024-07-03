@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 // Check that a reasonable error is produced if `dropshot::channel` is used on
-// a trait method rather than `dropshot::server`.
+// a trait method rather than `dropshot::api_description`.
 
 use dropshot::channel;
 use dropshot::RequestContext;

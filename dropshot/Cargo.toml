@@ -31,17 +31,18 @@ percent-encoding = "2.3.1"
 rustls = "0.22.4"
 rustls-pemfile = "2.1.2"
 scopeguard = "1.2.0"
-serde_json = "1.0.117"
+serde_json = "1.0.119"
 serde_path_to_error = "0.1.16"
 serde_urlencoded = "0.7.1"
 sha1 = "0.10.6"
+simple-mermaid = { version = "0.1.1", optional = true }
 slog = "2.5.0"
 slog-async = "2.8.0"
 slog-bunyan = "2.5.0"
 slog-json = "2.6.1"
 slog-term = "2.9.1"
 tokio-rustls = "0.25.0"
-toml = "0.8.13"
+toml = "0.8.14"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
@@ -75,7 +76,7 @@ optional = true
 default-features = false
 
 [dependencies.uuid]
-version = "1.8.0"
+version = "1.9.1"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
@@ -88,9 +89,9 @@ buf-list = "1.0.3"
 expectorate = "1.1.0"
 hyper-rustls = "0.25.0"
 hyper-staticfile = "0.9"
-lazy_static = "1.4.0"
+lazy_static = "1.5.0"
 libc = "0.2.155"
-mime_guess = "2.0.4"
+mime_guess = "2.0.5"
 subprocess = "0.2.9"
 tempfile = "3.10"
 trybuild = "1.0.96"
@@ -98,7 +99,7 @@ trybuild = "1.0.96"
 pem = "3.0"
 rcgen = "0.13.1"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
-tokio-tungstenite = "0.23.0"
+tokio-tungstenite = "0.23.1"
 
 [dev-dependencies.rustls-pki-types]
 version = "1.7.0"
@@ -120,3 +121,7 @@ version_check = "0.9.4"
 
 [features]
 usdt-probes = ["usdt/asm"]
+internal-docs = ["simple-mermaid"]
+
+[package.metadata.docs.rs]
+features = ["internal-docs"]

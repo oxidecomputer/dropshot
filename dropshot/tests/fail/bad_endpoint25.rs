@@ -5,7 +5,7 @@
 use dropshot::endpoint;
 use dropshot::HttpError;
 use dropshot::HttpResponse;
-use dropshot::HttpResponseOk;
+use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::Query;
 use dropshot::RequestContext;
 use schemars::JsonSchema;
@@ -26,7 +26,7 @@ async fn weird_types<'a>(
     _param1: Query<&'a QueryParams>,
     _param2: for<'b> TypedBody<&'b ()>,
 ) -> Result<impl HttpResponse, HttpError> {
-    Ok(HttpResponseOk(()))
+    Ok(HttpResponseUpdatedNoContent())
 }
 
 fn main() {}

@@ -210,7 +210,7 @@ impl ValidatedEndpointMetadata {
                 // for successful generation while being close by for errors.
                 // Seems pretty unobjectionable.
                 quote_spanned! {attr.pound_token.span()=>
-                    #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
+                    #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
                         #content_type,
