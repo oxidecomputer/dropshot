@@ -7,7 +7,7 @@ error: future cannot be sent between threads safely
 14 | | }]
    | |__^ future returned by `bad_channel` is not `Send`
    |
-   = help: within `impl Future<Output = Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>>`, the trait `Send` is not implemented for `Rc<i32>`
+   = help: within `impl Future<Output = Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>>`, the trait `Send` is not implemented for `Rc<i32>`, which is required by `impl Future<Output = Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>>: Send`
 note: future is not `Send` as this value is used across an await
   --> tests/fail/bad_channel15.rs:20:50
    |
@@ -24,3 +24,26 @@ note: required by a bound in `future_endpoint_must_be_send`
 14 | | }]
    | |__^ required by this bound in `future_endpoint_must_be_send`
    = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: future cannot be sent between threads safely
+  --> tests/fail/bad_channel15.rs:15:1
+   |
+15 | async fn bad_channel(
+   | ^^^^^ future created by async block is not `Send`
+   |
+   = help: within `{async block@$DIR/tests/fail/bad_channel15.rs:15:1: 15:6}`, the trait `Send` is not implemented for `Rc<i32>`, which is required by `{async block@$DIR/tests/fail/bad_channel15.rs:15:1: 15:6}: Send`
+note: future is not `Send` as this value is used across an await
+  --> tests/fail/bad_channel15.rs:20:50
+   |
+19 |     let _non_send_type = Rc::new(0);
+   |         -------------- has type `Rc<i32>` which is not `Send`
+20 |     tokio::time::sleep(Duration::from_millis(1)).await;
+   |                                                  ^^^^^ await occurs here, with `_non_send_type` maybe used later
+note: required by a bound in `WebsocketUpgrade::handle`
+  --> src/websocket.rs
+   |
+   |     pub fn handle<C, F>(mut self, handler: C) -> WebsocketEndpointResult
+   |            ------ required by a bound in this associated function
+...
+   |         F: Future<Output = WebsocketChannelResult> + Send + 'static,
+   |                                                      ^^^^ required by this bound in `WebsocketUpgrade::handle`

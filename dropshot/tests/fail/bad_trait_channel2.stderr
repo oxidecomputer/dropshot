@@ -1,0 +1,41 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_trait_channel2.rs:10:7
+   |
+10 | trait MyServer {
+   |       ^^^^^^^^
+
+error: endpoint `ref_self_method` must not have a `self` argument
+  --> tests/fail/bad_trait_channel2.rs:18:9
+   |
+18 |         &self,
+   |         ^^^^^
+
+error: endpoint `mut_self_method` must not have a `self` argument
+  --> tests/fail/bad_trait_channel2.rs:28:9
+   |
+28 |         self,
+   |         ^^^^
+
+error: endpoint `self_method` must not have a `self` argument
+  --> tests/fail/bad_trait_channel2.rs:38:9
+   |
+38 |         self,
+   |         ^^^^
+
+error: endpoint `self_box_self_method` must not have a `self` argument
+  --> tests/fail/bad_trait_channel2.rs:48:9
+   |
+48 |         self: Box<Self>,
+   |         ^^^^^^^^^^^^^^^
+
+error: endpoint `self_arc_self_method` must not have a `self` argument
+  --> tests/fail/bad_trait_channel2.rs:58:9
+   |
+58 |         self: Arc<Self>,
+   |         ^^^^^^^^^^^^^^^

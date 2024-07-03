@@ -54,7 +54,7 @@ pub(crate) fn do_channel(
                 &trait_item_fn.sig,
                 format!(
                     "endpoint `{name}` appears to be a trait function\n\
-                     note: did you mean to use `#[dropshot::server]` \
+                     note: did you mean to use `#[dropshot::api_description]` \
                      instead?",
                 ),
             ));
@@ -312,9 +312,9 @@ impl<'ast> ChannelParams<'ast> {
                 dropshot: dropshot.clone(),
                 sig,
                 rqctx_ty,
+                ret_ty,
                 shared_extractors,
                 websocket_conn,
-                ret_ty,
                 adapter_name,
                 websocket_upgrade_ty,
                 endpoint_result_ty,

@@ -1,5 +1,0 @@
-error: endpoint `bad_channel` has invalid attributes: unknown variant `UNKNOWN`, expected `WEBSOCKETS`
-  --> tests/fail/bad_server_channel20.rs:15:20
-   |
-15 |         protocol = UNKNOWN,
-   |                    ^^^^^^^

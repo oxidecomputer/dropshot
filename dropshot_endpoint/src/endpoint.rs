@@ -58,7 +58,7 @@ pub(crate) fn do_endpoint(
                 &trait_item_fn.sig,
                 format!(
                     "endpoint `{name}` appears to be a trait function\n\
-                     note: did you mean to use `#[dropshot::server]` \
+                     note: did you mean to use `#[dropshot::api_description]` \
                      instead?",
                 ),
             ));
@@ -679,7 +679,7 @@ mod tests {
                     _rqctx: MyRequestContext,
                     query: Query<QueryParams<'static>>,
                     path: Path<<X as Y>::Z>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
                     Ok(())
                 }
             },
@@ -709,7 +709,7 @@ mod tests {
                 /** handle "xyz" requests */
                 async fn handler_xyz(
                     _rqctx: RequestContext<(A, B)>,
-                ) -> Result<HttpResponseOk<()>, HttpError> {
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
                     Ok(())
                 }
             },

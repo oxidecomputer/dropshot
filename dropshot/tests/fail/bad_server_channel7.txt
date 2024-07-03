@@ -1,3 +1,0 @@
-bad_server_endpoint7.rs ensures that if the return value isn't Serialize, the
-macro produces a reasonable error message. But websockets are a binary protocol
-and have no such requirement, so this test is moot.

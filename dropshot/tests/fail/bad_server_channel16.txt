@@ -1,2 +1,0 @@
-bad_server_endpoint16.rs tests a Content-Type that isn't allowed -- the
-#[channel] attribute doesn't support custom content types so this test is moot.

@@ -88,7 +88,8 @@ impl EndpointMetadata {
                 attr,
                 format!(
                     "endpoint `{name_str}` must not specify `_dropshot_crate`\n\
-                     note: specify this as an argument to `#[server]` instead",
+                     note: specify this as an argument to `#[api_description]` \
+                     instead",
                 ),
             ));
         }
@@ -210,7 +211,7 @@ impl ValidatedEndpointMetadata {
                 // for successful generation while being close by for errors.
                 // Seems pretty unobjectionable.
                 quote_spanned! {attr.pound_token.span()=>
-                    #dropshot::ApiEndpoint::new_stub::<(#(#extractor_types,)*), #ret_ty>(
+                    #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
                         #endpoint_name.to_string(),
                         #dropshot::Method::#method_ident,
                         #content_type,
@@ -284,7 +285,8 @@ impl ChannelMetadata {
                 attr,
                 format!(
                     "channel `{name_str}` must not specify `_dropshot_crate`\n\
-                     note: specify this as an argument to `#[server]` instead",
+                     note: specify this as an argument to `#[api_description]` \
+                     instead",
                 ),
             ));
         }
@@ -306,8 +308,8 @@ impl ChannelMetadata {
             // endpoint metadata.
             let inner = ValidatedEndpointMetadata {
                 method: MethodType::GET,
-                path: path,
-                tags: tags,
+                path,
+                tags,
                 unpublished,
                 deprecated,
                 content_type: ValidContentType::ApplicationJson,
@@ -345,7 +347,7 @@ pub(crate) enum ApiEndpointKind<'ast> {
     /// A regular API endpoint. The argument is the function identifier or path.
     Regular(&'ast dyn ToTokens),
 
-    /// A stub API endpoint. This is used for #[server].
+    /// A stub API endpoint. This is used for #[api_description].
     Stub {
         /// The attribute, used for span information.
         attr: &'ast syn::Attribute,
