@@ -543,6 +543,13 @@ pub trait HttpResponse {
     /// Extract status code and structure metadata for the non-error response.
     /// Type information for errors is handled generically across all endpoints.
     fn response_metadata() -> ApiEndpointResponse;
+
+    /// Extract the status code from the concrete response instance.
+    ///
+    /// This may differ from the value extracted from `response_metadata()` in
+    /// error cases or if one has built a response manually using something like
+    /// [`Response<Body>`].
+    fn status_code(&self) -> StatusCode;
 }
 
 /// `Response<Body>` is used for free-form responses. The implementation of
@@ -553,6 +560,9 @@ impl HttpResponse for Response<Body> {
     }
     fn response_metadata() -> ApiEndpointResponse {
         ApiEndpointResponse::default()
+    }
+    fn status_code(&self) -> StatusCode {
+        self.status()
     }
 }
 
@@ -682,6 +692,9 @@ where
             description: Some(T::DESCRIPTION.to_string()),
             ..Default::default()
         }
+    }
+    fn status_code(&self) -> StatusCode {
+        T::STATUS_CODE
     }
 }
 
@@ -1046,5 +1059,9 @@ impl<
 
         metadata.headers = headers;
         metadata
+    }
+
+    fn status_code(&self) -> StatusCode {
+        T::STATUS_CODE
     }
 }
