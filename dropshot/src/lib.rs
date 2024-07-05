@@ -769,7 +769,8 @@ pub mod test_util;
 extern crate slog;
 
 pub use api_description::ApiDescription;
-pub use api_description::ApiDescriptionBuildError;
+pub use api_description::ApiDescriptionBuildErrors;
+pub use api_description::ApiDescriptionRegisterError;
 pub use api_description::ApiEndpoint;
 pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;

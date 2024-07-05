@@ -587,7 +587,7 @@ impl<'ast> SupportModuleGenerator<'ast> {
             #[automatically_derived]
             pub fn api_description<ServerImpl: #trait_ident>() -> ::std::result::Result<
                 #dropshot::ApiDescription<<ServerImpl as #trait_ident>::#context_ident>,
-                #dropshot::ApiDescriptionBuildError,
+                #dropshot::ApiDescriptionBuildErrors,
             > {
                 #body
             }
@@ -606,7 +606,7 @@ impl<'ast> SupportModuleGenerator<'ast> {
             #[automatically_derived]
             pub fn stub_api_description() -> ::std::result::Result<
                 #dropshot::ApiDescription<#dropshot::StubContext>,
-                #dropshot::ApiDescriptionBuildError,
+                #dropshot::ApiDescriptionBuildErrors,
             > {
                 #body
             }
@@ -647,12 +647,12 @@ impl<'ast> SupportModuleGenerator<'ast> {
 
             quote! {
                 let mut dropshot_api = #dropshot::ApiDescription::new();
-                let mut dropshot_errors: Vec<String> = Vec::new();
+                let mut dropshot_errors: Vec<#dropshot::ApiDescriptionRegisterError> = Vec::new();
 
                 #(#endpoints)*
 
                 if !dropshot_errors.is_empty() {
-                    Err(#dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+                    Err(#dropshot::ApiDescriptionBuildErrors::new(dropshot_errors))
                 } else {
                     Ok(dropshot_api)
                 }
