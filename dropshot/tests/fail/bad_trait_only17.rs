@@ -11,12 +11,21 @@ macro_rules! life_the_universe_and_everything {
     };
 }
 
+macro_rules! mostly_harmless {
+    () => {
+        fn six_times_nine() -> u32;
+    };
+}
+
 #[dropshot::api_description]
 trait MyApi {
     type Context;
 
     #[endpoint { method = GET }]
     life_the_universe_and_everything!();
+
+    #[channel { protocol = WEBSOCKETS }]
+    mostly_harmless!();
 }
 
 enum MyImpl {}
@@ -27,6 +36,10 @@ impl MyApi for MyImpl {
     type Context = ();
 
     fn the_answer() -> u32 {
+        42
+    }
+
+    fn six_times_nine() -> u32 {
         42
     }
 }

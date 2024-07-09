@@ -1,0 +1,72 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_trait_channel21.rs:21:7
+   |
+21 | trait MyServer {
+   |       ^^^^^^^^
+
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_trait_channel21.rs:32:9
+   |
+32 |         ...
+   |         ^^^
+
+error: only foreign or `unsafe extern "C"` functions may be C-variadic
+  --> tests/fail/bad_trait_channel21.rs:32:9
+   |
+32 |         ...
+   |         ^^^
+
+error: only foreign or `unsafe extern "C"` functions may be C-variadic
+  --> tests/fail/bad_trait_channel21.rs:45:9
+   |
+45 |         ...
+   |         ^^^
+
+error[E0658]: C-variadic functions are unstable
+  --> tests/fail/bad_trait_channel21.rs:29:5
+   |
+29 | /     async fn variadic_argument(
+30 | |         _rqctx: RequestContext<Self::Context>,
+31 | |         _param1: Query<QueryParams>,
+32 | |         ...
+33 | |     ) -> dropshot::WebsocketChannelResult;
+   | |__________________________________________^
+   |
+   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
+
+error[E0658]: C-variadic functions are unstable
+  --> tests/fail/bad_trait_channel21.rs:42:5
+   |
+42 | /     async fn variadic_argument(
+43 | |         _rqctx: RequestContext<()>,
+44 | |         _param1: Query<QueryParams>,
+45 | |         ...
+46 | |     ) -> dropshot::WebsocketChannelResult {
+47 | |         Ok(())
+48 | |     }
+   | |_____^
+   |
+   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
+
+error[E0700]: hidden type for `impl Future<Output = Result<(), Box<(dyn StdError + Send + Sync + 'static)>>>` captures lifetime that does not appear in bounds
+  --> tests/fail/bad_trait_channel21.rs:46:43
+   |
+42 | /      async fn variadic_argument(
+43 | |          _rqctx: RequestContext<()>,
+44 | |          _param1: Query<QueryParams>,
+45 | |          ...
+46 | |      ) -> dropshot::WebsocketChannelResult {
+   | | _________________________________________-_^
+   | ||_________________________________________|
+   |  |                                         opaque type defined here
+47 |  |         Ok(())
+48 |  |     }
+   |  |_____^
+   |
+   = note: hidden type `{async fn body of <MyImpl as MyServer>::variadic_argument()}` captures lifetime `'_`

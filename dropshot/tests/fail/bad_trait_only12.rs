@@ -6,7 +6,7 @@ use dropshot::HttpError;
 use dropshot::HttpResponseUpdatedNoContent;
 
 // Check that MyApi is present in the generated output, even though the
-// #[server] annotation is incorrect.
+// #[api_description] annotation is incorrect.
 #[dropshot::api_description { context = 123 }]
 trait MyApi {
     type Context;

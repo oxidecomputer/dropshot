@@ -5,11 +5,28 @@ pub trait MyTrait: 'static {
     ) -> impl ::core::future::Future<
         Output = Result<HttpResponseOk<()>, HttpError>,
     > + Send + 'static;
+    fn handler_ws(
+        rqctx: RequestContext<Self::Situation>,
+        upgraded: WebsocketConnection,
+    ) -> impl ::core::future::Future<Output = WebsocketChannelResult> + Send + 'static;
 }
 /// Support module for the Dropshot API trait [`MyTrait`](MyTrait).
 #[automatically_derived]
 pub mod my_support_module {
     use super::*;
+    const _: fn() = || {
+        trait TypeEq {
+            type This: ?Sized;
+        }
+        impl<T: ?Sized> TypeEq for T {
+            type This = Self;
+        }
+        fn validate_websocket_connection_type<T>()
+        where
+            T: ?Sized + TypeEq<This = topspin::WebsocketConnection>,
+        {}
+        validate_websocket_connection_type::<WebsocketConnection>();
+    };
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
     /// generation.
     ///
@@ -42,10 +59,35 @@ pub mod my_support_module {
     #[automatically_derived]
     pub fn stub_api_description() -> ::std::result::Result<
         topspin::ApiDescription<topspin::StubContext>,
-        topspin::ApiDescriptionBuildError,
+        topspin::ApiDescriptionBuildErrors,
     > {
-        let mut dropshot_api = topspin::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_api = topspin::ApiDescription::new()
+            .tag_config({
+                let mut tag_definitions = ::std::collections::HashMap::new();
+                tag_definitions
+                    .insert(
+                        "topspin".to_string(),
+                        topspin::TagDetails {
+                            description: Some(
+                                "Topspin is a tennis shot that causes the ball to spin forward"
+                                    .into(),
+                            ),
+                            external_docs: Some(
+                                topspin::TagExternalDocs {
+                                    description: Some("Wikipedia entry".into()),
+                                    url: "https://en.wikipedia.org/wiki/Topspin".to_string(),
+                                }
+                                    .into(),
+                            ),
+                        },
+                    );
+                topspin::TagConfig {
+                    allow_other_tags: true,
+                    endpoint_tag_policy: topspin::EndpointTagPolicy::Any,
+                    tag_definitions,
+                }
+            });
+        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new_for_types::<
                 (),
@@ -60,8 +102,17 @@ pub mod my_support_module {
                 dropshot_errors.push(error);
             }
         }
+        {
+            let endpoint_handler_ws = topspin::ApiEndpoint::new_for_types::<
+                (topspin::WebsocketUpgrade,),
+                topspin::WebsocketEndpointResult,
+            >("handler_ws".to_string(), topspin::Method::GET, "application/json", "/ws");
+            if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
+                dropshot_errors.push(error);
+            }
+        }
         if !dropshot_errors.is_empty() {
-            Err(topspin::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(topspin::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
@@ -117,10 +168,35 @@ pub mod my_support_module {
     #[automatically_derived]
     pub fn api_description<ServerImpl: MyTrait>() -> ::std::result::Result<
         topspin::ApiDescription<<ServerImpl as MyTrait>::Situation>,
-        topspin::ApiDescriptionBuildError,
+        topspin::ApiDescriptionBuildErrors,
     > {
-        let mut dropshot_api = topspin::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_api = topspin::ApiDescription::new()
+            .tag_config({
+                let mut tag_definitions = ::std::collections::HashMap::new();
+                tag_definitions
+                    .insert(
+                        "topspin".to_string(),
+                        topspin::TagDetails {
+                            description: Some(
+                                "Topspin is a tennis shot that causes the ball to spin forward"
+                                    .into(),
+                            ),
+                            external_docs: Some(
+                                topspin::TagExternalDocs {
+                                    description: Some("Wikipedia entry".into()),
+                                    url: "https://en.wikipedia.org/wiki/Topspin".to_string(),
+                                }
+                                    .into(),
+                            ),
+                        },
+                    );
+                topspin::TagConfig {
+                    allow_other_tags: true,
+                    endpoint_tag_policy: topspin::EndpointTagPolicy::Any,
+                    tag_definitions,
+                }
+            });
+        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new(
                 "handler_xyz".to_string(),
@@ -133,8 +209,32 @@ pub mod my_support_module {
                 dropshot_errors.push(error);
             }
         }
+        {
+            async fn handler_ws_adapter<ServerImpl: MyTrait>(
+                arg0: RequestContext<<ServerImpl as MyTrait>::Situation>,
+                __dropshot_websocket: topspin::WebsocketUpgrade,
+            ) -> topspin::WebsocketEndpointResult {
+                __dropshot_websocket
+                    .handle(move |__dropshot_websocket: WebsocketConnection| async move {
+                        <ServerImpl as MyTrait>::handler_ws(arg0, __dropshot_websocket)
+                            .await
+                    })
+            }
+            {
+                let endpoint_handler_ws = topspin::ApiEndpoint::new(
+                    "handler_ws".to_string(),
+                    handler_ws_adapter::<ServerImpl>,
+                    topspin::Method::GET,
+                    "application/json",
+                    "/ws",
+                );
+                if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
+                    dropshot_errors.push(error);
+                }
+            }
+        }
         if !dropshot_errors.is_empty() {
-            Err(topspin::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(topspin::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }

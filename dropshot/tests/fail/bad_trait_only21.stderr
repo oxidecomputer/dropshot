@@ -1,0 +1,17 @@
+error: unknown variant `foo`, expected one of `any`, `at_least_one`, `exactly_one`
+  --> tests/fail/bad_trait_only21.rs:13:31
+   |
+13 |         endpoint_tag_policy = foo,
+   |                               ^^^
+
+error[E0433]: failed to resolve: use of undeclared crate or module `my_api`
+  --> tests/fail/bad_trait_only21.rs:31:5
+   |
+31 |     my_api::api_description::<MyImpl>();
+   |     ^^^^^^ use of undeclared crate or module `my_api`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `my_api`
+  --> tests/fail/bad_trait_only21.rs:32:5
+   |
+32 |     my_api::stub_api_description();
+   |     ^^^^^^ use of undeclared crate or module `my_api`

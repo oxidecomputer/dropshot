@@ -15,6 +15,12 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...HEAD[Full list of commits]
 
+=== Breaking Changes
+
+* For `ApiEndpoint::register`, the `Err` variant now returns a structured `ApiDescriptionRegisterError` rather than a string.
+
+=== Other notable changes
+
 == 0.10.1 (released 2024-05-15)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.0\...v0.10.1[Full list of commits]

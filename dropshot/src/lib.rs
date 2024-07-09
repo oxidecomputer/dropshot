@@ -181,8 +181,9 @@
 //!
 //! An **API trait** is a Rust trait that represents a collection of API
 //! endpoints. Each endpoint is defined as a static method on the trait, and the
-//! trait as a whole is annotated with `#[dropshot::api_description]`. (Rust
-//! 1.75 or later is required.)
+//! trait as a whole is annotated with
+//! [`#[dropshot::api_description]`](macro@api_description). (Rust 1.75 or later
+//! is required.)
 //!
 //! While slightly more complex than the function-based server, API traits
 //! separate the interface definition from the implementation. Keeping the
@@ -769,7 +770,8 @@ pub mod test_util;
 extern crate slog;
 
 pub use api_description::ApiDescription;
-pub use api_description::ApiDescriptionBuildError;
+pub use api_description::ApiDescriptionBuildErrors;
+pub use api_description::ApiDescriptionRegisterError;
 pub use api_description::ApiEndpoint;
 pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;

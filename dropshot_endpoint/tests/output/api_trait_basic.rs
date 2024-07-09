@@ -5,11 +5,28 @@ trait MyTrait: 'static {
     ) -> impl ::core::future::Future<
         Output = Result<HttpResponseOk<()>, HttpError>,
     > + Send + 'static;
+    fn handler_ws(
+        rqctx: RequestContext<Self::Context>,
+        upgraded: WebsocketConnection,
+    ) -> impl ::core::future::Future<Output = WebsocketChannelResult> + Send + 'static;
 }
 /// Support module for the Dropshot API trait [`MyTrait`](MyTrait).
 #[automatically_derived]
 mod my_trait {
     use super::*;
+    const _: fn() = || {
+        trait TypeEq {
+            type This: ?Sized;
+        }
+        impl<T: ?Sized> TypeEq for T {
+            type This = Self;
+        }
+        fn validate_websocket_connection_type<T>()
+        where
+            T: ?Sized + TypeEq<This = dropshot::WebsocketConnection>,
+        {}
+        validate_websocket_connection_type::<WebsocketConnection>();
+    };
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
     /// generation.
     ///
@@ -42,10 +59,10 @@ mod my_trait {
     #[automatically_derived]
     pub fn stub_api_description() -> ::std::result::Result<
         dropshot::ApiDescription<dropshot::StubContext>,
-        dropshot::ApiDescriptionBuildError,
+        dropshot::ApiDescriptionBuildErrors,
     > {
         let mut dropshot_api = dropshot::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_errors: Vec<dropshot::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = dropshot::ApiEndpoint::new_for_types::<
                 (),
@@ -60,8 +77,22 @@ mod my_trait {
                 dropshot_errors.push(error);
             }
         }
+        {
+            let endpoint_handler_ws = dropshot::ApiEndpoint::new_for_types::<
+                (dropshot::WebsocketUpgrade,),
+                dropshot::WebsocketEndpointResult,
+            >(
+                "handler_ws".to_string(),
+                dropshot::Method::GET,
+                "application/json",
+                "/ws",
+            );
+            if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
+                dropshot_errors.push(error);
+            }
+        }
         if !dropshot_errors.is_empty() {
-            Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(dropshot::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
@@ -117,10 +148,10 @@ mod my_trait {
     #[automatically_derived]
     pub fn api_description<ServerImpl: MyTrait>() -> ::std::result::Result<
         dropshot::ApiDescription<<ServerImpl as MyTrait>::Context>,
-        dropshot::ApiDescriptionBuildError,
+        dropshot::ApiDescriptionBuildErrors,
     > {
         let mut dropshot_api = dropshot::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_errors: Vec<dropshot::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = dropshot::ApiEndpoint::new(
                 "handler_xyz".to_string(),
@@ -133,8 +164,32 @@ mod my_trait {
                 dropshot_errors.push(error);
             }
         }
+        {
+            async fn handler_ws_adapter<ServerImpl: MyTrait>(
+                arg0: RequestContext<<ServerImpl as MyTrait>::Context>,
+                __dropshot_websocket: dropshot::WebsocketUpgrade,
+            ) -> dropshot::WebsocketEndpointResult {
+                __dropshot_websocket
+                    .handle(move |__dropshot_websocket: WebsocketConnection| async move {
+                        <ServerImpl as MyTrait>::handler_ws(arg0, __dropshot_websocket)
+                            .await
+                    })
+            }
+            {
+                let endpoint_handler_ws = dropshot::ApiEndpoint::new(
+                    "handler_ws".to_string(),
+                    handler_ws_adapter::<ServerImpl>,
+                    dropshot::Method::GET,
+                    "application/json",
+                    "/ws",
+                );
+                if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
+                    dropshot_errors.push(error);
+                }
+            }
+        }
         if !dropshot_errors.is_empty() {
-            Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(dropshot::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
