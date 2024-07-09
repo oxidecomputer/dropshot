@@ -217,7 +217,7 @@ pub fn channel(
 ///     },
 /// }]
 /// trait MyTrait {
-///     type MyContext;
+///     type Context;
 ///
 ///     #[endpoint {
 ///         method = PUT,
