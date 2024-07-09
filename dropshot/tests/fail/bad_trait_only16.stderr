@@ -3,3 +3,9 @@ error: const `MY_CONSTANT` marked as endpoint is not a method
    |
 11 |     #[endpoint { method = GET }]
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: const `MY_CONSTANT2` marked as channel is not a method
+  --> tests/fail/bad_trait_only16.rs:14:5
+   |
+14 |     #[channel { protocol = WEBSOCKETS }]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

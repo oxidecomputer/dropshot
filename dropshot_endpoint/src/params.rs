@@ -340,6 +340,10 @@ pub(crate) enum RqctxTy<'ast> {
         /// A transformed type, with the type parameter replaced with the unit
         /// type.
         transformed_unit: syn::Type,
+
+        /// A transformed type, with the type parameter replaced with
+        /// <ServerImpl as #trait_ident>::#context_ident.
+        transformed_server_impl: syn::Type,
     },
 }
 
@@ -429,7 +433,20 @@ impl<'ast> RqctxTy<'ast> {
                 // Now replace the type parameter with the unit type.
                 *param = parse_quote! { () };
 
-                Some(Self::Trait { orig: ty, transformed_unit })
+                // Do the above once more for the server impl.
+                let mut transformed_server_impl = ty.clone();
+                let Ok(Some(param)) =
+                    extract_rqctx_param_mut(&mut transformed_server_impl)
+                else {
+                    unreachable!("other cases already bailed above")
+                };
+                *param = parse_quote! { <ServerImpl as #trait_ident>::#context_ident };
+
+                Some(Self::Trait {
+                    orig: ty,
+                    transformed_unit,
+                    transformed_server_impl,
+                })
             }
         }
     }
@@ -440,6 +457,17 @@ impl<'ast> RqctxTy<'ast> {
         match self {
             RqctxTy::Function(ty) => ty,
             RqctxTy::Trait { transformed_unit, .. } => transformed_unit,
+        }
+    }
+
+    /// Returns the transformed-to-server-impl type if this is a trait-based
+    /// RequestContext, otherwise returns the original type.
+    pub(crate) fn transformed_server_impl_type(&self) -> &syn::Type {
+        match self {
+            RqctxTy::Function(ty) => ty,
+            RqctxTy::Trait { transformed_server_impl, .. } => {
+                transformed_server_impl
+            }
         }
     }
 
@@ -466,12 +494,18 @@ impl<'ast> fmt::Debug for RqctxTy<'ast> {
             RqctxTy::Function(ty) => {
                 write!(f, "Function({})", ty.to_token_stream())
             }
-            RqctxTy::Trait { orig, transformed_unit } => {
+            RqctxTy::Trait {
+                orig,
+                transformed_unit,
+                transformed_server_impl,
+            } => {
                 write!(
                     f,
-                    "Trait {{ orig: {}, transformed_unit: {} }}",
+                    "Trait {{ orig: {}, transformed_unit: {}, \
+                     transformed_server_impl: {} }}",
                     orig.to_token_stream(),
                     transformed_unit.to_token_stream(),
+                    transformed_server_impl.to_token_stream(),
                 )
             }
         }

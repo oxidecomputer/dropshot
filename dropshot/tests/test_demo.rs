@@ -92,7 +92,7 @@ fn demo_api() -> ApiDescription<usize> {
     // tests.
     let error = api.register(demo_handler_path_param_impossible).unwrap_err();
     assert_eq!(
-        error,
+        error.message(),
         "path parameters are not consumed (different_param_name) and \
          specified parameters do not appear in the path (test1)"
     );

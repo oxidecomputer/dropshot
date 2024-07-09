@@ -10,6 +10,9 @@ trait MyApi {
     type Context;
     #[endpoint { method = GET }]
     const MY_CONSTANT: u32;
+
+    #[channel { protocol = WEBSOCKETS }]
+    const MY_CONSTANT2: u32;
 }
 
 enum MyImpl {}
@@ -19,6 +22,7 @@ enum MyImpl {}
 impl MyApi for MyImpl {
     type Context = ();
     const MY_CONSTANT: u32 = 42;
+    const MY_CONSTANT2: u32 = 84;
 }
 
 fn main() {

@@ -15,7 +15,7 @@ There are several tests here of the general form:
 - `bad_endpointN.rs`
 - `bad_channelN.rs`
 - `bad_trait_endpointN.rs`
-- (once supported) `bad_trait_channelN.rs`
+- `bad_trait_channelN.rs`
 
 The specific situations being tested are mirrored across tests with the same N. For example, `bad_endpoint2.rs` and `bad_channel2.rs` test the situation where a `self` argument is passed in.
 
@@ -27,9 +27,7 @@ The specific situations being tested are mirrored across tests with the same N. 
 
 In either case, we do not renumber tests--instead, we skip that number so the fixtures afterwards stay consistent.
 
-=== `bad_trait_endpoint` tests
-
-(... and `bad_trait_channel` tests once supported)
+=== `bad_trait_endpoint` and `bad_trait_channel` tests
 
 These tests ensure that API traits fail gracefully. Notably, *we should almost always generate the original trait* with all items (to the best of our ability), so these tests also include an implementation of the trait, as well as calls into the support module. The error output ensures that items aren't missing.
 
@@ -37,7 +35,7 @@ These tests ensure that API traits fail gracefully. Notably, *we should almost a
 
 Dropshot API traits introduce new and exciting failure modes. Tests that only make sense for API traits are named `bad_trait_onlyN.rs`.
 
-Most trait-only tests are generally agnostic to endpoint versus channel, or just don't have any tests. Hence they aren't split up into their own endpoint and channel tests.
+Most trait-only tests are generally agnostic to endpoint versus channel, or just don't have any endpoints at all. Hence they aren't split up into their own endpoint and channel tests.
 
 Like the `bad_trait_endpoint` tests, these tests include an implementation of the trait to ensure that it is still generated.
 

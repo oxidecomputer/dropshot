@@ -23,14 +23,17 @@ use serde_tokenstream::Error;
 use syn::parse_quote;
 use syn::spanned::Spanned;
 
-/// Channel usage message, produced if there were parameter errors.
-const USAGE: &str = "channel handlers must have the following signature:
+pub(crate) fn usage_str(context: &str) -> String {
+    format!(
+        "channel handlers must have the following signature:
     async fn(
-        rqctx: dropshot::RequestContext<MyContext>,
+        rqctx: dropshot::RequestContext<{context}>,
         [query_params: Query<Q>,]
         [path_params: Path<P>,]
         websocket_connection: dropshot::WebsocketConnection,
-    ) -> dropshot::WebsocketChannelResult";
+    ) -> dropshot::WebsocketChannelResult"
+    )
+}
 
 pub(crate) fn do_channel(
     attr: proc_macro2::TokenStream,
@@ -109,7 +112,10 @@ pub(crate) fn do_channel(
         let item_fn = item_fn
             .as_ref()
             .expect("has_param_errors is true => item_fn is Some");
-        errors.insert(0, Error::new_spanned(&item_fn.sig, USAGE));
+        errors.insert(
+            0,
+            Error::new_spanned(&item_fn.sig, usage_str("MyContext")),
+        );
     }
 
     (output.output, errors)
@@ -245,11 +251,12 @@ pub(crate) struct ChannelParams<'ast> {
     rqctx_ty: RqctxTy<'ast>,
     shared_extractors: Vec<&'ast syn::Type>,
     websocket_conn: &'ast syn::Type,
-    adapter_name: syn::Ident,
+    pub(crate) ret_ty: &'ast syn::Type,
+    pub(crate) adapter_name: syn::Ident,
 
     // Types used in the adapter function, generated at construction time.
     websocket_upgrade_ty: syn::Type,
-    endpoint_result_ty: syn::Type,
+    pub(crate) endpoint_result_ty: syn::Type,
 }
 
 impl<'ast> ChannelParams<'ast> {
@@ -298,13 +305,14 @@ impl<'ast> ChannelParams<'ast> {
         // errored out.
         if errors.has_errors() {
             None
-        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(_)) =
+        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) =
             (rqctx_ty, websocket_conn, ret_ty)
         {
             Some(Self {
                 dropshot: dropshot.clone(),
                 sig,
                 rqctx_ty,
+                ret_ty,
                 shared_extractors,
                 websocket_conn,
                 adapter_name,
@@ -341,6 +349,25 @@ impl<'ast> ChannelParams<'ast> {
             }
         });
 
+        let trait_type_checks = self.to_trait_type_checks();
+
+        quote! {
+            #rqctx_check
+
+            #(#shared_extractor_checks)*
+
+            #trait_type_checks
+        }
+    }
+
+    /// Generate type checks suitable for server traits.
+    ///
+    /// Unlike with endpoints, we do need to generate some of the type checks
+    /// within traits. That's because we use an adapter function -- so types
+    /// that are unique to the user function need to be checked.
+    pub(crate) fn to_trait_type_checks(&self) -> TokenStream {
+        let dropshot = &self.dropshot;
+
         let websocket_conn = self.websocket_conn;
         let websocket_conn_check = quote_spanned! { websocket_conn.span()=>
             const _: fn() = || {
@@ -365,10 +392,6 @@ impl<'ast> ChannelParams<'ast> {
         // job and just produces noise.)
 
         quote! {
-            #rqctx_check
-
-            #(#shared_extractor_checks)*
-
             #websocket_conn_check
         }
     }
@@ -400,14 +423,16 @@ impl<'ast> ChannelParams<'ast> {
     /// Returns a list of all the argument types as they should show up in the
     /// adapter function.
     fn adapter_arg_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
-        std::iter::once(self.rqctx_ty.transformed_unit_type())
+        std::iter::once(self.rqctx_ty.transformed_server_impl_type())
             .chain(self.extractor_types())
     }
 
     /// Returns a list of the extractor types.
     ///
     /// The exclusive extractor in this situation is `WebsocketUpgrade`.
-    fn extractor_types(&self) -> impl Iterator<Item = &syn::Type> + '_ {
+    pub(crate) fn extractor_types(
+        &self,
+    ) -> impl Iterator<Item = &syn::Type> + '_ {
         self.shared_extractors
             .iter()
             .copied()
@@ -459,6 +484,36 @@ impl<'ast> ChannelParams<'ast> {
                 __dropshot_websocket.handle(
                     move | __dropshot_websocket: #websocket_conn | async move {
                         #name(#(#arg_names_2),*).await
+                    },
+                )
+            }
+        }
+    }
+
+    /// Constructs the adapter function that calls the user's endpoint on a
+    /// server trait.
+    ///
+    /// This is a bit more complicated than the regular adapter function, since
+    /// the server trait must be referred to carefully.
+    pub(crate) fn to_trait_adapter_fn(
+        &self,
+        trait_ident: &syn::Ident,
+    ) -> TokenStream {
+        let arg_names = self.arg_names();
+        let arg_names_2 = self.arg_names();
+        let adapter_arg_types = self.adapter_arg_types();
+        let websocket_conn = self.websocket_conn;
+        let name = &self.sig.ident;
+        let adapter_name = &self.adapter_name;
+        let endpoint_result_ty = &self.endpoint_result_ty;
+
+        quote_spanned! {self.sig.span()=>
+            async fn #adapter_name<ServerImpl: #trait_ident>(
+                #( #arg_names: #adapter_arg_types ),*
+            ) -> #endpoint_result_ty {
+                __dropshot_websocket.handle(
+                    move | __dropshot_websocket: #websocket_conn | async move {
+                        <ServerImpl as #trait_ident>::#name(#(#arg_names_2),*).await
                     },
                 )
             }

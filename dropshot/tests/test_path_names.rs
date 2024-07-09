@@ -31,7 +31,7 @@ async fn handler(
 }
 
 #[test]
-fn test_path_names() -> Result<(), String> {
+fn test_path_names() -> anyhow::Result<()> {
     let mut api = ApiDescription::new();
     api.register(handler)?;
     Ok(())

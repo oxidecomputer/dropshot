@@ -16,6 +16,12 @@ trait MyApi {
     async fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+
+    #[channel = "weird"]
+    async fn bad_channel(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: dropshot::WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult;
 }
 
 enum MyImpl {}
@@ -29,6 +35,13 @@ impl MyApi for MyImpl {
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         Ok(HttpResponseUpdatedNoContent())
+    }
+
+    async fn bad_channel(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: dropshot::WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult {
+        Ok(())
     }
 }
 

@@ -1,5 +1,11 @@
 error: macro `life_the_universe_and_everything` marked as endpoint is not a method
-  --> tests/fail/bad_trait_only17.rs:18:5
+  --> tests/fail/bad_trait_only17.rs:24:5
    |
-18 |     #[endpoint { method = GET }]
+24 |     #[endpoint { method = GET }]
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: macro `mostly_harmless` marked as channel is not a method
+  --> tests/fail/bad_trait_only17.rs:27:5
+   |
+27 |     #[channel { protocol = WEBSOCKETS }]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
