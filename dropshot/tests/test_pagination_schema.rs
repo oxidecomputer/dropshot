@@ -42,7 +42,7 @@ async fn handler(
 }
 
 #[test]
-fn test_pagination_schema() -> Result<(), String> {
+fn test_pagination_schema() -> anyhow::Result<()> {
     let mut api = ApiDescription::new();
     api.register(handler)?;
     let mut output = Cursor::new(Vec::new());
