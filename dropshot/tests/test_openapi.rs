@@ -2,12 +2,13 @@
 
 use dropshot::{
     endpoint, http_response_found, http_response_see_other,
-    http_response_temporary_redirect, ApiDescription, FreeformBody, HttpError,
-    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
-    HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
-    HttpResponseSeeOther, HttpResponseTemporaryRedirect,
-    HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
-    RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
+    http_response_temporary_redirect, ApiDescription,
+    ApiDescriptionRegisterError, FreeformBody, HttpError, HttpResponseAccepted,
+    HttpResponseCreated, HttpResponseDeleted, HttpResponseFound,
+    HttpResponseHeaders, HttpResponseOk, HttpResponseSeeOther,
+    HttpResponseTemporaryRedirect, HttpResponseUpdatedNoContent, MultipartBody,
+    PaginationParams, Path, Query, RequestContext, ResultsPage, TagConfig,
+    TagDetails, TypedBody, UntypedBody,
 };
 use hyper::Body;
 use schemars::JsonSchema;
@@ -474,7 +475,7 @@ async fn handler25(
 
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
-) -> Result<ApiDescription<()>, String> {
+) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
     let mut api = ApiDescription::new();
 
     if let Some(tag_config) = maybe_tag_config {
@@ -510,7 +511,7 @@ fn make_api(
 }
 
 #[test]
-fn test_openapi() -> Result<(), String> {
+fn test_openapi() -> anyhow::Result<()> {
     let api = make_api(None)?;
     let mut output = Cursor::new(Vec::new());
 
@@ -522,7 +523,7 @@ fn test_openapi() -> Result<(), String> {
 }
 
 #[test]
-fn test_openapi_fuller() -> Result<(), String> {
+fn test_openapi_fuller() -> anyhow::Result<()> {
     let mut tag_definitions = HashMap::new();
     tag_definitions.insert(
         "it".to_string(),

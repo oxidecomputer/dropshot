@@ -127,10 +127,10 @@ pub fn channel(
 ///
 /// The `#[dropshot::api_description]` macro accepts these arguments:
 ///
-/// * `context`: The type of the context on the trait. Optional, and defaults to
+/// * `context`: The type of the context on the trait. Optional, defaults to
 ///   `Self::Context`.
-/// * `factory`: The name of the factory struct that will be generated.
-///   Optional, defaulting to `<TraitName>Factory`.
+/// * `module`: The name of the support module. Optional, defaults to the
+///   `snake_case` version of the trait name.
 ///
 /// ## Limitations
 ///

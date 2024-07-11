@@ -59,10 +59,10 @@ pub mod my_support_module {
     #[automatically_derived]
     pub fn stub_api_description() -> ::std::result::Result<
         topspin::ApiDescription<topspin::StubContext>,
-        topspin::ApiDescriptionBuildError,
+        topspin::ApiDescriptionBuildErrors,
     > {
         let mut dropshot_api = topspin::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new_for_types::<
                 (),
@@ -87,7 +87,7 @@ pub mod my_support_module {
             }
         }
         if !dropshot_errors.is_empty() {
-            Err(topspin::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(topspin::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
@@ -143,10 +143,10 @@ pub mod my_support_module {
     #[automatically_derived]
     pub fn api_description<ServerImpl: MyTrait>() -> ::std::result::Result<
         topspin::ApiDescription<<ServerImpl as MyTrait>::Situation>,
-        topspin::ApiDescriptionBuildError,
+        topspin::ApiDescriptionBuildErrors,
     > {
         let mut dropshot_api = topspin::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new(
                 "handler_xyz".to_string(),
@@ -184,7 +184,7 @@ pub mod my_support_module {
             }
         }
         if !dropshot_errors.is_empty() {
-            Err(topspin::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(topspin::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }

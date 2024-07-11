@@ -37,12 +37,12 @@ pub(crate) mod my_trait {
     #[automatically_derived]
     pub fn stub_api_description() -> ::std::result::Result<
         dropshot::ApiDescription<dropshot::StubContext>,
-        dropshot::ApiDescriptionBuildError,
+        dropshot::ApiDescriptionBuildErrors,
     > {
         let mut dropshot_api = dropshot::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_errors: Vec<dropshot::ApiDescriptionRegisterError> = Vec::new();
         if !dropshot_errors.is_empty() {
-            Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(dropshot::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
@@ -98,12 +98,12 @@ pub(crate) mod my_trait {
     #[automatically_derived]
     pub fn api_description<ServerImpl: MyTrait>() -> ::std::result::Result<
         dropshot::ApiDescription<<ServerImpl as MyTrait>::Context>,
-        dropshot::ApiDescriptionBuildError,
+        dropshot::ApiDescriptionBuildErrors,
     > {
         let mut dropshot_api = dropshot::ApiDescription::new();
-        let mut dropshot_errors: Vec<String> = Vec::new();
+        let mut dropshot_errors: Vec<dropshot::ApiDescriptionRegisterError> = Vec::new();
         if !dropshot_errors.is_empty() {
-            Err(dropshot::ApiDescriptionBuildError::new(dropshot_errors))
+            Err(dropshot::ApiDescriptionBuildErrors::new(dropshot_errors))
         } else {
             Ok(dropshot_api)
         }
