@@ -1,8 +1,8 @@
 error: unknown variant `foo`, expected one of `any`, `at_least_one`, `exactly_one`
-  --> tests/fail/bad_trait_only21.rs:13:31
+  --> tests/fail/bad_trait_only21.rs:13:18
    |
-13 |         endpoint_tag_policy = foo,
-   |                               ^^^
+13 |         policy = foo,
+   |                  ^^^
 
 error[E0433]: failed to resolve: use of undeclared crate or module `my_api`
   --> tests/fail/bad_trait_only21.rs:31:5

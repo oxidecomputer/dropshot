@@ -164,9 +164,9 @@ struct ApiTagConfig {
     #[serde(default)]
     allow_other_tags: bool,
     #[serde(default)]
-    endpoint_tag_policy: ApiEndpointTagPolicy,
-    // tag_definitions is required
-    tag_definitions: HashMap<String, ApiTagDetails>,
+    policy: ApiEndpointTagPolicy,
+    // tags is required
+    tags: HashMap<String, ApiTagDetails>,
 }
 
 /// A mirror of dropshot's `EndpointTagPolicy`, used as part of arguments to the
@@ -756,7 +756,7 @@ impl<'ast> SupportModuleGenerator<'ast> {
         let dropshot = self.dropshot;
         if let Some(tag_config) = self.tag_config {
             let allow_other_tags = tag_config.allow_other_tags;
-            let endpoint_tag_policy = match tag_config.endpoint_tag_policy {
+            let policy = match tag_config.policy {
                 ApiEndpointTagPolicy::Any => {
                     quote! { #dropshot::EndpointTagPolicy::Any }
                 }
@@ -767,43 +767,41 @@ impl<'ast> SupportModuleGenerator<'ast> {
                     quote! { #dropshot::EndpointTagPolicy::ExactlyOne }
                 }
             };
-            let tag_definitions =
-                tag_config.tag_definitions.iter().map(|(tag, details)| {
+            let tags = tag_config.tags.iter().map(|(tag, details)| {
+                let description =
+                    quote_project_option(details.description.as_deref());
+                let external_docs = details.external_docs.as_ref().map(|ed| {
                     let description =
-                        quote_project_option(details.description.as_deref());
-                    let external_docs =
-                        details.external_docs.as_ref().map(|ed| {
-                            let description =
-                                quote_project_option(ed.description.as_deref());
-                            let url = &ed.url;
-                            quote! {
-                                #dropshot::TagExternalDocs {
-                                    description: #description,
-                                    url: #url.to_string(),
-                                }
-                            }
-                        });
-                    let external_docs = quote_project_option(external_docs);
-
+                        quote_project_option(ed.description.as_deref());
+                    let url = &ed.url;
                     quote! {
-                        tag_definitions.insert(
-                            #tag.to_string(),
-                            #dropshot::TagDetails {
-                                description: #description,
-                                external_docs: #external_docs,
-                            }
-                        );
+                        #dropshot::TagExternalDocs {
+                            description: #description,
+                            url: #url.to_string(),
+                        }
                     }
                 });
+                let external_docs = quote_project_option(external_docs);
+
+                quote! {
+                    tags.insert(
+                        #tag.to_string(),
+                        #dropshot::TagDetails {
+                            description: #description,
+                            external_docs: #external_docs,
+                        }
+                    );
+                }
+            });
             Some(quote! {
                 .tag_config({
-                    let mut tag_definitions = ::std::collections::HashMap::new();
-                    #(#tag_definitions)*
+                    let mut tags = ::std::collections::HashMap::new();
+                    #(#tags)*
 
                     #dropshot::TagConfig {
                         allow_other_tags: #allow_other_tags,
-                        endpoint_tag_policy: #endpoint_tag_policy,
-                        tag_definitions,
+                        policy: #policy,
+                        tags,
                     }
                 })
             })
@@ -1395,9 +1393,10 @@ fn parse_channel_metadata(
         }
     };
 
-    // TODO: Switch to from_tokenstream_spanned once
-    // https://github.com/oxidecomputer/serde_tokenstream/pull/194 is available.
-    match from_tokenstream::<ChannelMetadata>(&l.tokens) {
+    match from_tokenstream_spanned::<ChannelMetadata>(
+        l.delimiter.span(),
+        &l.tokens,
+    ) {
         Ok(m) => m.validate(name_str, attr, MacroKind::Trait, errors),
         Err(error) => {
             errors.push(Error::new(
@@ -1711,8 +1710,8 @@ mod tests {
                 module = my_support_module,
                 tag_config = {
                     allow_other_tags = true,
-                    endpoint_tag_policy = any,
-                    tag_definitions = {
+                    policy = any,
+                    tags = {
                         topspin = {
                             description =
                                 "Topspin is a tennis shot that \

@@ -18,6 +18,9 @@ https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...HEAD[Full list of c
 === Breaking Changes
 
 * For `ApiEndpoint::register`, the `Err` variant now returns a structured `ApiDescriptionRegisterError` rather than a string.
+* `TagConfig` field names have changed, for consistency with tag configuration in API traits. The `Deserialize` implementation will still work with the old field names, but the `Serialize` implementation will always produce the new field names.
+** `endpoint_tag_policy` is now called `policy`.
+** `tag_definitions` is now called `tags`.
 
 === Other notable changes
 

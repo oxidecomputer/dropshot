@@ -6,7 +6,7 @@ use dropshot::HttpError;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::RequestContext;
 
-// Test empty tag configuration -- "tag_definitions" must be specified.
+// Test empty tag configuration -- "tags" must be specified.
 
 #[dropshot::api_description {
     tag_config = {}

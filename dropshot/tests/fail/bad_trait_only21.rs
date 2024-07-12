@@ -10,8 +10,8 @@ use dropshot::RequestContext;
 
 #[dropshot::api_description {
     tag_config = {
-        endpoint_tag_policy = foo,
-        tag_definitions = {},
+        policy = foo,
+        tags = {},
     }
 }]
 trait MyApi {

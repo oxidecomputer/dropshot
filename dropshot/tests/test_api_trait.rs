@@ -32,7 +32,7 @@ fn test_api_trait_basic() {
 
 #[dropshot::api_description {
     tag_config = {
-        tag_definitions = {},
+        tags = {},
     }
 }]
 trait ApiWithEmptyTagConfig {
@@ -67,7 +67,7 @@ fn test_api_trait_with_empty_tag_config() {
     tag_config = {
         // This means that tags are not allowed.
         allow_other_tags = false,
-        tag_definitions = {},
+        tags = {},
     }
 }]
 trait ApiWithDisallowedTags {
@@ -115,8 +115,8 @@ fn test_api_trait_with_disallowed_tags() {
 #[dropshot::api_description {
     tag_config = {
         allow_other_tags = false,
-        endpoint_tag_policy = at_least_one,
-        tag_definitions = {
+        policy = at_least_one,
+        tags = {
             // Test out every allowed tag configuration.
             "tag1" = {},
             "tag2" = {

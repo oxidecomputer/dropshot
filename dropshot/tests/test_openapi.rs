@@ -524,8 +524,8 @@ fn test_openapi() -> anyhow::Result<()> {
 
 #[test]
 fn test_openapi_fuller() -> anyhow::Result<()> {
-    let mut tag_definitions = HashMap::new();
-    tag_definitions.insert(
+    let mut tags = HashMap::new();
+    tags.insert(
         "it".to_string(),
         TagDetails {
             description: Some("Now you are the one who is it.".to_string()),
@@ -534,8 +534,8 @@ fn test_openapi_fuller() -> anyhow::Result<()> {
     );
     let tag_config = TagConfig {
         allow_other_tags: true,
-        endpoint_tag_policy: dropshot::EndpointTagPolicy::AtLeastOne,
-        tag_definitions,
+        policy: dropshot::EndpointTagPolicy::AtLeastOne,
+        tags: tags,
     };
     let api = make_api(Some(tag_config))?;
     let mut output = Cursor::new(Vec::new());

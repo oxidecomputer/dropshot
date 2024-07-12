@@ -10,8 +10,8 @@ use dropshot::RequestContext;
 
 #[dropshot::api_description {
     tag_config = {
-        endpoint_tag_policy = at_least_one,
-        tag_definitions = {
+        policy = at_least_one,
+        tags = {
             foo = {
                 external_docs = {}
             }

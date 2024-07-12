@@ -1,4 +1,4 @@
-error: missing field `tag_definitions`
+error: missing field `tags`
   --> tests/fail/bad_trait_only20.rs:12:18
    |
 12 |     tag_config = {}

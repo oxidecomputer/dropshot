@@ -151,43 +151,50 @@ pub fn channel(
 ///         rqctx: RequestContext<Self::MyContext>,
 ///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 /// }
-/// # // defining fn main puts the doctest in a module context
+/// # // defining fn main puts thoe doctest in a module context
 /// # fn main() {}
 /// ```
 ///
 /// ### Tag configuration
 ///
-/// With Dropshot, individual endpoints can have OpenAPI tags associated with
-/// them. For these tags, trait-wide configuration can be specified using the
-/// `tag_config` argument to `api_description`.
+/// Endpoints can have tags associated with them that appear in the OpenAPI
+/// document. These provide a means of organizing an API. Use the `tag_config`
+/// argument to specify tag information for the trait.
 ///
-/// `tag_config` is optional. If not specified, the default is to allow all
-/// tags.
+/// `tag_config` is optional. If not specified, the default is to allow any tag
+/// value and any number of tags associated with the endpoint.
+///
+/// If `tag_config` is specified, compliance with it is evaluated at runtime
+/// while registering endpoints. A failure to comply--for example, if `policy =
+/// at_least_one` is specified and some endpoint has no associated tags--results
+/// in the `api_description` and `stub_api_description` functions returning an
+/// error.
 ///
 /// The shape of `tag_config` is broadly similar to that of
 /// `dropshot::TagConfig`. It has the following fields:
 ///
-/// * `tag_definitions`: A map of tag names to information about them.
-///   _Required, but can be empty._
+/// * `tags`: A map of tag names with information about them. _Required, but can
+///   be empty._
 ///
-///   The keys are tag names, which are strings. The values consist of:
+///   The keys are tag names, which are strings. The values are objects that
+///   consist of:
 ///
 ///   * `description`: A string description of the tag. _Optional._
 ///   * `external_docs`: External documentation for the tag. _Optional._ This
 ///     has the following fields:
-///     * `description`: A string description of the external documentation.
+///     * `description`: A string description f the external documentation.
 ///       _Optional._
 ///     * `url`: The URL for the external documentation. _Required._
 ///
 /// * `allow_other_tags`: Whether to allow tags not explicitly defined in
-///   `tag_definitions`. _Optional, defaults to false. But if `tag_config` as a
-///   whole is not specified, all tags are allowed._
+///   `tags`. _Optional, defaults to false. But if `tag_config` as a whole is
+///   not specified, all tags are allowed._
 ///
-/// * `endpoint_tag_policy`: Must be one of the following:
-///   * `at_least_one`: Endpoints are required to have at least one tag, or
-///     possibly more.
+/// * `policy`: Must be one of the following:
+///   * `at_least_one`: Endpoints are required to have at least one tag, and may
+///     have more.
 ///   * `exactly_one`: Endpoints are required to have exactly one tag.
-///   * `any`: Endpoints may have any number of tags.
+///   * `any`: Endpoints may have any number of tags (including none at all).
 ///
 ///   _Optional, defaults to `any`._
 ///
@@ -198,8 +205,8 @@ pub fn channel(
 ///
 /// #[dropshot::api_description {
 ///     tag_config = {
-///         // If tag_config is specified, tag_definitions is required (but can be empty).
-///         tag_definitions = {
+///         // If tag_config is specified, tags is required (but can be empty).
+///         tags = {
 ///             "tag1" = {
 ///                 // The description is optional.
 ///                 description = "Tag 1",
@@ -212,7 +219,7 @@ pub fn channel(
 ///                 },
 ///             },
 ///         },
-///         endpoint_tag_policy = exactly_one,
+///         policy = exactly_one,
 ///         allow_other_tags = false,
 ///     },
 /// }]

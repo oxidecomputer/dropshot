@@ -4,7 +4,8 @@ pub trait MyTrait: 'static {
         rqctx: RequestContext<Self::Situation>,
     ) -> impl ::core::future::Future<
         Output = Result<HttpResponseOk<()>, HttpError>,
-    > + Send + 'static;
+    > + Send
+           + 'static;
     fn handler_ws(
         rqctx: RequestContext<Self::Situation>,
         upgraded: WebsocketConnection,
@@ -24,7 +25,8 @@ pub mod my_support_module {
         fn validate_websocket_connection_type<T>()
         where
             T: ?Sized + TypeEq<This = topspin::WebsocketConnection>,
-        {}
+        {
+        }
         validate_websocket_connection_type::<WebsocketConnection>();
     };
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
@@ -63,8 +65,8 @@ pub mod my_support_module {
     > {
         let mut dropshot_api = topspin::ApiDescription::new()
             .tag_config({
-                let mut tag_definitions = ::std::collections::HashMap::new();
-                tag_definitions
+                let mut tags = ::std::collections::HashMap::new();
+                tags
                     .insert(
                         "topspin".to_string(),
                         topspin::TagDetails {
@@ -83,11 +85,12 @@ pub mod my_support_module {
                     );
                 topspin::TagConfig {
                     allow_other_tags: true,
-                    endpoint_tag_policy: topspin::EndpointTagPolicy::Any,
-                    tag_definitions,
+                    policy: topspin::EndpointTagPolicy::Any,
+                    tags,
                 }
             });
-        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
+        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> =
+            Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new_for_types::<
                 (),
@@ -106,7 +109,12 @@ pub mod my_support_module {
             let endpoint_handler_ws = topspin::ApiEndpoint::new_for_types::<
                 (topspin::WebsocketUpgrade,),
                 topspin::WebsocketEndpointResult,
-            >("handler_ws".to_string(), topspin::Method::GET, "application/json", "/ws");
+            >(
+                "handler_ws".to_string(),
+                topspin::Method::GET,
+                "application/json",
+                "/ws",
+            );
             if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
                 dropshot_errors.push(error);
             }
@@ -172,8 +180,8 @@ pub mod my_support_module {
     > {
         let mut dropshot_api = topspin::ApiDescription::new()
             .tag_config({
-                let mut tag_definitions = ::std::collections::HashMap::new();
-                tag_definitions
+                let mut tags = ::std::collections::HashMap::new();
+                tags
                     .insert(
                         "topspin".to_string(),
                         topspin::TagDetails {
@@ -192,11 +200,12 @@ pub mod my_support_module {
                     );
                 topspin::TagConfig {
                     allow_other_tags: true,
-                    endpoint_tag_policy: topspin::EndpointTagPolicy::Any,
-                    tag_definitions,
+                    policy: topspin::EndpointTagPolicy::Any,
+                    tags,
                 }
             });
-        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
+        let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> =
+            Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new(
                 "handler_xyz".to_string(),
