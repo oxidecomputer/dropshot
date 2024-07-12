@@ -182,7 +182,7 @@ pub fn channel(
 ///   * `description`: A string description of the tag. _Optional._
 ///   * `external_docs`: External documentation for the tag. _Optional._ This
 ///     has the following fields:
-///     * `description`: A string description f the external documentation.
+///     * `description`: A string description of the external documentation.
 ///       _Optional._
 ///     * `url`: The URL for the external documentation. _Required._
 ///
