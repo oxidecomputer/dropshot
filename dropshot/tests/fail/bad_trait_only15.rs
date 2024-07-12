@@ -11,6 +11,9 @@ trait MyApi {
 
     #[endpoint { method = GET }]
     type MyType;
+
+    #[channel { protocol = WEBSOCKETS }]
+    type MyType2;
 }
 
 enum MyImpl {}
@@ -20,6 +23,7 @@ enum MyImpl {}
 impl MyApi for MyImpl {
     type Context = ();
     type MyType = ();
+    type MyType2 = ();
 }
 
 fn main() {

@@ -88,7 +88,8 @@ impl EndpointMetadata {
                 attr,
                 format!(
                     "endpoint `{name_str}` must not specify `_dropshot_crate`\n\
-                     note: specify this as an argument to `#[server]` instead",
+                     note: specify this as an argument to `#[api_description]` \
+                     instead",
                 ),
             ));
         }
@@ -284,7 +285,8 @@ impl ChannelMetadata {
                 attr,
                 format!(
                     "channel `{name_str}` must not specify `_dropshot_crate`\n\
-                     note: specify this as an argument to `#[server]` instead",
+                     note: specify this as an argument to `#[api_description]` \
+                     instead",
                 ),
             ));
         }
@@ -345,7 +347,7 @@ pub(crate) enum ApiEndpointKind<'ast> {
     /// A regular API endpoint. The argument is the function identifier or path.
     Regular(&'ast dyn ToTokens),
 
-    /// A stub API endpoint. This is used for #[server].
+    /// A stub API endpoint. This is used for #[api_description].
     Stub {
         /// The attribute, used for span information.
         attr: &'ast syn::Attribute,

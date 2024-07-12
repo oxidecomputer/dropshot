@@ -15,8 +15,9 @@ trait MyApi {
     // Introduce a syntax error outside of a function definition (in standard
     // Rust, "pub" doesn't work here).
     //
-    // Currently, this produces a message about "endpoint" not being valid. This
-    // isn't ideal, but at least the rest of the error output is good.
+    // Currently, this produces a message about "endpoint" and "channel" not
+    // being valid. This isn't ideal, but at least the rest of the error output
+    // is good.
     #[endpoint {
         method = GET,
         path = "/test",
@@ -24,6 +25,15 @@ trait MyApi {
     pub async fn bad_endpoint(
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+
+    #[channel {
+        protocol = WEBSOCKETS,
+        path = "/test",
+    }]
+    pub async fn bad_channel(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: dropshot::WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult;
 }
 
 enum MyImpl {}
@@ -36,6 +46,13 @@ impl MyApi for MyImpl {
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         Ok(HttpResponseUpdatedNoContent())
+    }
+
+    async fn bad_channel(
+        _rqctx: RequestContext<Self::Context>,
+        _upgraded: dropshot::WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult {
+        Ok(())
     }
 }
 
