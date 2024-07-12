@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 async-stream = "0.3.5"
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 base64 = "0.22.1"
 bytes = "1"
 camino = { version = "1.1.7", features = ["serde1"] }
@@ -31,7 +31,7 @@ percent-encoding = "2.3.1"
 rustls = "0.22.4"
 rustls-pemfile = "2.1.2"
 scopeguard = "1.2.0"
-serde_json = "1.0.119"
+serde_json = "1.0.120"
 serde_path_to_error = "0.1.16"
 serde_urlencoded = "0.7.1"
 sha1 = "0.10.6"
@@ -95,7 +95,7 @@ libc = "0.2.155"
 mime_guess = "2.0.5"
 subprocess = "0.2.9"
 tempfile = "3.10"
-trybuild = "1.0.96"
+trybuild = "1.0.97"
 # Used by the https examples and tests
 pem = "3.0"
 rcgen = "0.13.1"

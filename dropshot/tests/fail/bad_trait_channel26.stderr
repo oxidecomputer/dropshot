@@ -1,7 +1,8 @@
 error: endpoint `bad_channel` has invalid attributes: missing field `path`
- --> tests/fail/bad_trait_channel26.rs:9:1
-  |
-9 | #[dropshot::api_description]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the attribute macro `dropshot::api_description` (in Nightly builds, run with -Z macro-backtrace for more info)
+  --> tests/fail/bad_trait_channel26.rs:14:15
+   |
+14 |       #[channel {
+   |  _______________^
+15 | |         protocol = WEBSOCKETS,
+16 | |     }]
+   | |_____^

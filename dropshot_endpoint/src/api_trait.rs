@@ -1271,9 +1271,10 @@ fn parse_channel_metadata(
         }
     };
 
-    // TODO: Switch to from_tokenstream_spanned once
-    // https://github.com/oxidecomputer/serde_tokenstream/pull/194 is available.
-    match from_tokenstream::<ChannelMetadata>(&l.tokens) {
+    match from_tokenstream_spanned::<ChannelMetadata>(
+        l.delimiter.span(),
+        &l.tokens,
+    ) {
         Ok(m) => m.validate(name_str, attr, MacroKind::Trait, errors),
         Err(error) => {
             errors.push(Error::new(
