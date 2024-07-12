@@ -754,60 +754,58 @@ impl<'ast> SupportModuleGenerator<'ast> {
 
     fn make_tag_config(&self) -> Option<TokenStream> {
         let dropshot = self.dropshot;
-        if let Some(tag_config) = self.tag_config {
-            let allow_other_tags = tag_config.allow_other_tags;
-            let policy = match tag_config.policy {
-                ApiEndpointTagPolicy::Any => {
-                    quote! { #dropshot::EndpointTagPolicy::Any }
-                }
-                ApiEndpointTagPolicy::AtLeastOne => {
-                    quote! { #dropshot::EndpointTagPolicy::AtLeastOne }
-                }
-                ApiEndpointTagPolicy::ExactlyOne => {
-                    quote! { #dropshot::EndpointTagPolicy::ExactlyOne }
-                }
-            };
-            let tags = tag_config.tags.iter().map(|(tag, details)| {
-                let description =
-                    quote_project_option(details.description.as_deref());
-                let external_docs = details.external_docs.as_ref().map(|ed| {
-                    let description =
-                        quote_project_option(ed.description.as_deref());
-                    let url = &ed.url;
-                    quote! {
-                        #dropshot::TagExternalDocs {
-                            description: #description,
-                            url: #url.to_string(),
-                        }
-                    }
-                });
-                let external_docs = quote_project_option(external_docs);
+        let tag_config = self.tag_config.as_ref()?;
 
+        let allow_other_tags = tag_config.allow_other_tags;
+        let policy = match tag_config.policy {
+            ApiEndpointTagPolicy::Any => {
+                quote! { #dropshot::EndpointTagPolicy::Any }
+            }
+            ApiEndpointTagPolicy::AtLeastOne => {
+                quote! { #dropshot::EndpointTagPolicy::AtLeastOne }
+            }
+            ApiEndpointTagPolicy::ExactlyOne => {
+                quote! { #dropshot::EndpointTagPolicy::ExactlyOne }
+            }
+        };
+        let tags = tag_config.tags.iter().map(|(tag, details)| {
+            let description =
+                quote_project_option(details.description.as_deref());
+            let external_docs = details.external_docs.as_ref().map(|ed| {
+                let description =
+                    quote_project_option(ed.description.as_deref());
+                let url = &ed.url;
                 quote! {
-                    tags.insert(
-                        #tag.to_string(),
-                        #dropshot::TagDetails {
-                            description: #description,
-                            external_docs: #external_docs,
-                        }
-                    );
+                    #dropshot::TagExternalDocs {
+                        description: #description,
+                        url: #url.to_string(),
+                    }
                 }
             });
-            Some(quote! {
-                .tag_config({
-                    let mut tags = ::std::collections::HashMap::new();
-                    #(#tags)*
+            let external_docs = quote_project_option(external_docs);
 
-                    #dropshot::TagConfig {
-                        allow_other_tags: #allow_other_tags,
-                        policy: #policy,
-                        tags,
+            quote! {
+                tags.insert(
+                    #tag.to_string(),
+                    #dropshot::TagDetails {
+                        description: #description,
+                        external_docs: #external_docs,
                     }
-                })
+                );
+            }
+        });
+        Some(quote! {
+            .tag_config({
+                let mut tags = ::std::collections::HashMap::new();
+                #(#tags)*
+
+                #dropshot::TagConfig {
+                    allow_other_tags: #allow_other_tags,
+                    policy: #policy,
+                    tags,
+                }
             })
-        } else {
-            None
-        }
+        })
     }
 
     fn make_doc_comments(&self) -> ModuleDocComments {
