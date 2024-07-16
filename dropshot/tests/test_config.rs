@@ -111,6 +111,7 @@ fn make_config(
         ),
         request_body_max_bytes: 1024,
         default_handler_task_mode,
+        log_headers: Default::default(),
     }
 }
 
