@@ -82,7 +82,7 @@ pub mod my_support_module {
                 );
                 topspin::TagConfig {
                     allow_other_tags: true,
-                    policy: topspin::EndpointTagPolicy::Any,
+                    policy: EndpointTagPolicy::Any,
                     tags,
                 }
             });
@@ -190,7 +190,7 @@ pub mod my_support_module {
                 );
                 topspin::TagConfig {
                     allow_other_tags: true,
-                    policy: topspin::EndpointTagPolicy::Any,
+                    policy: EndpointTagPolicy::Any,
                     tags,
                 }
             });

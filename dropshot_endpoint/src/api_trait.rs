@@ -27,7 +27,9 @@ use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
-use serde_tokenstream::{from_tokenstream, from_tokenstream_spanned};
+use serde_tokenstream::{
+    from_tokenstream, from_tokenstream_spanned, ParseWrapper,
+};
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
@@ -163,26 +165,13 @@ impl ApiMetadata {
 struct ApiTagConfig {
     #[serde(default)]
     allow_other_tags: bool,
+    // This is an expression of type `dropshot::EndpointTagPolicy`. If not
+    // specified, we'll substitute the default value `EndpointTagPolicy::Any`,
+    // using the path to the dropshot crate determined by the macro invocation.
     #[serde(default)]
-    policy: ApiEndpointTagPolicy,
+    policy: Option<ParseWrapper<syn::Expr>>,
     // tags is required
     tags: HashMap<String, ApiTagDetails>,
-}
-
-/// A mirror of dropshot's `EndpointTagPolicy`, used as part of arguments to the
-/// top-level `api_description` macro.
-#[derive(Clone, Copy, Default, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-enum ApiEndpointTagPolicy {
-    /// Any number of tags is permitted.
-    #[default]
-    Any,
-
-    /// At least one tag is required and more are allowed.
-    AtLeastOne,
-
-    /// Exactly one tag is required.
-    ExactlyOne,
 }
 
 /// A mirror of dropshot's `TagDetails`, used as part of arguments to the
@@ -757,17 +746,12 @@ impl<'ast> SupportModuleGenerator<'ast> {
         let tag_config = self.tag_config.as_ref()?;
 
         let allow_other_tags = tag_config.allow_other_tags;
-        let policy = match tag_config.policy {
-            ApiEndpointTagPolicy::Any => {
+        let policy = tag_config.policy.as_ref().map_or_else(
+            || {
                 quote! { #dropshot::EndpointTagPolicy::Any }
-            }
-            ApiEndpointTagPolicy::AtLeastOne => {
-                quote! { #dropshot::EndpointTagPolicy::AtLeastOne }
-            }
-            ApiEndpointTagPolicy::ExactlyOne => {
-                quote! { #dropshot::EndpointTagPolicy::ExactlyOne }
-            }
-        };
+            },
+            |wrapper| wrapper.to_token_stream(),
+        );
         let tags = tag_config.tags.iter().map(|(tag, details)| {
             let description =
                 quote_project_option(details.description.as_deref());
@@ -1708,7 +1692,7 @@ mod tests {
                 module = my_support_module,
                 tag_config = {
                     allow_other_tags = true,
-                    policy = any,
+                    policy = EndpointTagPolicy::Any,
                     tags = {
                         topspin = {
                             description =

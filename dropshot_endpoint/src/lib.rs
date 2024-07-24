@@ -190,18 +190,18 @@ pub fn channel(
 ///   `tags`. _Optional, defaults to false. But if `tag_config` as a whole is
 ///   not specified, all tags are allowed._
 ///
-/// * `policy`: Must be one of the following:
-///   * `at_least_one`: Endpoints are required to have at least one tag, and may
-///     have more.
-///   * `exactly_one`: Endpoints are required to have exactly one tag.
-///   * `any`: Endpoints may have any number of tags (including none at all).
+/// * `policy`: Must be an expression of type `EndpointTagPolicy`; typically just
+///   the enum variant.
 ///
-///   _Optional, defaults to `any`._
+///   _Optional, defaults to `EndpointTagPolicy::Any`._
 ///
 /// ### Example: tag configuration
 ///
 /// ```ignore
-/// use dropshot::{RequestContext, HttpResponseUpdatedNoContent, HttpError};
+/// use dropshot::{
+///     EndpointTagPolicy, RequestContext, HttpResponseUpdatedNoContent,
+///     HttpError,
+/// };
 ///
 /// #[dropshot::api_description {
 ///     tag_config = {
@@ -219,7 +219,7 @@ pub fn channel(
 ///                 },
 ///             },
 ///         },
-///         policy = exactly_one,
+///         policy = EndpointTagPolicy::ExactlyOne,
 ///         allow_other_tags = false,
 ///     },
 /// }]

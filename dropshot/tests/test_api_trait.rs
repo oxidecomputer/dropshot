@@ -1,6 +1,9 @@
 // Copyright 2023 Oxide Computer Company
 
-use dropshot::{HttpError, HttpResponseUpdatedNoContent, RequestContext};
+use dropshot::{
+    EndpointTagPolicy, HttpError, HttpResponseUpdatedNoContent, RequestContext,
+    TagConfig,
+};
 
 #[dropshot::api_description]
 trait BasicApi {
@@ -58,9 +61,19 @@ impl ApiWithEmptyTagConfig for ImplWithEmptyTagConfig {
 
 #[test]
 fn test_api_trait_with_empty_tag_config() {
-    api_with_empty_tag_config::api_description::<ImplWithEmptyTagConfig>()
-        .unwrap();
-    api_with_empty_tag_config::stub_api_description().unwrap();
+    let api_description =
+        api_with_empty_tag_config::api_description::<ImplWithEmptyTagConfig>()
+            .unwrap();
+    // Ensure that the endpoint tag policy is Any.
+    assert_eq!(api_description.get_tag_config().policy, EndpointTagPolicy::Any);
+
+    let stub_description =
+        api_with_empty_tag_config::stub_api_description().unwrap();
+    // Ensure that the endpoint tag policy is Any.
+    assert_eq!(
+        stub_description.get_tag_config().policy,
+        EndpointTagPolicy::Any
+    );
 }
 
 #[dropshot::api_description {
@@ -115,7 +128,7 @@ fn test_api_trait_with_disallowed_tags() {
 #[dropshot::api_description {
     tag_config = {
         allow_other_tags = false,
-        policy = at_least_one,
+        policy = EndpointTagPolicy::Any,
         tags = {
             // Test out every allowed tag configuration.
             "tag1" = {},

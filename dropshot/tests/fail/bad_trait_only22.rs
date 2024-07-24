@@ -2,6 +2,7 @@
 
 #![allow(unused_imports)]
 
+use dropshot::EndpointTagPolicy;
 use dropshot::HttpError;
 use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::RequestContext;
@@ -10,7 +11,7 @@ use dropshot::RequestContext;
 
 #[dropshot::api_description {
     tag_config = {
-        policy = at_least_one,
+        policy = EndpointTagPolicy::AtLeastOne,
         tags = {
             foo = {
                 external_docs = {}

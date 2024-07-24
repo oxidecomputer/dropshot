@@ -73,6 +73,7 @@
 //!                 bind_address: "127.0.0.1:0".parse().unwrap(),
 //!                 request_body_max_bytes: 1024,
 //!                 default_handler_task_mode: HandlerTaskMode::Detached,
+//!                 log_headers: Default::default(),
 //!             },
 //!             api,
 //!             Arc::new(()),

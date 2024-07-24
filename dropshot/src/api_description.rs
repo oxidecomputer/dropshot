@@ -373,6 +373,14 @@ impl<Context: ServerContext> ApiDescription<Context> {
         self
     }
 
+    // Not (yet) part of the public API, only used for tests. If/when this is
+    // made public, we should consider changing the setter above to be named
+    // `with_tag_config`, and this to `tag_config`.
+    #[doc(hidden)]
+    pub fn get_tag_config(&self) -> &TagConfig {
+        &self.tag_config
+    }
+
     /// Register a new API endpoint.
     pub fn register<T>(
         &mut self,
