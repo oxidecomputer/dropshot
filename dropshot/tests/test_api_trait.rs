@@ -2,7 +2,6 @@
 
 use dropshot::{
     EndpointTagPolicy, HttpError, HttpResponseUpdatedNoContent, RequestContext,
-    TagConfig,
 };
 
 #[dropshot::api_description]
