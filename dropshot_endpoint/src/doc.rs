@@ -54,7 +54,7 @@ impl ExtractedDoc {
                         format!("{}{}", acc, comment)
                     } else if comment.is_empty() {
                         // Handle fully blank comments as newlines we keep.
-                        format!("{}\n", acc)
+                        format!("{}\n\n", acc)
                     } else {
                         // Default to space-separating comment fragments.
                         format!("{} {}", acc, comment)
@@ -227,13 +227,21 @@ mod tests {
         ///
         /// Even
         /// More
+        ///
+        ///
+        ///
+        /// And another
+        /// paragraph
         #[derive(Schema)]
         struct SummaryDescriptionBreak;
         assert_eq!(
             ExtractedDoc::from_attrs(&SummaryDescriptionBreak::schema().attrs),
             ExtractedDoc {
                 summary: Some("Summary".to_string()),
-                description: Some("Text More\nEven More".to_string())
+                description: Some(
+                    "Text More\n\nEven More\n\nAnd another paragraph"
+                        .to_string()
+                )
             },
         );
     }
