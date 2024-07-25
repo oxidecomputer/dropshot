@@ -53,7 +53,8 @@ impl ExtractedDoc {
                         // Continuation lines and newlines.
                         format!("{}{}", acc, comment)
                     } else if comment.is_empty() {
-                        // Handle fully blank comments as newlines we keep.
+                        // Blank lines get a markdown paragraph break (unless
+                        // acc already ends in '\n' -- see above)
                         format!("{}\n\n", acc)
                     } else {
                         // Default to space-separating comment fragments.
