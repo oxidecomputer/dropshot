@@ -118,7 +118,7 @@ features = [ "max_level_trace", "release_max_level_debug" ]
 # This is required for the build.rs script to check for an appropriate compiler
 # version so that `usdt` can be built on stable rust.
 [build-dependencies]
-version_check = "0.9.4"
+version_check = "0.9.5"
 
 [features]
 usdt-probes = ["usdt/asm"]
