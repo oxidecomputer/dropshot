@@ -63,8 +63,8 @@ async fn main() -> Result<(), String> {
     // Build a description of the API -- in this case it's not much of an API!.
     let mut api = ApiDescription::new().tag_config(TagConfig {
         allow_other_tags: false,
-        endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
-        tag_definitions: vec![
+        policy: EndpointTagPolicy::ExactlyOne,
+        tags: vec![
             (
                 "simpsons".to_string(),
                 TagDetails {

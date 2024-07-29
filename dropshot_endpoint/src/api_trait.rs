@@ -21,11 +21,15 @@
 //! Code that is common to both the server and endpoint macros lives in
 //! `endpoint.rs`.
 
+use std::collections::HashMap;
+
 use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
-use serde_tokenstream::{from_tokenstream, from_tokenstream_spanned};
+use serde_tokenstream::{
+    from_tokenstream, from_tokenstream_spanned, ParseWrapper,
+};
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
 
 use crate::{
@@ -131,6 +135,7 @@ struct ApiMetadata {
     #[serde(default)]
     context: Option<String>,
     module: Option<String>,
+    tag_config: Option<ApiTagConfig>,
     _dropshot_crate: Option<String>,
 }
 
@@ -154,6 +159,40 @@ impl ApiMetadata {
     }
 }
 
+/// A mirror of dropshot's `TagConfig`, used as part of arguments to the
+/// top-level `api_description` macro.
+#[derive(Deserialize, Debug)]
+struct ApiTagConfig {
+    #[serde(default)]
+    allow_other_tags: bool,
+    // This is an expression of type `dropshot::EndpointTagPolicy`. If not
+    // specified, we'll substitute the default value `EndpointTagPolicy::Any`,
+    // using the path to the dropshot crate determined by the macro invocation.
+    #[serde(default)]
+    policy: Option<ParseWrapper<syn::Expr>>,
+    // tags is required
+    tags: HashMap<String, ApiTagDetails>,
+}
+
+/// A mirror of dropshot's `TagDetails`, used as part of arguments to the
+/// top-level `api_description` macro.
+#[derive(Deserialize, Debug)]
+struct ApiTagDetails {
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    external_docs: Option<ApiTagExternalDocs>,
+}
+
+/// A mirror of dropshot's `TagExternalDocs`, used as part of arguments to the
+/// top-level `api_description` macro.
+#[derive(Deserialize, Debug)]
+struct ApiTagExternalDocs {
+    #[serde(default)]
+    description: Option<String>,
+    url: String,
+}
+
 struct ApiParser<'ast> {
     dropshot: TokenStream,
     item_trait: ApiItemTrait<'ast>,
@@ -161,6 +200,7 @@ struct ApiParser<'ast> {
     // Context associated type which we're always going to move to the top), so
     // we use a single list to store all of them.
     items: Vec<ApiItem<'ast>>,
+    tag_config: Option<ApiTagConfig>,
 
     context_item: ContextItem<'ast>,
 
@@ -275,6 +315,7 @@ impl<'ast> ApiParser<'ast> {
             dropshot,
             item_trait,
             items,
+            tag_config: metadata.tag_config,
             context_item,
             module_ident: Some(module_ident),
         }
@@ -302,6 +343,7 @@ impl<'ast> ApiParser<'ast> {
             dropshot: get_crate(None),
             item_trait,
             items: items.collect(),
+            tag_config: None,
             context_item: ContextItem::new_invalid_metadata(),
             module_ident: None,
         }
@@ -394,6 +436,7 @@ impl<'ast> ApiParser<'ast> {
                     item_trait,
                     context_item,
                     items: &self.items,
+                    tag_config: self.tag_config.as_ref(),
                 };
                 module_gen.to_token_stream()
             }
@@ -603,6 +646,8 @@ struct SupportModuleGenerator<'ast> {
 
     // These items might or might not be valid individually.
     items: &'ast [ApiItem<'ast>],
+
+    tag_config: Option<&'ast ApiTagConfig>,
 }
 
 impl<'ast> SupportModuleGenerator<'ast> {
@@ -666,6 +711,7 @@ impl<'ast> SupportModuleGenerator<'ast> {
                 panic!(#err_msg);
             }
         } else {
+            let tag_config = self.make_tag_config();
             let endpoints = self.items.iter().filter_map(|item| match item {
                 ApiItem::Fn(ApiFnItem::Endpoint(e)) => {
                     Some(e.to_api_endpoint(&self.dropshot, kind))
@@ -681,7 +727,7 @@ impl<'ast> SupportModuleGenerator<'ast> {
             });
 
             quote! {
-                let mut dropshot_api = #dropshot::ApiDescription::new();
+                let mut dropshot_api = #dropshot::ApiDescription::new()#tag_config;
                 let mut dropshot_errors: Vec<#dropshot::ApiDescriptionRegisterError> = Vec::new();
 
                 #(#endpoints)*
@@ -693,6 +739,57 @@ impl<'ast> SupportModuleGenerator<'ast> {
                 }
             }
         }
+    }
+
+    fn make_tag_config(&self) -> Option<TokenStream> {
+        let dropshot = self.dropshot;
+        let tag_config = self.tag_config.as_ref()?;
+
+        let allow_other_tags = tag_config.allow_other_tags;
+        let policy = tag_config.policy.as_ref().map_or_else(
+            || {
+                quote! { #dropshot::EndpointTagPolicy::Any }
+            },
+            |wrapper| wrapper.to_token_stream(),
+        );
+        let tags = tag_config.tags.iter().map(|(tag, details)| {
+            let description =
+                quote_project_option(details.description.as_deref());
+            let external_docs = details.external_docs.as_ref().map(|ed| {
+                let description =
+                    quote_project_option(ed.description.as_deref());
+                let url = &ed.url;
+                quote! {
+                    #dropshot::TagExternalDocs {
+                        description: #description,
+                        url: #url.to_string(),
+                    }
+                }
+            });
+            let external_docs = quote_project_option(external_docs);
+
+            quote! {
+                tags.insert(
+                    #tag.to_string(),
+                    #dropshot::TagDetails {
+                        description: #description,
+                        external_docs: #external_docs,
+                    }
+                );
+            }
+        });
+        Some(quote! {
+            .tag_config({
+                let mut tags = ::std::collections::HashMap::new();
+                #(#tags)*
+
+                #dropshot::TagConfig {
+                    allow_other_tags: #allow_other_tags,
+                    policy: #policy,
+                    tags,
+                }
+            })
+        })
     }
 
     fn make_doc_comments(&self) -> ModuleDocComments {
@@ -793,6 +890,13 @@ impl<'ast> ToTokens for SupportModuleGenerator<'ast> {
             }
         });
     }
+}
+
+/// Turn Some<T> into quote! { Some(T.into()) }, and None into quote! { None }.
+///
+/// The `.into()` assists with string conversions.
+fn quote_project_option<T: ToTokens>(t: Option<T>) -> TokenStream {
+    t.map_or_else(|| quote! { None }, |t| quote! { Some(#t.into()) })
 }
 
 /// Generated documentation comments for the support module.
@@ -1586,6 +1690,21 @@ mod tests {
             quote! {
                 context = Situation,
                 module = my_support_module,
+                tag_config = {
+                    allow_other_tags = true,
+                    policy = EndpointTagPolicy::Any,
+                    tags = {
+                        topspin = {
+                            description =
+                                "Topspin is a tennis shot that \
+                                 causes the ball to spin forward",
+                            external_docs = {
+                                description = "Wikipedia entry",
+                                url = "https://en.wikipedia.org/wiki/Topspin",
+                            },
+                        },
+                    },
+                },
                 _dropshot_crate = "topspin",
             },
             quote! {
@@ -1606,6 +1725,7 @@ mod tests {
             },
         );
 
+        eprintln!("errors: {:#?}", errors);
         assert!(errors.is_empty());
 
         let file = parse_quote! { #item };

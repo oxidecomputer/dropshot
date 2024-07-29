@@ -373,6 +373,14 @@ impl<Context: ServerContext> ApiDescription<Context> {
         self
     }
 
+    // Not (yet) part of the public API, only used for tests. If/when this is
+    // made public, we should consider changing the setter above to be named
+    // `with_tag_config`, and this to `tag_config`.
+    #[doc(hidden)]
+    pub fn get_tag_config(&self) -> &TagConfig {
+        &self.tag_config
+    }
+
     /// Register a new API endpoint.
     pub fn register<T>(
         &mut self,
@@ -413,7 +421,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             return Ok(());
         }
 
-        match (&self.tag_config.endpoint_tag_policy, e.tags.len()) {
+        match (&self.tag_config.policy, e.tags.len()) {
             (EndpointTagPolicy::AtLeastOne, 0) => {
                 return Err("At least one tag is required".to_string())
             }
@@ -425,7 +433,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         if !self.tag_config.allow_other_tags {
             for tag in &e.tags {
-                if !self.tag_config.tag_definitions.contains_key(tag) {
+                if !self.tag_config.tags.contains_key(tag) {
                     return Err(format!("Invalid tag: {}", tag));
                 }
             }
@@ -611,9 +619,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let endpoint_tags = (&self.router)
             .into_iter()
             .flat_map(|(_, _, endpoint)| {
-                endpoint.tags.iter().filter(|tag| {
-                    !self.tag_config.tag_definitions.contains_key(*tag)
-                })
+                endpoint
+                    .tags
+                    .iter()
+                    .filter(|tag| !self.tag_config.tags.contains_key(*tag))
             })
             .cloned()
             .collect::<HashSet<_>>()
@@ -623,7 +632,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // Bundle those with the explicit tags provided by the consumer
         openapi.tags = self
             .tag_config
-            .tag_definitions
+            .tags
             .iter()
             .map(|(name, details)| openapiv3::Tag {
                 name: name.clone(),
@@ -1243,16 +1252,21 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
 pub struct TagConfig {
     /// Are endpoints allowed to use tags not specified in this config?
     pub allow_other_tags: bool,
-    pub endpoint_tag_policy: EndpointTagPolicy,
-    pub tag_definitions: HashMap<String, TagDetails>,
+
+    // The aliases are for backwards compatibility with previous versions of
+    // Dropshot.
+    #[serde(alias = "endpoint_tag_policy")]
+    pub policy: EndpointTagPolicy,
+    #[serde(alias = "tag_definitions")]
+    pub tags: HashMap<String, TagDetails>,
 }
 
 impl Default for TagConfig {
     fn default() -> Self {
         Self {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::Any,
-            tag_definitions: HashMap::new(),
+            policy: EndpointTagPolicy::Any,
+            tags: HashMap::new(),
         }
     }
 }
@@ -1432,7 +1446,7 @@ mod test {
     fn test_tags_need_one() {
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
+            policy: EndpointTagPolicy::AtLeastOne,
             ..Default::default()
         });
         let ret = api.register(ApiEndpoint::new(
@@ -1450,7 +1464,7 @@ mod test {
     fn test_tags_too_many() {
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            policy: EndpointTagPolicy::ExactlyOne,
             ..Default::default()
         });
         let ret = api.register(
@@ -1472,7 +1486,7 @@ mod test {
     fn test_tags_just_right() {
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            policy: EndpointTagPolicy::ExactlyOne,
             ..Default::default()
         });
         let ret = api.register(
@@ -1495,8 +1509,8 @@ mod test {
         // for and aren't duplicated.
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
-            tag_definitions: vec![
+            policy: EndpointTagPolicy::AtLeastOne,
+            tags: vec![
                 ("a-tag".to_string(), TagDetails::default()),
                 ("b-tag".to_string(), TagDetails::default()),
                 ("c-tag".to_string(), TagDetails::default()),
@@ -1546,5 +1560,20 @@ mod test {
                 .into_iter()
                 .collect::<HashSet<_>>()
         )
+    }
+
+    #[test]
+    fn test_tag_config_deserialize_old() {
+        let config = r#"{
+            "allow_other_tags": true,
+            "endpoint_tag_policy": "AtLeastOne",
+            "tag_definitions": {
+                "a-tag": {},
+                "b-tag": {}
+            }
+        }"#;
+        let config: TagConfig = serde_json::from_str(config).unwrap();
+        assert_eq!(config.policy, EndpointTagPolicy::AtLeastOne);
+        assert_eq!(config.tags.len(), 2);
     }
 }
