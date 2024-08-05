@@ -230,7 +230,7 @@
 //! }
 //!
 //! // The `dropshot::api_description` macro generates a module called
-//! // `project_api`. This module has a method called `api_description`
+//! // `project_api_mod`. This module has a method called `api_description`
 //! // that, given an implementation of the trait, returns an `ApiDescription`.
 //! // The `ApiDescription` can then be used to set up an `HttpServer`.
 //!
@@ -257,7 +257,7 @@
 //!     // The type of `api` is provided for clarity -- it is generally inferred.
 //!     // "api" will automatically register all endpoints defined in the trait.
 //!     let mut api: ApiDescription<()> =
-//!         project_api::api_description::<ServerImpl>().unwrap();
+//!         project_api_mod::api_description::<ServerImpl>().unwrap();
 //!
 //!     // ... (use `api` to set up an `HttpServer` )
 //! }
@@ -500,7 +500,7 @@
 //!
 //! # // defining fn main puts the doctest in a module context
 //! # fn main() {
-//! let description = project_api::stub_api_description().unwrap();
+//! let description = project_api_mod::stub_api_description().unwrap();
 //! let mut openapi = description.openapi("Project Server", "1.0.0");
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! # }

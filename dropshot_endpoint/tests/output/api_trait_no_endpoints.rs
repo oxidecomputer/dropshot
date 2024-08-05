@@ -3,7 +3,7 @@ pub(crate) trait MyTrait: 'static {
 }
 /// Support module for the Dropshot API trait [`MyTrait`](MyTrait).
 #[automatically_derived]
-pub(crate) mod my_trait {
+pub(crate) mod my_trait_mod {
     use super::*;
     /// Generate a _stub_ API description for [`MyTrait`], meant for OpenAPI
     /// generation.
@@ -22,7 +22,7 @@ pub(crate) mod my_trait {
     ///
     /// ```rust,ignore
     /// fn print_openapi_spec() {
-    ///     let stub = my_trait::stub_api_description().unwrap();
+    ///     let stub = my_trait_mod::stub_api_description().unwrap();
     ///
     ///     // Generate OpenAPI spec from `stub`.
     ///     let spec = stub.openapi("MyTrait", "0.1.0");
@@ -31,7 +31,7 @@ pub(crate) mod my_trait {
     /// ```
     ///
     /// [`MyTrait`]: MyTrait
-    /// [`api_description`]: my_trait::api_description
+    /// [`api_description`]: my_trait_mod::api_description
     /// [`ApiDescription`]: dropshot::ApiDescription
     /// [`StubContext`]: dropshot::StubContext
     #[automatically_derived]
@@ -72,7 +72,7 @@ pub(crate) mod my_trait {
     /// #[tokio::main]
     /// async fn main() {
     ///     // Generate the description for `MyTraitImpl`.
-    ///     let description = my_trait::api_description::<MyTraitImpl>().unwrap();
+    ///     let description = my_trait_mod::api_description::<MyTraitImpl>().unwrap();
     ///
     ///     // Create a value of the concrete context type.
     ///     let context = /* some value of type `MyTraitImpl::Context` */;

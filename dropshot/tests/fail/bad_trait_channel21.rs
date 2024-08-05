@@ -50,6 +50,6 @@ impl MyServer for MyImpl {
 
 fn main() {
     // These items should be generated and accessible.
-    my_server::api_description::<MyImpl>();
-    my_server::stub_api_description();
+    my_server_mod::api_description::<MyImpl>();
+    my_server_mod::stub_api_description();
 }

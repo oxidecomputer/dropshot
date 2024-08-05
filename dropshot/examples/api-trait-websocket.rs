@@ -49,7 +49,7 @@ mod api {
     // If the interface and implementation (see below) are in different crates, then
     // this function would live in the interface crate.
     pub(crate) fn generate_openapi_spec() -> String {
-        let my_server = counter_api::stub_api_description().unwrap();
+        let my_server = counter_api_mod::stub_api_description().unwrap();
         let spec = my_server.openapi("Counter Server", "1.0.0");
         serde_json::to_string_pretty(&spec.json().unwrap()).unwrap()
     }
@@ -147,7 +147,7 @@ async fn main() -> Result<(), String> {
     println!("{}", api::generate_openapi_spec());
 
     let my_server =
-        api::counter_api::api_description::<imp::CounterImpl>().unwrap();
+        api::counter_api_mod::api_description::<imp::CounterImpl>().unwrap();
     let server = HttpServerStarter::new(
         &config_dropshot,
         my_server,

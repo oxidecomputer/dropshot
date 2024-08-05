@@ -130,7 +130,13 @@ pub fn channel(
 /// * `context`: The type of the context on the trait. Optional, defaults to
 ///   `Self::Context`.
 /// * `module`: The name of the support module. Optional, defaults to the
-///   `snake_case` version of the trait name.
+///   `{T}_mod`, where `T` is the snake_case version of the trait name.
+///
+///    For example, for a trait called `MyApi` the corresponding module name
+///    would be `my_api_mod`.
+///
+///    (The suffix `_mod` is added to module names so that a crate called
+///    `my-api` can define a trait `MyApi`, avoiding name conflicts.)
 ///
 /// ## Limitations
 ///
