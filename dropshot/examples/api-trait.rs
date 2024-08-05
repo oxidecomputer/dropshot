@@ -60,7 +60,7 @@ mod api {
     // If the interface and implementation (see below) are in different crates, then
     // this function would live in the interface crate.
     pub(crate) fn generate_openapi_spec() -> String {
-        let description = counter_api::stub_api_description().unwrap();
+        let description = counter_api_mod::stub_api_description().unwrap();
         let spec = description.openapi("Counter Server", "1.0.0");
         serde_json::to_string_pretty(&spec.json().unwrap()).unwrap()
     }
@@ -150,7 +150,7 @@ async fn main() -> Result<(), String> {
     // The api_description function accepts the specific implementation as a
     // type parameter.
     let my_api =
-        api::counter_api::api_description::<imp::CounterImpl>().unwrap();
+        api::counter_api_mod::api_description::<imp::CounterImpl>().unwrap();
     let server = HttpServerStarter::new(
         &config_dropshot,
         my_api,
