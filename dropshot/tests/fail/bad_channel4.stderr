@@ -26,6 +26,8 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 22 |     _params: Query<QueryParams>,
    |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
    |
+   = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
@@ -79,6 +81,8 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 24 | | ) -> dropshot::WebsocketChannelResult {
    | |_____________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
    |
+   = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
@@ -131,6 +135,8 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 19 | | }]
    | |__^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
    |
+   = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
