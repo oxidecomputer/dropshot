@@ -84,7 +84,8 @@ pub struct RequestContext<Context: ServerContext> {
     pub request_id: String,
     /// logger for this specific request
     pub log: Logger,
-
+    /// The operation ID for the endpoint handler method
+    pub operation_id: String,
     /// basic request information (method, URI, etc.)
     pub request: RequestInfo,
 }

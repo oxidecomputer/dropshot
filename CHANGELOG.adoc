@@ -21,6 +21,11 @@ https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...HEAD[Full list of c
 
 === Other notable changes
 
+* The `RequestContext` type now contains the `operation_id`, the name of the
+endpoint handler. This is the name of the Rust handler function, if one uses the
+`dropshot::endpoint` macro, and the value of the `operationId` field in the
+generated OpenAPI spec.
+
 == 0.10.1 (released 2024-05-15)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.0\...v0.10.1[Full list of commits]
