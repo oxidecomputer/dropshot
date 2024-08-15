@@ -1,0 +1,17 @@
+error: missing field `url`
+  --> tests/fail/bad_trait_only22.rs:17:33
+   |
+17 |                 external_docs = {}
+   |                                 ^^
+
+error[E0433]: failed to resolve: use of undeclared crate or module `my_api_mod`
+  --> tests/fail/bad_trait_only22.rs:37:5
+   |
+37 |     my_api_mod::api_description::<MyImpl>();
+   |     ^^^^^^^^^^ use of undeclared crate or module `my_api_mod`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `my_api_mod`
+  --> tests/fail/bad_trait_only22.rs:38:5
+   |
+38 |     my_api_mod::stub_api_description();
+   |     ^^^^^^^^^^ use of undeclared crate or module `my_api_mod`

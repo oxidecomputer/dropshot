@@ -61,7 +61,31 @@ pub mod my_support_module {
         topspin::ApiDescription<topspin::StubContext>,
         topspin::ApiDescriptionBuildErrors,
     > {
-        let mut dropshot_api = topspin::ApiDescription::new();
+        let mut dropshot_api = topspin::ApiDescription::new()
+            .tag_config({
+                let mut tags = ::std::collections::HashMap::new();
+                tags.insert(
+                    "topspin".to_string(),
+                    topspin::TagDetails {
+                        description: Some(
+                            "Topspin is a tennis shot that causes the ball to spin forward"
+                                .into(),
+                        ),
+                        external_docs: Some(
+                            topspin::TagExternalDocs {
+                                description: Some("Wikipedia entry".into()),
+                                url: "https://en.wikipedia.org/wiki/Topspin".to_string(),
+                            }
+                                .into(),
+                        ),
+                    },
+                );
+                topspin::TagConfig {
+                    allow_other_tags: true,
+                    policy: EndpointTagPolicy::Any,
+                    tags,
+                }
+            });
         let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new_for_types::<
@@ -145,7 +169,31 @@ pub mod my_support_module {
         topspin::ApiDescription<<ServerImpl as MyTrait>::Situation>,
         topspin::ApiDescriptionBuildErrors,
     > {
-        let mut dropshot_api = topspin::ApiDescription::new();
+        let mut dropshot_api = topspin::ApiDescription::new()
+            .tag_config({
+                let mut tags = ::std::collections::HashMap::new();
+                tags.insert(
+                    "topspin".to_string(),
+                    topspin::TagDetails {
+                        description: Some(
+                            "Topspin is a tennis shot that causes the ball to spin forward"
+                                .into(),
+                        ),
+                        external_docs: Some(
+                            topspin::TagExternalDocs {
+                                description: Some("Wikipedia entry".into()),
+                                url: "https://en.wikipedia.org/wiki/Topspin".to_string(),
+                            }
+                                .into(),
+                        ),
+                    },
+                );
+                topspin::TagConfig {
+                    allow_other_tags: true,
+                    policy: EndpointTagPolicy::Any,
+                    tags,
+                }
+            });
         let mut dropshot_errors: Vec<topspin::ApiDescriptionRegisterError> = Vec::new();
         {
             let endpoint_handler_xyz = topspin::ApiEndpoint::new(
