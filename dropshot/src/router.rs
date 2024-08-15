@@ -210,6 +210,7 @@ impl MapValue for VariableValue {
 #[derive(Debug)]
 pub struct RouterLookupResult<Context: ServerContext> {
     pub handler: Arc<dyn RouteHandler<Context>>,
+    pub operation_id: String,
     pub variables: VariableSet,
     pub body_content_type: ApiEndpointBodyContentType,
 }
@@ -482,6 +483,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
             .get(&methodname)
             .map(|handler| RouterLookupResult {
                 handler: Arc::clone(&handler.handler),
+                operation_id: handler.operation_id.clone(),
                 variables,
                 body_content_type: handler.body_content_type.clone(),
             })
