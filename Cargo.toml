@@ -43,3 +43,6 @@ declare_interior_mutable_const = "warn"
 # We'd like to warn on lossy casts in the future, but lossless casts are the
 # easiest ones to convert over.
 cast_lossless = "warn"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(usdt_need_asm)', 'cfg(usdt_need_asm_sym)'] }

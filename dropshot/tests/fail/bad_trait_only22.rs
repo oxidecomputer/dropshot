@@ -32,7 +32,8 @@ impl MyApi for MyImpl {
 }
 
 fn main() {
-    // These items are not generated.
-    my_api::api_description::<MyImpl>();
-    my_api::stub_api_description();
+    // These items are not generated because the api_description macro's fields
+    // are invalid.
+    my_api_mod::api_description::<MyImpl>();
+    my_api_mod::stub_api_description();
 }

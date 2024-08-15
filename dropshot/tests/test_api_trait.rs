@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 use dropshot::{
     EndpointTagPolicy, HttpError, HttpResponseUpdatedNoContent, RequestContext,
@@ -28,8 +28,8 @@ impl BasicApi for BasicImpl {
 
 #[test]
 fn test_api_trait_basic() {
-    basic_api::api_description::<BasicImpl>().unwrap();
-    basic_api::stub_api_description().unwrap();
+    basic_api_mod::api_description::<BasicImpl>().unwrap();
+    basic_api_mod::stub_api_description().unwrap();
 }
 
 #[dropshot::api_description {
@@ -60,14 +60,15 @@ impl ApiWithEmptyTagConfig for ImplWithEmptyTagConfig {
 
 #[test]
 fn test_api_trait_with_empty_tag_config() {
-    let api_description =
-        api_with_empty_tag_config::api_description::<ImplWithEmptyTagConfig>()
-            .unwrap();
+    let api_description = api_with_empty_tag_config_mod::api_description::<
+        ImplWithEmptyTagConfig,
+    >()
+    .unwrap();
     // Ensure that the endpoint tag policy is Any.
     assert_eq!(api_description.get_tag_config().policy, EndpointTagPolicy::Any);
 
     let stub_description =
-        api_with_empty_tag_config::stub_api_description().unwrap();
+        api_with_empty_tag_config_mod::stub_api_description().unwrap();
     // Ensure that the endpoint tag policy is Any.
     assert_eq!(
         stub_description.get_tag_config().policy,
@@ -105,7 +106,7 @@ impl ApiWithDisallowedTags for ImplWithDisallowedTags {
 
 #[test]
 fn test_api_trait_with_disallowed_tags() {
-    let errors = match api_with_disallowed_tags::api_description::<
+    let errors = match api_with_disallowed_tags_mod::api_description::<
         ImplWithDisallowedTags,
     >() {
         Ok(_) => panic!("expected error"),
@@ -115,7 +116,7 @@ fn test_api_trait_with_disallowed_tags() {
     assert_eq!(errors.errors().len(), 1);
     assert_eq!(errors.errors()[0].message(), "Invalid tag: foo");
 
-    let errors = match api_with_disallowed_tags::stub_api_description() {
+    let errors = match api_with_disallowed_tags_mod::stub_api_description() {
         Ok(_) => panic!("expected error"),
         Err(e) => e,
     };
@@ -204,6 +205,7 @@ impl ApiWithComplexTags for ImplWithComplexTags {
 
 #[test]
 fn test_api_trait_with_complex_tags() {
-    api_with_complex_tags::api_description::<ImplWithComplexTags>().unwrap();
-    api_with_complex_tags::stub_api_description().unwrap();
+    api_with_complex_tags_mod::api_description::<ImplWithComplexTags>()
+        .unwrap();
+    api_with_complex_tags_mod::stub_api_description().unwrap();
 }

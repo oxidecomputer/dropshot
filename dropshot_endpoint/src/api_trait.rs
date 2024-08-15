@@ -155,7 +155,7 @@ impl ApiMetadata {
     fn module_name(&self, trait_ident: &syn::Ident) -> String {
         self.module
             .clone()
-            .unwrap_or_else(|| trait_ident.to_string().to_snake_case())
+            .unwrap_or_else(|| trait_ident.to_string().to_snake_case() + "_mod")
     }
 }
 

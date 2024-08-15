@@ -45,6 +45,6 @@ impl MyApi for MyImpl {
 
 fn main() {
     // These items should be generated and accessible.
-    my_api::api_description::<MyImpl>();
-    my_api::stub_api_description();
+    my_api_mod::api_description::<MyImpl>();
+    my_api_mod::stub_api_description();
 }
