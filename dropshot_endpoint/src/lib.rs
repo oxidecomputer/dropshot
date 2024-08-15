@@ -137,17 +137,10 @@ pub fn channel(
 ///
 ///    (The suffix `_mod` is added to module names so that a crate called
 ///    `my-api` can define a trait `MyApi`, avoiding name conflicts.)
+/// * `tag_config`: Trait-wide tag configuration. _Optional._ For more
+///   information, see [_Tag configuration_](#tag-configuration) below.
 ///
-/// ## Limitations
-///
-/// Currently, the `#[dropshot::api_description]` macro is only supported in
-/// module contexts, not function definitions. This is a Rust limitation -- see
-/// [Rust issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
-/// details.
-///
-/// ## Example
-///
-/// With a custom context type:
+/// ### Example: specify a custom context type
 ///
 /// ```ignore
 /// use dropshot::{RequestContext, HttpResponseUpdatedNoContent, HttpError};
@@ -164,9 +157,100 @@ pub fn channel(
 ///         rqctx: RequestContext<Self::MyContext>,
 ///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
 /// }
+/// # // defining fn main puts thoe doctest in a module context
+/// # fn main() {}
+/// ```
+///
+/// ### Tag configuration
+///
+/// Endpoints can have tags associated with them that appear in the OpenAPI
+/// document. These provide a means of organizing an API. Use the `tag_config`
+/// argument to specify tag information for the trait.
+///
+/// `tag_config` is optional. If not specified, the default is to allow any tag
+/// value and any number of tags associated with the endpoint.
+///
+/// If `tag_config` is specified, compliance with it is evaluated at runtime
+/// while registering endpoints. A failure to comply--for example, if `policy =
+/// at_least_one` is specified and some endpoint has no associated tags--results
+/// in the `api_description` and `stub_api_description` functions returning an
+/// error.
+///
+/// The shape of `tag_config` is broadly similar to that of
+/// `dropshot::TagConfig`. It has the following fields:
+///
+/// * `tags`: A map of tag names with information about them. _Required, but can
+///   be empty._
+///
+///   The keys are tag names, which are strings. The values are objects that
+///   consist of:
+///
+///   * `description`: A string description of the tag. _Optional._
+///   * `external_docs`: External documentation for the tag. _Optional._ This
+///     has the following fields:
+///     * `description`: A string description of the external documentation.
+///       _Optional._
+///     * `url`: The URL for the external documentation. _Required._
+///
+/// * `allow_other_tags`: Whether to allow tags not explicitly defined in
+///   `tags`. _Optional, defaults to false. But if `tag_config` as a whole is
+///   not specified, all tags are allowed._
+///
+/// * `policy`: Must be an expression of type `EndpointTagPolicy`; typically just
+///   the enum variant.
+///
+///   _Optional, defaults to `EndpointTagPolicy::Any`._
+///
+/// ### Example: tag configuration
+///
+/// ```ignore
+/// use dropshot::{
+///     EndpointTagPolicy, RequestContext, HttpResponseUpdatedNoContent,
+///     HttpError,
+/// };
+///
+/// #[dropshot::api_description {
+///     tag_config = {
+///         // If tag_config is specified, tags is required (but can be empty).
+///         tags = {
+///             "tag1" = {
+///                 // The description is optional.
+///                 description = "Tag 1",
+///                 // external_docs is optional.
+///                 external_docs = {
+///                     // The description is optional.
+///                     description = "External docs for tag1",
+///                     // If external_docs is present, url is required.
+///                     url = "https://example.com/tag1",
+///                 },
+///             },
+///         },
+///         policy = EndpointTagPolicy::ExactlyOne,
+///         allow_other_tags = false,
+///     },
+/// }]
+/// trait MyTrait {
+///     type Context;
+///
+///     #[endpoint {
+///         method = PUT,
+///         path = "/test",
+///         tags = ["tag1"],
+///     }]
+///     async fn put_test(
+///         rqctx: RequestContext<Self::MyContext>,
+///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+/// }
 /// # // defining fn main puts the doctest in a module context
 /// # fn main() {}
 /// ```
+///
+/// ## Limitations
+///
+/// Currently, the `#[dropshot::api_description]` macro is only supported in
+/// module contexts, not function definitions. This is a Rust limitation -- see
+/// [Rust issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+/// details.
 ///
 /// ## More information
 ///
