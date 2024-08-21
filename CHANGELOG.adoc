@@ -34,7 +34,7 @@ generated OpenAPI spec.
 
 === Other notable changes
 
-* Trait-based API definitions. See https://docs.rs/dropshot_endpoint/latest/dropshot_endpoint/aattr.api_description.html[the documentation] for details.
+* Trait-based API definitions. See https://docs.rs/dropshot_endpoint/latest/dropshot_endpoint/attr.api_description.html[the documentation] for details.
 * https://github.com/oxidecomputer/dropshot/pull/1049[#1049] Added `HttpResponse::status_code()`
 
 == 0.10.1 (released 2024-05-15)
