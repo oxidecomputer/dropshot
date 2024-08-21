@@ -51,7 +51,7 @@ features = [ "serde", "std", "clock" ]
 default-features = false
 
 [dependencies.dropshot_endpoint]
-version = "^0.11.0-dev"
+version = "^0.11.1-dev"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
