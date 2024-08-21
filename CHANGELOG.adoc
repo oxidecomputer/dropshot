@@ -26,9 +26,12 @@ generated OpenAPI spec.
 * `TagConfig` field names have changed, for consistency with tag configuration in API traits. The `Deserialize` implementation will still work with the old field names, but the `Serialize` implementation will always produce the new field names.
 ** `endpoint_tag_policy` is now called `policy`.
 ** `tag_definitions` is now called `tags`.
+* https://github.com/oxidecomputer/dropshot/pull/1060[#1060] Optionally include additional header values in request log
 
 === Other notable changes
 
+* Trait-based API definitions. See https://docs.rs/dropshot_endpoint/latest/dropshot_endpoint/aattr.api_description.html[the documentation] for details.
+* https://github.com/oxidecomputer/dropshot/pull/1049[#1049] Added `HttpResponse::status_code()`
 
 == 0.10.1 (released 2024-05-15)
 
