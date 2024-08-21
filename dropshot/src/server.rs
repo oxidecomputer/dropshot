@@ -108,29 +108,56 @@ pub struct ServerConfig {
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
-    app_state: Arc<DropshotState<C>>,
-    local_addr: SocketAddr,
-    wrapped: WrappedHttpServerStarter<C>,
-    handler_waitgroup: WaitGroup,
+    // app_state: Arc<DropshotState<C>>,
+    // local_addr: SocketAddr,
+    // wrapped: WrappedHttpServerStarter<C>,
+    // handler_waitgroup: WaitGroup,
+    config: ConfigDropshot,
+    apis: Vec<ApiDescription<C>>,
+    private: C,
+    logger: Logger,
+    tls: Option<ConfigTls>,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
-    pub fn new(
-        config: &ConfigDropshot,
-        api: ApiDescription<C>,
-        private: C,
-        log: &Logger,
-    ) -> Result<HttpServerStarter<C>, GenericError> {
-        Self::new_with_tls(config, api, private, log, None)
+    pub fn new(config: &ConfigDropshot, private: C, log: &Logger) -> Self {
+        Self::new_with_tls(config, private, log, None)
     }
 
     pub fn new_with_tls(
         config: &ConfigDropshot,
-        api: ApiDescription<C>,
         private: C,
         log: &Logger,
         tls: Option<ConfigTls>,
-    ) -> Result<HttpServerStarter<C>, GenericError> {
+    ) -> Self {
+        Self {
+            config: config.clone(),
+            apis: Default::default(),
+            private,
+            logger: log.clone(),
+            tls,
+        }
+    }
+
+    /// Add an API to the server.
+    pub fn api(mut self, api: ApiDescription<C>) -> Self {
+        self.apis.push(api);
+        self
+    }
+
+    fn pre_start(
+        self,
+    ) -> Result<
+        (
+            Arc<DropshotState<C>>,
+            SocketAddr,
+            WrappedHttpServerStarter<C>,
+            WaitGroup,
+        ),
+        GenericError,
+    > {
+        let Self { config, apis, private, logger, tls } = self;
+
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
@@ -140,59 +167,62 @@ impl<C: ServerContext> HttpServerStarter<C> {
             log_headers: config.log_headers.clone(),
         };
 
+        // TODO build up the router
+        let mut router = HttpRouter::new();
+        for api in apis {
+            router.merge(api.into_router())
+        }
+
         let handler_waitgroup = WaitGroup::new();
-        let starter = match &tls {
+        let (wrapped, app_state, local_addr) = match &tls {
             Some(tls) => {
                 let (starter, app_state, local_addr) =
                     InnerHttpsServerStarter::new(
-                        config,
+                        &config,
                         server_config,
-                        api,
+                        router,
                         private,
-                        log,
+                        &logger,
                         tls,
                         handler_waitgroup.worker(),
                     )?;
-                HttpServerStarter {
+                (
+                    WrappedHttpServerStarter::Https(starter),
                     app_state,
                     local_addr,
-                    wrapped: WrappedHttpServerStarter::Https(starter),
-                    handler_waitgroup,
-                }
+                )
             }
             None => {
                 let (starter, app_state, local_addr) =
                     InnerHttpServerStarter::new(
-                        config,
+                        &config,
                         server_config,
-                        api,
+                        router,
                         private,
-                        log,
+                        &logger,
                         handler_waitgroup.worker(),
                     )?;
-                HttpServerStarter {
-                    app_state,
-                    local_addr,
-                    wrapped: WrappedHttpServerStarter::Http(starter),
-                    handler_waitgroup,
-                }
+                (WrappedHttpServerStarter::Http(starter), app_state, local_addr)
             }
         };
 
-        for (path, method, _) in &starter.app_state.router {
-            debug!(starter.app_state.log, "registered endpoint";
+        for (path, method, _) in &app_state.router {
+            debug!(app_state.log, "registered endpoint";
                 "method" => &method,
                 "path" => &path
             );
         }
 
-        Ok(starter)
+        Ok((app_state, local_addr, wrapped, handler_waitgroup))
     }
 
-    pub fn start(self) -> HttpServer<C> {
+    pub fn start(self) -> Result<HttpServer<C>, GenericError> {
+        let (app_state, local_addr, wrapped, handler_waitgroup) =
+            self.pre_start()?;
+
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let log_close = self.app_state.log.new(o!());
-        let join_handle = match self.wrapped {
+        let log_close = app_state.log.new(o!());
+        let join_handle = match wrapped {
             WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
             WrappedHttpServerStarter::Https(https) => {
                 https.start(rx, log_close)
@@ -202,9 +232,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
             r.map_err(|e| format!("waiting for server: {e}"))?
                 .map_err(|e| format!("server stopped: {e}"))
         });
-        info!(self.app_state.log, "listening");
+        info!(app_state.log, "listening");
 
-        let handler_waitgroup = self.handler_waitgroup;
         let join_handle = async move {
             // After the server shuts down, we also want to wait for any
             // detached handler futures to complete.
@@ -217,7 +246,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         let probe_registration = match usdt::register_probes() {
             Ok(_) => {
                 debug!(
-                    self.app_state.log,
+                    app_state.log,
                     "successfully registered DTrace USDT probes"
                 );
                 ProbeRegistration::Succeeded
@@ -225,7 +254,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             Err(e) => {
                 let msg = e.to_string();
                 error!(
-                    self.app_state.log,
+                    app_state.log,
                     "failed to register DTrace USDT probes: {}", msg
                 );
                 ProbeRegistration::Failed(msg)
@@ -234,19 +263,19 @@ impl<C: ServerContext> HttpServerStarter<C> {
         #[cfg(not(feature = "usdt-probes"))]
         let probe_registration = {
             debug!(
-                self.app_state.log,
+                app_state.log,
                 "DTrace USDT probes compiled out, not registering"
             );
             ProbeRegistration::Disabled
         };
 
-        HttpServer {
+        Ok(HttpServer {
             probe_registration,
-            app_state: self.app_state,
-            local_addr: self.local_addr,
+            app_state,
+            local_addr,
             closer: CloseHandle { close_channel: Some(tx) },
             join_future: join_handle.boxed().shared(),
-        }
+        })
     }
 }
 
@@ -286,7 +315,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
     fn new(
         config: &ConfigDropshot,
         server_config: ServerConfig,
-        api: ApiDescription<C>,
+        router: HttpRouter<C>,
         private: C,
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
@@ -297,7 +326,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
             tls_acceptor: None,
@@ -571,7 +600,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
     fn new(
         config: &ConfigDropshot,
         server_config: ServerConfig,
-        api: ApiDescription<C>,
+        router: HttpRouter<C>,
         private: C,
         log: &Logger,
         tls: &ConfigTls,
@@ -598,7 +627,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: logger,
             local_addr,
             tls_acceptor: Some(acceptor),
@@ -1186,9 +1215,10 @@ mod test {
         let log_context = LogContext::new("test server", &config_logging);
         let log = &log_context.log;
 
-        let server = HttpServerStarter::new(&config_dropshot, api, 0, log)
-            .unwrap()
-            .start();
+        let server = HttpServerStarter::new(&config_dropshot, 0, log)
+            .api(api)
+            .start()
+            .unwrap();
 
         (server, TestConfig { log_context })
     }
