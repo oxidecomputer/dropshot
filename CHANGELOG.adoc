@@ -15,6 +15,10 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...HEAD[Full list of commits]
 
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/959[#959] expands the settings available via `ConfigDropshot`. This adds two new fields `page_max_nitems` and `page_default_nitems` that will need to be added wherever a `ConfigDropshot` struct is manually constructed.
+
 == 0.11.0 (released 2024-08-21)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...v0.11.0[Full list of commits]
@@ -52,10 +56,6 @@ https://github.com/oxidecomputer/dropshot/compare/v0.10.0\...v0.10.1[Full list o
 * https://github.com/oxidecomputer/dropshot/pull/1003[#1003] Work around schemars 0.8.19 behavior change.
 * https://github.com/oxidecomputer/dropshot/pull/1005[#1005] Update edition to 2021.
 * https://github.com/oxidecomputer/dropshot/pull/988[#988] Add a spurious, trailing newline to OpenAPI output.
-
-=== Breaking Changes
-
-* https://github.com/oxidecomputer/dropshot/pull/959[#959] expands the settings available via `ConfigDropshot`. This adds two new fields `page_max_nitems` and `page_default_nitems` that will need to be added wherever a `ConfigDropshot` struct is manually constructed.
 
 == 0.10.0 (released 2024-02-06)
 
