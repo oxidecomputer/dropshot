@@ -17,7 +17,7 @@ https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...HEAD[Full list of c
 
 === Breaking Changes
 
-* https://github.com/oxidecomputer/dropshot/pull/959[#959] expands the settings available via `ConfigDropshot`. This adds two new fields `page_max_nitems` and `page_default_nitems` that will need to be added wherever a `ConfigDropshot` struct is manually constructed.
+* https://github.com/oxidecomputer/dropshot/pull/959[#959] expands the settings available via `ConfigDropshot`. This adds two new fields `page_max_nitems` and `page_default_nitems` that will need to be added wherever a `ConfigDropshot` struct is manually constructed. The defaults are likely appropriate for most use cases.
 
 == 0.11.0 (released 2024-08-21)
 
