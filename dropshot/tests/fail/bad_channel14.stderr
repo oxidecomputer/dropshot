@@ -1,0 +1,7 @@
+error: channel `channel_with_wildcard` has a wildcard path, which is not allowed
+  --> tests/fail/bad_channel14.rs:21:5
+   |
+21 | /     protocol = WEBSOCKETS,
+22 | |     path = "/assets/{stuff:.*}",
+23 | |     unpublished = true,
+   | |_______________________^

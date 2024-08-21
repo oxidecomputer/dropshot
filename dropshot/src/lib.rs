@@ -1,4 +1,5 @@
 // Copyright 2023 Oxide Computer Company
+
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
 //!
@@ -74,6 +75,7 @@
 //!                 page_max_nitems: NonZeroU32::new(10000).unwrap(),
 //!                 page_default_nitems: NonZeroU32::new(100).unwrap(),
 //!                 default_handler_task_mode: HandlerTaskMode::Detached,
+//!                 log_headers: Default::default(),
 //!             },
 //!             api,
 //!             Arc::new(()),
@@ -89,10 +91,6 @@
 //! This server returns a 404 for all resources because no API functions were
 //! registered.  See `examples/basic.rs` for a simple, documented example that
 //! provides a few resources using shared state.
-//!
-//! For a given `ApiDescription`, you can also print out an OpenAPI spec
-//! describing the API.  See [`ApiDescription::openapi`].
-//!
 //!
 //! ## API Handler Functions
 //!
@@ -114,9 +112,13 @@
 //! server, you configure the set of available API endpoints and which functions
 //! will handle each one by setting up an [`ApiDescription`].
 //!
-//! Typically, you define an endpoint with a handler function by using the
-//! [`endpoint`] macro. Here's an example of a single endpoint that lists
-//! a hardcoded project:
+//! There are two ways to define a set of endpoints:
+//!
+//! ### As a free function
+//!
+//! The simplest Dropshot server defines an endpoint as a function, annotated
+//! with the [`endpoint`] macro. Here's an example of a single endpoint that
+//! lists a hardcoded project:
 //!
 //! ```
 //! use dropshot::endpoint;
@@ -129,14 +131,14 @@
 //! use serde::Serialize;
 //! use std::sync::Arc;
 //!
-//! /** Represents a project in our API */
+//! /// Represents a project in our API.
 //! #[derive(Serialize, JsonSchema)]
 //! struct Project {
-//!     /** name of the project */
+//!     /// Name of the project.
 //!     name: String,
 //! }
 //!
-//! /** Fetch a project. */
+//! /// Fetch a project.
 //! #[endpoint {
 //!     method = GET,
 //!     path = "/projects/project1",
@@ -152,14 +154,12 @@
 //! fn main() {
 //!     let mut api = ApiDescription::new();
 //!
-//!     /*
-//!      * Register our endpoint and its handler function.  The "endpoint" macro
-//!      * specifies the HTTP method and URI path that identify the endpoint,
-//!      * allowing this metadata to live right alongside the handler function.
-//!      */
+//!     // Register our endpoint and its handler function.  The "endpoint" macro
+//!     // specifies the HTTP method and URI path that identify the endpoint,
+//!     // allowing this metadata to live right alongside the handler function.
 //!     api.register(myapi_projects_get_project).unwrap();
 //!
-//!     /* ... (use `api` to set up an `HttpServer` ) */
+//!     // ... (use `api` to set up an `HttpServer` )
 //! }
 //! ```
 //!
@@ -180,6 +180,129 @@
 //! for each type of response (which can also include documentation).  This is
 //! largely known statically, though generated at runtime.
 //!
+//! ### As an API trait
+//!
+//! An **API trait** is a Rust trait that represents a collection of API
+//! endpoints. Each endpoint is defined as a static method on the trait, and the
+//! trait as a whole is annotated with
+//! [`#[dropshot::api_description]`](macro@api_description). (Rust 1.75 or later
+//! is required.)
+//!
+//! While slightly more complex than the function-based server, API traits
+//! separate the interface definition from the implementation. Keeping the
+//! definition and implementation in different crates can allow for faster
+//! iteration of the interface, and simplifies multi-service repos with clients
+//! generated from the OpenAPI output of interfaces. In addition, API traits
+//! allow for multiple implementations, such as a mock implementation for
+//! testing.
+//!
+//! Here's an example of an API trait that's equivalent to the function-based
+//! server above:
+//!
+//! ```
+//! use dropshot::ApiDescription;
+//! use dropshot::HttpError;
+//! use dropshot::HttpResponseOk;
+//! use dropshot::RequestContext;
+//! use http::Method;
+//! use schemars::JsonSchema;
+//! use serde::Serialize;
+//! use std::sync::Arc;
+//!
+//! /// Represents a project in our API.
+//! #[derive(Serialize, JsonSchema)]
+//! struct Project {
+//!     /// Name of the project.
+//!     name: String,
+//! }
+//!
+//! /// Defines the trait that captures all the methods.
+//! #[dropshot::api_description]
+//! trait ProjectApi {
+//!     /// The context type used within endpoints.
+//!     type Context;
+//!
+//!     /// Fetch a project.
+//!     #[endpoint {
+//!         method = GET,
+//!         path = "/projects/project1",
+//!     }]
+//!     async fn myapi_projects_get_project(
+//!         rqctx: RequestContext<Self::Context>,
+//!     ) -> Result<HttpResponseOk<Project>, HttpError>;
+//! }
+//!
+//! // The `dropshot::api_description` macro generates a module called
+//! // `project_api_mod`. This module has a method called `api_description`
+//! // that, given an implementation of the trait, returns an `ApiDescription`.
+//! // The `ApiDescription` can then be used to set up an `HttpServer`.
+//!
+//! // --- The following code may be in another crate ---
+//!
+//! /// An empty type to hold the project server context.
+//! ///
+//! /// This type is never constructed, and is purely a way to name
+//! /// the specific server impl.
+//! enum ServerImpl {}
+//!
+//! impl ProjectApi for ServerImpl {
+//!     type Context = ();
+//!
+//!     async fn myapi_projects_get_project(
+//!         rqctx: RequestContext<Self::Context>,
+//!     ) -> Result<HttpResponseOk<Project>, HttpError> {
+//!         let project = Project { name: String::from("project1") };
+//!         Ok(HttpResponseOk(project))
+//!     }
+//! }
+//!
+//! fn main() {
+//!     // The type of `api` is provided for clarity -- it is generally inferred.
+//!     // "api" will automatically register all endpoints defined in the trait.
+//!     let mut api: ApiDescription<()> =
+//!         project_api_mod::api_description::<ServerImpl>().unwrap();
+//!
+//!     // ... (use `api` to set up an `HttpServer` )
+//! }
+//! ```
+//!
+//! See [`api-trait.rs`] and [`api-trait-alternate.rs`] for working
+//! examples.
+//!
+//! [`api-trait.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait.rs
+//! [`api-trait-alternate.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/api-trait-alternate.rs
+//!
+//! #### Limitations
+//!
+//! Currently, the `#[dropshot::api_description]` macro is only supported in module
+//! contexts, not within function bodies. This is a Rust limitation -- see [Rust
+//! issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+//! details.
+//!
+//! ### Choosing between functions and traits
+//!
+//! *Prototyping:* If you're prototyping with a small number of endpoints,
+//! functions provide an easier way to get started. The downside to traits is
+//! that endpoints signatures are defined at least twice, once in the trait and
+//! once in the implementation.
+//!
+//! *Small services:* For a service that is relatively isolated and quick to
+//! compile, traits and functions are both good options.
+//!
+//! *APIs with multiple implementations:* For services that are large enough to
+//! have a second, simpler implementation (of potentially parts of them), a
+//! trait is best.
+//!
+#![cfg_attr(
+    feature = "internal-docs",
+    doc = "Here's an archetypal way to organize code for a large service with a \
+         real and an in-memory test implementation. Each rounded node \
+         represents a binary and each rectangular node represents a library \
+         crate (or more than one for \"logic\").\n"
+)]
+#![cfg_attr(feature = "internal-docs", doc = simple_mermaid::mermaid!("../large-service-dep-graph.mmd"))]
 //!
 //! ### `#[endpoint { ... }]` attribute parameters
 //!
@@ -339,6 +462,55 @@
 //! users commonize code using regular Rust functions and calling them.  See the
 //! design notes in the README for more on this.
 //!
+//! ### Generating OpenAPI documents
+//!
+//! For a given `ApiDescription`, you can also print out an [OpenAPI
+//! document](https://spec.openapis.org/oas/v3.1.0#openapi-document) describing
+//! the API.  See [`ApiDescription::openapi`].
+//!
+//! With API traits, the `#[dropshot::api_description]` macro generates a helper
+//! function called `stub_api_description`, which returns an `ApiDescription`
+//! not backed by an implementation. This _stub description_ can be used to
+//! generate an OpenAPI document for the trait without requiring an
+//! implementation of the trait. For example:
+//!
+//! ```
+//! # use dropshot::ApiDescription;
+//! # use dropshot::HttpError;
+//! # use dropshot::HttpResponseOk;
+//! # use dropshot::RequestContext;
+//! # use http::Method;
+//! # use schemars::JsonSchema;
+//! # use serde::Serialize;
+//! # use std::sync::Arc;
+//! #
+//! # #[derive(Serialize, JsonSchema)]
+//! # struct Project {
+//! #     name: String,
+//! # }
+//! /// This is the API trait defined above.
+//! #[dropshot::api_description]
+//! trait ProjectApi {
+//!     type Context;
+//!     #[endpoint {
+//!         method = GET,
+//!         path = "/projects/project1",
+//!     }]
+//!     async fn myapi_projects_get_project(
+//!         rqctx: RequestContext<Self::Context>,
+//!     ) -> Result<HttpResponseOk<Project>, HttpError>;
+//! }
+//!
+//! # // defining fn main puts the doctest in a module context
+//! # fn main() {
+//! let description = project_api_mod::stub_api_description().unwrap();
+//! let mut openapi = description.openapi("Project Server", "1.0.0");
+//! openapi.write(&mut std::io::stdout().lock()).unwrap();
+//! # }
+//! ```
+//!
+//! A stub description must not be used for an actual server: all request
+//! handlers will immediately panic.
 //!
 //! ## Support for paginated resources
 //!
@@ -443,26 +615,21 @@
 //!
 //! ### Dropshot interfaces for pagination
 //!
-//! We can think of pagination in two parts: the input (handling the pagination
-//! query parameters) and the output (emitting a page of results, including the
-//! page token).
+//! The interfaces for pagination include:
 //!
-//! For input, a paginated API endpoint's handler function should accept a
-//! [`Query`]`<`[`PaginationParams`]`<ScanParams, PageSelector>>`, where
-//! `ScanParams` is a consumer-defined type specifying the parameters of the scan
-//! (typically including the sort fields, sort order, and filter options) and
-//! `PageSelector` is a consumer-defined type describing the page token.  The
-//! PageSelector will be serialized to JSON and base64-encoded to construct the
-//! page token.  This will be automatically parsed on the way back in.
+//! * input: your paginated API endpoint's handler function should accept an
+//!   argument of type [`Query`]`<`[`PaginationParams`]`<ScanParams,
+//!   PageSelector>>`, where you define `ScanParams` and `PageSelector` (see
+//!   `PaginationParams` for more on this.)
 //!
-//! For output, a paginated API endpoint's handler function can return
-//! `Result<`[`HttpResponseOk`]<[`ResultsPage`]`<T>, HttpError>` where `T:
-//! Serialize` is the item listed by the endpoint.  You can also use your own
-//! structure that contains a [`ResultsPage`] (possibly using
-//! `#[serde(flatten)]`), if that's the behavior you want.
+//! * output: your paginated API endpoint's handler function can return
+//!   `Result<`[`HttpResponseOk`]<[`ResultsPage`]`<T>, HttpError>` where `T:
+//!   Serialize` is the item listed by the endpoint.  You can also use your own
+//!   structure that contains a [`ResultsPage`] (possibly using
+//!   `#[serde(flatten)]`), if that's the behavior you want.
 //!
-//! There are several complete, documented examples in the "examples" directory.
-//!
+//! See the complete, documented pagination examples in the "examples"
+//! directory for more on how to use these.
 //!
 //! ### Advanced usage notes
 //!
@@ -572,9 +739,6 @@
 //! {"ok":{"id":"a53696af-543d-452f-81b6-5a045dd9921d","local_addr":"127.0.0.1:61028","remote_addr":"127.0.0.1:57376","status_code":204,"message":""}}
 //! ```
 
-// Clippy's style advice is definitely valuable, but not worth the trouble for
-// automated enforcement.
-#![allow(clippy::style)]
 // The `usdt` crate may require nightly, enabled if our consumer is enabling
 // DTrace probes.
 #![cfg_attr(all(feature = "usdt-probes", usdt_need_asm), feature(asm))]
@@ -609,6 +773,8 @@ pub mod test_util;
 extern crate slog;
 
 pub use api_description::ApiDescription;
+pub use api_description::ApiDescriptionBuildErrors;
+pub use api_description::ApiDescriptionRegisterError;
 pub use api_description::ApiEndpoint;
 pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
@@ -617,6 +783,7 @@ pub use api_description::ApiEndpointResponse;
 pub use api_description::EndpointTagPolicy;
 pub use api_description::ExtensionMode;
 pub use api_description::OpenApiDefinition;
+pub use api_description::StubContext;
 pub use api_description::TagConfig;
 pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
@@ -683,5 +850,6 @@ pub use handler::RequestContextArgument;
 pub use http::Method;
 
 extern crate dropshot_endpoint;
+pub use dropshot_endpoint::api_description;
 pub use dropshot_endpoint::channel;
 pub use dropshot_endpoint::endpoint;

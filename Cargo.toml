@@ -6,3 +6,43 @@
 [workspace]
 members = ["dropshot", "dropshot_endpoint" ]
 default-members = ["dropshot", "dropshot_endpoint" ]
+
+resolver = "2"
+
+[workspace.lints.clippy]
+# Clippy's style nits are useful, but not worth keeping in CI.
+style = { level = "allow", priority = -1 }
+# But continue to warn on anything in the "disallowed_" namespace.
+disallowed_macros = "warn"
+disallowed_methods = "warn"
+disallowed_names = "warn"
+disallowed_script_idents = "warn"
+disallowed_types = "warn"
+# Warn on some more style lints that are relatively stable and make sense.
+iter_cloned_collect = "warn"
+iter_next_slice = "warn"
+iter_nth = "warn"
+iter_nth_zero = "warn"
+iter_skip_next = "warn"
+len_zero = "warn"
+redundant_field_names = "warn"
+# `declare_interior_mutable_const` is classified as a style lint, but it can
+# identify real bugs (e.g., declaring a `const Atomic` and using it like
+# a `static Atomic`). However, it is also subject to false positives (e.g.,
+# idiomatically declaring a static array of atomics uses `const Atomic`). We
+# warn on this to catch the former, and expect any uses of the latter to allow
+# this locally.
+#
+# Note: any const value with a type containing a `bytes::Bytes` hits this lint,
+# and you should `#![allow]` it for now. This is most likely to be seen with
+# `http::header::{HeaderName, HeaderValue}`. This is a Clippy bug which will be
+# fixed in the Rust 1.80 toolchain (rust-lang/rust-clippy#12691).
+declare_interior_mutable_const = "warn"
+# Also warn on casts, preferring explicit conversions instead.
+#
+# We'd like to warn on lossy casts in the future, but lossless casts are the
+# easiest ones to convert over.
+cast_lossless = "warn"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(usdt_need_asm)', 'cfg(usdt_need_asm_sym)'] }

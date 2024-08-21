@@ -9,11 +9,14 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   check-style:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@cd7d8d697e10461458bc61a30d094dc601a8b017
+      - uses: actions/checkout@9a9194f87191a7e9055e3e9b95b8cfb13023bb08
       - name: Report cargo version
         run: cargo --version
       - name: Report rustfmt version
@@ -24,32 +27,35 @@ jobs:
   clippy-lint:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@cd7d8d697e10461458bc61a30d094dc601a8b017
+      - uses: actions/checkout@9a9194f87191a7e9055e3e9b95b8cfb13023bb08
       - name: Report cargo version
         run: cargo --version
       - name: Report Clippy version
         run: cargo clippy -- --version
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
       - name: Run Clippy Lints
-        # Clippy's style nits are useful, but not worth keeping in CI.  This
-        # override belongs in src/lib.rs, but that doesn't reliably work due to
-        # rust-lang/rust-clippy#6610.
-        run: cargo clippy --all-targets -- --deny warnings --allow clippy::style
+        run: cargo clippy --all-targets -- --deny warnings
 
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2022, macos-12]
-        features: [ all, default ]
+        # macos-14 for M1 runners
+        os: [ubuntu-22.04, windows-2022, macos-14]
+        features: [all, default]
         include:
           - features: all
             feature_flags: --all-features
     steps:
-      - uses: actions/checkout@cd7d8d697e10461458bc61a30d094dc601a8b017
+      - uses: actions/checkout@9a9194f87191a7e9055e3e9b95b8cfb13023bb08
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
         run: rustc --version
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
+        with:
+          # Matrix instances other than OS need to be added to this explicitly
+          key: ${{ matrix.features }}
       - name: Build
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests

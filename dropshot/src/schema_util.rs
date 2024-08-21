@@ -480,13 +480,21 @@ fn j2oas_schema_object(
     }
 
     if let Some(metadata) = &obj.metadata {
-        data.title = metadata.title.clone();
-        data.description = metadata.description.clone();
-        data.default = metadata.default.clone();
+        data.title.clone_from(&metadata.title);
+        data.description.clone_from(&metadata.description);
+        data.default.clone_from(&metadata.default);
         data.deprecated = metadata.deprecated;
         data.read_only = metadata.read_only;
         data.write_only = metadata.write_only;
     }
+
+    // Preserve extensions
+    data.extensions = obj
+        .extensions
+        .iter()
+        .filter(|(key, _)| key.starts_with("x-"))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
 
     if let Some(name) = name {
         data.title = Some(name.clone());
@@ -1068,5 +1076,22 @@ mod test {
         let schema = schemars::schema_for!(Uno).schema;
 
         let _ = j2oas_schema_object(None, &schema);
+    }
+
+    #[test]
+    fn test_extension_conversion() {
+        let j = serde_json::json!({
+            "type": "object",
+            "x-stuff": {
+                "a": "b",
+                "c": [ "d", "e" ]
+            }
+        });
+
+        let pre: schemars::schema::Schema =
+            serde_json::from_value(j.clone()).unwrap();
+        let post = j2oas_schema(None, &pre);
+        let v = serde_json::to_value(post.as_item().unwrap()).unwrap();
+        assert_eq!(j, v);
     }
 }

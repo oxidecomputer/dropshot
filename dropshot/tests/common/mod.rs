@@ -51,89 +51,62 @@ pub fn create_log_context(test_name: &str) -> LogContext {
     LogContext::new(test_name, &log_config)
 }
 
-pub struct TestCertificateChain<'a> {
-    root_cert: rustls::pki_types::CertificateDer<'a>,
-    intermediate_cert: rustls::pki_types::CertificateDer<'a>,
-    intermediate_keypair: rcgen::Certificate,
-    end_cert: rustls::pki_types::CertificateDer<'a>,
-    end_keypair: rcgen::Certificate,
+struct TestCertificateChain {
+    root_cert: rcgen::Certificate,
+    intermediate_cert: rcgen::Certificate,
+    end_keypair: rcgen::KeyPair,
+    end_cert: rcgen::Certificate,
 }
 
-impl<'a> TestCertificateChain<'a> {
+impl TestCertificateChain {
     fn new() -> Self {
-        let mut root_params = rcgen::CertificateParams::new(vec![]);
+        let root_keypair =
+            rcgen::KeyPair::generate().expect("root keypair generation failed");
+        let mut root_params =
+            rcgen::CertificateParams::new(vec![]).expect("invalid root params");
         root_params.is_ca =
             rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
-        let root_keypair = rcgen::Certificate::from_params(root_params)
+
+        let root_cert = root_params
+            .self_signed(&root_keypair)
             .expect("failed to generate root keys");
 
-        let mut intermediate_params = rcgen::CertificateParams::new(vec![]);
+        let intermediate_keypair = rcgen::KeyPair::generate()
+            .expect("intermediate keypair generation failed");
+        let mut intermediate_params = rcgen::CertificateParams::new(vec![])
+            .expect("invalid intermediate params");
         intermediate_params.is_ca =
             rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
-        let intermediate_keypair =
-            rcgen::Certificate::from_params(intermediate_params)
-                .expect("failed to generate intermediate keys");
+        let intermediate_cert = intermediate_params
+            .signed_by(&intermediate_keypair, &root_cert, &root_keypair)
+            .expect("failed to sign intermediate cert");
 
-        let end_keypair = rcgen::Certificate::from_params(
-            rcgen::CertificateParams::new(vec!["localhost".into()]),
-        )
-        .expect("failed to generate end-entity keys");
+        let end_keypair =
+            rcgen::KeyPair::generate().expect("end keypair generation failed");
+        let end_params =
+            rcgen::CertificateParams::new(vec!["localhost".into()])
+                .expect("invalid end params");
+        let end_cert = end_params
+            .signed_by(&end_keypair, &intermediate_cert, &intermediate_keypair)
+            .expect("failed to sign end cert");
 
-        let root_cert = rustls::pki_types::CertificateDer::from(
-            root_keypair
-                .serialize_der()
-                .expect("failed to serialize root cert"),
-        );
-        let intermediate_cert = rustls::pki_types::CertificateDer::from(
-            intermediate_keypair
-                .serialize_der_with_signer(&root_keypair)
-                .expect("failed to serialize intermediate cert"),
-        );
-        let end_cert = rustls::pki_types::CertificateDer::from(
-            end_keypair
-                .serialize_der_with_signer(&intermediate_keypair)
-                .expect("failed to serialize end-entity cert"),
-        );
-
-        Self {
-            root_cert,
-            intermediate_cert,
-            intermediate_keypair,
-            end_cert,
-            end_keypair,
-        }
+        Self { root_cert, intermediate_cert, end_keypair, end_cert }
     }
 
-    pub fn end_cert_private_key<'b>(
-        &self,
-    ) -> rustls::pki_types::PrivateKeyDer<'b> {
+    pub fn end_cert_private_key(&self) -> rustls::pki_types::PrivateKeyDer {
         rustls::pki_types::PrivateKeyDer::from(
-            rustls::pki_types::PrivatePkcs1KeyDer::from(
-                self.end_keypair.serialize_private_key_der(),
+            rustls::pki_types::PrivatePkcs8KeyDer::from(
+                self.end_keypair.serialize_der(),
             ),
         )
     }
 
     pub fn cert_chain(&self) -> Vec<rustls::pki_types::CertificateDer> {
         vec![
-            self.end_cert.clone(),
-            self.intermediate_cert.clone(),
-            self.root_cert.clone(),
+            self.end_cert.der().clone(),
+            self.intermediate_cert.der().clone(),
+            self.root_cert.der().clone(),
         ]
-    }
-
-    pub fn generate_new_end_cert(&mut self) {
-        let end_keypair = rcgen::Certificate::from_params(
-            rcgen::CertificateParams::new(vec!["localhost".into()]),
-        )
-        .expect("failed to generate end-entity keys");
-        let end_cert = rustls::pki_types::CertificateDer::from(
-            end_keypair
-                .serialize_der_with_signer(&self.intermediate_keypair)
-                .expect("failed to serialize end-entity cert"),
-        );
-        self.end_keypair = end_keypair;
-        self.end_cert = end_cert;
     }
 }
 

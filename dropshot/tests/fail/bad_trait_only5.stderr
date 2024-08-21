@@ -1,0 +1,18 @@
+error: API trait `MyApi` does not have associated type `OtherContext`
+       (this type specifies the shared context for endpoints)
+ --> tests/fail/bad_trait_only5.rs:8:7
+  |
+8 | trait MyApi {
+  |       ^^^^^
+
+error[E0425]: cannot find function `api_description` in module `my_api_mod`
+  --> tests/fail/bad_trait_only5.rs:22:17
+   |
+22 |     my_api_mod::api_description::<MyImpl>();
+   |                 ^^^^^^^^^^^^^^^ not found in `my_api_mod`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_api_mod`
+  --> tests/fail/bad_trait_only5.rs:23:17
+   |
+23 |     my_api_mod::stub_api_description();
+   |                 ^^^^^^^^^^^^^^^^^^^^ not found in `my_api_mod`

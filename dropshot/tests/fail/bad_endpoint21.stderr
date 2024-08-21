@@ -1,0 +1,24 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+  --> tests/fail/bad_endpoint21.rs:24:1
+   |
+24 | / async fn variadic_argument(
+25 | |     _rqctx: RequestContext<()>,
+26 | |     _param1: Query<QueryParams>,
+27 | |     ...
+28 | | ) -> Result<HttpResponseOk<()>, HttpError> {
+   | |__________________________________________^
+
+error: endpoint `variadic_argument` must not have a variadic argument
+  --> tests/fail/bad_endpoint21.rs:27:5
+   |
+27 |     ...
+   |     ^^^

@@ -1,0 +1,17 @@
+error: API trait `MyApi` must not have generics
+ --> tests/fail/bad_trait_only9.rs:8:12
+  |
+8 | trait MyApi<'a> {
+  |            ^^^^
+
+error[E0425]: cannot find function `api_description` in module `my_api_mod`
+  --> tests/fail/bad_trait_only9.rs:23:17
+   |
+23 |     my_api_mod::api_description::<MyImpl>();
+   |                 ^^^^^^^^^^^^^^^ not found in `my_api_mod`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_api_mod`
+  --> tests/fail/bad_trait_only9.rs:24:17
+   |
+24 |     my_api_mod::stub_api_description();
+   |                 ^^^^^^^^^^^^^^^^^^^^ not found in `my_api_mod`

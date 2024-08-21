@@ -1,0 +1,16 @@
+error[E0271]: expected `{async block@$DIR/tests/fail/bad_channel12.rs:14:1: 14:6}` to be a future that resolves to `Result<(), Box<dyn Error + Send + Sync>>`, but it resolves to `Result<String, Box<dyn Error + Send + Sync>>`
+  --> tests/fail/bad_channel12.rs:14:1
+   |
+14 | async fn bad_response_type(
+   | ^^^^^ expected `Result<(), Box<...>>`, found `Result<String, Box<...>>`
+   |
+   = note: expected enum `Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>`
+              found enum `Result<String, Box<dyn std::error::Error + Send + Sync>>`
+note: required by a bound in `WebsocketUpgrade::handle`
+  --> src/websocket.rs
+   |
+   |     pub fn handle<C, F>(mut self, handler: C) -> WebsocketEndpointResult
+   |            ------ required by a bound in this associated function
+...
+   |         F: Future<Output = WebsocketChannelResult> + Send + 'static,
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `WebsocketUpgrade::handle`

@@ -1,0 +1,18 @@
+error: API trait `MyApi` must not have a where clause
+  --> tests/fail/bad_trait_only11.rs:9:1
+   |
+9  | / where
+10 | |     usize: std::fmt::Debug,
+   | |___________________________^
+
+error[E0425]: cannot find function `api_description` in module `my_api_mod`
+  --> tests/fail/bad_trait_only11.rs:26:17
+   |
+26 |     my_api_mod::api_description::<MyImpl>();
+   |                 ^^^^^^^^^^^^^^^ not found in `my_api_mod`
+
+error[E0425]: cannot find function `stub_api_description` in module `my_api_mod`
+  --> tests/fail/bad_trait_only11.rs:27:17
+   |
+27 |     my_api_mod::stub_api_description();
+   |                 ^^^^^^^^^^^^^^^^^^^^ not found in `my_api_mod`

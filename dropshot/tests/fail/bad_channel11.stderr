@@ -1,0 +1,23 @@
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel11.rs:13:1
+   |
+13 | / async fn bad_channel(
+14 | |     _rqctx: RequestContext<()>,
+15 | |     _upgraded: WebsocketConnection,
+16 | | ) {
+   | |_^
+
+error: endpoint `bad_channel` must return a Result
+  --> tests/fail/bad_channel11.rs:13:1
+   |
+13 | / async fn bad_channel(
+14 | |     _rqctx: RequestContext<()>,
+15 | |     _upgraded: WebsocketConnection,
+16 | | ) {
+   | |_^
