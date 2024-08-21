@@ -39,7 +39,7 @@ pub fn test_setup_with_context<Context: ServerContext>(
 
     let logctx = create_log_context(test_name);
     let log = logctx.log.new(o!());
-    TestContext::new(api, ctx, config_dropshot, Some(logctx), log)
+    TestContext::new(api, ctx, &config_dropshot, Some(logctx), log)
 }
 
 pub fn create_log_context(test_name: &str) -> LogContext {

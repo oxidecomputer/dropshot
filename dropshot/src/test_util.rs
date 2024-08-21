@@ -480,7 +480,7 @@ impl<Context: ServerContext> TestContext<Context> {
     pub fn new(
         api: ApiDescription<Context>,
         private: Context,
-        config_dropshot: ConfigDropshot,
+        config_dropshot: &ConfigDropshot,
         log_context: Option<LogContext>,
         log: Logger,
     ) -> TestContext<Context> {
