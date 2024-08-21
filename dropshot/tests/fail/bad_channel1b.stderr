@@ -1,31 +1,22 @@
-error[E0277]: the trait bound `WebsocketUpgrade: RequestContextArgument` is not satisfied
-  --> tests/fail/bad_channel1b.rs:8:1
+error: channel handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<MyContext>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               websocket_connection: dropshot::WebsocketConnection,
+           ) -> dropshot::WebsocketChannelResult
+  --> tests/fail/bad_channel1b.rs:12:1
    |
-8  | / #[channel {
-9  | |     protocol = WEBSOCKETS,
-10 | |     path = "/test",
-11 | | }]
-   | |__^ the trait `RequestContextArgument` is not implemented for `WebsocketUpgrade`
-   |
-   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
-   = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
+12 | / async fn bad_channel(
+13 | |     _upgraded: WebsocketConnection,
+14 | | ) -> dropshot::WebsocketChannelResult {
+   | |_____________________________________^
 
-error[E0277]: the trait bound `fn(WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {<impl From<bad_channel> for ApiEndpoint<<WebsocketUpgrade as RequestContextArgument>::Context>>::from::bad_channel}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
-  --> tests/fail/bad_channel1b.rs:12:10
+error: endpoint `bad_channel` must have at least two arguments: RequestContext and WebsocketConnection
+  --> tests/fail/bad_channel1b.rs:12:21
    |
-8  | / #[channel {
-9  | |     protocol = WEBSOCKETS,
-10 | |     path = "/test",
-11 | | }]
-   | |__- required by a bound introduced by this call
 12 |   async fn bad_channel(
-   |            ^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {<impl From<bad_channel> for ApiEndpoint<<WebsocketUpgrade as RequestContextArgument>::Context>>::from::bad_channel}`
-   |
-note: required by a bound in `ApiEndpoint::<Context>::new`
-  --> src/api_description.rs
-   |
-   |     pub fn new<HandlerType, FuncParams, ResponseType>(
-   |            --- required by a bound in this associated function
-...
-   |         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
-   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`
+   |  _____________________^
+13 | |     _upgraded: WebsocketConnection,
+14 | | ) -> dropshot::WebsocketChannelResult {
+   | |_^

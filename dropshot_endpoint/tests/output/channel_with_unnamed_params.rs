@@ -18,38 +18,17 @@ const _: fn() = || {
     need_shared_extractor::<Path<P>>();
 };
 const _: fn() = || {
-    fn need_exclusive_extractor<T>()
-    where
-        T: ?Sized + dropshot::ExclusiveExtractor,
-    {}
-    need_exclusive_extractor::<dropshot::WebsocketUpgrade>();
-};
-const _: fn() = || {
-    trait ResultTrait {
-        type T;
-        type E;
-    }
-    impl<TT, EE> ResultTrait for Result<TT, EE>
-    where
-        TT: dropshot::HttpResponse,
-    {
-        type T = TT;
-        type E = EE;
-    }
-    struct NeedHttpResponse(<dropshot::WebsocketEndpointResult as ResultTrait>::T);
     trait TypeEq {
         type This: ?Sized;
     }
     impl<T: ?Sized> TypeEq for T {
         type This = Self;
     }
-    fn validate_result_error_type<T>()
+    fn validate_websocket_connection_type<T>()
     where
-        T: ?Sized + TypeEq<This = dropshot::HttpError>,
+        T: ?Sized + TypeEq<This = dropshot::WebsocketConnection>,
     {}
-    validate_result_error_type::<
-        <dropshot::WebsocketEndpointResult as ResultTrait>::E,
-    >();
+    validate_websocket_connection_type::<WebsocketConnection>();
 };
 #[allow(non_camel_case_types, missing_docs)]
 ///API Endpoint: handler_xyz
@@ -67,20 +46,9 @@ for dropshot::ApiEndpoint<
             _: RequestContext<()>,
             _: Query<Q>,
             _: Path<P>,
-            __dropshot_websocket_upgrade: dropshot::WebsocketUpgrade,
-        ) -> dropshot::WebsocketEndpointResult {
-            async fn __dropshot_websocket_handler(
-                _: RequestContext<()>,
-                _: Query<Q>,
-                _: Path<P>,
-                conn: WebsocketConnection,
-            ) -> WebsocketChannelResult {
-                Ok(())
-            }
-            __dropshot_websocket_upgrade
-                .handle(move |conn: WebsocketConnection| async move {
-                    __dropshot_websocket_handler(_, _, _, conn).await
-                })
+            _: WebsocketConnection,
+        ) -> WebsocketChannelResult {
+            Ok(())
         }
         const _: fn() = || {
             fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
@@ -88,14 +56,27 @@ for dropshot::ApiEndpoint<
                 arg0: RequestContext<()>,
                 arg1: Query<Q>,
                 arg2: Path<P>,
-                arg3: dropshot::WebsocketUpgrade,
+                __dropshot_websocket: WebsocketConnection,
             ) {
-                future_endpoint_must_be_send(handler_xyz(arg0, arg1, arg2, arg3));
+                future_endpoint_must_be_send(
+                    handler_xyz(arg0, arg1, arg2, __dropshot_websocket),
+                );
             }
         };
+        async fn handler_xyz_adapter(
+            arg0: RequestContext<()>,
+            arg1: Query<Q>,
+            arg2: Path<P>,
+            __dropshot_websocket: dropshot::WebsocketUpgrade,
+        ) -> dropshot::WebsocketEndpointResult {
+            __dropshot_websocket
+                .handle(move |__dropshot_websocket: WebsocketConnection| async move {
+                    handler_xyz(arg0, arg1, arg2, __dropshot_websocket).await
+                })
+        }
         dropshot::ApiEndpoint::new(
             "handler_xyz".to_string(),
-            handler_xyz,
+            handler_xyz_adapter,
             dropshot::Method::GET,
             "application/json",
             "/my/ws/channel",

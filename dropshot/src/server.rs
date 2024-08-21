@@ -93,6 +93,14 @@ pub struct ServerConfig {
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
     pub default_handler_task_mode: HandlerTaskMode,
+    /// A list of header names to include as extra properties in the log
+    /// messages emitted by the per-request logger.  Each header will, if
+    /// present, be included in the output with a "hdr_"-prefixed property name
+    /// in lower case that has all hyphens replaced with underscores; e.g.,
+    /// "X-Forwarded-For" will be included as "hdr_x_forwarded_for".  No attempt
+    /// is made to deal with headers that appear multiple times in a single
+    /// request.
+    pub log_headers: Vec<String>,
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
@@ -125,6 +133,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
+            log_headers: config.log_headers.clone(),
         };
 
         let handler_waitgroup = WaitGroup::new();
@@ -818,12 +827,39 @@ async fn http_request_handle_wrap<C: ServerContext>(
     // themselves.
     let start_time = std::time::Instant::now();
     let request_id = generate_request_id();
-    let request_log = server.log.new(o!(
+
+    let mut request_log = server.log.new(o!(
         "remote_addr" => remote_addr,
         "req_id" => request_id.clone(),
         "method" => request.method().as_str().to_string(),
         "uri" => format!("{}", request.uri()),
     ));
+    // If we have been asked to include any headers from the request in the
+    // log messages, do so here:
+    for name in server.config.log_headers.iter() {
+        let v = request
+            .headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok().map(str::to_string));
+
+        if let Some(v) = v {
+            // This is unfortunate in at least two ways: first, we would like to
+            // just construct _one_ key value map, but OwnedKV is opaque and can
+            // only be constructed with the o!() macro, so the only way to layer
+            // on a dynamic set of additional properties is by creating a chain
+            // of child loggers to add each one; second, we would like to be
+            // able to include all header values under a single map-valued
+            // "header" property, but slog only allows us a single-level
+            // property hierarchy.  Alas!
+            //
+            // We also replace the hyphens with underscores to make it easier to
+            // refer to the generated properties in dynamic languages used for
+            // filtering like rhai.
+            let k = format!("hdr_{}", name.to_lowercase().replace('-', "_"));
+            request_log = request_log.new(o!(k => v));
+        }
+    }
+
     trace!(request_log, "incoming request");
     #[cfg(feature = "usdt-probes")]
     probes::request__start!(|| {
@@ -957,6 +993,7 @@ async fn http_request_handle<C: ServerContext>(
         request: RequestInfo::new(&request, remote_addr),
         path_variables: lookup_result.variables,
         body_content_type: lookup_result.body_content_type,
+        operation_id: lookup_result.operation_id,
         request_id: request_id.to_string(),
         log: request_log,
     };

@@ -384,6 +384,7 @@ mod tests {
                     page_default_nitems: NonZeroU32::new(1).unwrap(),
                     default_handler_task_mode:
                         HandlerTaskMode::CancelOnDisconnect,
+                    log_headers: Default::default(),
                 },
                 router: HttpRouter::new(),
                 log: log.clone(),
@@ -399,6 +400,7 @@ mod tests {
             request: RequestInfo::new(&request, remote_addr),
             path_variables: Default::default(),
             body_content_type: Default::default(),
+            operation_id: "".to_string(),
             request_id: "".to_string(),
             log: log.clone(),
         };

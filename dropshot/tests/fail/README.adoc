@@ -14,16 +14,32 @@ There are several tests here of the general form:
 
 - `bad_endpointN.rs`
 - `bad_channelN.rs`
+- `bad_trait_endpointN.rs`
+- `bad_trait_channelN.rs`
 
 The specific situations being tested are mirrored across tests with the same N. For example, `bad_endpoint2.rs` and `bad_channel2.rs` test the situation where a `self` argument is passed in.
 
-For channels:
+=== `bad_channel` tests
 
 - Some of these tests may be mirrored as multiple closely-related tests. For example, endpoints require that at least one argument is present, so `bad_endpoint1.rs` tests the situation where no arguments have been provided. But channels require that at least _two_ arguments are present, so we have `bad_channel1a.rs`, which passes in zero arguments, and `bad_channel1b.rs`, which passes in one argument.
 
 - Some of these tests may be moot. In this case, we check in text files with the rationale for skipping. For example, `bad_channel7.txt`.
 
 In either case, we do not renumber tests--instead, we skip that number so the fixtures afterwards stay consistent.
+
+=== `bad_trait_endpoint` and `bad_trait_channel` tests
+
+These tests ensure that API traits fail gracefully. Notably, *we should almost always generate the original trait* with all items (to the best of our ability), so these tests also include an implementation of the trait, as well as calls into the support module. The error output ensures that items aren't missing.
+
+=== Trait-only tests
+
+Dropshot API traits introduce new and exciting failure modes. Tests that only make sense for API traits are named `bad_trait_onlyN.rs`.
+
+Most trait-only tests are generally agnostic to endpoint versus channel, or just don't have any endpoints at all. Hence they aren't split up into their own endpoint and channel tests.
+
+Like the `bad_trait_endpoint` tests, these tests include an implementation of the trait to ensure that it is still generated.
+
+Since trait-based APIs are strictly more complex than function-based APIs, there are no function-only tests. All function-based tests have trait-based equivalents.
 
 == Updating to new Rust versions
 

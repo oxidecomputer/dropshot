@@ -120,6 +120,7 @@ fn make_server(
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+        log_headers: Default::default(),
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.to_path_buf(),
@@ -436,6 +437,7 @@ async fn test_server_is_https() {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+        log_headers: Default::default(),
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),

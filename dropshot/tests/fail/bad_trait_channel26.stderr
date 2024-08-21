@@ -1,0 +1,8 @@
+error: endpoint `bad_channel` has invalid attributes: missing field `path`
+  --> tests/fail/bad_trait_channel26.rs:14:15
+   |
+14 |       #[channel {
+   |  _______________^
+15 | |         protocol = WEBSOCKETS,
+16 | |     }]
+   | |_____^

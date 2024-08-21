@@ -6,6 +6,7 @@ use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
+use crate::handler::StubRouteHandler;
 use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
@@ -13,6 +14,7 @@ use crate::schema_util::j2oas_schema;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
+use crate::HttpError;
 use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
@@ -27,7 +29,16 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
+
+/// A type used to produce an `ApiDescription` without a concrete implementation
+/// of an API trait.
+///
+/// This type is never constructed, and is used only as a type parameter to
+/// [`ApiEndpoint::new_for_types`].
+#[derive(Copy, Clone, Debug)]
+pub enum StubContext {}
 
 /// ApiEndpoint represents a single API endpoint associated with an
 /// ApiDescription. It has a handler, HTTP method (e.g. GET, POST), and a path--
@@ -109,6 +120,89 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         self.deprecated = deprecated;
         self
     }
+}
+
+impl<'a> ApiEndpoint<StubContext> {
+    /// Create a new API endpoint without an actual handler behind it, which
+    /// panics if called.
+    ///
+    /// This is useful for generating OpenAPI documentation without having to
+    /// implement the actual handler function. In that capacity, it is used for
+    /// trait-based dropshot APIs.
+    ///
+    /// # Example
+    ///
+    /// This must be invoked by specifying the request and response types as
+    /// type parameters.
+    ///
+    /// ```rust
+    /// use dropshot::{ApiDescription, ApiEndpoint, HttpError, HttpResponseOk, Query, StubContext};
+    /// use schemars::JsonSchema;
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Debug, Deserialize, JsonSchema)]
+    /// struct GetValueParams {
+    ///     key: String,
+    /// }
+    ///
+    /// let mut api: ApiDescription<StubContext> = ApiDescription::new();
+    /// let endpoint = ApiEndpoint::new_for_types::<
+    ///     // The request type is always a tuple. Note the 1-tuple syntax.
+    ///     (Query<GetValueParams>,),
+    ///     // The response type is always Result<T, HttpError> where T implements
+    ///     // HttpResponse.
+    ///     Result<HttpResponseOk<String>, HttpError>,
+    /// >(
+    ///     "get_value".to_string(),
+    ///     http::Method::GET,
+    ///     "application/json",
+    ///     "/value",
+    /// );
+    /// api.register(endpoint).unwrap();
+    /// ```
+    pub fn new_for_types<FuncParams, ResultType>(
+        operation_id: String,
+        method: Method,
+        content_type: &'a str,
+        path: &'a str,
+    ) -> Self
+    where
+        FuncParams: RequestExtractor + 'static,
+        ResultType: HttpResultType,
+    {
+        let body_content_type =
+            ApiEndpointBodyContentType::from_mime_type(content_type)
+                .expect("unsupported mime type");
+        let func_parameters = FuncParams::metadata(body_content_type.clone());
+        let response = ResultType::Response::response_metadata();
+        let handler = StubRouteHandler::new_with_name(&operation_id);
+        ApiEndpoint {
+            operation_id,
+            handler,
+            method,
+            path: path.to_string(),
+            parameters: func_parameters.parameters,
+            body_content_type,
+            response,
+            summary: None,
+            description: None,
+            tags: vec![],
+            extension_mode: func_parameters.extension_mode,
+            visible: true,
+            deprecated: false,
+        }
+    }
+}
+
+pub trait HttpResultType {
+    type Response: HttpResponse + Send + Sync + 'static;
+}
+
+impl<T> HttpResultType for Result<T, HttpError>
+where
+    T: HttpResponse + Send + Sync + 'static,
+{
+    type Response = T;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a
@@ -279,12 +373,24 @@ impl<Context: ServerContext> ApiDescription<Context> {
         self
     }
 
+    // Not (yet) part of the public API, only used for tests. If/when this is
+    // made public, we should consider changing the setter above to be named
+    // `with_tag_config`, and this to `tag_config`.
+    #[doc(hidden)]
+    pub fn get_tag_config(&self) -> &TagConfig {
+        &self.tag_config
+    }
+
     /// Register a new API endpoint.
-    pub fn register<T>(&mut self, endpoint: T) -> Result<(), String>
+    pub fn register<T>(
+        &mut self,
+        endpoint: T,
+    ) -> Result<(), ApiDescriptionRegisterError>
     where
         T: Into<ApiEndpoint<Context>>,
     {
         let e = endpoint.into();
+        let operation_id = e.operation_id.clone();
 
         // manually outline, see https://matklad.github.io/2021/09/04/fast-rust-builds.html#Keeping-Instantiations-In-Check
         fn _register<C: ServerContext>(
@@ -300,7 +406,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
             Ok(())
         }
 
-        _register(self, e)?;
+        _register(self, e).map_err(|error| ApiDescriptionRegisterError {
+            operation_id,
+            message: error,
+        })?;
 
         Ok(())
     }
@@ -312,7 +421,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             return Ok(());
         }
 
-        match (&self.tag_config.endpoint_tag_policy, e.tags.len()) {
+        match (&self.tag_config.policy, e.tags.len()) {
             (EndpointTagPolicy::AtLeastOne, 0) => {
                 return Err("At least one tag is required".to_string())
             }
@@ -324,7 +433,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         if !self.tag_config.allow_other_tags {
             for tag in &e.tags {
-                if !self.tag_config.tag_definitions.contains_key(tag) {
+                if !self.tag_config.tags.contains_key(tag) {
                     return Err(format!("Invalid tag: {}", tag));
                 }
             }
@@ -510,9 +619,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let endpoint_tags = (&self.router)
             .into_iter()
             .flat_map(|(_, _, endpoint)| {
-                endpoint.tags.iter().filter(|tag| {
-                    !self.tag_config.tag_definitions.contains_key(*tag)
-                })
+                endpoint
+                    .tags
+                    .iter()
+                    .filter(|tag| !self.tag_config.tags.contains_key(*tag))
             })
             .cloned()
             .collect::<HashSet<_>>()
@@ -522,7 +632,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // Bundle those with the explicit tags provided by the consumer
         openapi.tags = self
             .tag_config
-            .tag_definitions
+            .tags
             .iter()
             .map(|(name, details)| openapiv3::Tag {
                 name: name.clone(),
@@ -878,6 +988,74 @@ impl<Context: ServerContext> ApiDescription<Context> {
     }
 }
 
+/// A collection of errors that occurred while building an `ApiDescription`.
+///
+/// Returned by the `api_description` and `stub_api_description` functions
+/// generated by the [`api_description`](macro@crate::api_description) macro.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiDescriptionBuildErrors {
+    errors: Vec<ApiDescriptionRegisterError>,
+}
+
+impl ApiDescriptionBuildErrors {
+    /// Create a new `ApiDescriptionBuildErrors` with the given errors.
+    pub fn new(errors: Vec<ApiDescriptionRegisterError>) -> Self {
+        Self { errors }
+    }
+
+    /// Return a list of the errors that occurred.
+    pub fn errors(&self) -> &[ApiDescriptionRegisterError] {
+        &self.errors
+    }
+}
+
+impl fmt::Display for ApiDescriptionBuildErrors {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "failed to register endpoints: \n")?;
+        for error in &self.errors {
+            write!(
+                f,
+                "  - registering '{}' failed: {}\n",
+                error.operation_id, error.message
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ApiDescriptionBuildErrors {}
+
+/// An error that occurred while registering an individual API endpoint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiDescriptionRegisterError {
+    operation_id: String,
+    message: String,
+}
+
+impl ApiDescriptionRegisterError {
+    /// Return the name of the endpoint that failed to register.
+    pub fn operation_id(&self) -> &str {
+        &self.operation_id
+    }
+
+    /// Return a message describing what occurred while registering the endpoint.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl fmt::Display for ApiDescriptionRegisterError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "failed to register endpoint '{}': {}",
+            self.operation_id, self.message
+        )
+    }
+}
+
+impl std::error::Error for ApiDescriptionRegisterError {}
+
 /// Returns true iff the schema represents the void schema that matches no data.
 fn is_empty(schema: &schemars::schema::Schema) -> bool {
     if let schemars::schema::Schema::Bool(false) = schema {
@@ -1074,16 +1252,21 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
 pub struct TagConfig {
     /// Are endpoints allowed to use tags not specified in this config?
     pub allow_other_tags: bool,
-    pub endpoint_tag_policy: EndpointTagPolicy,
-    pub tag_definitions: HashMap<String, TagDetails>,
+
+    // The aliases are for backwards compatibility with previous versions of
+    // Dropshot.
+    #[serde(alias = "endpoint_tag_policy")]
+    pub policy: EndpointTagPolicy,
+    #[serde(alias = "tag_definitions")]
+    pub tags: HashMap<String, TagDetails>,
 }
 
 impl Default for TagConfig {
     fn default() -> Self {
         Self {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::Any,
-            tag_definitions: HashMap::new(),
+            policy: EndpointTagPolicy::Any,
+            tags: HashMap::new(),
         }
     }
 }
@@ -1170,11 +1353,11 @@ mod test {
             CONTENT_TYPE_JSON,
             "/",
         ));
+        let error = ret.unwrap_err();
         assert_eq!(
-            ret,
-            Err("specified parameters do not appear in the path (a,b)"
-                .to_string())
-        )
+            error.message(),
+            "specified parameters do not appear in the path (a,b)",
+        );
     }
 
     #[test]
@@ -1187,10 +1370,8 @@ mod test {
             CONTENT_TYPE_JSON,
             "/{a}/{aa}/{b}/{bb}",
         ));
-        assert_eq!(
-            ret,
-            Err("path parameters are not consumed (aa,bb)".to_string())
-        );
+        let error = ret.unwrap_err();
+        assert_eq!(error.message(), "path parameters are not consumed (aa,bb)");
     }
 
     #[test]
@@ -1203,11 +1384,11 @@ mod test {
             CONTENT_TYPE_JSON,
             "/{c}/{d}",
         ));
+        let error = ret.unwrap_err();
         assert_eq!(
-            ret,
-            Err("path parameters are not consumed (c,d) and specified \
-                 parameters do not appear in the path (a,b)"
-                .to_string())
+            error.message(),
+            "path parameters are not consumed (c,d) and \
+             specified parameters do not appear in the path (a,b)"
         );
     }
 
@@ -1255,7 +1436,7 @@ mod test {
         let mut api = ApiDescription::new();
         let error = api.register(test_dup_names_handler).unwrap_err();
         assert_eq!(
-            error,
+            error.message(),
             "the parameter 'thing' is specified for both query and path \
              parameters",
         );
@@ -1265,7 +1446,7 @@ mod test {
     fn test_tags_need_one() {
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
+            policy: EndpointTagPolicy::AtLeastOne,
             ..Default::default()
         });
         let ret = api.register(ApiEndpoint::new(
@@ -1275,14 +1456,15 @@ mod test {
             CONTENT_TYPE_JSON,
             "/{a}/{b}",
         ));
-        assert_eq!(ret, Err("At least one tag is required".to_string()));
+        let error = ret.unwrap_err();
+        assert_eq!(error.message(), "At least one tag is required".to_string());
     }
 
     #[test]
     fn test_tags_too_many() {
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            policy: EndpointTagPolicy::ExactlyOne,
             ..Default::default()
         });
         let ret = api.register(
@@ -1296,15 +1478,15 @@ mod test {
             .tag("howdy")
             .tag("pardner"),
         );
-
-        assert_eq!(ret, Err("Exactly one tag is required".to_string()));
+        let error = ret.unwrap_err();
+        assert_eq!(error.message(), "Exactly one tag is required");
     }
 
     #[test]
     fn test_tags_just_right() {
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::ExactlyOne,
+            policy: EndpointTagPolicy::ExactlyOne,
             ..Default::default()
         });
         let ret = api.register(
@@ -1327,8 +1509,8 @@ mod test {
         // for and aren't duplicated.
         let mut api = ApiDescription::new().tag_config(TagConfig {
             allow_other_tags: true,
-            endpoint_tag_policy: EndpointTagPolicy::AtLeastOne,
-            tag_definitions: vec![
+            policy: EndpointTagPolicy::AtLeastOne,
+            tags: vec![
                 ("a-tag".to_string(), TagDetails::default()),
                 ("b-tag".to_string(), TagDetails::default()),
                 ("c-tag".to_string(), TagDetails::default()),
@@ -1378,5 +1560,20 @@ mod test {
                 .into_iter()
                 .collect::<HashSet<_>>()
         )
+    }
+
+    #[test]
+    fn test_tag_config_deserialize_old() {
+        let config = r#"{
+            "allow_other_tags": true,
+            "endpoint_tag_policy": "AtLeastOne",
+            "tag_definitions": {
+                "a-tag": {},
+                "b-tag": {}
+            }
+        }"#;
+        let config: TagConfig = serde_json::from_str(config).unwrap();
+        assert_eq!(config.policy, EndpointTagPolicy::AtLeastOne);
+        assert_eq!(config.tags.len(), 2);
     }
 }
