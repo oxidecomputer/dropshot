@@ -296,7 +296,7 @@ impl JsonSchema for WebsocketUpgrade {
 mod tests {
     use crate::config::HandlerTaskMode;
     use crate::router::HttpRouter;
-    use crate::server::{DropshotState, ServerConfig};
+    use crate::server::{DropshotState, ServerConfig, Unversioned};
     use crate::{
         ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
         WebsocketUpgrade,
@@ -342,6 +342,7 @@ mod tests {
                 handler_waitgroup_worker: DebugIgnore(
                     WaitGroup::new().worker(),
                 ),
+                version_policy: Arc::new(Unversioned),
             }),
             request: RequestInfo::new(&request, remote_addr),
             path_variables: Default::default(),

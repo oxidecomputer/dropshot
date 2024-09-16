@@ -1001,8 +1001,11 @@ async fn http_request_handle<C: ServerContext>(
             String::from("version is disallowed by policy"),
         ));
     }
-    let lookup_result =
-        server.router.lookup_route(&method, uri.path().into(), &version)?;
+    let lookup_result = server.router.lookup_route(
+        &method,
+        uri.path().into(),
+        Some(&version),
+    )?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),

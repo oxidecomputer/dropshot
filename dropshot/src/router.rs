@@ -401,6 +401,15 @@ impl<Context: ServerContext> HttpRouter<Context> {
         // handlers.insert(version, endpoint);
     }
 
+    #[cfg(test)]
+    pub fn lookup_route_unversioned(
+        &self,
+        method: &Method,
+        path: InputPath<'_>,
+    ) -> Result<RouterLookupResult<Context>, HttpError> {
+        self.lookup_route(method, path, None)
+    }
+
     /// Look up the route handler for an HTTP request having method `method` and
     /// URI path `path`.  A successful lookup produces a `RouterLookupResult`,
     /// which includes both the handler that can process this request and a map
@@ -411,7 +420,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         &self,
         method: &Method,
         path: InputPath<'_>,
-        version: &Version,
+        version: Option<&Version>,
     ) -> Result<RouterLookupResult<Context>, HttpError> {
         let all_segments = input_path_to_segments(&path).map_err(|_| {
             HttpError::for_bad_request(
@@ -490,10 +499,19 @@ impl<Context: ServerContext> HttpRouter<Context> {
         let handlers = node.methods.get(&methodname).ok_or_else(|| {
             HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
         })?;
-        let handler =
-            handlers.iter().find(|e| e.versions.matches(version)).ok_or_else(
-                || HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED),
-            )?;
+        let handler = if let Some(version) = version {
+            handlers.iter().find(|e| e.versions.matches(version))
+        } else {
+            // XXX-dap: if the caller provided `None`, then this is an
+            // unversioned server, and that means there cannot be any endpoints
+            // with versions, which means there can't be more than one handler
+            // here.
+            assert!(handlers.len() <= 1);
+            handlers.iter().next()
+        }
+        .ok_or_else(|| {
+            HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
+        })?;
 
         Ok(RouterLookupResult {
             handler: Arc::clone(&handler.handler),
@@ -992,54 +1010,72 @@ mod test {
         let mut router = HttpRouter::new();
 
         // Check a few initial conditions.
-        let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error =
-            router.lookup_route(&Method::GET, "////".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error =
-            router.lookup_route(&Method::GET, "/foo/bar".into()).unwrap_err();
+        let error = router
+            .lookup_route_unversioned(&Method::GET, "/".into())
+            .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error = router
-            .lookup_route(&Method::GET, "//foo///bar".into())
+            .lookup_route_unversioned(&Method::GET, "////".into())
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error = router
+            .lookup_route_unversioned(&Method::GET, "/foo/bar".into())
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error = router
+            .lookup_route_unversioned(&Method::GET, "//foo///bar".into())
             .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
 
         // Insert a route into the middle of the tree.  This will let us look at
         // parent nodes, sibling nodes, and child nodes.
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/bar"));
-        assert!(router.lookup_route(&Method::GET, "/foo/bar".into()).is_ok());
-        assert!(router.lookup_route(&Method::GET, "/foo/bar/".into()).is_ok());
-        assert!(router.lookup_route(&Method::GET, "//foo/bar".into()).is_ok());
-        assert!(router.lookup_route(&Method::GET, "//foo//bar".into()).is_ok());
         assert!(router
-            .lookup_route(&Method::GET, "//foo//bar//".into())
+            .lookup_route_unversioned(&Method::GET, "/foo/bar".into())
             .is_ok());
         assert!(router
-            .lookup_route(&Method::GET, "///foo///bar///".into())
+            .lookup_route_unversioned(&Method::GET, "/foo/bar/".into())
+            .is_ok());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "//foo/bar".into())
+            .is_ok());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "//foo//bar".into())
+            .is_ok());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "//foo//bar//".into())
+            .is_ok());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "///foo///bar///".into())
             .is_ok());
 
         // TODO-cleanup: consider having a "build" step that constructs a
         // read-only router and does validation like making sure that there's a
         // GET route on all nodes?
-        let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error =
-            router.lookup_route(&Method::GET, "/foo".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
-        let error =
-            router.lookup_route(&Method::GET, "//foo".into()).unwrap_err();
+        let error = router
+            .lookup_route_unversioned(&Method::GET, "/".into())
+            .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error = router
-            .lookup_route(&Method::GET, "/foo/bar/baz".into())
+            .lookup_route_unversioned(&Method::GET, "/foo".into())
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error = router
+            .lookup_route_unversioned(&Method::GET, "//foo".into())
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        let error = router
+            .lookup_route_unversioned(&Method::GET, "/foo/bar/baz".into())
             .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
 
-        let error =
-            router.lookup_route(&Method::PUT, "/foo/bar".into()).unwrap_err();
+        let error = router
+            .lookup_route_unversioned(&Method::PUT, "/foo/bar".into())
+            .unwrap_err();
         assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
-        let error =
-            router.lookup_route(&Method::PUT, "/foo/bar/".into()).unwrap_err();
+        let error = router
+            .lookup_route_unversioned(&Method::PUT, "/foo/bar/".into())
+            .unwrap_err();
         assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
     }
 
@@ -1051,15 +1087,21 @@ mod test {
         // back, even if we use different names that normalize to "/".
         // Before we start, sanity-check that there's nothing at the root
         // already.  Other test cases examine the errors in more detail.
-        assert!(router.lookup_route(&Method::GET, "/".into()).is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "/".into())
+            .is_err());
         router.insert(new_endpoint(new_handler_named("h1"), Method::GET, "/"));
-        let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
+        let result =
+            router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "//".into()).unwrap();
+        let result =
+            router.lookup_route_unversioned(&Method::GET, "//".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "///".into()).unwrap();
+        let result = router
+            .lookup_route_unversioned(&Method::GET, "///".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
 
@@ -1067,49 +1109,73 @@ mod test {
         // we get both this handler and the previous one if we ask for the
         // corresponding method and that we get no handler for a different,
         // third method.
-        assert!(router.lookup_route(&Method::PUT, "/".into()).is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::PUT, "/".into())
+            .is_err());
         router.insert(new_endpoint(new_handler_named("h2"), Method::PUT, "/"));
-        let result = router.lookup_route(&Method::PUT, "/".into()).unwrap();
+        let result =
+            router.lookup_route_unversioned(&Method::PUT, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h2");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
+        let result =
+            router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(router.lookup_route(&Method::DELETE, "/".into()).is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::DELETE, "/".into())
+            .is_err());
         assert!(result.variables.is_empty());
 
         // Now insert a handler one level deeper.  Verify that all the previous
         // handlers behave as we expect, and that we have one handler at the new
         // path, whichever name we use for it.
-        assert!(router.lookup_route(&Method::GET, "/foo".into()).is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "/foo".into())
+            .is_err());
         router.insert(new_endpoint(
             new_handler_named("h3"),
             Method::GET,
             "/foo",
         ));
-        let result = router.lookup_route(&Method::PUT, "/".into()).unwrap();
+        let result =
+            router.lookup_route_unversioned(&Method::PUT, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h2");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/".into()).unwrap();
+        let result =
+            router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/foo".into()).unwrap();
+        let result = router
+            .lookup_route_unversioned(&Method::GET, "/foo".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        let result = router.lookup_route(&Method::GET, "/foo/".into()).unwrap();
+        let result = router
+            .lookup_route_unversioned(&Method::GET, "/foo/".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        let result =
-            router.lookup_route(&Method::GET, "//foo//".into()).unwrap();
+        let result = router
+            .lookup_route_unversioned(&Method::GET, "//foo//".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        let result =
-            router.lookup_route(&Method::GET, "/foo//".into()).unwrap();
+        let result = router
+            .lookup_route_unversioned(&Method::GET, "/foo//".into())
+            .unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.variables.is_empty());
-        assert!(router.lookup_route(&Method::PUT, "/foo".into()).is_err());
-        assert!(router.lookup_route(&Method::PUT, "/foo/".into()).is_err());
-        assert!(router.lookup_route(&Method::PUT, "//foo//".into()).is_err());
-        assert!(router.lookup_route(&Method::PUT, "/foo//".into()).is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::PUT, "/foo".into())
+            .is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::PUT, "/foo/".into())
+            .is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::PUT, "//foo//".into())
+            .is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::PUT, "/foo//".into())
+            .is_err());
     }
 
     #[test]
@@ -1118,7 +1184,7 @@ mod test {
         // change the behavior, intentionally or otherwise.
         let mut router = HttpRouter::new();
         assert!(router
-            .lookup_route(&Method::GET, "/not{a}variable".into())
+            .lookup_route_unversioned(&Method::GET, "/not{a}variable".into())
             .is_err());
         router.insert(new_endpoint(
             new_handler_named("h4"),
@@ -1126,15 +1192,15 @@ mod test {
             "/not{a}variable",
         ));
         let result = router
-            .lookup_route(&Method::GET, "/not{a}variable".into())
+            .lookup_route_unversioned(&Method::GET, "/not{a}variable".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h4");
         assert!(result.variables.is_empty());
         assert!(router
-            .lookup_route(&Method::GET, "/not{b}variable".into())
+            .lookup_route_unversioned(&Method::GET, "/not{b}variable".into())
             .is_err());
         assert!(router
-            .lookup_route(&Method::GET, "/notnotavariable".into())
+            .lookup_route_unversioned(&Method::GET, "/notnotavariable".into())
             .is_err());
     }
 
@@ -1147,12 +1213,14 @@ mod test {
             Method::GET,
             "/projects/{project_id}",
         ));
-        assert!(router.lookup_route(&Method::GET, "/projects".into()).is_err());
         assert!(router
-            .lookup_route(&Method::GET, "/projects/".into())
+            .lookup_route_unversioned(&Method::GET, "/projects".into())
+            .is_err());
+        assert!(router
+            .lookup_route_unversioned(&Method::GET, "/projects/".into())
             .is_err());
         let result = router
-            .lookup_route(&Method::GET, "/projects/p12345".into())
+            .lookup_route_unversioned(&Method::GET, "/projects/p12345".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
@@ -1164,10 +1232,13 @@ mod test {
             VariableValue::String("p12345".to_string())
         );
         assert!(router
-            .lookup_route(&Method::GET, "/projects/p12345/child".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects/p12345/child".into()
+            )
             .is_err());
         let result = router
-            .lookup_route(&Method::GET, "/projects/p12345/".into())
+            .lookup_route_unversioned(&Method::GET, "/projects/p12345/".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
@@ -1175,7 +1246,10 @@ mod test {
             VariableValue::String("p12345".to_string())
         );
         let result = router
-            .lookup_route(&Method::GET, "/projects///p12345//".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects///p12345//".into(),
+            )
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
@@ -1184,7 +1258,10 @@ mod test {
         );
         // Trick question!
         let result = router
-            .lookup_route(&Method::GET, "/projects/{project_id}".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects/{project_id}".into(),
+            )
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
@@ -1204,7 +1281,7 @@ mod test {
              {fwrule_id}/info",
         ));
         let result = router
-            .lookup_route(
+            .lookup_route_unversioned(
                 &Method::GET,
                 "/projects/p1/instances/i2/fwrules/fw3/info".into(),
             )
@@ -1239,16 +1316,28 @@ mod test {
             "/projects/{project_id}/instances",
         ));
         assert!(router
-            .lookup_route(&Method::GET, "/projects/instances".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects/instances".into()
+            )
             .is_err());
         assert!(router
-            .lookup_route(&Method::GET, "/projects//instances".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects//instances".into()
+            )
             .is_err());
         assert!(router
-            .lookup_route(&Method::GET, "/projects///instances".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects///instances".into()
+            )
             .is_err());
         let result = router
-            .lookup_route(&Method::GET, "/projects/foo/instances".into())
+            .lookup_route_unversioned(
+                &Method::GET,
+                "/projects/foo/instances".into(),
+            )
             .unwrap();
         assert_eq!(result.handler.label(), "h7");
     }
@@ -1263,7 +1352,10 @@ mod test {
         ));
 
         let result = router
-            .lookup_route(&Method::OPTIONS, "/console/missiles/launch".into())
+            .lookup_route_unversioned(
+                &Method::OPTIONS,
+                "/console/missiles/launch".into(),
+            )
             .unwrap();
 
         assert_eq!(
@@ -1296,7 +1388,10 @@ mod test {
         ));
 
         let result = router
-            .lookup_route(&Method::OPTIONS, "/console/missiles/launch".into())
+            .lookup_route_unversioned(
+                &Method::OPTIONS,
+                "/console/missiles/launch".into(),
+            )
             .unwrap();
 
         let path =
