@@ -7,6 +7,7 @@ use super::handler::RouteHandler;
 use crate::from_map::MapError;
 use crate::from_map::MapValue;
 use crate::server::ServerContext;
+use crate::server::Version;
 use crate::ApiEndpoint;
 use crate::ApiEndpointBodyContentType;
 use http::Method;
@@ -16,9 +17,9 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-/// `HttpRouter` is a simple data structure for routing incoming HTTP requests to
-/// specific handler functions based on the request method and URI path.  For
-/// examples, see the basic test below.
+/// `HttpRouter` is a simple data structure for routing incoming HTTP requests
+/// to specific handler functions based on the request method, URI path, and
+/// version.  For examples, see the basic test below.
 ///
 /// Routes are registered and looked up according to a path, like `"/foo/bar"`.
 /// Paths are split into segments separated by one or more '/' characters.  When
@@ -56,7 +57,8 @@ use std::sync::Arc;
 /// * A given path cannot use the same variable name twice.  For example, you
 ///   can't register path `"/projects/{id}/instances/{id}"`.
 ///
-/// * A given resource may have at most one handler for a given HTTP method.
+/// * A given resource may have at most one handler for a given HTTP method and
+///   version.
 ///
 /// * The expectation is that during server initialization,
 ///   `HttpRouter::insert()` will be invoked to register a number of route
@@ -81,7 +83,7 @@ pub struct HttpRouter<Context: ServerContext> {
 #[derive(Debug)]
 struct HttpRouterNode<Context: ServerContext> {
     /// Handlers, etc. for each of the HTTP methods defined for this node.
-    methods: BTreeMap<String, ApiEndpoint<Context>>,
+    methods: BTreeMap<String, Vec<ApiEndpoint<Context>>>,
     /// Edges linking to child nodes.
     edges: Option<HttpRouterEdges<Context>>,
 }
@@ -386,15 +388,17 @@ impl<Context: ServerContext> HttpRouter<Context> {
         }
 
         let methodname = method.as_str().to_uppercase();
-        if node.methods.contains_key(&methodname) {
-            panic!(
-                "URI path \"{}\": attempted to create duplicate route for \
-                 method \"{}\"",
-                path, method,
-            );
-        }
+        node.methods.entry(methodname).or_default().push(endpoint);
+        // XXX-dap check if any versions overlap with existing handlers
+        // if handlers.contains_key(&version) {
+        //     panic!(
+        //         "URI path \"{}\": attempted to create duplicate route for \
+        //          method \"{}\" version {:?}",
+        //         path, method, version
+        //     );
+        // }
 
-        node.methods.insert(methodname, endpoint);
+        // handlers.insert(version, endpoint);
     }
 
     /// Look up the route handler for an HTTP request having method `method` and
@@ -407,6 +411,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         &self,
         method: &Method,
         path: InputPath<'_>,
+        version: &Version,
     ) -> Result<RouterLookupResult<Context>, HttpError> {
         let all_segments = input_path_to_segments(&path).map_err(|_| {
             HttpError::for_bad_request(
@@ -471,6 +476,9 @@ impl<Context: ServerContext> HttpRouter<Context> {
 
         // As a somewhat special case, if one requests a node with no handlers
         // at all, report a 404.  We could probably treat this as a 405 as well.
+        // XXX-dap It's a little tricky to get these edge cases right.  We
+        // should report a 405 if there are _any_ method handlers for this
+        // version, but a 404 if there are none.
         if node.methods.is_empty() {
             return Err(HttpError::for_not_found(
                 None,
@@ -479,17 +487,20 @@ impl<Context: ServerContext> HttpRouter<Context> {
         }
 
         let methodname = method.as_str().to_uppercase();
-        node.methods
-            .get(&methodname)
-            .map(|handler| RouterLookupResult {
-                handler: Arc::clone(&handler.handler),
-                operation_id: handler.operation_id.clone(),
-                variables,
-                body_content_type: handler.body_content_type.clone(),
-            })
-            .ok_or_else(|| {
-                HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
-            })
+        let handlers = node.methods.get(&methodname).ok_or_else(|| {
+            HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
+        })?;
+        let handler =
+            handlers.iter().find(|e| e.versions.matches(version)).ok_or_else(
+                || HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED),
+            )?;
+
+        Ok(RouterLookupResult {
+            handler: Arc::clone(&handler.handler),
+            operation_id: handler.operation_id.clone(),
+            variables,
+            body_content_type: handler.body_content_type.clone(),
+        })
     }
 }
 
@@ -511,6 +522,8 @@ fn insert_var(
     varnames.insert(new_varname.clone());
 }
 
+// XXX-dap This now duplicates the first two strings if there are endpoints with
+// multiple different versions.  Are callers okay with that?
 impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
     type Item = (String, String, &'a ApiEndpoint<Context>);
     type IntoIter = HttpRouterIter<'a, Context>;
@@ -538,7 +551,9 @@ type PathIter<'a, Context> =
 impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
     fn new(router: &'a HttpRouter<Context>) -> Self {
         HttpRouterIter {
-            method: Box::new(router.root.methods.iter()),
+            method: Box::new(router.root.methods.iter().flat_map(
+                |(m, handlers)| handlers.iter().map(move |h| (m, h)),
+            )),
             path: vec![(
                 PathSegment::Literal("".to_string()),
                 HttpRouterIter::iter_node(&router.root),
@@ -606,8 +621,8 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
             match self.method.next() {
                 Some((m, ref e)) => break Some((self.path(), m.clone(), e)),
                 None => {
-                    // We've iterated fully through the method in this node so it's
-                    // time to find the next node.
+                    // We've iterated fully through the method in this node so
+                    // it's time to find the next node.
                     match self.path.last_mut() {
                         None => break None,
                         Some((_, ref mut last)) => match last.next() {
@@ -620,7 +635,12 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
                                     path_component,
                                     HttpRouterIter::iter_node(node),
                                 ));
-                                self.method = Box::new(node.methods.iter());
+                                self.method =
+                                    Box::new(node.methods.iter().flat_map(
+                                        |(m, handlers)| {
+                                            handlers.iter().map(move |h| (m, h))
+                                        },
+                                    ))
                             }
                         },
                     }

@@ -615,6 +615,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
     fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
+        // XXX-dap what's with this 3.0.3 literal?!
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
 
@@ -622,6 +623,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let endpoint_tags = (&self.router)
             .into_iter()
             .flat_map(|(_, _, endpoint)| {
+                // XXX-dap filter out the version we care about.
                 endpoint
                     .tags
                     .iter()
@@ -661,6 +663,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
         for (path, method, endpoint) in &self.router {
+            // XXX-dap filter based on version
             if !endpoint.visible {
                 continue;
             }
@@ -1065,6 +1068,18 @@ pub enum ApiVersions {
     From(String),
     FromUntil(String, String),
     Until(String),
+}
+
+impl ApiVersions {
+    pub(crate) fn matches(&self, version: &String) -> bool {
+        match self {
+            ApiVersions::All => true,
+            // XXX-dap
+            ApiVersions::From(_before) => todo!(),
+            ApiVersions::FromUntil(_lower, _upper) => todo!(),
+            ApiVersions::Until(_upper) => todo!(),
+        }
+    }
 }
 
 /// Returns true iff the schema represents the void schema that matches no data.

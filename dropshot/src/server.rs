@@ -76,11 +76,42 @@ pub struct DropshotState<C: ServerContext> {
     /// Worker for the handler_waitgroup associated with this server, allowing
     /// graceful shutdown to wait for all handlers to complete.
     pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
+    pub(crate) version_policy: Arc<dyn VersionPolicy>,
 }
 
 impl<C: ServerContext> DropshotState<C> {
     pub fn using_tls(&self) -> bool {
         self.tls_acceptor.is_some()
+    }
+}
+
+// XXX-dap should be a semer of some kind
+// XXX-dap if we want to make it so that people don't have to deal with versions
+// if they don't care about it, then we probably want a VersionPolicy whose
+// returned default is some sentinel value that matches only ApiVersions::All.
+pub type Version = String;
+
+pub trait VersionPolicy: std::fmt::Debug + Send + Sync {
+    fn version_allowed(&self, version: &Version) -> bool;
+    fn default_version(&self) -> DefaultVersion;
+}
+
+pub enum DefaultVersion {
+    Version(Version),
+    ClientMustSpecify,
+    DontCare,
+}
+
+#[derive(Debug)]
+pub struct Unversioned;
+impl VersionPolicy for Unversioned {
+    fn version_allowed(&self, version: &Version) -> bool {
+        // XXX-dap this shouldn't be callable actually
+        true
+    }
+
+    fn default_version(&self) -> DefaultVersion {
+        DefaultVersion::DontCare
     }
 }
 
@@ -121,7 +152,14 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        Self::new_with_tls(config, api, private, log, None)
+        Self::new_with_tls(
+            config,
+            api,
+            private,
+            log,
+            None,
+            Arc::new(Unversioned),
+        )
     }
 
     pub fn new_with_tls(
@@ -130,6 +168,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
         tls: Option<ConfigTls>,
+        version_policy: Arc<dyn VersionPolicy>,
     ) -> Result<HttpServerStarter<C>, GenericError> {
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
@@ -152,6 +191,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         log,
                         tls,
                         handler_waitgroup.worker(),
+                        version_policy,
                     )?;
                 HttpServerStarter {
                     app_state,
@@ -169,6 +209,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         private,
                         log,
                         handler_waitgroup.worker(),
+                        version_policy,
                     )?;
                 HttpServerStarter {
                     app_state,
@@ -290,6 +331,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         private: C,
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
+        version_policy: Arc<dyn VersionPolicy>,
     ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
@@ -302,6 +344,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             local_addr,
             tls_acceptor: None,
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
+            version_policy,
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
@@ -576,6 +619,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         log: &Logger,
         tls: &ConfigTls,
         handler_waitgroup_worker: waitgroup::Worker,
+        version_policy: Arc<dyn VersionPolicy>,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             rustls::ServerConfig::try_from(tls)?,
@@ -603,6 +647,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             local_addr,
             tls_acceptor: Some(acceptor),
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
+            version_policy,
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
@@ -949,8 +994,15 @@ async fn http_request_handle<C: ServerContext>(
     // TODO-correctness: Do we need to dump the body on errors?
     let method = request.method();
     let uri = request.uri();
+    let version = String::from("dummy"); // XXX-dap
+    if !server.version_policy.version_allowed(&version) {
+        return Err(HttpError::for_not_found(
+            None,
+            String::from("version is disallowed by policy"),
+        ));
+    }
     let lookup_result =
-        server.router.lookup_route(&method, uri.path().into())?;
+        server.router.lookup_route(&method, uri.path().into(), &version)?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),
