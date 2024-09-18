@@ -778,6 +778,7 @@ pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
+pub use api_description::ApiEndpointVersions;
 pub use api_description::EndpointTagPolicy;
 pub use api_description::ExtensionMode;
 pub use api_description::OpenApiDefinition;

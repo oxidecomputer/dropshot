@@ -381,6 +381,7 @@ dependencies = [
  "rustls-pki-types",
  "schemars",
  "scopeguard",
+ "semver",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -415,6 +416,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "schema",
+ "semver",
  "serde",
  "serde_tokenstream",
  "syn 2.0.77",
@@ -1526,6 +1528,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
 
 [[package]]
 name = "serde"

@@ -388,17 +388,21 @@ impl<Context: ServerContext> HttpRouter<Context> {
         }
 
         let methodname = method.as_str().to_uppercase();
-        node.methods.entry(methodname).or_default().push(endpoint);
-        // XXX-dap check if any versions overlap with existing handlers
-        // if handlers.contains_key(&version) {
-        //     panic!(
-        //         "URI path \"{}\": attempted to create duplicate route for \
-        //          method \"{}\" version {:?}",
-        //         path, method, version
-        //     );
-        // }
+        let existing_handlers =
+            node.methods.entry(methodname.clone()).or_default();
 
-        // handlers.insert(version, endpoint);
+        // XXX-dap TODO-coverage
+        for handler in existing_handlers.iter() {
+            if handler.versions.overlaps_with(&endpoint.versions) {
+                panic!(
+                    "URI path \"{}\": attempted to register multiple handlers \
+                     for method \"{} \" with overlapping version ranges",
+                    path, methodname
+                );
+            }
+        }
+
+        existing_handlers.push(endpoint);
     }
 
     #[cfg(test)]
@@ -483,43 +487,53 @@ impl<Context: ServerContext> HttpRouter<Context> {
             _ => {}
         }
 
-        // As a somewhat special case, if one requests a node with no handlers
-        // at all, report a 404.  We could probably treat this as a 405 as well.
-        // XXX-dap It's a little tricky to get these edge cases right.  We
-        // should report a 405 if there are _any_ method handlers for this
-        // version, but a 404 if there are none.
-        if node.methods.is_empty() {
-            return Err(HttpError::for_not_found(
-                None,
-                String::from("route has no handlers"),
-            ));
-        }
-
+        // First, look for a matching implementation.
         let methodname = method.as_str().to_uppercase();
-        let handlers = node.methods.get(&methodname).ok_or_else(|| {
-            HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
-        })?;
-        let handler = if let Some(version) = version {
-            handlers.iter().find(|e| e.versions.matches(version))
-        } else {
-            // XXX-dap: if the caller provided `None`, then this is an
-            // unversioned server, and that means there cannot be any endpoints
-            // with versions, which means there can't be more than one handler
-            // here.
-            assert!(handlers.len() <= 1);
-            handlers.iter().next()
+        if let Some(handler) = find_handler_matching_version(
+            node.methods.get(&methodname).map(|v| v.as_slice()).unwrap_or(&[]),
+            version,
+        ) {
+            return Ok(RouterLookupResult {
+                handler: Arc::clone(&handler.handler),
+                operation_id: handler.operation_id.clone(),
+                variables,
+                body_content_type: handler.body_content_type.clone(),
+            });
         }
-        .ok_or_else(|| {
-            HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
-        })?;
 
-        Ok(RouterLookupResult {
-            handler: Arc::clone(&handler.handler),
-            operation_id: handler.operation_id.clone(),
-            variables,
-            body_content_type: handler.body_content_type.clone(),
-        })
+        // We found no handler matching this path, method name, and version.
+        // We're going to report a 404 ("Not Found") or 405 ("Method Not
+        // Allowed").  It's a 405 if there are any handlers matching this path
+        // and version for a different method.  It's a 404 otherwise.
+        // XXX-dap TODO-coverage
+        if node.methods.values().any(|handlers| {
+            find_handler_matching_version(handlers, version).is_some()
+        }) {
+            Err(HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED))
+        } else {
+            Err(HttpError::for_not_found(
+                None,
+                format!("route has no handlers for version {:?}", version),
+            ))
+        }
     }
+}
+
+/// Given a list of handlers, return the first one matching the given semver
+///
+/// If `version` is `None`, any handler will do.
+// XXX-dap TODO-coverage
+fn find_handler_matching_version<'a, I, C>(
+    handlers: I,
+    version: Option<&Version>,
+) -> Option<&'a ApiEndpoint<C>>
+where
+    I: IntoIterator<Item = &'a ApiEndpoint<C>>,
+    C: ServerContext,
+{
+    handlers
+        .into_iter()
+        .find(|h| matches!(version, Some(v) if h.versions.matches(v)))
 }
 
 /// Insert a variable into the set after checking for duplicates.
@@ -769,7 +783,7 @@ mod test {
     use super::HttpRouter;
     use super::PathSegment;
     use crate::api_description::ApiEndpointBodyContentType;
-    use crate::api_description::ApiVersions;
+    use crate::api_description::ApiEndpointVersions;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
     use crate::ApiEndpoint;
@@ -815,7 +829,7 @@ mod test {
             extension_mode: Default::default(),
             visible: true,
             deprecated: false,
-            versions: ApiVersions::All,
+            versions: ApiEndpointVersions::All,
         }
     }
 

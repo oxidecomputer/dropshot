@@ -83,7 +83,7 @@ impl EndpointMetadata {
             deprecated,
             content_type,
             _dropshot_crate,
-            versions
+            versions,
         } = self;
 
         if kind == MacroKind::Trait && _dropshot_crate.is_some() {
@@ -139,6 +139,9 @@ impl EndpointMetadata {
                 unpublished,
                 deprecated,
                 content_type,
+                versions: versions
+                    .map(|h| h.into_inner())
+                    .unwrap_or(VersionRange::All),
             })
         } else {
             unreachable!("no validation errors, but content_type is None")
@@ -154,6 +157,14 @@ pub(crate) struct ValidatedEndpointMetadata {
     unpublished: bool,
     deprecated: bool,
     content_type: ValidContentType,
+    versions: VersionRange,
+}
+
+fn semver_parts(x: &semver::Version) -> (u64, u64, u64) {
+    // This was validated during validation.
+    assert_eq!(x.pre, semver::Prerelease::EMPTY);
+    assert_eq!(x.build, semver::BuildMetadata::EMPTY);
+    (x.major, x.minor, x.patch)
 }
 
 impl ValidatedEndpointMetadata {
@@ -191,6 +202,36 @@ impl ValidatedEndpointMetadata {
             quote! { .deprecated(true) }
         });
 
+        let versions = match &self.versions {
+            VersionRange::All => quote! { #dropshot::ApiEndpointVersions::All },
+            VersionRange::From(x) => {
+                let (major, minor, patch) = semver_parts(&x);
+                quote! {
+                    #dropshot::ApiEndpointVersions::From(
+                        semver::Version::new(#major, #minor, #patch)
+                    )
+                }
+            }
+            VersionRange::Until(y) => {
+                let (major, minor, patch) = semver_parts(&y);
+                quote! {
+                    #dropshot::ApiEndpointVersions::Until(
+                        semver::Version::new(#major, #minor, #patch)
+                    )
+                }
+            }
+            VersionRange::FromUntil(x, y) => {
+                let (xmajor, xminor, xpatch) = semver_parts(&x);
+                let (ymajor, yminor, ypatch) = semver_parts(&y);
+                quote! {
+                    #dropshot::ApiEndpointVersions::FromUntil(
+                        semver::Version::new(#xmajor, #xminor, #xpatch),
+                        semver::Version::new(#ymajor, #yminor, #ypatch),
+                    )
+                }
+            }
+        };
+
         let fn_call = match kind {
             ApiEndpointKind::Regular(endpoint_fn) => {
                 quote_spanned! {endpoint_fn.span()=>
@@ -200,6 +241,7 @@ impl ValidatedEndpointMetadata {
                         #dropshot::Method::#method_ident,
                         #content_type,
                         #path,
+                        #versions,
                     )
                 }
             }
@@ -219,6 +261,7 @@ impl ValidatedEndpointMetadata {
                         #dropshot::Method::#method_ident,
                         #content_type,
                         #path,
+                        #versions,
                     )
                 }
             }
@@ -237,9 +280,37 @@ impl ValidatedEndpointMetadata {
 
 #[derive(Debug)]
 pub(crate) enum VersionRange {
-    From,
-    Until,
-    FromUntil,
+    All,
+    From(semver::Version),
+    Until(semver::Version),
+    FromUntil(semver::Version, semver::Version),
+}
+
+fn parse_semver(
+    input: syn::parse::ParseStream,
+    v: syn::LitStr,
+) -> syn::Result<semver::Version> {
+    v.value()
+        .parse::<semver::Version>()
+        .map_err(|e| input.error(format!("expected semver: {}", e)))
+        .and_then(|s| {
+            if s.pre == semver::Prerelease::EMPTY {
+                Ok(s)
+            } else {
+                Err(input.error(format!(
+                    "semver pre-release string is not supported here"
+                )))
+            }
+        })
+        .and_then(|s| {
+            if s.build == semver::BuildMetadata::EMPTY {
+                Ok(s)
+            } else {
+                Err(input.error(format!(
+                    "semver build metadata is not supported here"
+                )))
+            }
+        })
 }
 
 impl syn::parse::Parse for VersionRange {
@@ -247,21 +318,24 @@ impl syn::parse::Parse for VersionRange {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Token![..]) {
             let _ = input.parse::<syn::Token![..]>()?;
-            let xxx = input.parse::<syn::LitStr>()?;
-            Ok(VersionRange::Until)
+            let latest = input.parse::<syn::LitStr>()?;
+            let latest_semver = parse_semver(input, latest)?;
+            Ok(VersionRange::Until(latest_semver))
         } else {
-            let xxx = input.parse::<syn::LitStr>()?;
+            let earliest = input.parse::<syn::LitStr>()?;
+            let earliest_semver = parse_semver(input, earliest)?;
             let _ = input.parse::<syn::Token![..]>()?;
             let lookahead = input.lookahead1();
             if lookahead.peek(syn::LitStr) {
-                let yyy = input.parse::<syn::LitStr>()?;
-                Ok(VersionRange::FromUntil)
+                let latest = input.parse::<syn::LitStr>()?;
+                let latest_semver = parse_semver(input, latest)?;
+                Ok(VersionRange::FromUntil(earliest_semver, latest_semver))
             } else {
-                Ok(VersionRange::From)
+                Ok(VersionRange::From(earliest_semver))
             }
         }
     }
- }
+}
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
@@ -310,7 +384,7 @@ impl ChannelMetadata {
             unpublished,
             deprecated,
             _dropshot_crate,
-            versions
+            versions,
         } = self;
 
         if kind == MacroKind::Trait && _dropshot_crate.is_some() {
@@ -346,6 +420,9 @@ impl ChannelMetadata {
                 unpublished,
                 deprecated,
                 content_type: ValidContentType::ApplicationJson,
+                versions: versions
+                    .map(|h| h.into_inner())
+                    .unwrap_or(VersionRange::All),
             };
 
             Some(ValidatedChannelMetadata { inner })

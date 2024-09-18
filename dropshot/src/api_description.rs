@@ -59,7 +59,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub extension_mode: ExtensionMode,
     pub visible: bool,
     pub deprecated: bool,
-    pub versions: ApiVersions,
+    pub versions: ApiEndpointVersions,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -69,6 +69,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         method: Method,
         content_type: &'a str,
         path: &'a str,
+        versions: ApiEndpointVersions,
     ) -> Self
     where
         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
@@ -94,7 +95,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
-            versions: ApiVersions::All,
+            versions,
         }
     }
 
@@ -138,7 +139,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// type parameters.
     ///
     /// ```rust
-    /// use dropshot::{ApiDescription, ApiEndpoint, HttpError, HttpResponseOk, Query, StubContext};
+    /// use dropshot::{ApiDescription, ApiEndpoint, ApiEndpointVersions, HttpError, HttpResponseOk, Query, StubContext};
     /// use schemars::JsonSchema;
     /// use serde::Deserialize;
     ///
@@ -159,6 +160,7 @@ impl<'a> ApiEndpoint<StubContext> {
     ///     http::Method::GET,
     ///     "application/json",
     ///     "/value",
+    ///     ApiEndpointVersions::All,
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
@@ -167,6 +169,7 @@ impl<'a> ApiEndpoint<StubContext> {
         method: Method,
         content_type: &'a str,
         path: &'a str,
+        versions: ApiEndpointVersions,
     ) -> Self
     where
         FuncParams: RequestExtractor + 'static,
@@ -192,7 +195,7 @@ impl<'a> ApiEndpoint<StubContext> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
-            versions: ApiVersions::All,
+            versions,
         }
     }
 }
@@ -354,9 +357,9 @@ impl std::fmt::Debug for ApiSchemaGenerator {
     }
 }
 
-/// An ApiDescription represents the endpoints and handler functions in your API.
-/// Other metadata could also be provided here.  This object can be used to
-/// generate an OpenAPI spec or to run an HTTP server implementing the API.
+/// An ApiDescription represents the endpoints and handler functions in your
+/// API.  Other metadata could also be provided here.  This object can be used
+/// to generate an OpenAPI spec or to run an HTTP server implementing the API.
 pub struct ApiDescription<Context: ServerContext> {
     /// In practice, all the information we need is encoded in the router.
     router: HttpRouter<Context>,
@@ -615,7 +618,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
     fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
-        // XXX-dap what's with this 3.0.3 literal?!
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
 
@@ -1062,22 +1064,92 @@ impl fmt::Display for ApiDescriptionRegisterError {
 
 impl std::error::Error for ApiDescriptionRegisterError {}
 
+/// Describes which versions of the API this endpoint is defined for
 #[derive(Debug)]
-pub enum ApiVersions {
+pub enum ApiEndpointVersions {
+    /// this endpoint covers all versions of the API
     All,
-    From(String),
-    FromUntil(String, String),
-    Until(String),
+    /// this endpoint was introduced in a specific version and is present in all
+    /// subsequent versions
+    From(semver::Version),
+    /// this endpoint was introduced in a specific version and removed in a
+    /// subsequent version
+    FromUntil(semver::Version, semver::Version),
+    /// this endpoint was present in all versions up to (and including) this
+    /// specific version
+    Until(semver::Version),
 }
 
-impl ApiVersions {
-    pub(crate) fn matches(&self, version: &String) -> bool {
+impl ApiEndpointVersions {
+    // XXX-dap TODO-coverage
+    pub(crate) fn matches(&self, version: &semver::Version) -> bool {
         match self {
-            ApiVersions::All => true,
-            // XXX-dap
-            ApiVersions::From(_before) => todo!(),
-            ApiVersions::FromUntil(_lower, _upper) => todo!(),
-            ApiVersions::Until(_upper) => todo!(),
+            ApiEndpointVersions::All => true,
+            ApiEndpointVersions::From(earliest) => version >= earliest,
+            ApiEndpointVersions::FromUntil(earliest, latest) => {
+                version >= earliest && version <= latest
+            }
+            ApiEndpointVersions::Until(latest) => version <= latest,
+        }
+    }
+
+    // XXX-dap TODO-coverage
+    pub(crate) fn overlaps_with(&self, other: &ApiEndpointVersions) -> bool {
+        // XXX-dap TODO-cleanup there are better ways to write this
+        // You'd think there would be better ways to do this.  You might think:
+        //
+        // - `semver` has a `VersionReq`, which represents a range similar to
+        //   our variants.  It does not have a way to programmatically construct
+        //   it and it does not support an "intersection" operator.
+        // - These are basically Rust ranges, right?  Yes, but Rust also doesn't
+        //   have a range "intersection" operator.
+        match (self, other) {
+            // easy degenerate cases
+            (ApiEndpointVersions::All, _) => true,
+            (_, ApiEndpointVersions::All) => true,
+            (ApiEndpointVersions::From(_), ApiEndpointVersions::From(_)) => {
+                true
+            }
+            (ApiEndpointVersions::Until(_), ApiEndpointVersions::Until(_)) => {
+                true
+            }
+
+            // more complicated cases
+            (
+                ApiEndpointVersions::From(earliest),
+                ApiEndpointVersions::Until(latest),
+            ) => latest >= earliest,
+            (
+                ApiEndpointVersions::Until(latest),
+                ApiEndpointVersions::From(earliest),
+            ) => latest >= earliest,
+
+            (
+                ApiEndpointVersions::From(earliest),
+                ApiEndpointVersions::FromUntil(_, latest),
+            ) => earliest <= latest,
+            (
+                ApiEndpointVersions::FromUntil(_, latest),
+                ApiEndpointVersions::From(earliest),
+            ) => earliest <= latest,
+
+            (
+                ApiEndpointVersions::Until(latest),
+                ApiEndpointVersions::FromUntil(earliest, _),
+            ) => earliest <= latest,
+            (
+                ApiEndpointVersions::FromUntil(earliest, _),
+                ApiEndpointVersions::Until(latest),
+            ) => earliest <= latest,
+
+            (
+                ApiEndpointVersions::FromUntil(earliest1, latest1),
+                ApiEndpointVersions::FromUntil(earliest2, latest2),
+            ) => {
+                // XXX-dap double-check
+                (earliest1 <= earliest2 && earliest2 <= latest1)
+                    || (earliest2 <= earliest1 && earliest1 <= latest2)
+            }
         }
     }
 }
@@ -1353,7 +1425,8 @@ mod test {
     use std::collections::HashSet;
     use std::str::from_utf8;
 
-    use crate as dropshot; // for "endpoint" macro
+    use crate as dropshot;
+    use crate::api_description::ApiEndpointVersions; // for "endpoint" macro
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1378,6 +1451,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(
@@ -1395,6 +1469,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/{a}/{aa}/{b}/{bb}",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(error.message(), "path parameters are not consumed (aa,bb)");
@@ -1409,6 +1484,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/{c}/{d}",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(
@@ -1481,6 +1557,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/{a}/{b}",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(error.message(), "At least one tag is required".to_string());
@@ -1500,6 +1577,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("howdy")
             .tag("pardner"),
@@ -1522,6 +1600,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("a-tag"),
         );
@@ -1551,6 +1630,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/xx/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("a-tag")
             .tag("z-tag"),
@@ -1563,6 +1643,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/yy/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("b-tag")
             .tag("y-tag"),

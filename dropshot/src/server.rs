@@ -85,11 +85,10 @@ impl<C: ServerContext> DropshotState<C> {
     }
 }
 
-// XXX-dap should be a semer of some kind
 // XXX-dap if we want to make it so that people don't have to deal with versions
 // if they don't care about it, then we probably want a VersionPolicy whose
 // returned default is some sentinel value that matches only ApiVersions::All.
-pub type Version = String;
+pub type Version = semver::Version;
 
 pub trait VersionPolicy: std::fmt::Debug + Send + Sync {
     fn version_allowed(&self, version: &Version) -> bool;
@@ -994,7 +993,7 @@ async fn http_request_handle<C: ServerContext>(
     // TODO-correctness: Do we need to dump the body on errors?
     let method = request.method();
     let uri = request.uri();
-    let version = String::from("dummy"); // XXX-dap
+    let version = semver::Version::new(1, 2, 3); // XXX-dap
     if !server.version_policy.version_allowed(&version) {
         return Err(HttpError::for_not_found(
             None,
