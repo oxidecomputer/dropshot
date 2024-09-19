@@ -394,11 +394,20 @@ impl<Context: ServerContext> HttpRouter<Context> {
         // XXX-dap TODO-coverage
         for handler in existing_handlers.iter() {
             if handler.versions.overlaps_with(&endpoint.versions) {
-                panic!(
-                    "URI path \"{}\": attempted to register multiple handlers \
-                     for method \"{} \" with overlapping version ranges",
-                    path, methodname
-                );
+                if handler.versions == endpoint.versions {
+                    panic!(
+                        "URI path \"{}\": attempted to create duplicate route \
+                        for method \"{}\"",
+                        path, methodname
+                    );
+                } else {
+                    panic!(
+                        "URI path \"{}\": attempted to register multiple \
+                        handlers for method \"{} \" with overlapping version \
+                        ranges",
+                        path, methodname
+                    );
+                }
             }
         }
 

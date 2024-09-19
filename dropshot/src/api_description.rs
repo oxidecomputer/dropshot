@@ -1067,7 +1067,7 @@ impl fmt::Display for ApiDescriptionRegisterError {
 impl std::error::Error for ApiDescriptionRegisterError {}
 
 /// Describes which versions of the API this endpoint is defined for
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ApiEndpointVersions {
     /// this endpoint covers all versions of the API
     All,
