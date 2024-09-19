@@ -104,7 +104,7 @@ pub enum DefaultVersion {
 #[derive(Debug)]
 pub struct Unversioned;
 impl VersionPolicy for Unversioned {
-    fn version_allowed(&self, version: &Version) -> bool {
+    fn version_allowed(&self, _version: &Version) -> bool {
         // XXX-dap this shouldn't be callable actually
         true
     }
