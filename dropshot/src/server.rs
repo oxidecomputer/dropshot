@@ -85,9 +85,6 @@ impl<C: ServerContext> DropshotState<C> {
     }
 }
 
-// XXX-dap if we want to make it so that people don't have to deal with versions
-// if they don't care about it, then we probably want a VersionPolicy whose
-// returned default is some sentinel value that matches only ApiVersions::All.
 pub type Version = semver::Version;
 
 #[derive(Debug)]
