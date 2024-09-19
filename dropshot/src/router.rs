@@ -523,6 +523,13 @@ impl<Context: ServerContext> HttpRouter<Context> {
             ))
         }
     }
+
+    pub fn endpoints<'a>(
+        &'a self,
+        version: Option<&'a Version>,
+    ) -> HttpRouterIter<'a, Context> {
+        HttpRouterIter::new(self, version)
+    }
 }
 
 /// Given a list of handlers, return the first one matching the given semver
@@ -537,10 +544,7 @@ where
     I: IntoIterator<Item = &'a ApiEndpoint<C>>,
     C: ServerContext,
 {
-    handlers.into_iter().find(|h| match version {
-        None => true,
-        Some(v) => h.versions.matches(v),
-    })
+    handlers.into_iter().find(|h| h.versions.matches(version))
 }
 
 /// Insert a variable into the set after checking for duplicates.
@@ -561,16 +565,6 @@ fn insert_var(
     varnames.insert(new_varname.clone());
 }
 
-// XXX-dap This now duplicates the first two strings if there are endpoints with
-// multiple different versions.  Are callers okay with that?
-impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
-    type Item = (String, String, &'a ApiEndpoint<Context>);
-    type IntoIter = HttpRouterIter<'a, Context>;
-    fn into_iter(self) -> Self::IntoIter {
-        HttpRouterIter::new(self)
-    }
-}
-
 /// Route Interator implementation. We perform a preorder, depth first traversal
 /// of the tree starting from the root node. For each node, we enumerate the
 /// methods and then descend into its children (or single child in the case of
@@ -583,20 +577,42 @@ pub struct HttpRouterIter<'a, Context: ServerContext> {
     method:
         Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint<Context>)> + 'a>,
     path: Vec<(PathSegment, Box<PathIter<'a, Context>>)>,
+    version: Option<&'a Version>,
 }
 type PathIter<'a, Context> =
     dyn Iterator<Item = (PathSegment, &'a Box<HttpRouterNode<Context>>)> + 'a;
 
+fn iter_handlers_from_node<'a, 'b, 'c, C: ServerContext>(
+    node: &'a HttpRouterNode<C>,
+    version: Option<&'b Version>,
+) -> Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint<C>)> + 'c>
+where
+    'a: 'c,
+    'b: 'c,
+{
+    Box::new(node.methods.iter().flat_map(move |(m, handlers)| {
+        handlers.iter().filter_map(move |h| {
+            if h.versions.matches(version.clone()) {
+                Some((m, h))
+            } else {
+                None
+            }
+        })
+    }))
+}
+
 impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
-    fn new(router: &'a HttpRouter<Context>) -> Self {
+    fn new(
+        router: &'a HttpRouter<Context>,
+        version: Option<&'a Version>,
+    ) -> Self {
         HttpRouterIter {
-            method: Box::new(router.root.methods.iter().flat_map(
-                |(m, handlers)| handlers.iter().map(move |h| (m, h)),
-            )),
+            method: iter_handlers_from_node(&router.root, version.clone()),
             path: vec![(
                 PathSegment::Literal("".to_string()),
                 HttpRouterIter::iter_node(&router.root),
             )],
+            version,
         }
     }
 
@@ -674,12 +690,10 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
                                     path_component,
                                     HttpRouterIter::iter_node(node),
                                 ));
-                                self.method =
-                                    Box::new(node.methods.iter().flat_map(
-                                        |(m, handlers)| {
-                                            handlers.iter().map(move |h| (m, h))
-                                        },
-                                    ))
+                                self.method = iter_handlers_from_node(
+                                    &node,
+                                    self.version.clone(),
+                                );
                             }
                         },
                     }
@@ -1426,7 +1440,7 @@ mod test {
     #[test]
     fn test_iter_null() {
         let router = HttpRouter::<()>::new();
-        let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
+        let ret: Vec<_> = router.endpoints(None).map(|x| (x.0, x.1)).collect();
         assert_eq!(ret, vec![]);
     }
 
@@ -1443,7 +1457,7 @@ mod test {
             Method::GET,
             "/projects/{project_id}/instances",
         ));
-        let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
+        let ret: Vec<_> = router.endpoints(None).map(|x| (x.0, x.1)).collect();
         assert_eq!(
             ret,
             vec![
@@ -1469,7 +1483,7 @@ mod test {
             Method::POST,
             "/",
         ));
-        let ret: Vec<_> = router.into_iter().map(|x| (x.0, x.1)).collect();
+        let ret: Vec<_> = router.endpoints(None).map(|x| (x.0, x.1)).collect();
         assert_eq!(
             ret,
             vec![

@@ -598,34 +598,37 @@ impl<Context: ServerContext> ApiDescription<Context> {
     /// [`OpenApiDefinition`] which can be used to specify the contents of the
     /// definition and select an output format.
     ///
-    /// The arguments to this function will be used for the mandatory `title` and
-    /// `version` properties that the `Info` object in an OpenAPI definition must
-    /// contain.
-    pub fn openapi<S1, S2>(
+    /// The arguments to this function will be used for the mandatory `title`
+    /// and `version` properties that the `Info` object in an OpenAPI definition
+    /// must contain.
+    pub fn openapi<S>(
         &self,
-        title: S1,
-        version: S2,
+        title: S,
+        version: semver::Version,
     ) -> OpenApiDefinition<Context>
     where
-        S1: AsRef<str>,
-        S2: AsRef<str>,
+        S: AsRef<str>,
     {
-        OpenApiDefinition::new(self, title.as_ref(), version.as_ref())
+        OpenApiDefinition::new(self, title.as_ref(), version)
     }
 
     /// Internal routine for constructing the OpenAPI definition describing this
     /// API in its JSON form.
-    fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
+    fn gen_openapi(
+        &self,
+        info: openapiv3::Info,
+        version: &semver::Version,
+    ) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
 
         // Gather up the ad hoc tags from endpoints
-        let endpoint_tags = (&self.router)
-            .into_iter()
+        let endpoint_tags = self
+            .router
+            .endpoints(Some(version))
             .flat_map(|(_, _, endpoint)| {
-                // XXX-dap filter out the version we care about.
                 endpoint
                     .tags
                     .iter()
@@ -664,8 +667,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let mut definitions =
             indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
-        for (path, method, endpoint) in &self.router {
-            // XXX-dap filter based on version
+        for (path, method, endpoint) in self.router.endpoints(Some(version)) {
             if !endpoint.visible {
                 continue;
             }
@@ -1082,7 +1084,12 @@ pub enum ApiEndpointVersions {
 
 impl ApiEndpointVersions {
     // XXX-dap TODO-coverage
-    pub(crate) fn matches(&self, version: &semver::Version) -> bool {
+    pub(crate) fn matches(&self, version: Option<&semver::Version>) -> bool {
+        let Some(version) = version else {
+            // If there's no version constraint at all, then all versions match.
+            return true;
+        };
+
         match self {
             ApiEndpointVersions::All => true,
             ApiEndpointVersions::From(earliest) => version >= earliest,
@@ -1218,27 +1225,28 @@ fn is_empty(schema: &schemars::schema::Schema) -> bool {
 pub struct OpenApiDefinition<'a, Context: ServerContext> {
     api: &'a ApiDescription<Context>,
     info: openapiv3::Info,
+    version: semver::Version,
 }
 
 impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     fn new(
         api: &'a ApiDescription<Context>,
         title: &str,
-        version: &str,
+        version: semver::Version,
     ) -> OpenApiDefinition<'a, Context> {
         let info = openapiv3::Info {
             title: title.to_string(),
             version: version.to_string(),
             ..Default::default()
         };
-        OpenApiDefinition { api, info }
+        OpenApiDefinition { api, info, version }
     }
 
     /// Provide a short description of the API.  CommonMark syntax may be
     /// used for rich text representation.
     ///
-    /// This routine will set the `description` field of the `Info` object in the
-    /// OpenAPI definition.
+    /// This routine will set the `description` field of the `Info` object in
+    /// the OpenAPI definition.
     pub fn description<S: AsRef<str>>(&mut self, description: S) -> &mut Self {
         self.info.description = Some(description.as_ref().to_string());
         self
@@ -1325,7 +1333,9 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
 
     /// Build a JSON object containing the OpenAPI definition for this API.
     pub fn json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(&self.api.gen_openapi(self.info.clone()))
+        serde_json::to_value(
+            &self.api.gen_openapi(self.info.clone(), &self.version),
+        )
     }
 
     /// Build a JSON object containing the OpenAPI definition for this API and
@@ -1336,7 +1346,7 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     ) -> serde_json::Result<()> {
         serde_json::to_writer_pretty(
             &mut *out,
-            &self.api.gen_openapi(self.info.clone()),
+            &self.api.gen_openapi(self.info.clone(), &self.version),
         )?;
         writeln!(out).map_err(serde_json::Error::custom)?;
         Ok(())
@@ -1651,7 +1661,7 @@ mod test {
         .unwrap();
 
         let mut out = Vec::new();
-        api.openapi("", "").write(&mut out).unwrap();
+        api.openapi("", semver::Version::new(1, 0, 0)).write(&mut out).unwrap();
         let out = from_utf8(&out).unwrap();
         let spec = serde_json::from_str::<OpenAPI>(out).unwrap();
 

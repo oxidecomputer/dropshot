@@ -255,10 +255,12 @@ impl<C: ServerContext> HttpServerStarter<C> {
             }
         };
 
-        for (path, method, _) in &starter.app_state.router {
+        for (path, method, endpoint) in starter.app_state.router.endpoints(None)
+        {
             debug!(starter.app_state.log, "registered endpoint";
                 "method" => &method,
-                "path" => &path
+                "path" => &path,
+                "versions" => ?endpoint.versions,
             );
         }
 
