@@ -14,7 +14,6 @@ use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
-use dropshot::Unversioned;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -92,7 +91,6 @@ async fn main() -> Result<(), String> {
         api_context,
         &log,
         config_tls,
-        std::sync::Arc::new(Unversioned),
     )
     .map_err(|error| format!("failed to create server: {}", error))?
     .start();

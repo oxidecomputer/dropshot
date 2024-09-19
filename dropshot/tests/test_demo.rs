@@ -1060,9 +1060,6 @@ type RequestCtx = RequestContext<usize>;
 #[endpoint {
     method = GET,
     path = "/testing/demo1",
-    // versions = "1.2.3"..,
-    // versions = .."1.2.5",
-    versions = "1.2.3".."1.2.5",
 }]
 async fn demo_handler_args_1(
     _rqctx: RequestCtx,

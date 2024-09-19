@@ -5,14 +5,13 @@
 use dropshot::test_util::read_config;
 use dropshot::{
     ConfigDropshot, ConfigTls, HandlerTaskMode, HttpError, HttpResponseOk,
-    RequestContext, Unversioned,
+    RequestContext,
 };
 use dropshot::{HttpServer, HttpServerStarter};
 use slog::o;
 use slog::Logger;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
 
@@ -96,7 +95,6 @@ fn make_server<T: Send + Sync + 'static>(
         context,
         log,
         tls,
-        Arc::new(Unversioned),
     )
     .unwrap()
 }

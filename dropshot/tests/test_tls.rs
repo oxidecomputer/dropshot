@@ -5,7 +5,7 @@
 
 use dropshot::{
     ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk,
-    HttpServerStarter, Unversioned,
+    HttpServerStarter,
 };
 use slog::{o, Logger};
 use std::convert::TryFrom;
@@ -126,7 +126,6 @@ fn make_server(
         0,
         log,
         config_tls,
-        Arc::new(Unversioned),
     )
     .unwrap()
 }
@@ -436,16 +435,10 @@ async fn test_server_is_https() {
     });
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
-    let server = HttpServerStarter::new_with_tls(
-        &config,
-        api,
-        0,
-        &log,
-        config_tls,
-        Arc::new(Unversioned),
-    )
-    .unwrap()
-    .start();
+    let server =
+        HttpServerStarter::new_with_tls(&config, api, 0, &log, config_tls)
+            .unwrap()
+            .start();
     let port = server.local_addr().port();
 
     let https_client = make_https_client(make_pki_verifier(&certs));

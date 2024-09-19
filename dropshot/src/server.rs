@@ -76,7 +76,7 @@ pub struct DropshotState<C: ServerContext> {
     /// Worker for the handler_waitgroup associated with this server, allowing
     /// graceful shutdown to wait for all handlers to complete.
     pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
-    pub(crate) version_policy: Arc<dyn VersionPolicy>,
+    pub(crate) version_policy: VersionPolicy,
 }
 
 impl<C: ServerContext> DropshotState<C> {
@@ -90,28 +90,54 @@ impl<C: ServerContext> DropshotState<C> {
 // returned default is some sentinel value that matches only ApiVersions::All.
 pub type Version = semver::Version;
 
-pub trait VersionPolicy: std::fmt::Debug + Send + Sync {
-    fn version_allowed(&self, version: &Version) -> bool;
-    fn default_version(&self) -> DefaultVersion;
-}
-
-pub enum DefaultVersion {
-    Version(Version),
-    ClientMustSpecify,
-    DontCare,
-}
-
 #[derive(Debug)]
-pub struct Unversioned;
-impl VersionPolicy for Unversioned {
-    fn version_allowed(&self, _version: &Version) -> bool {
-        // XXX-dap this shouldn't be callable actually
-        true
-    }
+pub enum VersionPolicy {
+    Unversioned,
+    Dynamic(Box<dyn DynamicVersionPolicy>),
+}
 
-    fn default_version(&self) -> DefaultVersion {
-        DefaultVersion::DontCare
+impl VersionPolicy {
+    fn request_version(
+        &self,
+        request: &Request<Body>,
+        request_log: &Logger,
+    ) -> Result<Option<Version>, HttpError> {
+        match self {
+            VersionPolicy::Unversioned => Ok(None),
+            VersionPolicy::Dynamic(vers_impl) => {
+                // XXX-dap We should validate that if the server is Unversioned,
+                // then the router has no version-restricted APIs.
+                let result =
+                    vers_impl.request_extract_version(request, request_log);
+
+                match &result {
+                    Ok(version) => {
+                        debug!(request_log, "determined request API version";
+                            "version" => %version,
+                        );
+                    }
+                    Err(error) => {
+                        error!(
+                            request_log,
+                            "failed to determine request API version";
+                            // XXX-dap use inline error chain
+                            "error" => %error
+                        );
+                    }
+                }
+
+                result.map(Some)
+            }
+        }
     }
+}
+
+pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
+    fn request_extract_version(
+        &self,
+        request: &Request<Body>,
+        log: &Logger,
+    ) -> Result<Version, HttpError>;
 }
 
 /// Stores static configuration associated with the server
@@ -151,14 +177,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        Self::new_with_tls(
-            config,
-            api,
-            private,
-            log,
-            None,
-            Arc::new(Unversioned),
-        )
+        Self::new_with_tls(config, api, private, log, None)
     }
 
     pub fn new_with_tls(
@@ -167,7 +186,24 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
         tls: Option<ConfigTls>,
-        version_policy: Arc<dyn VersionPolicy>,
+    ) -> Result<HttpServerStarter<C>, GenericError> {
+        Self::new_with_versioning(
+            config,
+            api,
+            private,
+            log,
+            tls,
+            VersionPolicy::Unversioned,
+        )
+    }
+
+    pub fn new_with_versioning(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+        tls: Option<ConfigTls>,
+        version_policy: VersionPolicy,
     ) -> Result<HttpServerStarter<C>, GenericError> {
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
@@ -330,7 +366,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         private: C,
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
-        version_policy: Arc<dyn VersionPolicy>,
+        version_policy: VersionPolicy,
     ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
@@ -618,7 +654,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         log: &Logger,
         tls: &ConfigTls,
         handler_waitgroup_worker: waitgroup::Worker,
-        version_policy: Arc<dyn VersionPolicy>,
+        version_policy: VersionPolicy,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             rustls::ServerConfig::try_from(tls)?,
@@ -993,17 +1029,12 @@ async fn http_request_handle<C: ServerContext>(
     // TODO-correctness: Do we need to dump the body on errors?
     let method = request.method();
     let uri = request.uri();
-    let version = semver::Version::new(1, 2, 3); // XXX-dap
-    if !server.version_policy.version_allowed(&version) {
-        return Err(HttpError::for_not_found(
-            None,
-            String::from("version is disallowed by policy"),
-        ));
-    }
+    let found_version =
+        server.version_policy.request_version(&request, &request_log)?;
     let lookup_result = server.router.lookup_route(
         &method,
         uri.path().into(),
-        Some(&version),
+        found_version.as_ref(),
     )?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
