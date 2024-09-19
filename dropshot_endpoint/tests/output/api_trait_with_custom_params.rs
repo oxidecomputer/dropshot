@@ -96,6 +96,7 @@ pub mod my_support_module {
                 topspin::Method::GET,
                 "application/json",
                 "/xyz",
+                topspin::ApiEndpointVersions::All,
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
                 dropshot_errors.push(error);
@@ -105,7 +106,13 @@ pub mod my_support_module {
             let endpoint_handler_ws = topspin::ApiEndpoint::new_for_types::<
                 (topspin::WebsocketUpgrade,),
                 topspin::WebsocketEndpointResult,
-            >("handler_ws".to_string(), topspin::Method::GET, "application/json", "/ws");
+            >(
+                "handler_ws".to_string(),
+                topspin::Method::GET,
+                "application/json",
+                "/ws",
+                topspin::ApiEndpointVersions::All,
+            );
             if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
                 dropshot_errors.push(error);
             }
@@ -202,6 +209,7 @@ pub mod my_support_module {
                 topspin::Method::GET,
                 "application/json",
                 "/xyz",
+                topspin::ApiEndpointVersions::All,
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
                 dropshot_errors.push(error);
@@ -225,6 +233,7 @@ pub mod my_support_module {
                     topspin::Method::GET,
                     "application/json",
                     "/ws",
+                    topspin::ApiEndpointVersions::All,
                 );
                 if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
                     dropshot_errors.push(error);

@@ -70,6 +70,7 @@ for topspin::ApiEndpoint<
             topspin::Method::GET,
             "application/json",
             "/my/ws/channel",
+            topspin::ApiEndpointVersions::All,
         )
     }
 }

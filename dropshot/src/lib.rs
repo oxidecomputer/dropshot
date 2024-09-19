@@ -502,7 +502,8 @@
 //! # // defining fn main puts the doctest in a module context
 //! # fn main() {
 //! let description = project_api_mod::stub_api_description().unwrap();
-//! let mut openapi = description.openapi("Project Server", "1.0.0");
+//! let mut openapi = description
+//!     .openapi("Project Server", semver::Version::new(1, 0, 0));
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! # }
 //! ```
