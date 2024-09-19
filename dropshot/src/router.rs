@@ -513,7 +513,13 @@ impl<Context: ServerContext> HttpRouter<Context> {
         } else {
             Err(HttpError::for_not_found(
                 None,
-                format!("route has no handlers for version {:?}", version),
+                format!(
+                    "route has no handlers for version {}",
+                    match version {
+                        Some(v) => v.to_string(),
+                        None => String::from("<none>"),
+                    }
+                ),
             ))
         }
     }
@@ -531,9 +537,10 @@ where
     I: IntoIterator<Item = &'a ApiEndpoint<C>>,
     C: ServerContext,
 {
-    handlers
-        .into_iter()
-        .find(|h| matches!(version, Some(v) if h.versions.matches(v)))
+    handlers.into_iter().find(|h| match version {
+        None => true,
+        Some(v) => h.versions.matches(v),
+    })
 }
 
 /// Insert a variable into the set after checking for duplicates.
