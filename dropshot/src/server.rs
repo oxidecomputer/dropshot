@@ -119,8 +119,7 @@ impl VersionPolicy {
                         error!(
                             request_log,
                             "failed to determine request API version";
-                            // XXX-dap use inline error chain
-                            "error" => %error
+                            "error" => ?error,
                         );
                     }
                 }
