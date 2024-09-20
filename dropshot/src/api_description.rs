@@ -1067,6 +1067,9 @@ impl fmt::Display for ApiDescriptionRegisterError {
 impl std::error::Error for ApiDescriptionRegisterError {}
 
 /// Describes which versions of the API this endpoint is defined for
+// XXX-dap use explicit constructors so that we can validate the FromUntil
+// bounds are in order so that we don't get non-sensical answers if they're
+// misordered.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ApiEndpointVersions {
     /// this endpoint covers all versions of the API
@@ -1083,7 +1086,6 @@ pub enum ApiEndpointVersions {
 }
 
 impl ApiEndpointVersions {
-    // XXX-dap TODO-coverage
     pub(crate) fn matches(&self, version: Option<&semver::Version>) -> bool {
         let Some(version) = version else {
             // If there's no version constraint at all, then all versions match.
@@ -1434,8 +1436,9 @@ mod test {
     use std::collections::HashSet;
     use std::str::from_utf8;
 
-    use crate as dropshot;
-    use crate::api_description::ApiEndpointVersions; // for "endpoint" macro
+    use crate as dropshot; // for "endpoint" macro
+    use crate::api_description::ApiEndpointVersions;
+    use semver::Version;
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1660,7 +1663,7 @@ mod test {
         .unwrap();
 
         let mut out = Vec::new();
-        api.openapi("", semver::Version::new(1, 0, 0)).write(&mut out).unwrap();
+        api.openapi("", Version::new(1, 0, 0)).write(&mut out).unwrap();
         let out = from_utf8(&out).unwrap();
         let spec = serde_json::from_str::<OpenAPI>(out).unwrap();
 
@@ -1691,5 +1694,86 @@ mod test {
         let config: TagConfig = serde_json::from_str(config).unwrap();
         assert_eq!(config.policy, EndpointTagPolicy::AtLeastOne);
         assert_eq!(config.tags.len(), 2);
+    }
+
+    #[test]
+    fn test_endpoint_versions_matches() {
+        let v_all = ApiEndpointVersions::All;
+        let v_from = ApiEndpointVersions::From(Version::new(1, 2, 3));
+        let v_until = ApiEndpointVersions::Until(Version::new(4, 5, 6));
+        let v_fromuntil = ApiEndpointVersions::FromUntil(
+            Version::new(1, 2, 3),
+            Version::new(4, 5, 6),
+        );
+        struct TestCase<'a> {
+            versions: &'a ApiEndpointVersions,
+            check: Option<Version>,
+            expected: bool,
+        }
+        impl<'a> TestCase<'a> {
+            fn new(
+                versions: &'a ApiEndpointVersions,
+                check: Version,
+                expected: bool,
+            ) -> TestCase<'a> {
+                TestCase { versions, check: Some(check), expected }
+            }
+
+            fn new_empty(versions: &'a ApiEndpointVersions) -> TestCase<'a> {
+                // Every type of ApiEndpointVersions ought to match when
+                // provided no version constraint.
+                TestCase { versions, check: None, expected: true }
+            }
+        }
+
+        let mut nerrors = 0;
+        for test_case in &[
+            TestCase::new_empty(&v_all),
+            TestCase::new_empty(&v_from),
+            TestCase::new_empty(&v_until),
+            TestCase::new_empty(&v_fromuntil),
+            TestCase::new(&v_all, Version::new(0, 0, 0), true),
+            TestCase::new(&v_all, Version::new(1, 0, 0), true),
+            TestCase::new(&v_all, Version::new(1, 2, 3), true),
+            TestCase::new(&v_from, Version::new(0, 0, 0), false),
+            TestCase::new(&v_from, Version::new(1, 2, 2), false),
+            TestCase::new(&v_from, Version::new(1, 2, 3), true),
+            TestCase::new(&v_from, Version::new(1, 2, 4), true),
+            TestCase::new(&v_from, Version::new(5, 0, 0), true),
+            TestCase::new(&v_until, Version::new(0, 0, 0), true),
+            TestCase::new(&v_until, Version::new(4, 5, 5), true),
+            TestCase::new(&v_until, Version::new(4, 5, 6), true),
+            TestCase::new(&v_until, Version::new(4, 5, 7), false),
+            TestCase::new(&v_until, Version::new(37, 0, 0), false),
+            TestCase::new(&v_fromuntil, Version::new(0, 0, 0), false),
+            TestCase::new(&v_fromuntil, Version::new(1, 2, 2), false),
+            TestCase::new(&v_fromuntil, Version::new(1, 2, 3), true),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 5), true),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 6), true),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 7), false),
+            TestCase::new(&v_fromuntil, Version::new(12, 0, 0), false),
+        ] {
+            print!(
+                "test case: {:?} matches {}: expected {}, got ",
+                test_case.versions,
+                match &test_case.check {
+                    Some(x) => format!("Some({x})"),
+                    None => String::from("None"),
+                },
+                test_case.expected
+            );
+
+            let result = test_case.versions.matches(test_case.check.as_ref());
+            if result != test_case.expected {
+                println!("{} (FAIL)", result);
+                nerrors += 1;
+            } else {
+                println!("{} (PASS)", result);
+            }
+        }
+
+        if nerrors > 0 {
+            panic!("test cases failed: {}", nerrors);
+        }
     }
 }
