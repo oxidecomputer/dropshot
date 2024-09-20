@@ -1067,9 +1067,6 @@ impl fmt::Display for ApiDescriptionRegisterError {
 impl std::error::Error for ApiDescriptionRegisterError {}
 
 /// Describes which versions of the API this endpoint is defined for
-// XXX-dap use explicit constructors so that we can validate the FromUntil
-// bounds are in order so that we don't get non-sensical answers if they're
-// misordered.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ApiEndpointVersions {
     /// this endpoint covers all versions of the API
@@ -1753,6 +1750,19 @@ mod test {
     }
 
     #[test]
+    fn test_endpoint_versions_range() {
+        let error = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 2),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "versions in a from-until version range must be provided in order"
+        );
+    }
+
+    #[test]
     fn test_endpoint_versions_matches() {
         let v_all = ApiEndpointVersions::all();
         let v_from = ApiEndpointVersions::from(Version::new(1, 2, 3));
@@ -1762,6 +1772,12 @@ mod test {
             Version::new(4, 5, 6),
         )
         .unwrap();
+        let v_oneversion = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 3),
+        )
+        .unwrap();
+
         struct TestCase<'a> {
             versions: &'a ApiEndpointVersions,
             check: Option<Version>,
@@ -1789,6 +1805,7 @@ mod test {
             TestCase::new_empty(&v_from),
             TestCase::new_empty(&v_until),
             TestCase::new_empty(&v_fromuntil),
+            TestCase::new_empty(&v_oneversion),
             TestCase::new(&v_all, Version::new(0, 0, 0), true),
             TestCase::new(&v_all, Version::new(1, 0, 0), true),
             TestCase::new(&v_all, Version::new(1, 2, 3), true),
@@ -1809,6 +1826,9 @@ mod test {
             TestCase::new(&v_fromuntil, Version::new(4, 5, 6), true),
             TestCase::new(&v_fromuntil, Version::new(4, 5, 7), false),
             TestCase::new(&v_fromuntil, Version::new(12, 0, 0), false),
+            TestCase::new(&v_oneversion, Version::new(1, 2, 2), false),
+            TestCase::new(&v_oneversion, Version::new(1, 2, 3), true),
+            TestCase::new(&v_oneversion, Version::new(1, 2, 4), false),
         ] {
             print!(
                 "test case: {:?} matches {}: expected {}, got ",
