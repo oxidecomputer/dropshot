@@ -4,6 +4,7 @@
 use super::error::HttpError;
 use super::handler::RouteHandler;
 
+use crate::api_description::ApiEndpointVersions;
 use crate::from_map::MapError;
 use crate::from_map::MapValue;
 use crate::server::ServerContext;
@@ -68,6 +69,9 @@ use std::sync::Arc;
 pub struct HttpRouter<Context: ServerContext> {
     /// root of the trie
     root: Box<HttpRouterNode<Context>>,
+    /// indicates whether this router contains any endpoints that are
+    /// constrained by version
+    has_versioned_routes: bool,
 }
 
 /// Each node in the tree represents a group of HTTP resources having the same
@@ -226,7 +230,10 @@ impl<Context: ServerContext> HttpRouterNode<Context> {
 impl<Context: ServerContext> HttpRouter<Context> {
     /// Returns a new `HttpRouter` with no routes configured.
     pub fn new() -> Self {
-        HttpRouter { root: Box::new(HttpRouterNode::new()) }
+        HttpRouter {
+            root: Box::new(HttpRouterNode::new()),
+            has_versioned_routes: false,
+        }
     }
 
     /// Configure a route for HTTP requests based on the HTTP `method` and
@@ -411,7 +418,17 @@ impl<Context: ServerContext> HttpRouter<Context> {
             }
         }
 
+        if endpoint.versions != ApiEndpointVersions::All {
+            self.has_versioned_routes = true;
+        }
+
         existing_handlers.push(endpoint);
+    }
+
+    /// Returns whether this router contains any routes that are constrained by
+    /// version
+    pub fn has_versioned_routes(&self) -> bool {
+        self.has_versioned_routes
     }
 
     #[cfg(test)]

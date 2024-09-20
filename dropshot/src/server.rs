@@ -51,6 +51,10 @@ use slog::Logger;
 // TODO Replace this with something else?
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Debug, thiserror::Error)]
+#[error("unversioned servers cannot have endpoints with specific versions")]
+pub struct UnversionedServerHasVersionedRoutes {}
+
 /// Endpoint-accessible context associated with a server.
 ///
 /// Automatically implemented for all Send + Sync types.
@@ -102,8 +106,6 @@ impl VersionPolicy {
         match self {
             VersionPolicy::Unversioned => Ok(None),
             VersionPolicy::Dynamic(vers_impl) => {
-                // XXX-dap We should validate that if the server is Unversioned,
-                // then the router has no version-restricted APIs.
                 let result =
                     vers_impl.request_extract_version(request, request_log);
 
@@ -366,14 +368,21 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
         version_policy: VersionPolicy,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
+    ) -> Result<InnerHttpServerStarterNewReturn<C>, GenericError> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
+
+        let router = api.into_router();
+        if let VersionPolicy::Unversioned = version_policy {
+            if router.has_versioned_routes() {
+                return Err(Box::new(UnversionedServerHasVersionedRoutes {}));
+            }
+        }
 
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
             tls_acceptor: None,
@@ -673,10 +682,17 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         let https_acceptor =
             HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
 
+        let router = api.into_router();
+        if let VersionPolicy::Unversioned = version_policy {
+            if router.has_versioned_routes() {
+                return Err(Box::new(UnversionedServerHasVersionedRoutes {}));
+            }
+        }
+
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: logger,
             local_addr,
             tls_acceptor: Some(acceptor),

@@ -94,10 +94,7 @@ where
     v_str.parse::<T>().map_err(|e| {
         HttpError::for_bad_request(
             None,
-            format!(
-                "bad value for header {:?}: {}: {}",
-                header_name, e, v_str
-            ),
+            format!("bad value for header {:?}: {}: {}", header_name, e, v_str),
         )
     })
 }
