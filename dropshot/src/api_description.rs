@@ -1079,13 +1079,50 @@ pub enum ApiEndpointVersions {
     From(semver::Version),
     /// this endpoint was introduced in a specific version and removed in a
     /// subsequent version
-    FromUntil(semver::Version, semver::Version),
+    // We use an extra level of indirection to enforce that the versions here
+    // are provided in order.
+    FromUntil(OrderedVersionPair),
     /// this endpoint was present in all versions up to (and including) this
     /// specific version
     Until(semver::Version),
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct OrderedVersionPair {
+    earliest: semver::Version,
+    latest: semver::Version,
+}
+
 impl ApiEndpointVersions {
+    pub fn all() -> ApiEndpointVersions {
+        ApiEndpointVersions::All
+    }
+
+    pub fn from(v: semver::Version) -> ApiEndpointVersions {
+        ApiEndpointVersions::From(v)
+    }
+
+    pub fn until(v: semver::Version) -> ApiEndpointVersions {
+        ApiEndpointVersions::Until(v)
+    }
+
+    pub fn from_until(
+        earliest: semver::Version,
+        latest: semver::Version,
+    ) -> Result<ApiEndpointVersions, &'static str> {
+        if latest < earliest {
+            return Err(
+                "versions in a from-until version range must be provided \
+                 in order",
+            );
+        }
+
+        Ok(ApiEndpointVersions::FromUntil(OrderedVersionPair {
+            earliest,
+            latest,
+        }))
+    }
+
     pub(crate) fn matches(&self, version: Option<&semver::Version>) -> bool {
         let Some(version) = version else {
             // If there's no version constraint at all, then all versions match.
@@ -1095,9 +1132,10 @@ impl ApiEndpointVersions {
         match self {
             ApiEndpointVersions::All => true,
             ApiEndpointVersions::From(earliest) => version >= earliest,
-            ApiEndpointVersions::FromUntil(earliest, latest) => {
-                version >= earliest && version <= latest
-            }
+            ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                earliest,
+                latest,
+            }) => version >= earliest && version <= latest,
             ApiEndpointVersions::Until(latest) => version <= latest,
         }
     }
@@ -1135,25 +1173,43 @@ impl ApiEndpointVersions {
 
             (
                 ApiEndpointVersions::From(earliest),
-                ApiEndpointVersions::FromUntil(_, latest),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: _,
+                    latest,
+                }),
             ) => earliest <= latest,
             (
-                ApiEndpointVersions::FromUntil(_, latest),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: _,
+                    latest,
+                }),
                 ApiEndpointVersions::From(earliest),
             ) => earliest <= latest,
 
             (
                 ApiEndpointVersions::Until(latest),
-                ApiEndpointVersions::FromUntil(earliest, _),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest,
+                    latest: _,
+                }),
             ) => earliest <= latest,
             (
-                ApiEndpointVersions::FromUntil(earliest, _),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest,
+                    latest: _,
+                }),
                 ApiEndpointVersions::Until(latest),
             ) => earliest <= latest,
 
             (
-                ApiEndpointVersions::FromUntil(earliest1, latest1),
-                ApiEndpointVersions::FromUntil(earliest2, latest2),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: earliest1,
+                    latest: latest1,
+                }),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: earliest2,
+                    latest: latest2,
+                }),
             ) => {
                 (earliest1 <= earliest2 && earliest2 <= latest1)
                     || (earliest2 <= earliest1 && earliest1 <= latest2)
@@ -1698,13 +1754,14 @@ mod test {
 
     #[test]
     fn test_endpoint_versions_matches() {
-        let v_all = ApiEndpointVersions::All;
-        let v_from = ApiEndpointVersions::From(Version::new(1, 2, 3));
-        let v_until = ApiEndpointVersions::Until(Version::new(4, 5, 6));
-        let v_fromuntil = ApiEndpointVersions::FromUntil(
+        let v_all = ApiEndpointVersions::all();
+        let v_from = ApiEndpointVersions::from(Version::new(1, 2, 3));
+        let v_until = ApiEndpointVersions::until(Version::new(4, 5, 6));
+        let v_fromuntil = ApiEndpointVersions::from_until(
             Version::new(1, 2, 3),
             Version::new(4, 5, 6),
-        );
+        )
+        .unwrap();
         struct TestCase<'a> {
             versions: &'a ApiEndpointVersions,
             check: Option<Version>,

@@ -224,10 +224,10 @@ impl ValidatedEndpointMetadata {
                 let (xmajor, xminor, xpatch) = semver_parts(&x);
                 let (ymajor, yminor, ypatch) = semver_parts(&y);
                 quote! {
-                    #dropshot::ApiEndpointVersions::FromUntil(
+                    #dropshot::ApiEndpointVersions::from_until(
                         semver::Version::new(#xmajor, #xminor, #xpatch),
                         semver::Version::new(#ymajor, #yminor, #ypatch),
-                    )
+                    ).unwrap()
                 }
             }
         };
@@ -329,6 +329,12 @@ impl syn::parse::Parse for VersionRange {
             if lookahead.peek(syn::LitStr) {
                 let latest = input.parse::<syn::LitStr>()?;
                 let latest_semver = parse_semver(input, latest)?;
+                if latest_semver < earliest_semver {
+                    return Err(input.error(format!(
+                        "semver range (from ... until ...) has the \
+                         endpoints out of order"
+                    )));
+                }
                 Ok(VersionRange::FromUntil(earliest_semver, latest_semver))
             } else {
                 Ok(VersionRange::From(earliest_semver))
