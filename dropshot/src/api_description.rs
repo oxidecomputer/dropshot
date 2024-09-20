@@ -1102,12 +1102,12 @@ impl ApiEndpointVersions {
 
     // XXX-dap TODO-coverage
     pub(crate) fn overlaps_with(&self, other: &ApiEndpointVersions) -> bool {
-        // XXX-dap TODO-cleanup there are better ways to write this
-        // You'd think there would be better ways to do this.  You might think:
+        // There must be better ways to do this.  You might think:
         //
         // - `semver` has a `VersionReq`, which represents a range similar to
-        //   our variants.  It does not have a way to programmatically construct
-        //   it and it does not support an "intersection" operator.
+        //   our variants.  But it does not have a way to programmatically
+        //   construct it and it does not support an "intersection" operator.
+        //
         // - These are basically Rust ranges, right?  Yes, but Rust also doesn't
         //   have a range "intersection" operator.
         match (self, other) {
@@ -1153,7 +1153,6 @@ impl ApiEndpointVersions {
                 ApiEndpointVersions::FromUntil(earliest1, latest1),
                 ApiEndpointVersions::FromUntil(earliest2, latest2),
             ) => {
-                // XXX-dap double-check
                 (earliest1 <= earliest2 && earliest2 <= latest1)
                     || (earliest2 <= earliest1 && earliest1 <= latest2)
             }
