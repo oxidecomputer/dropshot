@@ -1120,6 +1120,15 @@ impl ApiEndpointVersions {
         }))
     }
 
+    /// Returns whether the given `version` matches this endpoint version
+    ///
+    /// Recall that `ApiEndpointVersions` essentially defines a _range_ of
+    /// API versions that an API endpoint will appear in.  This returns true if
+    /// `version` is contained in that range.  This is used to determine if an
+    /// endpoint satisfies the requirements for an incoming request.
+    ///
+    /// If `version` is `None`, that means that the request doesn't care what
+    /// version it's getting.  `matches()` always returns true in that case.
     pub(crate) fn matches(&self, version: Option<&semver::Version>) -> bool {
         let Some(version) = version else {
             // If there's no version constraint at all, then all versions match.
@@ -1137,7 +1146,10 @@ impl ApiEndpointVersions {
         }
     }
 
-    // XXX-dap TODO-coverage
+    /// Returns whether one version range overlaps with another
+    ///
+    /// This is used to disallow registering multiple API endpoints where, if
+    /// given a particular version, it would be ambiguous which endpoint to use.
     pub(crate) fn overlaps_with(&self, other: &ApiEndpointVersions) -> bool {
         // There must be better ways to do this.  You might think:
         //
@@ -1846,6 +1858,175 @@ mod test {
                 nerrors += 1;
             } else {
                 println!("{} (PASS)", result);
+            }
+        }
+
+        if nerrors > 0 {
+            panic!("test cases failed: {}", nerrors);
+        }
+    }
+
+    #[test]
+    fn test_endpoint_versions_overlaps() {
+        let v_all = ApiEndpointVersions::all();
+        let v_from = ApiEndpointVersions::from(Version::new(1, 2, 3));
+        let v_until = ApiEndpointVersions::until(Version::new(4, 5, 6));
+        let v_fromuntil = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(4, 5, 6),
+        )
+        .unwrap();
+        let v_oneversion = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 3),
+        )
+        .unwrap();
+
+        struct TestCase<'a> {
+            v1: &'a ApiEndpointVersions,
+            v2: &'a ApiEndpointVersions,
+            expected: bool,
+        }
+
+        impl<'a> TestCase<'a> {
+            fn new(
+                v1: &'a ApiEndpointVersions,
+                v2: &'a ApiEndpointVersions,
+                expected: bool,
+            ) -> TestCase<'a> {
+                TestCase { v1, v2, expected }
+            }
+        }
+
+        let mut nerrors = 0;
+        for test_case in &[
+            // All of our canned intervals overlap with themselves.
+            TestCase::new(&v_all, &v_all, true),
+            TestCase::new(&v_from, &v_from, true),
+            TestCase::new(&v_until, &v_until, true),
+            TestCase::new(&v_fromuntil, &v_fromuntil, true),
+            TestCase::new(&v_oneversion, &v_oneversion, true),
+            //
+            // "all" test cases.
+            //
+            // "all" overlaps with all of our other canned intervals.
+            TestCase::new(&v_all, &v_from, true),
+            TestCase::new(&v_all, &v_until, true),
+            TestCase::new(&v_all, &v_fromuntil, true),
+            TestCase::new(&v_all, &v_oneversion, true),
+            //
+            // "from" test cases.
+            //
+            // "from" + "from" always overlap
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::from(Version::new(0, 1, 2)),
+                true,
+            ),
+            // "from" + "until": overlap is exactly one point
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::until(Version::new(1, 2, 3)),
+                true,
+            ),
+            // "from" + "until": no overlap
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::until(Version::new(1, 2, 2)),
+                false,
+            ),
+            // "from" from "from-until": overlap
+            TestCase::new(&v_from, &v_fromuntil, true),
+            // "from" + "from-until": no overlap
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::from_until(
+                    Version::new(1, 2, 0),
+                    Version::new(1, 2, 2),
+                )
+                .unwrap(),
+                false,
+            ),
+            //
+            // "until" test cases
+            //
+            // "until" + "until" always overlap.
+            TestCase::new(
+                &v_until,
+                &ApiEndpointVersions::until(Version::new(2, 0, 0)),
+                true,
+            ),
+            // "until" plus "from-until": overlap
+            TestCase::new(&v_until, &v_fromuntil, true),
+            // "until" plus "from-until": no overlap
+            TestCase::new(
+                &v_until,
+                &ApiEndpointVersions::from_until(
+                    Version::new(5, 0, 0),
+                    Version::new(6, 0, 0),
+                )
+                .unwrap(),
+                false,
+            ),
+            //
+            // "from-until" test cases
+            //
+            // We've tested everything except two "from-until" ranges.
+            // first: no overlap
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(1, 2, 2),
+                )
+                .unwrap(),
+                false,
+            ),
+            // overlap at one endpoint
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(1, 2, 3),
+                )
+                .unwrap(),
+                true,
+            ),
+            // overlap in the middle somewhere
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(2, 0, 0),
+                )
+                .unwrap(),
+                true,
+            ),
+            // one contained entirely inside the other
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(12, 0, 0),
+                )
+                .unwrap(),
+                true,
+            ),
+        ] {
+            print!(
+                "test case: {:?} overlaps {:?}: expected {}, got ",
+                test_case.v1, test_case.v2, test_case.expected
+            );
+
+            // Make sure to test both directions.  The result should be the
+            // same.
+            let result1 = test_case.v1.overlaps_with(&test_case.v2);
+            let result2 = test_case.v2.overlaps_with(&test_case.v1);
+            if result1 != test_case.expected || result2 != test_case.expected {
+                println!("{} {} (FAIL)", result1, result2);
+                nerrors += 1;
+            } else {
+                println!("{} (PASS)", result1);
             }
         }
 
