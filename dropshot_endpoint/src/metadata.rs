@@ -319,9 +319,13 @@ impl syn::parse::Parse for VersionRange {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Token![..]) {
             let _ = input.parse::<syn::Token![..]>()?;
-            let latest = input.parse::<syn::LitStr>()?;
-            let latest_semver = parse_semver(&latest)?;
-            Ok(VersionRange::Until(latest_semver))
+            if input.is_empty() {
+                Ok(VersionRange::All)
+            } else {
+                let latest = input.parse::<syn::LitStr>()?;
+                let latest_semver = parse_semver(&latest)?;
+                Ok(VersionRange::Until(latest_semver))
+            }
         } else {
             let earliest = input.parse::<syn::LitStr>()?;
             let earliest_semver = parse_semver(&earliest)?;

@@ -803,6 +803,102 @@ mod tests {
     }
 
     #[test]
+    fn test_endpoint_with_versions_all() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = ..
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_all.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
+    fn test_endpoint_with_versions_from() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = "1.2.3"..
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
+    fn test_endpoint_with_versions_until() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = .."1.2.3"
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_until.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
+    fn test_endpoint_with_versions_from_until() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = "1.2.3".."4.5.6",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from_until.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
     fn test_endpoint_invalid_item() {
         let (_, errors) = do_endpoint(
             quote! {
