@@ -15,6 +15,13 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/1115[#1115] Dropshot now supports hosting multiple versions of an API at a single server and routing to the correct version based on the incoming request.  See documentation for details.  If you don't care about this, you can mostly ignore it, but see "Breaking Changes" below.
+
+=== Breaking Changes
+
+* Dropshot now expects that APIs use https://semver.org/[Semver] values for their version string.  Concretely, this only means that the `version` argument to `ApiDescription::openapi` (which generates an OpenAPI document) must be a `semver::Version`.  Previously, it was `AsRef<str>`.
+* If you're invoking `ApiEndpoint::new` directly or constructing one as a literal (both of which are uncommon), you must provide a new `ApiEndpointVersions` value describing which versions this endpoint implements.  You can use `ApiEndpointVersions::All` if you don't care about versioning.
+
 == 0.11.0 (released 2024-08-21)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...v0.11.0[Full list of commits]
