@@ -1,14 +1,7 @@
 const _: fn() = || {
     struct NeedRequestContext(
-        <RequestContext<()> as topspin::RequestContextArgument>::Context,
+        <RequestContext<()> as dropshot::RequestContextArgument>::Context,
     );
-};
-const _: fn() = || {
-    fn need_shared_extractor<T>()
-    where
-        T: ?Sized + topspin::SharedExtractor,
-    {}
-    need_shared_extractor::<Query<Q>>();
 };
 const _: fn() = || {
     trait TypeEq {
@@ -19,7 +12,7 @@ const _: fn() = || {
     }
     fn validate_websocket_connection_type<T>()
     where
-        T: ?Sized + TypeEq<This = topspin::WebsocketConnection>,
+        T: ?Sized + TypeEq<This = dropshot::WebsocketConnection>,
     {}
     validate_websocket_connection_type::<WebsocketConnection>();
 };
@@ -30,15 +23,14 @@ struct my_channel {}
 ///API Endpoint: my_channel
 const my_channel: my_channel = my_channel {};
 impl From<my_channel>
-for topspin::ApiEndpoint<
-    <RequestContext<()> as topspin::RequestContextArgument>::Context,
+for dropshot::ApiEndpoint<
+    <RequestContext<()> as dropshot::RequestContextArgument>::Context,
 > {
     fn from(_: my_channel) -> Self {
         #[allow(clippy::unused_async)]
         async fn my_channel(
-            rqctx: RequestContext<()>,
-            query: Query<Q>,
-            conn: WebsocketConnection,
+            _rqctx: RequestContext<()>,
+            _conn: WebsocketConnection,
         ) -> WebsocketChannelResult {
             Ok(())
         }
@@ -46,31 +38,27 @@ for topspin::ApiEndpoint<
             fn future_endpoint_must_be_send<T: ::std::marker::Send>(_t: T) {}
             fn check_future_bounds(
                 arg0: RequestContext<()>,
-                arg1: Query<Q>,
                 __dropshot_websocket: WebsocketConnection,
             ) {
-                future_endpoint_must_be_send(
-                    my_channel(arg0, arg1, __dropshot_websocket),
-                );
+                future_endpoint_must_be_send(my_channel(arg0, __dropshot_websocket));
             }
         };
         async fn my_channel_adapter(
             arg0: RequestContext<()>,
-            arg1: Query<Q>,
-            __dropshot_websocket: topspin::WebsocketUpgrade,
-        ) -> topspin::WebsocketEndpointResult {
+            __dropshot_websocket: dropshot::WebsocketUpgrade,
+        ) -> dropshot::WebsocketEndpointResult {
             __dropshot_websocket
                 .handle(move |__dropshot_websocket: WebsocketConnection| async move {
-                    my_channel(arg0, arg1, __dropshot_websocket).await
+                    my_channel(arg0, __dropshot_websocket).await
                 })
         }
-        topspin::ApiEndpoint::new(
+        dropshot::ApiEndpoint::new(
             "my_channel".to_string(),
             my_channel_adapter,
-            topspin::Method::GET,
+            dropshot::Method::GET,
             "application/json",
             "/my/ws/channel",
-            topspin::ApiEndpointVersions::All,
+            dropshot::ApiEndpointVersions::Until(semver::Version::new(1u64, 2u64, 3u64)),
         )
     }
 }

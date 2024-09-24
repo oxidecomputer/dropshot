@@ -79,6 +79,7 @@ for topspin::ApiEndpoint<
             topspin::Method::GET,
             "application/json",
             "/a/b/c",
+            topspin::ApiEndpointVersions::All,
         )
     }
 }

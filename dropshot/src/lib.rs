@@ -502,7 +502,8 @@
 //! # // defining fn main puts the doctest in a module context
 //! # fn main() {
 //! let description = project_api_mod::stub_api_description().unwrap();
-//! let mut openapi = description.openapi("Project Server", "1.0.0");
+//! let mut openapi = description
+//!     .openapi("Project Server", semver::Version::new(1, 0, 0));
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! # }
 //! ```
@@ -778,6 +779,7 @@ pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
+pub use api_description::ApiEndpointVersions;
 pub use api_description::EndpointTagPolicy;
 pub use api_description::ExtensionMode;
 pub use api_description::OpenApiDefinition;
@@ -834,8 +836,10 @@ pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
+pub use server::DynamicVersionPolicy;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
+pub use server::VersionPolicy;
 pub use server::{HttpServer, HttpServerStarter};
 pub use websocket::WebsocketChannelResult;
 pub use websocket::WebsocketConnection;

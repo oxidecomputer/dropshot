@@ -51,6 +51,10 @@ use slog::Logger;
 // TODO Replace this with something else?
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Debug, thiserror::Error)]
+#[error("unversioned servers cannot have endpoints with specific versions")]
+pub struct UnversionedServerHasVersionedRoutes {}
+
 /// Endpoint-accessible context associated with a server.
 ///
 /// Automatically implemented for all Send + Sync types.
@@ -76,12 +80,62 @@ pub struct DropshotState<C: ServerContext> {
     /// Worker for the handler_waitgroup associated with this server, allowing
     /// graceful shutdown to wait for all handlers to complete.
     pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
+    pub(crate) version_policy: VersionPolicy,
 }
 
 impl<C: ServerContext> DropshotState<C> {
     pub fn using_tls(&self) -> bool {
         self.tls_acceptor.is_some()
     }
+}
+
+pub type Version = semver::Version;
+
+#[derive(Debug)]
+pub enum VersionPolicy {
+    Unversioned,
+    Dynamic(Box<dyn DynamicVersionPolicy>),
+}
+
+impl VersionPolicy {
+    fn request_version(
+        &self,
+        request: &Request<Body>,
+        request_log: &Logger,
+    ) -> Result<Option<Version>, HttpError> {
+        match self {
+            VersionPolicy::Unversioned => Ok(None),
+            VersionPolicy::Dynamic(vers_impl) => {
+                let result =
+                    vers_impl.request_extract_version(request, request_log);
+
+                match &result {
+                    Ok(version) => {
+                        debug!(request_log, "determined request API version";
+                            "version" => %version,
+                        );
+                    }
+                    Err(error) => {
+                        error!(
+                            request_log,
+                            "failed to determine request API version";
+                            "error" => ?error,
+                        );
+                    }
+                }
+
+                result.map(Some)
+            }
+        }
+    }
+}
+
+pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
+    fn request_extract_version(
+        &self,
+        request: &Request<Body>,
+        log: &Logger,
+    ) -> Result<Version, HttpError>;
 }
 
 /// Stores static configuration associated with the server
@@ -131,6 +185,24 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
         tls: Option<ConfigTls>,
     ) -> Result<HttpServerStarter<C>, GenericError> {
+        Self::new_with_versioning(
+            config,
+            api,
+            private,
+            log,
+            tls,
+            VersionPolicy::Unversioned,
+        )
+    }
+
+    pub fn new_with_versioning(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+        tls: Option<ConfigTls>,
+        version_policy: VersionPolicy,
+    ) -> Result<HttpServerStarter<C>, GenericError> {
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
@@ -152,6 +224,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         log,
                         tls,
                         handler_waitgroup.worker(),
+                        version_policy,
                     )?;
                 HttpServerStarter {
                     app_state,
@@ -169,6 +242,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                         private,
                         log,
                         handler_waitgroup.worker(),
+                        version_policy,
                     )?;
                 HttpServerStarter {
                     app_state,
@@ -179,10 +253,12 @@ impl<C: ServerContext> HttpServerStarter<C> {
             }
         };
 
-        for (path, method, _) in &starter.app_state.router {
+        for (path, method, endpoint) in starter.app_state.router.endpoints(None)
+        {
             debug!(starter.app_state.log, "registered endpoint";
                 "method" => &method,
-                "path" => &path
+                "path" => &path,
+                "versions" => ?endpoint.versions,
             );
         }
 
@@ -290,18 +366,27 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         private: C,
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
+        version_policy: VersionPolicy,
+    ) -> Result<InnerHttpServerStarterNewReturn<C>, GenericError> {
         let incoming = AddrIncoming::bind(&config.bind_address)?;
         let local_addr = incoming.local_addr();
+
+        let router = api.into_router();
+        if let VersionPolicy::Unversioned = version_policy {
+            if router.has_versioned_routes() {
+                return Err(Box::new(UnversionedServerHasVersionedRoutes {}));
+            }
+        }
 
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
             tls_acceptor: None,
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
+            version_policy,
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
@@ -576,6 +661,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         log: &Logger,
         tls: &ConfigTls,
         handler_waitgroup_worker: waitgroup::Worker,
+        version_policy: VersionPolicy,
     ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             rustls::ServerConfig::try_from(tls)?,
@@ -595,14 +681,22 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         let https_acceptor =
             HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
 
+        let router = api.into_router();
+        if let VersionPolicy::Unversioned = version_policy {
+            if router.has_versioned_routes() {
+                return Err(Box::new(UnversionedServerHasVersionedRoutes {}));
+            }
+        }
+
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: logger,
             local_addr,
             tls_acceptor: Some(acceptor),
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
+            version_policy,
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
@@ -949,8 +1043,13 @@ async fn http_request_handle<C: ServerContext>(
     // TODO-correctness: Do we need to dump the body on errors?
     let method = request.method();
     let uri = request.uri();
-    let lookup_result =
-        server.router.lookup_route(&method, uri.path().into())?;
+    let found_version =
+        server.version_policy.request_version(&request, &request_log)?;
+    let lookup_result = server.router.lookup_route(
+        &method,
+        uri.path().into(),
+        found_version.as_ref(),
+    )?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),

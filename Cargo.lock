@@ -381,6 +381,7 @@ dependencies = [
  "rustls-pki-types",
  "schemars",
  "scopeguard",
+ "semver",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -394,6 +395,7 @@ dependencies = [
  "slog-term",
  "subprocess",
  "tempfile",
+ "thiserror",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
@@ -415,6 +417,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "schema",
+ "semver",
  "serde",
  "serde_tokenstream",
  "syn 2.0.77",
@@ -1528,6 +1531,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61697e0a1c7e512e84a621326239844a24d8207b4669b41bc18b32ea5cbf988b"
+
+[[package]]
 name = "serde"
 version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1827,18 +1836,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.56"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54378c645627613241d077a3a79db965db602882668f9136ac42af9ecb730ad"
+checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.56"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa0faa943b50f3db30a20aa7e265dbc66076993efed8463e8de414e5d06d3471"
+checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
 dependencies = [
  "proc-macro2",
  "quote",
