@@ -298,7 +298,9 @@ fn parse_semver(v: &syn::LitStr) -> syn::Result<semver::Version> {
             } else {
                 Err(syn::Error::new_spanned(
                     v,
-                    format!("semver pre-release string is not supported here"),
+                    String::from(
+                        "semver pre-release string is not supported here",
+                    ),
                 ))
             }
         })
@@ -308,7 +310,7 @@ fn parse_semver(v: &syn::LitStr) -> syn::Result<semver::Version> {
             } else {
                 Err(syn::Error::new_spanned(
                     v,
-                    format!("semver build metadata is not supported here"),
+                    String::from("semver build metadata is not supported here"),
                 ))
             }
         })
@@ -343,9 +345,9 @@ impl syn::parse::Parse for VersionRange {
                     .collect();
                     return Err(syn::Error::new_spanned(
                         span,
-                        format!(
+                        String::from(
                             "semver range (from ... until ...) has the \
-                             endpoints out of order"
+                             endpoints out of order",
                         ),
                     ));
                 }

@@ -615,7 +615,7 @@ where
 {
     Box::new(node.methods.iter().flat_map(move |(m, handlers)| {
         handlers.iter().filter_map(move |h| {
-            if h.versions.matches(version.clone()) {
+            if h.versions.matches(version) {
                 Some((m, h))
             } else {
                 None
@@ -630,7 +630,7 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
         version: Option<&'a Version>,
     ) -> Self {
         HttpRouterIter {
-            method: iter_handlers_from_node(&router.root, version.clone()),
+            method: iter_handlers_from_node(&router.root, version),
             path: vec![(
                 PathSegment::Literal("".to_string()),
                 HttpRouterIter::iter_node(&router.root),
@@ -715,7 +715,7 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
                                 ));
                                 self.method = iter_handlers_from_node(
                                     &node,
-                                    self.version.clone(),
+                                    self.version,
                                 );
                             }
                         },
