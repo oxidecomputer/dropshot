@@ -72,7 +72,9 @@ mod my_trait_mod {
                 dropshot::Method::GET,
                 "application/json",
                 "/xyz",
-                dropshot::ApiEndpointVersions::All,
+                dropshot::ApiEndpointVersions::From(
+                    semver::Version::new(1u64, 2u64, 3u64),
+                ),
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
                 dropshot_errors.push(error);
@@ -161,7 +163,9 @@ mod my_trait_mod {
                 dropshot::Method::GET,
                 "application/json",
                 "/xyz",
-                dropshot::ApiEndpointVersions::All,
+                dropshot::ApiEndpointVersions::From(
+                    semver::Version::new(1u64, 2u64, 3u64),
+                ),
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
                 dropshot_errors.push(error);
