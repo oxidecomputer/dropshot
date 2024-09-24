@@ -958,15 +958,14 @@ mod tests {
             },
         );
         assert!(!errors.is_empty());
-        // XXX-dap
-        // assert_eq!(
-        //     errors.get(0).map(ToString::to_string),
-        //     Some(
-        //         "expected semver: unexpected character 'o' while \
-        //          parsing major version number"
-        //             .to_string()
-        //     ),
-        // );
+        assert_eq!(
+            errors.get(0).map(ToString::to_string),
+            Some(
+                "expected semver: unexpected character 'o' while \
+                 parsing major version number"
+                    .to_string()
+            ),
+        );
 
         let (_, errors) = do_endpoint(
             quote! {
@@ -983,14 +982,14 @@ mod tests {
             },
         );
         assert!(!errors.is_empty());
-        // assert_eq!(
-        //     errors.get(0).map(ToString::to_string),
-        //     Some(
-        //         "expected semver: unexpected end of input while parsing \
-        //          minor version number"
-        //             .to_string()
-        //     ),
-        // );
+        assert_eq!(
+            errors.get(0).map(ToString::to_string),
+            Some(
+                "expected semver: unexpected end of input while parsing \
+                 minor version number"
+                    .to_string()
+            ),
+        );
 
         let (_, errors) = do_endpoint(
             quote! {
@@ -1007,11 +1006,10 @@ mod tests {
             },
         );
         assert!(!errors.is_empty());
-        // XXX-dap
-        // assert_eq!(
-        //     errors.get(0).map(ToString::to_string),
-        //     Some("semver pre-release string is not supported here".to_string()),
-        // );
+        assert_eq!(
+            errors.get(0).map(ToString::to_string),
+            Some("semver pre-release string is not supported here".to_string()),
+        );
 
         let (_, errors) = do_endpoint(
             quote! {
@@ -1028,11 +1026,10 @@ mod tests {
             },
         );
         assert!(!errors.is_empty());
-        // XXX-dap
-        // assert_eq!(
-        //     errors.get(0).map(ToString::to_string),
-        //     Some("semver build metadata is not supported here".to_string()),
-        // );
+        assert_eq!(
+            errors.get(0).map(ToString::to_string),
+            Some("semver build metadata is not supported here".to_string()),
+        );
 
         let (_, errors) = do_endpoint(
             quote! {

@@ -2,7 +2,7 @@
 
 //! Code to handle metadata associated with an endpoint.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, TokenTree};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use serde::Deserialize;
 use syn::{spanned::Spanned, Error};
@@ -286,29 +286,30 @@ pub(crate) enum VersionRange {
     FromUntil(semver::Version, semver::Version),
 }
 
-fn parse_semver(
-    input: syn::parse::ParseStream,
-    v: syn::LitStr,
-) -> syn::Result<semver::Version> {
+fn parse_semver(v: &syn::LitStr) -> syn::Result<semver::Version> {
     v.value()
         .parse::<semver::Version>()
-        .map_err(|e| input.error(format!("expected semver: {}", e)))
+        .map_err(|e| {
+            syn::Error::new_spanned(v, format!("expected semver: {}", e))
+        })
         .and_then(|s| {
             if s.pre == semver::Prerelease::EMPTY {
                 Ok(s)
             } else {
-                Err(input.error(format!(
-                    "semver pre-release string is not supported here"
-                )))
+                Err(syn::Error::new_spanned(
+                    v,
+                    format!("semver pre-release string is not supported here"),
+                ))
             }
         })
         .and_then(|s| {
             if s.build == semver::BuildMetadata::EMPTY {
                 Ok(s)
             } else {
-                Err(input.error(format!(
-                    "semver build metadata is not supported here"
-                )))
+                Err(syn::Error::new_spanned(
+                    v,
+                    format!("semver build metadata is not supported here"),
+                ))
             }
         })
 }
@@ -319,21 +320,30 @@ impl syn::parse::Parse for VersionRange {
         if lookahead.peek(syn::Token![..]) {
             let _ = input.parse::<syn::Token![..]>()?;
             let latest = input.parse::<syn::LitStr>()?;
-            let latest_semver = parse_semver(input, latest)?;
+            let latest_semver = parse_semver(&latest)?;
             Ok(VersionRange::Until(latest_semver))
         } else {
             let earliest = input.parse::<syn::LitStr>()?;
-            let earliest_semver = parse_semver(input, earliest)?;
+            let earliest_semver = parse_semver(&earliest)?;
             let _ = input.parse::<syn::Token![..]>()?;
             let lookahead = input.lookahead1();
             if lookahead.peek(syn::LitStr) {
                 let latest = input.parse::<syn::LitStr>()?;
-                let latest_semver = parse_semver(input, latest)?;
+                let latest_semver = parse_semver(&latest)?;
                 if latest_semver < earliest_semver {
-                    return Err(input.error(format!(
-                        "semver range (from ... until ...) has the \
-                         endpoints out of order"
-                    )));
+                    let span: TokenStream = [
+                        TokenTree::from(earliest.token()),
+                        TokenTree::from(latest.token()),
+                    ]
+                    .into_iter()
+                    .collect();
+                    return Err(syn::Error::new_spanned(
+                        span,
+                        format!(
+                            "semver range (from ... until ...) has the \
+                             endpoints out of order"
+                        ),
+                    ));
                 }
                 Ok(VersionRange::FromUntil(earliest_semver, latest_semver))
             } else {
