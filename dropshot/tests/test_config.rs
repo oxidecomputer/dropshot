@@ -581,3 +581,49 @@ async fn test_config_handler_task_mode_detached() {
 
     logctx.cleanup_successful();
 }
+
+#[tokio::test]
+async fn test_unversioned_servers_with_versioned_routes() {
+    #[dropshot::endpoint {
+        method = GET,
+        path = "/handler",
+        versions = "1.0.1".."1.0.1",
+    }]
+    async fn versioned_handler(
+        _rqctx: RequestContext<i32>,
+    ) -> Result<HttpResponseOk<u64>, HttpError> {
+        Ok(HttpResponseOk(3))
+    }
+
+    let logctx =
+        create_log_context("test_unversioned_servers_with_versioned_routes");
+    let config_dropshot = ConfigDropshot::default();
+
+    // Test both the HTTP and HTTPS code paths because the check is present in
+    // both.
+    let (certs, key) = common::generate_tls_key();
+    let (serialized_certs, serialized_key) =
+        common::tls_key_to_buffer(&certs, &key);
+    let tls = Some(ConfigTls::AsBytes {
+        certs: serialized_certs.clone(),
+        key: serialized_key.clone(),
+    });
+    for tls_arg in [None, tls] {
+        let mut api = dropshot::ApiDescription::new();
+        api.register(versioned_handler).unwrap();
+        let Err(error) = HttpServerStarter::new_with_tls(
+            &config_dropshot,
+            api,
+            0,
+            &logctx.log,
+            tls_arg,
+        ) else {
+            panic!("expected failure to create server");
+        };
+        println!("{}", error);
+        assert_eq!(
+            error.to_string(),
+            "unversioned servers cannot have endpoints with specific versions"
+        );
+    }
+}
