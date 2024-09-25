@@ -19,7 +19,6 @@ use schemars::JsonSchema;
 use semver::Version;
 use serde::Serialize;
 use slog::Logger;
-use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -60,43 +59,8 @@ impl DynamicVersionPolicy for BasicVersionPolicy {
         request: &Request<Body>,
         _log: &Logger,
     ) -> Result<Version, HttpError> {
-        parse_header(request.headers(), "dropshot-demo-version")
+        dropshot::parse_header(request.headers(), "dropshot-demo-version")
     }
-}
-
-/// Parses a required header out of a request (producing useful error messages
-/// for all failure modes)
-fn parse_header<T>(
-    headers: &http::HeaderMap,
-    header_name: &str,
-) -> Result<T, HttpError>
-where
-    T: FromStr,
-    <T as FromStr>::Err: std::fmt::Display,
-{
-    let v_value = headers.get(header_name).ok_or_else(|| {
-        HttpError::for_bad_request(
-            None,
-            format!("missing expected header {:?}", header_name),
-        )
-    })?;
-
-    let v_str = v_value.to_str().map_err(|_| {
-        HttpError::for_bad_request(
-            None,
-            format!(
-                "bad value for header {:?}: not ASCII: {:?}",
-                header_name, v_value
-            ),
-        )
-    })?;
-
-    v_str.parse::<T>().map_err(|e| {
-        HttpError::for_bad_request(
-            None,
-            format!("bad value for header {:?}: {}: {}", header_name, e, v_str),
-        )
-    })
 }
 
 // HTTP API interface

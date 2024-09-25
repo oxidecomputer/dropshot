@@ -104,6 +104,10 @@ rcgen = "0.13.1"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.23.1"
 
+[dev-dependencies.reqwest]
+version = "0.12.7"
+features = [ "json" ]
+
 [dev-dependencies.rustls-pki-types]
 version = "1.8.0"
 # Needed for CertificateDer::into_owned
