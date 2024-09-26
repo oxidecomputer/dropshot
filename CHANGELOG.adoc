@@ -15,6 +15,16 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...HEAD[Full list of commits]
 
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/1028[#1028] Updates Dropshot for `hyper` 1.0 and `http` 1.0.  Since consumers provide Dropshot with values from `hyper` and `http`, you'll need to update to `hyper` 1.0 and `http` 1.0 (or newer compatible versions), too.
++
+**What you need to do:**
+1. Update your crate's dependencies on `hyper` and `http` to 1.0 (or a newer compatible version) in Cargo.toml.
+2. Replace any references to `hyper::Body` with `dropshot::Body` instead.
++
+There are no other known breaking changes in these crates that affect Dropshot.  If you have any trouble with this upgrade, please let us know by filing an issue.
+
 == 0.11.0 (released 2024-08-21)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...v0.11.0[Full list of commits]
@@ -36,16 +46,6 @@ generated OpenAPI spec.
 
 * Trait-based API definitions. See https://docs.rs/dropshot_endpoint/latest/dropshot_endpoint/attr.api_description.html[the documentation] for details.
 * https://github.com/oxidecomputer/dropshot/pull/1049[#1049] Added `HttpResponse::status_code()`
-
-=== Breaking Changes
-
-* https://github.com/oxidecomputer/dropshot/pull/1028[#1028] Updates Dropshot for `hyper` 1.0 and `http` 1.0.  Since consumers provide Dropshot with values from `hyper` and `http`, you'll need to update to `hyper` 1.0 and `http` 1.0 (or newer compatible versions), too.
-+
-**What you need to do:**
-1. Update your crate's dependencies on `hyper` and `http` to 1.0 (or a newer compatible version) in Cargo.toml.
-2. Replace any references to `hyper::Body` with `dropshot::Body` instead.
-+
-There are no other known breaking changes in these crates that affect Dropshot.  If you have any trouble with this upgrade, please let us know by filing an issue.
 
 == 0.10.1 (released 2024-05-15)
 
