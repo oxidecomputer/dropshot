@@ -19,12 +19,11 @@ use bytes::Bytes;
 use bytes::BytesMut;
 use futures::Stream;
 use futures::TryStreamExt;
-use hyper::body::HttpBody;
+use http_body_util::BodyExt;
 use schemars::schema::InstanceType;
 use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
-use std::convert::Infallible;
 use std::fmt::Debug;
 
 // TypedBody: body extractor for formats that can be deserialized to a specific
@@ -57,7 +56,7 @@ pub struct MultipartBody {
 impl ExclusiveExtractor for MultipartBody {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
         let (parts, body) = request.into_parts();
         // Get the content-type header.
@@ -87,7 +86,10 @@ impl ExclusiveExtractor for MultipartBody {
                 )
             })?;
         Ok(MultipartBody {
-            content: multer::Multipart::new(body, boundary.to_string()),
+            content: multer::Multipart::new(
+                body.into_data_stream(),
+                boundary.to_string(),
+            ),
         })
     }
 
@@ -121,7 +123,7 @@ impl ExclusiveExtractor for MultipartBody {
 /// to the content type, and deserialize it to an instance of `BodyType`.
 async fn http_request_load_body<Context: ServerContext, BodyType>(
     rqctx: &RequestContext<Context>,
-    request: hyper::Request<hyper::Body>,
+    request: hyper::Request<crate::Body>,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
@@ -204,7 +206,7 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
         http_request_load_body(rqctx, request).await
     }
@@ -258,7 +260,7 @@ impl UntypedBody {
 impl ExclusiveExtractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<UntypedBody, HttpError> {
         let server = &rqctx.server;
         let body = request.into_body();
@@ -282,12 +284,12 @@ impl ExclusiveExtractor for UntypedBody {
 /// raw bytes available to the consumer.
 #[derive(Debug)]
 pub struct StreamingBody {
-    body: hyper::Body,
+    body: crate::Body,
     cap: usize,
 }
 
 impl StreamingBody {
-    fn new(body: hyper::Body, cap: usize) -> Self {
+    fn new(body: crate::Body, cap: usize) -> Self {
         Self { body, cap }
     }
 
@@ -295,8 +297,7 @@ impl StreamingBody {
     #[doc(hidden)]
     pub fn __from_bytes(data: Bytes) -> Self {
         let cap = data.len();
-        let stream = futures::stream::iter([Ok::<_, Infallible>(data)]);
-        let body = hyper::Body::wrap_stream(stream);
+        let body = crate::Body::from(data);
         Self { body, cap }
     }
 
@@ -377,12 +378,21 @@ impl StreamingBody {
     ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send {
         async_stream::try_stream! {
             let mut bytes_read: usize = 0;
-            while let Some(buf_res) = self.body.data().await {
-                let buf = buf_res?;
+            while let Some(frame_res) = self.body.frame().await {
+                let frame = frame_res.map_err(|e| HttpError::for_bad_request(
+                    None,
+                    format!("error streaming request body: {}", e),
+                ))?;
+                let Ok(buf) = frame.into_data() else { continue }; // skip trailers
                 let len = buf.len();
 
                 if bytes_read + len > self.cap {
-                    http_dump_body(&mut self.body).await?;
+                    http_dump_body(&mut self.body).await.map_err(|e| {
+                        HttpError::for_bad_request(
+                            None,
+                            format!("error streaming request body: {}", e),
+                        )
+                    })?;
                     // TODO-correctness check status code
                     Err(HttpError::for_bad_request(
                         None,
@@ -393,10 +403,6 @@ impl StreamingBody {
                 bytes_read += len;
                 yield buf;
             }
-
-            // Read the trailers as well, even though we're not going to do anything
-            // with them.
-            self.body.trailers().await?;
         }
     }
 
@@ -417,7 +423,7 @@ impl StreamingBody {
 impl ExclusiveExtractor for StreamingBody {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
         let server = &rqctx.server;
 

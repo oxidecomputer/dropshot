@@ -735,9 +735,9 @@ mod test {
     use crate::router::VariableValue;
     use crate::ApiEndpoint;
     use crate::ApiEndpointResponse;
+    use crate::Body;
     use http::Method;
     use http::StatusCode;
-    use hyper::Body;
     use hyper::Response;
     use serde::Deserialize;
     use std::collections::BTreeMap;

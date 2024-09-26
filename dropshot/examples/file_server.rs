@@ -3,6 +3,7 @@
 //! Example using Dropshot to serve files
 
 use dropshot::ApiDescription;
+use dropshot::Body;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
@@ -10,7 +11,6 @@ use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
 use dropshot::{endpoint, Path};
 use http::{Response, StatusCode};
-use hyper::Body;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -133,7 +133,11 @@ async fn static_content(
                 format!("failed to read file {:?}: {:#}", entry, e),
             )
         })?;
-        let file_stream = hyper_staticfile::FileBytesStream::new(file);
+
+        let file_access = hyper_staticfile::vfs::TokioFileAccess::new(file);
+        let file_stream =
+            hyper_staticfile::util::FileBytesStream::new(file_access);
+        let body = Body::wrap(hyper_staticfile::Body::Full(file_stream));
 
         // Derive the MIME type from the file name
         let content_type = mime_guess::from_path(&entry)
@@ -143,7 +147,7 @@ async fn static_content(
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(http::header::CONTENT_TYPE, content_type)
-            .body(file_stream.into_body())?)
+            .body(body)?)
     }
 }
 

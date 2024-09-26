@@ -7,6 +7,7 @@
 //! which will be spawned to handle the incoming connection.
 
 use crate::api_description::ExtensionMode;
+use crate::body::Body;
 use crate::{
     ApiEndpointBodyContentType, ExclusiveExtractor, ExtractorMetadata,
     HttpError, RequestContext, ServerContext,
@@ -17,12 +18,14 @@ use http::header;
 use http::Response;
 use http::StatusCode;
 use hyper::upgrade::OnUpgrade;
-use hyper::Body;
 use schemars::JsonSchema;
 use serde_json::json;
 use sha1::{Digest, Sha1};
 use slog::Logger;
 use std::future::Future;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
 /// WebsocketUpgrade is an ExclusiveExtractor used to upgrade and handle an HTTP
 /// request as a websocket when present in a Dropshot endpoint's function
@@ -51,7 +54,10 @@ pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
 pub struct WebsocketConnection(WebsocketConnectionRaw);
 
 /// A type that implements [tokio::io::AsyncRead] + [tokio::io::AsyncWrite].
-pub type WebsocketConnectionRaw = hyper::upgrade::Upgraded;
+// A newtype so as to not expose the less-stable hyper-util type.
+pub struct WebsocketConnectionRaw(
+    hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>,
+);
 
 impl WebsocketConnection {
     /// Consumes `self` and returns the held raw connection.
@@ -87,7 +93,7 @@ fn derive_accept_key(request_key: &[u8]) -> String {
 impl ExclusiveExtractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<Body>,
     ) -> Result<Self, HttpError> {
         if !request
             .headers()
@@ -229,7 +235,9 @@ impl WebsocketUpgrade {
                 tokio::spawn(async move {
                     match upgrade_fut.await {
                         Ok(upgrade) => {
-                            match handler(WebsocketConnection(upgrade)).await {
+                            let io = hyper_util::rt::TokioIo::new(upgrade);
+                            let raw = WebsocketConnectionRaw(io);
+                            match handler(WebsocketConnection(raw)).await {
                                 Ok(x) => Ok(x),
                                 Err(e) => {
                                     error!(
@@ -292,8 +300,55 @@ impl JsonSchema for WebsocketUpgrade {
     }
 }
 
+impl tokio::io::AsyncRead for WebsocketConnectionRaw {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_read(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for WebsocketConnectionRaw {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write(cx, buf)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.0.is_write_vectored()
+    }
+
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[std::io::IoSlice<'_>],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write_vectored(cx, bufs)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_shutdown(cx)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::body::Body;
     use crate::config::HandlerTaskMode;
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
@@ -303,7 +358,6 @@ mod tests {
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
-    use hyper::Body;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::num::NonZeroU32;
     use std::sync::Arc;

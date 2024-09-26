@@ -387,7 +387,7 @@
 //! use dropshot::TypedBody;
 //! use dropshot::Query;
 //! use dropshot::RequestContext;
-//! use hyper::Body;
+//! use dropshot::Body;
 //! use hyper::Response;
 //! use schemars::JsonSchema;
 //! use serde::Deserialize;
@@ -750,6 +750,7 @@
 mod dtrace;
 
 mod api_description;
+mod body;
 mod config;
 mod error;
 mod extractor;
@@ -785,6 +786,7 @@ pub use api_description::StubContext;
 pub use api_description::TagConfig;
 pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
+pub use body::Body;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use config::HandlerTaskMode;
