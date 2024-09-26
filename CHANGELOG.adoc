@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...HEAD[Full list of commits]
+
+== 0.12.0 (released 2024-09-26)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...v0.12.0[Full list of commits]
 
 === Breaking Changes
 
