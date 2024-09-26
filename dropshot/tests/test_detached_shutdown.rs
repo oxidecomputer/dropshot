@@ -3,11 +3,11 @@
 //! Test cases for graceful shutdown of a server running tasks in
 //! `HandlerTaskMode::Detached`.
 
+use dropshot::Body;
 use dropshot::{
     endpoint, ApiDescription, HandlerTaskMode, HttpError, RequestContext,
 };
 use http::{Method, Response, StatusCode};
-use hyper::Body;
 use std::time::Duration;
 use tokio::sync::mpsc;
 

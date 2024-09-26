@@ -3,6 +3,7 @@
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
+use dropshot::Body;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -11,7 +12,6 @@ use dropshot::HttpServerStarter;
 use dropshot::MultipartBody;
 use dropshot::RequestContext;
 use http::{Response, StatusCode};
-use hyper::Body;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

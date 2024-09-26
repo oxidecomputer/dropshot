@@ -2,6 +2,7 @@
 //! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
+use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
@@ -18,12 +19,7 @@ use futures::future::{
 };
 use futures::lock::Mutex;
 use futures::stream::{Stream, StreamExt};
-use hyper::server::{
-    conn::{AddrIncoming, AddrStream},
-    Server,
-};
 use hyper::service::Service;
-use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use rustls;
@@ -197,18 +193,16 @@ impl<C: ServerContext> HttpServerStarter<C> {
             WrappedHttpServerStarter::Https(https) => {
                 https.start(rx, log_close)
             }
-        }
-        .map(|r| {
-            r.map_err(|e| format!("waiting for server: {e}"))?
-                .map_err(|e| format!("server stopped: {e}"))
-        });
+        };
         info!(self.app_state.log, "listening");
 
         let handler_waitgroup = self.handler_waitgroup;
         let join_handle = async move {
             // After the server shuts down, we also want to wait for any
             // detached handler futures to complete.
-            () = join_handle.await?;
+            () = join_handle
+                .await
+                .map_err(|e| format!("server stopped: {e}"))?;
             () = handler_waitgroup.wait().await;
             Ok(())
         };
@@ -256,7 +250,8 @@ enum WrappedHttpServerStarter<C: ServerContext> {
 }
 
 struct InnerHttpServerStarter<C: ServerContext>(
-    Server<AddrIncoming, ServerConnectionHandler<C>>,
+    HttpAcceptor,
+    ServerConnectionHandler<C>,
 );
 
 type InnerHttpServerStarterNewReturn<C> =
@@ -266,17 +261,46 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
     /// Begins execution of the underlying Http server.
     fn start(
         self,
-        close_signal: tokio::sync::oneshot::Receiver<()>,
+        mut close_signal: tokio::sync::oneshot::Receiver<()>,
         log_close: Logger,
-    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
-        let graceful = self.0.with_graceful_shutdown(async move {
-            close_signal.await.expect(
-                "dropshot server shutting down without invoking close()",
-            );
-            info!(log_close, "received request to begin graceful shutdown");
-        });
+    ) -> tokio::task::JoinHandle<()> {
+        use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+        use hyper_util::server::conn::auto;
 
-        tokio::spawn(graceful)
+        tokio::spawn(async move {
+            let mut builder = auto::Builder::new(TokioExecutor::new());
+            // http/1 settings
+            builder.http1().timer(TokioTimer::new());
+            // http/2 settings
+            builder.http2().timer(TokioTimer::new());
+
+            // Use a graceful watcher to keep track of all existing connections,
+            // and when the close_signal is trigger, force all known conns
+            // to start a graceful shutdown.
+            let graceful =
+                hyper_util::server::graceful::GracefulShutdown::new();
+
+            loop {
+                tokio::select! {
+                    (sock, remote_addr) = self.0.accept() => {
+                        let fut = builder.serve_connection_with_upgrades(
+                            TokioIo::new(sock),
+                            self.1.make_http_request_handler(remote_addr),
+                        );
+                        let fut = graceful.watch(fut.into_owned());
+                        tokio::spawn(fut);
+                    },
+
+                    _ = &mut close_signal => {
+                        info!(log_close, "received request to begin graceful shutdown");
+                        break;
+                    }
+                }
+            }
+
+            // optional: could use another select on a timeout
+            graceful.shutdown().await
+        })
     }
 
     /// Set up an HTTP server bound on the specified address that runs
@@ -290,9 +314,15 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         private: C,
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, hyper::Error> {
-        let incoming = AddrIncoming::bind(&config.bind_address)?;
-        let local_addr = incoming.local_addr();
+    ) -> Result<InnerHttpServerStarterNewReturn<C>, std::io::Error> {
+        // We use `from_std` instead of just calling `bind` here directly
+        // to avoid invoking an async function.
+        let std_listener = std::net::TcpListener::bind(&config.bind_address)?;
+        std_listener.set_nonblocking(true)?;
+        let tcp = TcpListener::from_std(std_listener)?;
+        let local_addr = tcp.local_addr()?;
+        let incoming =
+            HttpAcceptor { tcp, log: log.new(o!("local_addr" => local_addr)) };
 
         let app_state = Arc::new(DropshotState {
             private,
@@ -305,9 +335,44 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         });
 
         let make_service = ServerConnectionHandler::new(app_state.clone());
-        let builder = hyper::Server::builder(incoming);
-        let server = builder.serve(make_service);
-        Ok((InnerHttpServerStarter(server), app_state, local_addr))
+        Ok((
+            InnerHttpServerStarter(incoming, make_service),
+            app_state,
+            local_addr,
+        ))
+    }
+}
+
+/// Accepts TCP connections like a `TcpListener`, but ignores transient errors rather than propagating them to the caller
+struct HttpAcceptor {
+    tcp: TcpListener,
+    log: slog::Logger,
+}
+
+impl HttpAcceptor {
+    async fn accept(&self) -> (TcpStream, SocketAddr) {
+        loop {
+            match self.tcp.accept().await {
+                Ok((socket, addr)) => return (socket, addr),
+                Err(e) => match e.kind() {
+                    // These are errors on the individual socket that we
+                    // tried to accept, and so can be ignored.
+                    std::io::ErrorKind::ConnectionRefused
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::ConnectionReset => (),
+
+                    // This could EMFILE implying resource exhaustion.
+                    // Sleep a little bit and try again.
+                    _ => {
+                        warn!(self.log, "accept error"; "error" => e);
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            100,
+                        ))
+                        .await;
+                    }
+                },
+            }
+        }
     }
 }
 
@@ -384,21 +449,25 @@ impl HttpsAcceptor {
     pub fn new(
         log: slog::Logger,
         tls_acceptor: Arc<Mutex<TlsAcceptor>>,
-        tcp_listener: TcpListener,
+        http_acceptor: HttpAcceptor,
     ) -> HttpsAcceptor {
         HttpsAcceptor {
             stream: Box::new(Box::pin(Self::new_stream(
                 log,
                 tls_acceptor,
-                tcp_listener,
+                http_acceptor,
             ))),
         }
+    }
+
+    async fn accept(&mut self) -> Option<std::io::Result<TlsConn>> {
+        self.stream.next().await
     }
 
     fn new_stream(
         log: slog::Logger,
         tls_acceptor: Arc<Mutex<TlsAcceptor>>,
-        tcp_listener: TcpListener,
+        http_acceptor: HttpAcceptor,
     ) -> impl Stream<Item = std::io::Result<TlsConn>> {
         stream! {
             let mut tls_negotiations = futures::stream::FuturesUnordered::new();
@@ -424,29 +493,7 @@ impl HttpsAcceptor {
                             },
                         }
                     },
-                    accept_result = tcp_listener.accept() => {
-                        let (socket, addr) = match accept_result {
-                            Ok(v) => v,
-                            Err(e) => {
-                                match e.kind() {
-                                    std::io::ErrorKind::ConnectionAborted => {
-                                        continue;
-                                    },
-                                    // The other errors that can be returned
-                                    // under POSIX are all programming errors or
-                                    // resource exhaustion. For now, handle
-                                    // these by no longer accepting new
-                                    // connections.
-                                    // TODO-robustness: Consider handling these
-                                    // more gracefully.
-                                    _ => {
-                                        yield Err(e);
-                                        break;
-                                    }
-                                }
-                            }
-                        };
-
+                    (socket, addr) = http_acceptor.accept() => {
                         let tls_negotiation = tls_acceptor
                             .lock()
                             .await
@@ -461,21 +508,9 @@ impl HttpsAcceptor {
     }
 }
 
-impl hyper::server::accept::Accept for HttpsAcceptor {
-    type Conn = TlsConn;
-    type Error = std::io::Error;
-
-    fn poll_accept(
-        mut self: Pin<&mut Self>,
-        ctx: &mut core::task::Context,
-    ) -> core::task::Poll<Option<Result<Self::Conn, Self::Error>>> {
-        let pinned = Pin::new(&mut self.stream);
-        pinned.poll_next(ctx)
-    }
-}
-
 struct InnerHttpsServerStarter<C: ServerContext>(
-    Server<HttpsAcceptor, ServerConnectionHandler<C>>,
+    HttpsAcceptor,
+    ServerConnectionHandler<C>,
 );
 
 /// Create a TLS configuration from the Dropshot config structure.
@@ -554,18 +589,46 @@ type InnerHttpsServerStarterNewReturn<C> =
 impl<C: ServerContext> InnerHttpsServerStarter<C> {
     /// Begins execution of the underlying Http server.
     fn start(
-        self,
-        close_signal: tokio::sync::oneshot::Receiver<()>,
+        mut self,
+        mut close_signal: tokio::sync::oneshot::Receiver<()>,
         log_close: Logger,
-    ) -> tokio::task::JoinHandle<Result<(), hyper::Error>> {
-        let graceful = self.0.with_graceful_shutdown(async move {
-            close_signal.await.expect(
-                "dropshot server shutting down without invoking close()",
-            );
-            info!(log_close, "received request to begin graceful shutdown");
-        });
+    ) -> tokio::task::JoinHandle<()> {
+        use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+        use hyper_util::server::conn::auto;
 
-        tokio::spawn(graceful)
+        tokio::spawn(async move {
+            let mut builder = auto::Builder::new(TokioExecutor::new());
+            // http/1 settings
+            builder.http1().timer(TokioTimer::new());
+
+            // Use a graceful watcher to keep track of all existing connections,
+            // and when the close_signal is trigger, force all known conns
+            // to start a graceful shutdown.
+            let graceful =
+                hyper_util::server::graceful::GracefulShutdown::new();
+
+            loop {
+                tokio::select! {
+                    Some(Ok(sock)) = self.0.accept() => {
+                        let remote_addr = sock.remote_addr();
+                        let fut = builder.serve_connection_with_upgrades(
+                            TokioIo::new(sock),
+                            self.1.make_http_request_handler(remote_addr),
+                        );
+                        let fut = graceful.watch(fut.into_owned());
+                        tokio::spawn(fut);
+                    },
+
+                    _ = &mut close_signal => {
+                        info!(log_close, "received request to begin graceful shutdown");
+                        break;
+                    }
+                }
+            }
+
+            // optional: could use another select on a timeout
+            graceful.shutdown().await
+        })
     }
 
     fn new(
@@ -592,6 +655,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
 
         let local_addr = tcp.local_addr()?;
         let logger = log.new(o!("local_addr" => local_addr));
+        let tcp = HttpAcceptor { tcp, log: logger.clone() };
         let https_acceptor =
             HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
 
@@ -606,28 +670,12 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         });
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-        let server = Server::builder(https_acceptor).serve(make_service);
 
-        Ok((InnerHttpsServerStarter(server), app_state, local_addr))
-    }
-}
-
-impl<C: ServerContext> Service<&TlsConn> for ServerConnectionHandler<C> {
-    type Response = ServerRequestHandler<C>;
-    type Error = GenericError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(
-        &mut self,
-        _ctx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, conn: &TlsConn) -> Self::Future {
-        let server = Arc::clone(&self.server);
-        let remote_addr = conn.remote_addr();
-        Box::pin(http_connection_handle(server, remote_addr))
+        Ok((
+            InnerHttpsServerStarter(https_acceptor, make_service),
+            app_state,
+            local_addr,
+        ))
     }
 }
 
@@ -764,18 +812,6 @@ impl<C: ServerContext> FusedFuture for HttpServer<C> {
     }
 }
 
-/// Initial entry point for handling a new connection to the HTTP server.
-/// This is invoked by Hyper when a new connection is accepted.  This function
-/// must return a Hyper Service object that will handle requests for this
-/// connection.
-async fn http_connection_handle<C: ServerContext>(
-    server: Arc<DropshotState<C>>,
-    remote_addr: SocketAddr,
-) -> Result<ServerRequestHandler<C>, GenericError> {
-    info!(server.log, "accepted connection"; "remote_addr" => %remote_addr);
-    Ok(ServerRequestHandler::new(server, remote_addr))
-}
-
 /// Initial entry point for handling a new request to the HTTP server.  This is
 /// invoked by Hyper when a new request is received.  This function returns a
 /// Result that either represents a valid HTTP response or an error (which will
@@ -783,7 +819,7 @@ async fn http_connection_handle<C: ServerContext>(
 async fn http_request_handle_wrap<C: ServerContext>(
     server: Arc<DropshotState<C>>,
     remote_addr: SocketAddr,
-    request: Request<Body>,
+    request: Request<hyper::body::Incoming>,
 ) -> Result<Response<Body>, GenericError> {
     // This extra level of indirection makes error handling much more
     // straightforward, since the request handling code can simply return early
@@ -936,7 +972,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
 async fn http_request_handle<C: ServerContext>(
     server: Arc<DropshotState<C>>,
-    request: Request<Body>,
+    request: Request<hyper::body::Incoming>,
     request_id: &str,
     request_log: Logger,
     remote_addr: std::net::SocketAddr,
@@ -947,6 +983,7 @@ async fn http_request_handle<C: ServerContext>(
     // TODO-hardening: add a request read timeout as well so that we don't allow
     // this to take forever.
     // TODO-correctness: Do we need to dump the body on errors?
+    let request = request.map(crate::Body::wrap);
     let method = request.method();
     let uri = request.uri();
     let lookup_result =
@@ -1056,38 +1093,17 @@ impl<C: ServerContext> ServerConnectionHandler<C> {
     fn new(server: Arc<DropshotState<C>>) -> Self {
         ServerConnectionHandler { server }
     }
-}
 
-impl<T: ServerContext> Service<&AddrStream> for ServerConnectionHandler<T> {
-    // Recall that a Service in this context is just something that takes a
-    // request (which could be anything) and produces a response (which could be
-    // anything).  This being a connection handler, the request type is an
-    // AddrStream (which wraps a TCP connection) and the response type is
-    // another Service: one that accepts HTTP requests and produces HTTP
-    // responses.
-    type Response = ServerRequestHandler<T>;
-    type Error = GenericError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(
-        &mut self,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
-        // TODO is this right?
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, conn: &AddrStream) -> Self::Future {
-        // We're given a borrowed reference to the AddrStream, but our interface
-        // is async (which is good, so that we can support time-consuming
-        // operations as part of receiving requests).  To avoid having to ensure
-        // that conn's lifetime exceeds that of this async operation, we simply
-        // copy the only useful information out of the conn: the SocketAddr.  We
-        // may want to create our own connection type to encapsulate the socket
-        // address and any other per-connection state that we want to keep.
-        let server = Arc::clone(&self.server);
-        let remote_addr = conn.remote_addr();
-        Box::pin(http_connection_handle(server, remote_addr))
+    /// Initial entry point for handling a new connection to the HTTP server.
+    /// This is invoked by Hyper when a new connection is accepted.  This function
+    /// must return a Hyper Service object that will handle requests for this
+    /// connection.
+    fn make_http_request_handler(
+        &self,
+        remote_addr: SocketAddr,
+    ) -> ServerRequestHandler<C> {
+        info!(self.server.log, "accepted connection"; "remote_addr" => %remote_addr);
+        ServerRequestHandler::new(self.server.clone(), remote_addr)
     }
 }
 
@@ -1110,20 +1126,14 @@ impl<C: ServerContext> ServerRequestHandler<C> {
     }
 }
 
-impl<C: ServerContext> Service<Request<Body>> for ServerRequestHandler<C> {
+impl<C: ServerContext> Service<Request<hyper::body::Incoming>>
+    for ServerRequestHandler<C>
+{
     type Response = Response<Body>;
     type Error = GenericError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
-        // TODO is this right?
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+    fn call(&self, req: Request<hyper::body::Incoming>) -> Self::Future {
         Box::pin(http_request_handle_wrap(
             Arc::clone(&self.server),
             self.remote_addr,
@@ -1230,5 +1240,30 @@ mod test {
     async fn test_drop_server_without_close_okay() {
         let (server, _) = create_test_server();
         std::mem::drop(server);
+    }
+
+    #[tokio::test]
+    async fn test_http_acceptor_happy_path() {
+        const TOTAL: usize = 100;
+        let tcp =
+            tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = tcp.local_addr().expect("local_addr");
+        let acceptor =
+            HttpAcceptor { log: slog::Logger::root(slog::Discard, o!()), tcp };
+
+        let t1 = tokio::spawn(async move {
+            for _ in 0..TOTAL {
+                let _ = acceptor.accept().await;
+            }
+        });
+
+        let t2 = tokio::spawn(async move {
+            for _ in 0..TOTAL {
+                tokio::net::TcpStream::connect(&addr).await.expect("connect");
+            }
+        });
+
+        t1.await.expect("task 1");
+        t2.await.expect("task 2");
     }
 }
