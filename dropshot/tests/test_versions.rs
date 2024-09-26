@@ -4,6 +4,7 @@
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
+use dropshot::ClientSpecifiesVersionInHeader;
 use dropshot::ConfigDropshot;
 use dropshot::HttpError;
 use dropshot::HttpErrorResponseBody;
@@ -39,7 +40,11 @@ async fn test_versions() {
         (),
         &logctx.log,
         None,
-        VersionPolicy::Dynamic(Box::new(TestVersionPolicy {})),
+        VersionPolicy::Dynamic(Box::new(TestVersionPolicy(
+            ClientSpecifiesVersionInHeader::new(
+                VERSION_HEADER_NAME.parse().unwrap(),
+            ),
+        ))),
     )
     .unwrap()
     .start();
@@ -273,24 +278,18 @@ async fn handler4(
 }
 
 #[derive(Debug)]
-struct TestVersionPolicy;
+struct TestVersionPolicy(ClientSpecifiesVersionInHeader);
 impl dropshot::DynamicVersionPolicy for TestVersionPolicy {
     fn request_extract_version(
         &self,
         request: &http::Request<hyper::Body>,
-        _log: &slog::Logger,
+        log: &slog::Logger,
     ) -> Result<Version, HttpError> {
-        dropshot::parse_header(request.headers(), VERSION_HEADER_NAME).and_then(
-            |v: semver::Version| {
-                if v.major == 4 && v.minor == 3 && v.patch == 2 {
-                    Err(HttpError::for_bad_request(
-                        None,
-                        String::from(FORBIDDEN_MSG),
-                    ))
-                } else {
-                    Ok(v)
-                }
-            },
-        )
+        let v = self.0.request_extract_version(request, log)?;
+        if v.major == 4 && v.minor == 3 && v.patch == 2 {
+            Err(HttpError::for_bad_request(None, String::from(FORBIDDEN_MSG)))
+        } else {
+            Ok(v)
+        }
     }
 }

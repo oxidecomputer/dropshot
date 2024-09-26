@@ -47,6 +47,7 @@ use waitgroup::WaitGroup;
 use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
 use slog::Logger;
+use crate::versioning::VersionPolicy;
 
 // TODO Replace this with something else?
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -89,55 +90,6 @@ impl<C: ServerContext> DropshotState<C> {
     }
 }
 
-pub type Version = semver::Version;
-
-#[derive(Debug)]
-pub enum VersionPolicy {
-    Unversioned,
-    Dynamic(Box<dyn DynamicVersionPolicy>),
-}
-
-impl VersionPolicy {
-    fn request_version(
-        &self,
-        request: &Request<Body>,
-        request_log: &Logger,
-    ) -> Result<Option<Version>, HttpError> {
-        match self {
-            VersionPolicy::Unversioned => Ok(None),
-            VersionPolicy::Dynamic(vers_impl) => {
-                let result =
-                    vers_impl.request_extract_version(request, request_log);
-
-                match &result {
-                    Ok(version) => {
-                        debug!(request_log, "determined request API version";
-                            "version" => %version,
-                        );
-                    }
-                    Err(error) => {
-                        error!(
-                            request_log,
-                            "failed to determine request API version";
-                            "error" => ?error,
-                        );
-                    }
-                }
-
-                result.map(Some)
-            }
-        }
-    }
-}
-
-pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
-    fn request_extract_version(
-        &self,
-        request: &Request<Body>,
-        log: &Logger,
-    ) -> Result<Version, HttpError>;
-}
-
 /// Stores static configuration associated with the server
 /// TODO-cleanup merge with ConfigDropshot
 #[derive(Debug)]
@@ -169,6 +121,14 @@ pub struct HttpServerStarter<C: ServerContext> {
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
+    /// Construct a new starter with TLS disabled and version policy
+    /// `VersionPolicy::Unversioned`
+    ///
+    /// ## Errors
+    ///
+    /// This fails for any of the reasons that
+    /// [`HttpServerStarter::new_with_tls()`] can fail when the `tls` argument
+    /// is `None`.
     pub fn new(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
@@ -178,6 +138,19 @@ impl<C: ServerContext> HttpServerStarter<C> {
         Self::new_with_tls(config, api, private, log, None)
     }
 
+    /// Construct a new starter with version policy
+    /// `VersionPolicy::Unversioned`
+    ///
+    /// ## Errors
+    ///
+    /// This fails if:
+    ///
+    /// * we could not bind to the requested address and port
+    /// * `tls` is `Some` but the provided configuration was not valid
+    /// * `api` (the `ApiDescription`) contains any endpoints that are
+    ///   version-restricted (i.e., have "versions" to anything other than
+    ///   `ApiEndpointVersions::All).  Versioned routes are not supported with
+    ///   unversioned servers.
     pub fn new_with_tls(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
@@ -195,6 +168,19 @@ impl<C: ServerContext> HttpServerStarter<C> {
         )
     }
 
+    /// Construct a new starter
+    ///
+    /// ## Errors
+    ///
+    /// This fails if:
+    ///
+    /// * we could not bind to the requested address and port
+    /// * `tls` is `Some` but the provided configuration was not valid
+    /// * `version_policy` is `VersionPolicy::Unversioned` and `api` (the
+    ///   `ApiDescription`) contains any endpoints that are version-restricted
+    ///   (i.e., have "versions" to anything other than
+    ///   `ApiEndpointVersions::All).  Versioned routes are not supported with
+    ///   unversioned servers.
     pub fn new_with_versioning(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
