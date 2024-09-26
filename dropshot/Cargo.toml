@@ -1,7 +1,7 @@
 [package]
 name = "dropshot"
 description = "expose REST APIs from a Rust program"
-version = "0.12.0"
+version = "0.12.1-dev"
 authors = ["David Pacheco <dap@oxidecomputer.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -52,7 +52,7 @@ features = [ "serde", "std", "clock" ]
 default-features = false
 
 [dependencies.dropshot_endpoint]
-version = "^0.12.0"
+version = "^0.12.1-dev"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
