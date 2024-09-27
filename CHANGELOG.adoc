@@ -15,9 +15,9 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...HEAD[Full list of commits]
 
-* https://github.com/oxidecomputer/dropshot/pull/1122[#1122]Adds a new `ServerBuilder` as the primary way of constructing a Dropshot server.  This replaces `HttpServerStarter::new()` and `HttpServerStarter::new_with_tls()`.  These older functions still exist for compatibility.  They may be removed in an upcoming release, along with the `HttpServerStarter`.
+* https://github.com/oxidecomputer/dropshot/pull/1122[#1122] Adds a new `ServerBuilder` as the primary way of constructing a Dropshot server.  This replaces `HttpServerStarter::new()` and `HttpServerStarter::new_with_tls()`.  These older functions still exist for compatibility.  They may be removed in an upcoming release, along with the `HttpServerStarter`.
 +
-In this release, the builder interface is not especially nicer than these older functions.  As we look at adding new construction-time options (e.g., for API versioning), those will only be added to the builder.
+In this release, using the builder interface is not very different from using these older functions.  But as we look at adding new construction-time options (e.g., for API versioning), those will only be added to the builder.
 +
 The builder also provides structured errors rather than the `GenericError` provided by these older functions.
 +
