@@ -28,7 +28,6 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::mem;
 use std::net::SocketAddr;
-use std::num::NonZeroU32;
 use std::panic;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -60,7 +59,7 @@ pub struct DropshotState<C: ServerContext> {
     /// caller-specific state
     pub private: C,
     /// static server configuration parameters
-    pub config: ServerConfig,
+    pub config: ConfigDropshot,
     /// request router
     pub router: HttpRouter<C>,
     /// server-wide log handle
@@ -78,29 +77,6 @@ impl<C: ServerContext> DropshotState<C> {
     pub fn using_tls(&self) -> bool {
         self.tls_acceptor.is_some()
     }
-}
-
-/// Stores static configuration associated with the server
-/// TODO-cleanup merge with ConfigDropshot
-#[derive(Debug)]
-pub struct ServerConfig {
-    /// maximum allowed size of a request body
-    pub request_body_max_bytes: usize,
-    /// maximum size of any page of results
-    pub page_max_nitems: NonZeroU32,
-    /// default size for a page of results
-    pub page_default_nitems: NonZeroU32,
-    /// Default behavior for HTTP handler functions with respect to clients
-    /// disconnecting early.
-    pub default_handler_task_mode: HandlerTaskMode,
-    /// A list of header names to include as extra properties in the log
-    /// messages emitted by the per-request logger.  Each header will, if
-    /// present, be included in the output with a "hdr_"-prefixed property name
-    /// in lower case that has all hyphens replaced with underscores; e.g.,
-    /// "X-Forwarded-For" will be included as "hdr_x_forwarded_for".  No attempt
-    /// is made to deal with headers that appear multiple times in a single
-    /// request.
-    pub log_headers: Vec<String>,
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
@@ -127,22 +103,12 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
         tls: Option<ConfigTls>,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        let server_config = ServerConfig {
-            // We start aggressively to ensure test coverage.
-            request_body_max_bytes: config.request_body_max_bytes,
-            page_max_nitems: NonZeroU32::new(10000).unwrap(),
-            page_default_nitems: NonZeroU32::new(100).unwrap(),
-            default_handler_task_mode: config.default_handler_task_mode,
-            log_headers: config.log_headers.clone(),
-        };
-
         let handler_waitgroup = WaitGroup::new();
         let starter = match &tls {
             Some(tls) => {
                 let (starter, app_state, local_addr) =
                     InnerHttpsServerStarter::new(
-                        config,
-                        server_config,
+                        config.clone(),
                         api,
                         private,
                         log,
@@ -159,8 +125,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             None => {
                 let (starter, app_state, local_addr) =
                     InnerHttpServerStarter::new(
-                        config,
-                        server_config,
+                        config.clone(),
                         api,
                         private,
                         log,
@@ -308,8 +273,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
     /// of `HttpServerStarter` (and await the result) to actually start the
     /// server.
     fn new(
-        config: &ConfigDropshot,
-        server_config: ServerConfig,
+        config: ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
@@ -326,7 +290,7 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
 
         let app_state = Arc::new(DropshotState {
             private,
-            config: server_config,
+            config,
             router: api.into_router(),
             log: log.new(o!("local_addr" => local_addr)),
             local_addr,
@@ -632,8 +596,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
     }
 
     fn new(
-        config: &ConfigDropshot,
-        server_config: ServerConfig,
+        config: ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
@@ -661,7 +624,7 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
 
         let app_state = Arc::new(DropshotState {
             private,
-            config: server_config,
+            config,
             router: api.into_router(),
             log: logger,
             local_addr,

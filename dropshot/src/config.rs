@@ -4,6 +4,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 use std::net::SocketAddr;
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 /// Raw [`rustls::ServerConfig`] TLS configuration for use with
@@ -49,6 +50,10 @@ pub struct ConfigDropshot {
     pub bind_address: SocketAddr,
     /// maximum allowed size of a request body, defaults to 1024
     pub request_body_max_bytes: usize,
+    /// maximum size of any page of results
+    pub page_max_nitems: NonZeroU32,
+    /// default size for a page of results
+    pub page_default_nitems: NonZeroU32,
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
     pub default_handler_task_mode: HandlerTaskMode,
@@ -114,6 +119,8 @@ impl Default for ConfigDropshot {
         ConfigDropshot {
             bind_address: "127.0.0.1:0".parse().unwrap(),
             request_body_max_bytes: 1024,
+            page_max_nitems: NonZeroU32::new(10000).unwrap(),
+            page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: HandlerTaskMode::Detached,
             log_headers: Default::default(),
         }

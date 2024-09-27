@@ -31,6 +31,10 @@ https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...v0.12.0[Full list o
 
 There are no other known breaking changes in these crates that affect Dropshot.  If you have any trouble with this upgrade, please let us know by filing an issue.
 
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/959[#959] expands the settings available via `ConfigDropshot`. This adds two new fields `page_max_nitems` and `page_default_nitems` that will need to be added wherever a `ConfigDropshot` struct is manually constructed. The defaults are likely appropriate for most use cases.
+
 == 0.11.0 (released 2024-08-21)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.10.1\...v0.11.0[Full list of commits]
