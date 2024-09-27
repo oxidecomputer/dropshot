@@ -105,10 +105,7 @@ pub struct ServerConfig {
 }
 
 pub struct HttpServerStarter<C: ServerContext> {
-    app_state: Arc<DropshotState<C>>,
-    local_addr: SocketAddr,
-    wrapped: WrappedHttpServerStarter<C>,
-    handler_waitgroup: WaitGroup,
+    server: HttpServer<C>,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
@@ -122,128 +119,24 @@ impl<C: ServerContext> HttpServerStarter<C> {
     }
 
     pub fn new_with_tls(
-        _config: &ConfigDropshot,
-        _api: ApiDescription<C>,
-        _private: C,
-        _log: &Logger,
-        _tls: Option<ConfigTls>,
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+        tls: Option<ConfigTls>,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        todo!(); // XXX-dap
-                 // let server_config = ServerConfig {
-                 //     // We start aggressively to ensure test coverage.
-                 //     request_body_max_bytes: config.request_body_max_bytes,
-                 //     page_max_nitems: NonZeroU32::new(10000).unwrap(),
-                 //     page_default_nitems: NonZeroU32::new(100).unwrap(),
-                 //     default_handler_task_mode: config.default_handler_task_mode,
-                 //     log_headers: config.log_headers.clone(),
-                 // };
-
-        // let handler_waitgroup = WaitGroup::new();
-        // let starter = match &tls {
-        //     Some(tls) => {
-        //         let (starter, app_state, local_addr) =
-        //             InnerHttpsServerStarter::new(
-        //                 config,
-        //                 server_config,
-        //                 api,
-        //                 private,
-        //                 log,
-        //                 tls,
-        //                 handler_waitgroup.worker(),
-        //             )?;
-        //         HttpServerStarter {
-        //             app_state,
-        //             local_addr,
-        //             wrapped: WrappedHttpServerStarter::Https(starter),
-        //             handler_waitgroup,
-        //         }
-        //     }
-        //     None => {
-        //         let (starter, app_state, local_addr) =
-        //             InnerHttpServerStarter::new(
-        //                 config,
-        //                 server_config,
-        //                 api,
-        //                 private,
-        //                 log,
-        //                 handler_waitgroup.worker(),
-        //             )?;
-        //         HttpServerStarter {
-        //             app_state,
-        //             local_addr,
-        //             wrapped: WrappedHttpServerStarter::Http(starter),
-        //             handler_waitgroup,
-        //         }
-        //     }
-        // };
-
-        // for (path, method, _) in &starter.app_state.router {
-        //     debug!(starter.app_state.log, "registered endpoint";
-        //         "method" => &method,
-        //         "path" => &path
-        //     );
-        // }
-
-        // Ok(starter)
+        Ok(Self {
+            server: ServerBuilder::new(log.clone(), private)
+                .tls(tls)
+                .api(api)
+                .config(config.clone())
+                .build()
+                .map_err(Box::new)?,
+        })
     }
 
     pub fn start(self) -> HttpServer<C> {
-        todo!();
-        // let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        // let log_close = self.app_state.log.new(o!());
-        // let join_handle = match self.wrapped {
-        //     WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
-        //     WrappedHttpServerStarter::Https(https) => {
-        //         https.start(rx, log_close)
-        //     }
-        // };
-        // info!(self.app_state.log, "listening");
-
-        // let handler_waitgroup = self.handler_waitgroup;
-        // let join_handle = async move {
-        //     // After the server shuts down, we also want to wait for any
-        //     // detached handler futures to complete.
-        //     () = join_handle
-        //         .await
-        //         .map_err(|e| format!("server stopped: {e}"))?;
-        //     () = handler_waitgroup.wait().await;
-        //     Ok(())
-        // };
-
-        // #[cfg(feature = "usdt-probes")]
-        // let probe_registration = match usdt::register_probes() {
-        //     Ok(_) => {
-        //         debug!(
-        //             self.app_state.log,
-        //             "successfully registered DTrace USDT probes"
-        //         );
-        //         ProbeRegistration::Succeeded
-        //     }
-        //     Err(e) => {
-        //         let msg = e.to_string();
-        //         error!(
-        //             self.app_state.log,
-        //             "failed to register DTrace USDT probes: {}", msg
-        //         );
-        //         ProbeRegistration::Failed(msg)
-        //     }
-        // };
-        // #[cfg(not(feature = "usdt-probes"))]
-        // let probe_registration = {
-        //     debug!(
-        //         self.app_state.log,
-        //         "DTrace USDT probes compiled out, not registering"
-        //     );
-        //     ProbeRegistration::Disabled
-        // };
-
-        // HttpServer {
-        //     probe_registration,
-        //     app_state: self.app_state,
-        //     local_addr: self.local_addr,
-        //     closer: CloseHandle { close_channel: Some(tx) },
-        //     join_future: join_handle.boxed().shared(),
-        // }
+        self.server
     }
 }
 
@@ -256,9 +149,6 @@ struct InnerHttpServerStarter<C: ServerContext>(
     HttpAcceptor,
     ServerConnectionHandler<C>,
 );
-
-type InnerHttpServerStarterNewReturn<C> =
-    (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
 
 impl<C: ServerContext> InnerHttpServerStarter<C> {
     /// Begins execution of the underlying Http server.
@@ -304,40 +194,6 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
             // optional: could use another select on a timeout
             graceful.shutdown().await
         })
-    }
-
-    /// Set up an HTTP server bound on the specified address that runs
-    /// registered handlers.  You must invoke `start()` on the returned instance
-    /// of `HttpServerStarter` (and await the result) to actually start the
-    /// server.
-    fn new(
-        _config: &ConfigDropshot,
-        _server_config: ServerConfig,
-        _api: ApiDescription<C>,
-        _private: C,
-        _log: &Logger,
-        _handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, BuildError> {
-        todo!();
-        // let incoming =
-        //     HttpAcceptor { tcp, log: log.new(o!("local_addr" => local_addr)) };
-
-        // let app_state = Arc::new(DropshotState {
-        //     private,
-        //     config: server_config,
-        //     router: api.into_router(),
-        //     log: logger,
-        //     local_addr,
-        //     tls_acceptor: None,
-        //     handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
-        // });
-
-        // let make_service = ServerConnectionHandler::new(app_state.clone());
-        // Ok((
-        //     InnerHttpServerStarter(incoming, make_service),
-        //     app_state,
-        //     local_addr,
-        // ))
     }
 }
 
@@ -573,9 +429,6 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
     }
 }
 
-type InnerHttpsServerStarterNewReturn<C> =
-    (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
-
 impl<C: ServerContext> InnerHttpsServerStarter<C> {
     /// Begins execution of the underlying Http server.
     fn start(
@@ -619,43 +472,6 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
             // optional: could use another select on a timeout
             graceful.shutdown().await
         })
-    }
-
-    fn new(
-        _config: &ConfigDropshot,
-        _server_config: ServerConfig,
-        _api: ApiDescription<C>,
-        _private: C,
-        _log: &Logger,
-        _tls: &ConfigTls,
-        _handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpsServerStarterNewReturn<C>, BuildError> {
-        todo!();
-        // let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
-        //     rustls::ServerConfig::try_from(tls)?,
-        // ))));
-
-        // let tcp = HttpAcceptor { tcp, log: logger.clone() };
-        // let https_acceptor =
-        //     HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
-
-        // let app_state = Arc::new(DropshotState {
-        //     private,
-        //     config: server_config,
-        //     router: api.into_router(),
-        //     log: logger,
-        //     local_addr,
-        //     tls_acceptor: Some(acceptor),
-        //     handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
-        // });
-
-        // let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-
-        // Ok((
-        //     InnerHttpsServerStarter(https_acceptor, make_service),
-        //     app_state,
-        //     local_addr,
-        // ))
     }
 }
 
