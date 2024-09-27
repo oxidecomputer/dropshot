@@ -140,6 +140,27 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
         tls: Option<ConfigTls>,
     ) -> Result<HttpServerStarter<C>, BuildError> {
+        let tcp = {
+            let std_listener = std::net::TcpListener::bind(
+                &config.bind_address,
+            )
+            .map_err(|e| BuildError::bind_error(e, config.bind_address))?;
+            std_listener.set_nonblocking(true).map_err(|e| {
+                BuildError::generic_system(e, "setting non-blocking")
+            })?;
+            // We use `from_std` instead of just calling `bind` here directly
+            // to avoid invoking an async function.
+            TcpListener::from_std(std_listener).map_err(|e| {
+                BuildError::generic_system(e, "creating TCP listener")
+            })?
+        };
+
+        let local_addr = tcp.local_addr().map_err(|e| {
+            BuildError::generic_system(e, "getting local TCP address")
+        })?;
+
+        let log = log.new(o!("local_addr" => local_addr));
+
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
@@ -148,24 +169,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
             default_handler_task_mode: config.default_handler_task_mode,
             log_headers: config.log_headers.clone(),
         };
-        let handler_waitgroup = WaitGroup::new();
-
-        let std_listener = std::net::TcpListener::bind(&config.bind_address)
-            .map_err(|e| BuildError::bind_error(e, config.bind_address))?;
-        std_listener.set_nonblocking(true).map_err(|e| {
-            BuildError::generic_system(e, "setting non-blocking")
-        })?;
-        // We use `from_std` instead of just calling `bind` here directly
-        // to avoid invoking an async function.
-        let tcp = TcpListener::from_std(std_listener).map_err(|e| {
-            BuildError::generic_system(e, "creating TCP listener")
-        })?;
-        let local_addr = tcp.local_addr().map_err(|e| {
-            BuildError::generic_system(e, "getting local TCP address")
-        })?;
-        let incoming = HttpAcceptor { tcp, log: log.clone() };
-
-        let log = log.new(o!("local_addr" => local_addr));
 
         let tls_acceptor = tls
             .as_ref()
@@ -175,7 +178,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 )))))
             })
             .transpose()?;
-
+        let handler_waitgroup = WaitGroup::new();
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
@@ -193,11 +196,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
             );
         }
 
+        let http_acceptor = HttpAcceptor { tcp, log: log.clone() };
+
         Ok(HttpServerStarter {
             app_state,
             local_addr,
             handler_waitgroup,
-            http_acceptor: incoming,
+            http_acceptor,
             tls_acceptor,
         })
     }
@@ -211,10 +216,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
             http_acceptor,
         } = self;
 
-        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-
         let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
-
+        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
         let log = &app_state.log;
         let log_close = log.clone();
         let join_handle = tokio::spawn(async move {
