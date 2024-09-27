@@ -49,7 +49,7 @@
 //! use dropshot::ConfigLogging;
 //! use dropshot::ConfigLoggingLevel;
 //! use dropshot::HandlerTaskMode;
-//! use dropshot::HttpServerStarter;
+//! use dropshot::ServerBuilder;
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
@@ -67,20 +67,9 @@
 //!     // Register API functions -- see detailed example or ApiDescription docs.
 //!
 //!     // Start the server.
-//!     let server =
-//!         HttpServerStarter::new(
-//!             &ConfigDropshot {
-//!                 bind_address: "127.0.0.1:0".parse().unwrap(),
-//!                 request_body_max_bytes: 1024,
-//!                 default_handler_task_mode: HandlerTaskMode::Detached,
-//!                 log_headers: Default::default(),
-//!             },
-//!             api,
-//!             Arc::new(()),
-//!             &log,
-//!         )
-//!         .map_err(|error| format!("failed to start server: {}", error))?
-//!         .start();
+//!     let server = ServerBuilder::new(api, Arc::new(()), log)
+//!         .start()
+//!         .map_err(|error| format!("failed to start server: {}", error))?;
 //!
 //!     server.await
 //! }
@@ -836,6 +825,8 @@ pub use pagination::PaginationOrder;
 pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
+pub use server::BuildError;
+pub use server::ServerBuilder;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};

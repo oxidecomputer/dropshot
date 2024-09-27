@@ -567,8 +567,8 @@ impl HttpResponse for Response<Body> {
     }
 }
 
-/// Wraps a [dropshot::Body] so that it can be used with coded response types such
-/// as [HttpResponseOk].
+/// Wraps a [`Body`] so that it can be used with coded response types such as
+/// [HttpResponseOk].
 pub struct FreeformBody(pub Body);
 
 impl From<Body> for FreeformBody {
