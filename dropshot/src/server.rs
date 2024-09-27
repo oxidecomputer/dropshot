@@ -43,6 +43,7 @@ use waitgroup::WaitGroup;
 use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
 use slog::Logger;
+use thiserror::Error;
 
 // TODO Replace this with something else?
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -106,8 +107,9 @@ pub struct ServerConfig {
 pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
-    wrapped: WrappedHttpServerStarter<C>,
     handler_waitgroup: WaitGroup,
+    incoming: HttpAcceptor,
+    tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
@@ -127,6 +129,17 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
         tls: Option<ConfigTls>,
     ) -> Result<HttpServerStarter<C>, GenericError> {
+        HttpServerStarter::new_internal(config, api, private, log, tls)
+            .map_err(|e| Box::new(e) as GenericError)
+    }
+
+    fn new_internal(
+        config: &ConfigDropshot,
+        api: ApiDescription<C>,
+        private: C,
+        log: &Logger,
+        tls: Option<ConfigTls>,
+    ) -> Result<HttpServerStarter<C>, BuildError> {
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
             request_body_max_bytes: config.request_body_max_bytes,
@@ -135,68 +148,150 @@ impl<C: ServerContext> HttpServerStarter<C> {
             default_handler_task_mode: config.default_handler_task_mode,
             log_headers: config.log_headers.clone(),
         };
-
         let handler_waitgroup = WaitGroup::new();
-        let starter = match &tls {
-            Some(tls) => {
-                let (starter, app_state, local_addr) =
-                    InnerHttpsServerStarter::new(
-                        config,
-                        server_config,
-                        api,
-                        private,
-                        log,
-                        tls,
-                        handler_waitgroup.worker(),
-                    )?;
-                HttpServerStarter {
-                    app_state,
-                    local_addr,
-                    wrapped: WrappedHttpServerStarter::Https(starter),
-                    handler_waitgroup,
-                }
-            }
-            None => {
-                let (starter, app_state, local_addr) =
-                    InnerHttpServerStarter::new(
-                        config,
-                        server_config,
-                        api,
-                        private,
-                        log,
-                        handler_waitgroup.worker(),
-                    )?;
-                HttpServerStarter {
-                    app_state,
-                    local_addr,
-                    wrapped: WrappedHttpServerStarter::Http(starter),
-                    handler_waitgroup,
-                }
-            }
-        };
 
-        for (path, method, _) in &starter.app_state.router {
-            debug!(starter.app_state.log, "registered endpoint";
+        let std_listener = std::net::TcpListener::bind(&config.bind_address)
+            .map_err(|e| BuildError::bind_error(e, config.bind_address))?;
+        std_listener.set_nonblocking(true).map_err(|e| {
+            BuildError::generic_system(e, "setting non-blocking")
+        })?;
+        // We use `from_std` instead of just calling `bind` here directly
+        // to avoid invoking an async function.
+        let tcp = TcpListener::from_std(std_listener).map_err(|e| {
+            BuildError::generic_system(e, "creating TCP listener")
+        })?;
+        let local_addr = tcp.local_addr().map_err(|e| {
+            BuildError::generic_system(e, "getting local TCP address")
+        })?;
+        let incoming = HttpAcceptor { tcp, log: log.clone() };
+
+        let log = log.new(o!("local_addr" => local_addr));
+
+        let tls_acceptor = tls
+            .as_ref()
+            .map(|tls| {
+                Ok(Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
+                    rustls::ServerConfig::try_from(tls)?,
+                )))))
+            })
+            .transpose()?;
+
+        let app_state = Arc::new(DropshotState {
+            private,
+            config: server_config,
+            router: api.into_router(),
+            log: log.clone(),
+            local_addr,
+            tls_acceptor: tls_acceptor.clone(),
+            handler_waitgroup_worker: DebugIgnore(handler_waitgroup.worker()),
+        });
+
+        for (path, method, _) in &app_state.router {
+            debug!(&log, "registered endpoint";
                 "method" => &method,
                 "path" => &path
             );
         }
 
-        Ok(starter)
+        Ok(HttpServerStarter {
+            app_state,
+            local_addr,
+            handler_waitgroup,
+            incoming,
+            tls_acceptor,
+        })
     }
 
     pub fn start(self) -> HttpServer<C> {
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let log_close = self.app_state.log.new(o!());
-        let join_handle = match self.wrapped {
-            WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
-            WrappedHttpServerStarter::Https(https) => {
-                https.start(rx, log_close)
-            }
-        };
-        info!(self.app_state.log, "listening");
+        let HttpServerStarter {
+            app_state,
+            local_addr,
+            handler_waitgroup,
+            tls_acceptor,
+            incoming, // XXX-dap rename
+        } = self;
 
-        let handler_waitgroup = self.handler_waitgroup;
+        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
+
+        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+
+        let log = &app_state.log;
+        let log_close = log.clone();
+        let join_handle = tokio::spawn(async move {
+            use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+            use hyper_util::server::conn::auto;
+
+            let mut builder = auto::Builder::new(TokioExecutor::new());
+            // http/1 settings
+            builder.http1().timer(TokioTimer::new());
+            // XXX-dap previously, the TLS one did NOT do this http2 step
+            // http/2 settings
+            builder.http2().timer(TokioTimer::new());
+
+            // Use a graceful watcher to keep track of all existing connections,
+            // and when the close_signal is trigger, force all known conns
+            // to start a graceful shutdown.
+            let graceful =
+                hyper_util::server::graceful::GracefulShutdown::new();
+
+            // The following code looks superficially similar between the HTTP
+            // and HTTPS paths.  However, the concrete types of various objects
+            // are different and so it's not easy to actually share the code.
+            let log = log_close;
+            match tls_acceptor {
+                Some(tls_acceptor) => {
+                    let mut https_acceptor =
+                        HttpsAcceptor::new(log.clone(), tls_acceptor, incoming);
+                    loop {
+                        tokio::select! {
+                            Some(Ok(sock)) = https_acceptor.accept() => {
+                                let remote_addr = sock.remote_addr();
+                                let handler = make_service
+                                    .make_http_request_handler(remote_addr);
+                                let fut = builder
+                                    .serve_connection_with_upgrades(
+                                        TokioIo::new(sock),
+                                        handler,
+                                    );
+                                let fut = graceful.watch(fut.into_owned());
+                                tokio::spawn(fut);
+                            },
+
+                            _ = &mut rx => {
+                                info!(log, "beginning graceful shutdown");
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => loop {
+                    tokio::select! {
+                        (sock, remote_addr) = incoming.accept() => {
+                            let handler = make_service
+                                .make_http_request_handler(remote_addr);
+                            let fut = builder
+                                .serve_connection_with_upgrades(
+                                    TokioIo::new(sock),
+                                    handler,
+                                );
+                            let fut = graceful.watch(fut.into_owned());
+                            tokio::spawn(fut);
+                        },
+
+                        _ = &mut rx => {
+                            info!(log, "beginning graceful shutdown");
+                            break;
+                        }
+                    }
+                },
+            };
+
+            // optional: could use another select on a timeout
+            graceful.shutdown().await
+        });
+
+        info!(log, "listening");
+
         let join_handle = async move {
             // After the server shuts down, we also want to wait for any
             // detached handler futures to complete.
@@ -210,136 +305,28 @@ impl<C: ServerContext> HttpServerStarter<C> {
         #[cfg(feature = "usdt-probes")]
         let probe_registration = match usdt::register_probes() {
             Ok(_) => {
-                debug!(
-                    self.app_state.log,
-                    "successfully registered DTrace USDT probes"
-                );
+                debug!(&log, "successfully registered DTrace USDT probes");
                 ProbeRegistration::Succeeded
             }
             Err(e) => {
                 let msg = e.to_string();
-                error!(
-                    self.app_state.log,
-                    "failed to register DTrace USDT probes: {}", msg
-                );
+                error!(&log, "failed to register DTrace USDT probes: {}", msg);
                 ProbeRegistration::Failed(msg)
             }
         };
         #[cfg(not(feature = "usdt-probes"))]
         let probe_registration = {
-            debug!(
-                self.app_state.log,
-                "DTrace USDT probes compiled out, not registering"
-            );
+            debug!(&log, "DTrace USDT probes compiled out, not registering");
             ProbeRegistration::Disabled
         };
 
         HttpServer {
             probe_registration,
-            app_state: self.app_state,
-            local_addr: self.local_addr,
+            app_state,
+            local_addr,
             closer: CloseHandle { close_channel: Some(tx) },
             join_future: join_handle.boxed().shared(),
         }
-    }
-}
-
-enum WrappedHttpServerStarter<C: ServerContext> {
-    Http(InnerHttpServerStarter<C>),
-    Https(InnerHttpsServerStarter<C>),
-}
-
-struct InnerHttpServerStarter<C: ServerContext>(
-    HttpAcceptor,
-    ServerConnectionHandler<C>,
-);
-
-type InnerHttpServerStarterNewReturn<C> =
-    (InnerHttpServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
-
-impl<C: ServerContext> InnerHttpServerStarter<C> {
-    /// Begins execution of the underlying Http server.
-    fn start(
-        self,
-        mut close_signal: tokio::sync::oneshot::Receiver<()>,
-        log_close: Logger,
-    ) -> tokio::task::JoinHandle<()> {
-        use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-        use hyper_util::server::conn::auto;
-
-        tokio::spawn(async move {
-            let mut builder = auto::Builder::new(TokioExecutor::new());
-            // http/1 settings
-            builder.http1().timer(TokioTimer::new());
-            // http/2 settings
-            builder.http2().timer(TokioTimer::new());
-
-            // Use a graceful watcher to keep track of all existing connections,
-            // and when the close_signal is trigger, force all known conns
-            // to start a graceful shutdown.
-            let graceful =
-                hyper_util::server::graceful::GracefulShutdown::new();
-
-            loop {
-                tokio::select! {
-                    (sock, remote_addr) = self.0.accept() => {
-                        let fut = builder.serve_connection_with_upgrades(
-                            TokioIo::new(sock),
-                            self.1.make_http_request_handler(remote_addr),
-                        );
-                        let fut = graceful.watch(fut.into_owned());
-                        tokio::spawn(fut);
-                    },
-
-                    _ = &mut close_signal => {
-                        info!(log_close, "received request to begin graceful shutdown");
-                        break;
-                    }
-                }
-            }
-
-            // optional: could use another select on a timeout
-            graceful.shutdown().await
-        })
-    }
-
-    /// Set up an HTTP server bound on the specified address that runs
-    /// registered handlers.  You must invoke `start()` on the returned instance
-    /// of `HttpServerStarter` (and await the result) to actually start the
-    /// server.
-    fn new(
-        config: &ConfigDropshot,
-        server_config: ServerConfig,
-        api: ApiDescription<C>,
-        private: C,
-        log: &Logger,
-        handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, std::io::Error> {
-        // We use `from_std` instead of just calling `bind` here directly
-        // to avoid invoking an async function.
-        let std_listener = std::net::TcpListener::bind(&config.bind_address)?;
-        std_listener.set_nonblocking(true)?;
-        let tcp = TcpListener::from_std(std_listener)?;
-        let local_addr = tcp.local_addr()?;
-        let incoming =
-            HttpAcceptor { tcp, log: log.new(o!("local_addr" => local_addr)) };
-
-        let app_state = Arc::new(DropshotState {
-            private,
-            config: server_config,
-            router: api.into_router(),
-            log: log.new(o!("local_addr" => local_addr)),
-            local_addr,
-            tls_acceptor: None,
-            handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
-        });
-
-        let make_service = ServerConnectionHandler::new(app_state.clone());
-        Ok((
-            InnerHttpServerStarter(incoming, make_service),
-            app_state,
-            local_addr,
-        ))
     }
 }
 
@@ -508,16 +495,11 @@ impl HttpsAcceptor {
     }
 }
 
-struct InnerHttpsServerStarter<C: ServerContext>(
-    HttpsAcceptor,
-    ServerConnectionHandler<C>,
-);
-
 /// Create a TLS configuration from the Dropshot config structure.
 impl TryFrom<&ConfigTls> for rustls::ServerConfig {
-    type Error = std::io::Error;
+    type Error = BuildError;
 
-    fn try_from(config: &ConfigTls) -> std::io::Result<Self> {
+    fn try_from(config: &ConfigTls) -> Result<Self, Self::Error> {
         let (mut cert_reader, mut key_reader): (
             Box<dyn std::io::BufRead>,
             Box<dyn std::io::BufRead>,
@@ -532,25 +514,17 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             ConfigTls::AsFile { cert_file, key_file } => {
                 let certfile = Box::new(std::io::BufReader::new(
                     std::fs::File::open(cert_file).map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!(
-                                "failed to open {}: {}",
-                                cert_file.display(),
-                                e
-                            ),
+                        BuildError::generic_system(
+                            e,
+                            format!("opening {}", cert_file.display()),
                         )
                     })?,
                 ));
                 let keyfile = Box::new(std::io::BufReader::new(
                     std::fs::File::open(key_file).map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!(
-                                "failed to open {}: {}",
-                                key_file.display(),
-                                e
-                            ),
+                        BuildError::generic_system(
+                            e,
+                            format!("opening {}", key_file.display()),
                         )
                     })?,
                 ));
@@ -561,17 +535,17 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
         let certs = rustls_pemfile::certs(&mut cert_reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| {
-                io_error(format!("failed to load certificate: {err}"))
+                BuildError::generic_system(err, "loading TLS certificates")
             })?;
         let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| {
-                io_error(format!("failed to load private key: {err}"))
+                BuildError::generic_system(err, "loading TLS private key")
             })?;
         let mut keys_iter = keys.into_iter();
         let (Some(private_key), None) = (keys_iter.next(), keys_iter.next())
         else {
-            return Err(io_error("expected a single private key".into()));
+            return Err(BuildError::NotOnePrivateKey);
         };
 
         let mut cfg = rustls::ServerConfig::builder()
@@ -580,102 +554,6 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             .expect("bad certificate/key");
         cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         Ok(cfg)
-    }
-}
-
-type InnerHttpsServerStarterNewReturn<C> =
-    (InnerHttpsServerStarter<C>, Arc<DropshotState<C>>, SocketAddr);
-
-impl<C: ServerContext> InnerHttpsServerStarter<C> {
-    /// Begins execution of the underlying Http server.
-    fn start(
-        mut self,
-        mut close_signal: tokio::sync::oneshot::Receiver<()>,
-        log_close: Logger,
-    ) -> tokio::task::JoinHandle<()> {
-        use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-        use hyper_util::server::conn::auto;
-
-        tokio::spawn(async move {
-            let mut builder = auto::Builder::new(TokioExecutor::new());
-            // http/1 settings
-            builder.http1().timer(TokioTimer::new());
-
-            // Use a graceful watcher to keep track of all existing connections,
-            // and when the close_signal is trigger, force all known conns
-            // to start a graceful shutdown.
-            let graceful =
-                hyper_util::server::graceful::GracefulShutdown::new();
-
-            loop {
-                tokio::select! {
-                    Some(Ok(sock)) = self.0.accept() => {
-                        let remote_addr = sock.remote_addr();
-                        let fut = builder.serve_connection_with_upgrades(
-                            TokioIo::new(sock),
-                            self.1.make_http_request_handler(remote_addr),
-                        );
-                        let fut = graceful.watch(fut.into_owned());
-                        tokio::spawn(fut);
-                    },
-
-                    _ = &mut close_signal => {
-                        info!(log_close, "received request to begin graceful shutdown");
-                        break;
-                    }
-                }
-            }
-
-            // optional: could use another select on a timeout
-            graceful.shutdown().await
-        })
-    }
-
-    fn new(
-        config: &ConfigDropshot,
-        server_config: ServerConfig,
-        api: ApiDescription<C>,
-        private: C,
-        log: &Logger,
-        tls: &ConfigTls,
-        handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
-        let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
-            rustls::ServerConfig::try_from(tls)?,
-        ))));
-
-        let tcp = {
-            let listener = std::net::TcpListener::bind(&config.bind_address)?;
-            listener.set_nonblocking(true)?;
-            // We use `from_std` instead of just calling `bind` here directly
-            // to avoid invoking an async function, to match the interface
-            // provided by `HttpServerStarter::new`.
-            TcpListener::from_std(listener)?
-        };
-
-        let local_addr = tcp.local_addr()?;
-        let logger = log.new(o!("local_addr" => local_addr));
-        let tcp = HttpAcceptor { tcp, log: logger.clone() };
-        let https_acceptor =
-            HttpsAcceptor::new(logger.clone(), acceptor.clone(), tcp);
-
-        let app_state = Arc::new(DropshotState {
-            private,
-            config: server_config,
-            router: api.into_router(),
-            log: logger,
-            local_addr,
-            tls_acceptor: Some(acceptor),
-            handler_waitgroup_worker: DebugIgnore(handler_waitgroup_worker),
-        });
-
-        let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
-
-        Ok((
-            InnerHttpsServerStarter(https_acceptor, make_service),
-            app_state,
-            local_addr,
-        ))
     }
 }
 
@@ -1142,8 +1020,40 @@ impl<C: ServerContext> Service<Request<hyper::body::Incoming>>
     }
 }
 
-fn io_error(err: String) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, err)
+/// Errors encountered while configuring a Dropshot server
+#[derive(Debug, Error)]
+pub enum BuildError {
+    #[error("failed to bind to {address}")]
+    BindError {
+        address: SocketAddr,
+        #[source]
+        error: std::io::Error,
+    },
+    #[error("expected exactly one TLS private key")]
+    NotOnePrivateKey,
+    #[error("must register an API")]
+    MissingApi,
+    #[error("only one API can be registered with a server")]
+    TooManyApis,
+    #[error("{context}")]
+    SystemError {
+        context: String,
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+impl BuildError {
+    fn bind_error(error: std::io::Error, address: SocketAddr) -> BuildError {
+        BuildError::BindError { address, error }
+    }
+
+    fn generic_system<S: Into<String>>(
+        error: std::io::Error,
+        context: S,
+    ) -> BuildError {
+        BuildError::SystemError { context: context.into(), error }
+    }
 }
 
 #[cfg(test)]
