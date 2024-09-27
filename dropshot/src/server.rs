@@ -108,7 +108,7 @@ pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
     handler_waitgroup: WaitGroup,
-    incoming: HttpAcceptor,
+    http_acceptor: HttpAcceptor,
     tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
 }
 
@@ -197,7 +197,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             app_state,
             local_addr,
             handler_waitgroup,
-            incoming,
+            http_acceptor: incoming,
             tls_acceptor,
         })
     }
@@ -208,7 +208,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             local_addr,
             handler_waitgroup,
             tls_acceptor,
-            incoming, // XXX-dap rename
+            http_acceptor,
         } = self;
 
         let make_service = ServerConnectionHandler::new(Arc::clone(&app_state));
@@ -240,8 +240,11 @@ impl<C: ServerContext> HttpServerStarter<C> {
             let log = log_close;
             match tls_acceptor {
                 Some(tls_acceptor) => {
-                    let mut https_acceptor =
-                        HttpsAcceptor::new(log.clone(), tls_acceptor, incoming);
+                    let mut https_acceptor = HttpsAcceptor::new(
+                        log.clone(),
+                        tls_acceptor,
+                        http_acceptor,
+                    );
                     loop {
                         tokio::select! {
                             Some(Ok(sock)) = https_acceptor.accept() => {
@@ -266,7 +269,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
                 }
                 None => loop {
                     tokio::select! {
-                        (sock, remote_addr) = incoming.accept() => {
+                        (sock, remote_addr) = http_acceptor.accept() => {
                             let handler = make_service
                                 .make_http_request_handler(remote_addr);
                             let fut = builder
