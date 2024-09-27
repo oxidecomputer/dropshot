@@ -242,7 +242,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
             let mut builder = auto::Builder::new(TokioExecutor::new());
             // http/1 settings
             builder.http1().timer(TokioTimer::new());
-            // XXX-dap previously, the TLS one did NOT do this http2 step
             // http/2 settings
             builder.http2().timer(TokioTimer::new());
 
