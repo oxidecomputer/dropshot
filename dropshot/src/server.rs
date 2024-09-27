@@ -33,6 +33,7 @@ use std::panic;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use thiserror::Error;
 use tokio::io::ReadBuf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
@@ -314,13 +315,21 @@ impl<C: ServerContext> InnerHttpServerStarter<C> {
         private: C,
         log: &Logger,
         handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpServerStarterNewReturn<C>, std::io::Error> {
+    ) -> Result<InnerHttpServerStarterNewReturn<C>, BuildError> {
+        // XXX-dap this is mostly duplicated from the Https version
         // We use `from_std` instead of just calling `bind` here directly
         // to avoid invoking an async function.
-        let std_listener = std::net::TcpListener::bind(&config.bind_address)?;
-        std_listener.set_nonblocking(true)?;
-        let tcp = TcpListener::from_std(std_listener)?;
-        let local_addr = tcp.local_addr()?;
+        let std_listener = std::net::TcpListener::bind(&config.bind_address)
+            .map_err(|e| BuildError::bind_error(e, config.bind_address))?;
+        std_listener.set_nonblocking(true).map_err(|e| {
+            BuildError::generic_system(e, "setting non-blocking")
+        })?;
+        let tcp = TcpListener::from_std(std_listener).map_err(|e| {
+            BuildError::generic_system(e, "creating TCP listener")
+        })?;
+        let local_addr = tcp.local_addr().map_err(|e| {
+            BuildError::generic_system(e, "getting local TCP address")
+        })?;
         let incoming =
             HttpAcceptor { tcp, log: log.new(o!("local_addr" => local_addr)) };
 
@@ -515,9 +524,9 @@ struct InnerHttpsServerStarter<C: ServerContext>(
 
 /// Create a TLS configuration from the Dropshot config structure.
 impl TryFrom<&ConfigTls> for rustls::ServerConfig {
-    type Error = std::io::Error;
+    type Error = BuildError;
 
-    fn try_from(config: &ConfigTls) -> std::io::Result<Self> {
+    fn try_from(config: &ConfigTls) -> Result<Self, Self::Error> {
         let (mut cert_reader, mut key_reader): (
             Box<dyn std::io::BufRead>,
             Box<dyn std::io::BufRead>,
@@ -532,25 +541,17 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             ConfigTls::AsFile { cert_file, key_file } => {
                 let certfile = Box::new(std::io::BufReader::new(
                     std::fs::File::open(cert_file).map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!(
-                                "failed to open {}: {}",
-                                cert_file.display(),
-                                e
-                            ),
+                        BuildError::generic_system(
+                            e,
+                            format!("opening {}", cert_file.display()),
                         )
                     })?,
                 ));
                 let keyfile = Box::new(std::io::BufReader::new(
                     std::fs::File::open(key_file).map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!(
-                                "failed to open {}: {}",
-                                key_file.display(),
-                                e
-                            ),
+                        BuildError::generic_system(
+                            e,
+                            format!("opening {}", key_file.display()),
                         )
                     })?,
                 ));
@@ -561,17 +562,17 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
         let certs = rustls_pemfile::certs(&mut cert_reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| {
-                io_error(format!("failed to load certificate: {err}"))
+                BuildError::generic_system(err, "loading TLS certificates")
             })?;
         let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| {
-                io_error(format!("failed to load private key: {err}"))
+                BuildError::generic_system(err, "loading TLS private key")
             })?;
         let mut keys_iter = keys.into_iter();
         let (Some(private_key), None) = (keys_iter.next(), keys_iter.next())
         else {
-            return Err(io_error("expected a single private key".into()));
+            return Err(BuildError::NotOnePrivateKey);
         };
 
         let mut cfg = rustls::ServerConfig::builder()
@@ -639,21 +640,28 @@ impl<C: ServerContext> InnerHttpsServerStarter<C> {
         log: &Logger,
         tls: &ConfigTls,
         handler_waitgroup_worker: waitgroup::Worker,
-    ) -> Result<InnerHttpsServerStarterNewReturn<C>, GenericError> {
+    ) -> Result<InnerHttpsServerStarterNewReturn<C>, BuildError> {
         let acceptor = Arc::new(Mutex::new(TlsAcceptor::from(Arc::new(
             rustls::ServerConfig::try_from(tls)?,
         ))));
 
         let tcp = {
-            let listener = std::net::TcpListener::bind(&config.bind_address)?;
-            listener.set_nonblocking(true)?;
+            let listener = std::net::TcpListener::bind(&config.bind_address)
+                .map_err(|e| BuildError::bind_error(e, config.bind_address))?;
+            listener.set_nonblocking(true).map_err(|e| {
+                BuildError::generic_system(e, "setting non-blocking")
+            })?;
             // We use `from_std` instead of just calling `bind` here directly
             // to avoid invoking an async function, to match the interface
             // provided by `HttpServerStarter::new`.
-            TcpListener::from_std(listener)?
+            TcpListener::from_std(listener).map_err(|e| {
+                BuildError::generic_system(e, "creating TCP listener")
+            })?
         };
 
-        let local_addr = tcp.local_addr()?;
+        let local_addr = tcp.local_addr().map_err(|e| {
+            BuildError::generic_system(e, "getting local TCP address")
+        })?;
         let logger = log.new(o!("local_addr" => local_addr));
         let tcp = HttpAcceptor { tcp, log: logger.clone() };
         let https_acceptor =
@@ -1142,8 +1150,209 @@ impl<C: ServerContext> Service<Request<hyper::body::Incoming>>
     }
 }
 
-fn io_error(err: String) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, err)
+#[derive(Debug, Error)]
+pub enum BuildError {
+    #[error("failed to bind to {address}")]
+    BindError {
+        address: SocketAddr,
+        #[source]
+        error: std::io::Error,
+    },
+    #[error("expected exactly one TLS private key")]
+    NotOnePrivateKey,
+    #[error("must register an API")]
+    MissingApi,
+    #[error("only one API can be registered with a server")]
+    TooManyApis,
+    #[error("{context}")]
+    SystemError {
+        context: String,
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+impl BuildError {
+    fn bind_error(error: std::io::Error, address: SocketAddr) -> BuildError {
+        BuildError::BindError { address, error }
+    }
+
+    fn generic_system<S: Into<String>>(
+        error: std::io::Error,
+        context: S,
+    ) -> BuildError {
+        BuildError::SystemError { context: context.into(), error }
+    }
+}
+
+#[derive(Debug)]
+pub struct ServerBuilder<C: ServerContext> {
+    // required caller-provided values
+    private: C,
+    log: Logger,
+
+    // optional caller-provided values
+    config: ConfigDropshot,
+    tls: Option<ConfigTls>,
+    api: DebugIgnore<Option<ApiDescription<C>>>,
+
+    // our own internal state
+    error: Option<BuildError>,
+}
+
+impl<C: ServerContext> ServerBuilder<C> {
+    pub fn new(log: Logger, private: C) -> ServerBuilder<C> {
+        ServerBuilder {
+            private,
+            log,
+            config: Default::default(),
+            tls: Default::default(),
+            api: Default::default(),
+            error: Default::default(),
+        }
+    }
+
+    pub fn config(mut self, config: ConfigDropshot) -> Self {
+        self.config = config;
+        self
+    }
+
+    pub fn tls(mut self, tls: Option<ConfigTls>) -> Self {
+        self.tls = tls;
+        self
+    }
+
+    pub fn api(mut self, api: ApiDescription<C>) -> Self {
+        if self.api.is_none() {
+            self.api = DebugIgnore(Some(api));
+        } else {
+            self.error(BuildError::TooManyApis);
+        }
+
+        self
+    }
+
+    fn error(&mut self, error: BuildError) {
+        if self.error.is_none() {
+            self.error = Some(error);
+        }
+    }
+
+    pub fn build(self) -> Result<HttpServer<C>, BuildError> {
+        let server_config = ServerConfig {
+            // We start aggressively to ensure test coverage.
+            request_body_max_bytes: self.config.request_body_max_bytes,
+            page_max_nitems: NonZeroU32::new(10000).unwrap(),
+            page_default_nitems: NonZeroU32::new(100).unwrap(),
+            default_handler_task_mode: self.config.default_handler_task_mode,
+            log_headers: self.config.log_headers.clone(),
+        };
+        let handler_waitgroup = WaitGroup::new();
+
+        let config = self.config;
+        let private = self.private;
+        let log = self.log;
+        let tls = self.tls;
+        let api = self.api.0.ok_or_else(|| BuildError::MissingApi)?;
+
+        let starter = if let Some(tls) = &tls {
+            let (starter, app_state, local_addr) =
+                InnerHttpsServerStarter::new(
+                    &config,
+                    server_config,
+                    api,
+                    private,
+                    &log,
+                    tls,
+                    handler_waitgroup.worker(),
+                )?;
+            HttpServerStarter {
+                app_state,
+                local_addr,
+                wrapped: WrappedHttpServerStarter::Https(starter),
+                handler_waitgroup,
+            }
+        } else {
+            let (starter, app_state, local_addr) = InnerHttpServerStarter::new(
+                &config,
+                server_config,
+                api,
+                private,
+                &log,
+                handler_waitgroup.worker(),
+            )?;
+            HttpServerStarter {
+                app_state,
+                local_addr,
+                wrapped: WrappedHttpServerStarter::Http(starter),
+                handler_waitgroup,
+            }
+        };
+
+        let log = &starter.app_state.log;
+        for (path, method, _) in &starter.app_state.router {
+            debug!(log, "registered endpoint";
+                "method" => &method,
+                "path" => &path
+            );
+        }
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let log_close = starter.app_state.log.new(o!());
+        let join_handle = match starter.wrapped {
+            WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
+            WrappedHttpServerStarter::Https(https) => {
+                https.start(rx, log_close)
+            }
+        };
+        info!(log, "listening");
+
+        let handler_waitgroup = starter.handler_waitgroup;
+        let join_handle = async move {
+            // After the server shuts down, we also want to wait for any
+            // detached handler futures to complete.
+            () = join_handle
+                .await
+                .map_err(|e| format!("server stopped: {e}"))?;
+            () = handler_waitgroup.wait().await;
+            Ok(())
+        };
+
+        #[cfg(feature = "usdt-probes")]
+        let probe_registration = match usdt::register_probes() {
+            Ok(_) => {
+                debug!(
+                    starter.app_state.log,
+                    "successfully registered DTrace USDT probes"
+                );
+                ProbeRegistration::Succeeded
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                error!(
+                    starter.app_state.log,
+                    "failed to register DTrace USDT probes: {}", msg
+                );
+                ProbeRegistration::Failed(msg)
+            }
+        };
+        #[cfg(not(feature = "usdt-probes"))]
+        let probe_registration = {
+            debug!(
+                starter.app_state.log,
+                "DTrace USDT probes compiled out, not registering"
+            );
+            ProbeRegistration::Disabled
+        };
+
+        Ok(HttpServer {
+            probe_registration,
+            app_state: starter.app_state,
+            local_addr: starter.local_addr,
+            closer: CloseHandle { close_channel: Some(tx) },
+            join_future: join_handle.boxed().shared(),
+        })
+    }
 }
 
 #[cfg(test)]
