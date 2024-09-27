@@ -140,63 +140,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
     }
 }
 
-enum WrappedHttpServerStarter<C: ServerContext> {
-    Http(InnerHttpServerStarter<C>),
-    Https(InnerHttpsServerStarter<C>),
-}
-
-struct InnerHttpServerStarter<C: ServerContext>(
-    HttpAcceptor,
-    ServerConnectionHandler<C>,
-);
-
-impl<C: ServerContext> InnerHttpServerStarter<C> {
-    /// Begins execution of the underlying Http server.
-    fn start(
-        self,
-        mut close_signal: tokio::sync::oneshot::Receiver<()>,
-        log_close: Logger,
-    ) -> tokio::task::JoinHandle<()> {
-        use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-        use hyper_util::server::conn::auto;
-
-        tokio::spawn(async move {
-            let mut builder = auto::Builder::new(TokioExecutor::new());
-            // http/1 settings
-            builder.http1().timer(TokioTimer::new());
-            // http/2 settings
-            builder.http2().timer(TokioTimer::new());
-
-            // Use a graceful watcher to keep track of all existing connections,
-            // and when the close_signal is trigger, force all known conns
-            // to start a graceful shutdown.
-            let graceful =
-                hyper_util::server::graceful::GracefulShutdown::new();
-
-            loop {
-                tokio::select! {
-                    (sock, remote_addr) = self.0.accept() => {
-                        let fut = builder.serve_connection_with_upgrades(
-                            TokioIo::new(sock),
-                            self.1.make_http_request_handler(remote_addr),
-                        );
-                        let fut = graceful.watch(fut.into_owned());
-                        tokio::spawn(fut);
-                    },
-
-                    _ = &mut close_signal => {
-                        info!(log_close, "received request to begin graceful shutdown");
-                        break;
-                    }
-                }
-            }
-
-            // optional: could use another select on a timeout
-            graceful.shutdown().await
-        })
-    }
-}
-
 /// Accepts TCP connections like a `TcpListener`, but ignores transient errors rather than propagating them to the caller
 struct HttpAcceptor {
     tcp: TcpListener,
@@ -362,11 +305,6 @@ impl HttpsAcceptor {
     }
 }
 
-struct InnerHttpsServerStarter<C: ServerContext>(
-    HttpsAcceptor,
-    ServerConnectionHandler<C>,
-);
-
 /// Create a TLS configuration from the Dropshot config structure.
 impl TryFrom<&ConfigTls> for rustls::ServerConfig {
     type Error = BuildError;
@@ -426,52 +364,6 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             .expect("bad certificate/key");
         cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         Ok(cfg)
-    }
-}
-
-impl<C: ServerContext> InnerHttpsServerStarter<C> {
-    /// Begins execution of the underlying Http server.
-    fn start(
-        mut self,
-        mut close_signal: tokio::sync::oneshot::Receiver<()>,
-        log_close: Logger,
-    ) -> tokio::task::JoinHandle<()> {
-        use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-        use hyper_util::server::conn::auto;
-
-        tokio::spawn(async move {
-            let mut builder = auto::Builder::new(TokioExecutor::new());
-            // http/1 settings
-            builder.http1().timer(TokioTimer::new());
-
-            // Use a graceful watcher to keep track of all existing connections,
-            // and when the close_signal is trigger, force all known conns
-            // to start a graceful shutdown.
-            let graceful =
-                hyper_util::server::graceful::GracefulShutdown::new();
-
-            loop {
-                tokio::select! {
-                    Some(Ok(sock)) = self.0.accept() => {
-                        let remote_addr = sock.remote_addr();
-                        let fut = builder.serve_connection_with_upgrades(
-                            TokioIo::new(sock),
-                            self.1.make_http_request_handler(remote_addr),
-                        );
-                        let fut = graceful.watch(fut.into_owned());
-                        tokio::spawn(fut);
-                    },
-
-                    _ = &mut close_signal => {
-                        info!(log_close, "received request to begin graceful shutdown");
-                        break;
-                    }
-                }
-            }
-
-            // optional: could use another select on a timeout
-            graceful.shutdown().await
-        })
     }
 }
 
@@ -1081,21 +973,6 @@ impl<C: ServerContext> ServerBuilder<C> {
 
         let incoming = HttpAcceptor { tcp, log: log.clone() };
 
-        let inner_starter = match tls_acceptor {
-            Some(tls_acceptor) => {
-                let https_acceptor =
-                    HttpsAcceptor::new(log.clone(), tls_acceptor, incoming);
-                WrappedHttpServerStarter::Https(InnerHttpsServerStarter(
-                    https_acceptor,
-                    make_service,
-                ))
-            }
-            None => WrappedHttpServerStarter::Http(InnerHttpServerStarter(
-                incoming,
-                make_service,
-            )),
-        };
-
         let log = &app_state.log;
         for (path, method, _) in &app_state.router {
             debug!(log, "registered endpoint";
@@ -1104,14 +981,82 @@ impl<C: ServerContext> ServerBuilder<C> {
             );
         }
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let log_close = app_state.log.new(o!());
-        let join_handle = match inner_starter {
-            WrappedHttpServerStarter::Http(http) => http.start(rx, log_close),
-            WrappedHttpServerStarter::Https(https) => {
-                https.start(rx, log_close)
-            }
-        };
+        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+
+        let log_close = log.clone();
+        let join_handle = tokio::spawn(async move {
+            use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+            use hyper_util::server::conn::auto;
+
+            let mut builder = auto::Builder::new(TokioExecutor::new());
+            // http/1 settings
+            builder.http1().timer(TokioTimer::new());
+            // XXX-dap previously, the TLS one did NOT do this http2 step
+            // http/2 settings
+            builder.http2().timer(TokioTimer::new());
+
+            // Use a graceful watcher to keep track of all existing connections,
+            // and when the close_signal is trigger, force all known conns
+            // to start a graceful shutdown.
+            let graceful =
+                hyper_util::server::graceful::GracefulShutdown::new();
+
+            // The following code looks superficially similar between the HTTP
+            // and HTTPS paths.  However, the concrete types of various objects
+            // are different and so it's not easy to actually share the code.
+            let log = log_close;
+            match tls_acceptor {
+                Some(tls_acceptor) => {
+                    let mut https_acceptor =
+                        HttpsAcceptor::new(log.clone(), tls_acceptor, incoming);
+                    loop {
+                        tokio::select! {
+                            Some(Ok(sock)) = https_acceptor.accept() => {
+                                let remote_addr = sock.remote_addr();
+                                let handler = make_service
+                                    .make_http_request_handler(remote_addr);
+                                let fut = builder
+                                    .serve_connection_with_upgrades(
+                                        TokioIo::new(sock),
+                                        handler,
+                                    );
+                                let fut = graceful.watch(fut.into_owned());
+                                tokio::spawn(fut);
+                            },
+
+                            _ = &mut rx => {
+                                info!(log, "beginning graceful shutdown");
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => loop {
+                    tokio::select! {
+                        (sock, remote_addr) = incoming.accept() => {
+                            let handler = make_service
+                                .make_http_request_handler(remote_addr);
+                            let fut = builder
+                                .serve_connection_with_upgrades(
+                                    TokioIo::new(sock),
+                                    handler,
+                                );
+                            let fut = graceful.watch(fut.into_owned());
+                            tokio::spawn(fut);
+                        },
+
+                        _ = &mut rx => {
+                            info!(log, "beginning graceful shutdown");
+                            break;
+                        }
+                    }
+                },
+            };
+
+            // optional: could use another select on a timeout
+            graceful.shutdown().await
+        });
+
         info!(log, "listening");
 
         let join_handle = async move {
