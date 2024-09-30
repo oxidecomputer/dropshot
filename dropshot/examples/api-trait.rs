@@ -134,8 +134,7 @@ mod imp {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    // For simplicity, we'll configure an "info"-level logger that writes to
-    // stderr assuming that it's a terminal.
+    // See dropshot/examples/basic.rs for more details on most of these pieces.
     let config_logging =
         ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging

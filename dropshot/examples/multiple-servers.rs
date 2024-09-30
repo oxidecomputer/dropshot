@@ -77,9 +77,9 @@ use dropshot::HttpResponseCreated;
 use dropshot::HttpResponseDeleted;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServer;
-use dropshot::HttpServerStarter;
 use dropshot::Path;
 use dropshot::RequestContext;
+use dropshot::ServerBuilder;
 use dropshot::TypedBody;
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
@@ -191,16 +191,13 @@ impl SharedMultiServerContext {
             Entry::Vacant(slot) => slot,
         };
 
-        // For simplicity, we'll configure an "info"-level logger that writes to
-        // stderr assuming that it's a terminal.
+        // See dropshot/examples/basic.rs for more details on most of these pieces.
         let config_logging =
             ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
         let log = config_logging
             .to_logger(format!("example-multiserver-{name}"))
             .map_err(|error| format!("failed to create logger: {}", error))?;
 
-        // Build a description of the API.
-        //
         // TODO: Could `ApiDescription` implement `Clone`, or could we pass an
         // `Arc<ApiDescription>` instead?
         let mut api = ApiDescription::new();
@@ -218,10 +215,10 @@ impl SharedMultiServerContext {
             name: name.to_string(),
             log: log.clone(),
         };
-        let server =
-            HttpServerStarter::new(&config_dropshot, api, context, &log)
-                .map_err(|error| format!("failed to create server: {}", error))?
-                .start();
+        let server = ServerBuilder::new(api, context, log)
+            .config(config_dropshot)
+            .start()
+            .map_err(|error| format!("failed to create server: {}", error))?;
         let shutdown_handle = server.wait_for_shutdown();
 
         slot.insert(server);

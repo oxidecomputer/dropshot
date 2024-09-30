@@ -68,11 +68,11 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::EmptyScanParams;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServerStarter;
 use dropshot::PaginationParams;
 use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::ResultsPage;
+use dropshot::ServerBuilder;
 use dropshot::WhichPage;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -146,6 +146,7 @@ async fn example_list_projects(
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+    // See dropshot/examples/basic.rs for more details on most of these pieces.
     let port = std::env::args()
         .nth(1)
         .map(|p| p.parse::<u16>())
@@ -174,8 +175,9 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
     let mut api = ApiDescription::new();
     api.register(example_list_projects).unwrap();
-    let server = HttpServerStarter::new(&config_dropshot, api, ctx, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    let server = ServerBuilder::new(api, ctx, log)
+        .config(config_dropshot)
+        .start()
+        .map_err(|error| format!("failed to create server: {}", error))?;
     server.await
 }
