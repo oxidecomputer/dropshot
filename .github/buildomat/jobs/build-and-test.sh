@@ -17,4 +17,4 @@ banner build
 ptime -m cargo build --all-features --locked --all-targets --verbose
 
 banner test
-RUST_BACKTRACE=1 ptime -m cargo test --all-features --locked --verbose
+ptime -m cargo test --all-features --locked --verbose
