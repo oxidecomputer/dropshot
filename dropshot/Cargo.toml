@@ -105,6 +105,7 @@ trybuild = "1.0.99"
 # Used by the https examples and tests
 pem = "3.0"
 rcgen = "0.13.1"
+reqwest = { version = "0.12.8", features = ["json"] }
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.24.0"
 
