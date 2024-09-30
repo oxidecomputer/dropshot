@@ -20,7 +20,7 @@ error: cannot find attribute `endpoint` in this scope
 21 |     #[endpoint {
    |       ^^^^^^^^
    |
-help: consider importing one of these items
+help: consider importing one of these attribute macros
    |
 5  + use dropshot::endpoint;
    |
@@ -33,7 +33,7 @@ error: cannot find attribute `channel` in this scope
 29 |     #[channel {
    |       ^^^^^^^
    |
-help: consider importing one of these items
+help: consider importing one of these attribute macros
    |
 5  + use dropshot::channel;
    |

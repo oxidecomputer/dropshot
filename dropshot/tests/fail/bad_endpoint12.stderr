@@ -4,9 +4,15 @@ error[E0277]: the trait bound `String: HttpResponse` is not satisfied
 15 | ) -> Result<String, HttpError> {
    |      ^^^^^^ the trait `HttpCodedResponse` is not implemented for `String`, which is required by `Result<String, HttpError>: ResultTrait`
    |
-   = help: the following other types implement trait `HttpResponse`:
-             HttpResponseHeaders<T, H>
-             http::response::Response<Body>
+   = help: the following other types implement trait `HttpCodedResponse`:
+             HttpResponseAccepted<T>
+             HttpResponseCreated<T>
+             HttpResponseDeleted
+             HttpResponseOk<T>
+             HttpResponseUpdatedNoContent
+             dropshot::handler::HttpResponseFoundStatus
+             dropshot::handler::HttpResponseSeeOtherStatus
+             dropshot::handler::HttpResponseTemporaryRedirectStatus
    = note: required for `String` to implement `HttpResponse`
 note: required for `Result<String, HttpError>` to implement `ResultTrait`
   --> tests/fail/bad_endpoint12.rs:15:6

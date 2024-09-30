@@ -16,13 +16,13 @@ error: endpoint `variadic_argument` must not have a variadic argument
 32 |         ...
    |         ^^^
 
-error: only foreign or `unsafe extern "C"` functions may be C-variadic
+error: only foreign, `unsafe extern "C"`, or `unsafe extern "C-unwind"` functions may have a C-variadic arg
   --> tests/fail/bad_trait_channel21.rs:32:9
    |
 32 |         ...
    |         ^^^
 
-error: only foreign or `unsafe extern "C"` functions may be C-variadic
+error: only foreign, `unsafe extern "C"`, or `unsafe extern "C-unwind"` functions may have a C-variadic arg
   --> tests/fail/bad_trait_channel21.rs:45:9
    |
 45 |         ...
