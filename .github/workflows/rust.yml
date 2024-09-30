@@ -11,6 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   check-style:
@@ -59,4 +60,4 @@ jobs:
       - name: Build
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
-        run: RUST_BACKTRACE=1 cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose
+        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose
