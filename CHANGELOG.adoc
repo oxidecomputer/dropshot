@@ -47,7 +47,7 @@ ServerBuilder::new(api, private, log).config(config).tls(tls).start().map_err(..
 +
 If you were _not_ invoking `start()` immediately before, you can still construct an intermediate starter object with `build_starter()`.  If you were doing this:
 +
-```rust`
+```rust
 let starter = HttpServerStarter::new(&config, api, private, &log).map_err(...)?;
 ...
 starter.start()
