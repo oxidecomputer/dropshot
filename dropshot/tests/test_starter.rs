@@ -76,7 +76,7 @@ async fn test_with_tls() {
     // for TLS, we're required to use a server name and not an IP address here.
     let url = format!("https://localhost:{}/demo", server_addr.port());
     let response = client.get(&url).send().await.unwrap();
-    assert_eq!(response.status(), hyper::StatusCode::OK);
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
     assert_eq!(response.json::<String>().await.unwrap(), "demo");
 
     logctx.cleanup_successful();
