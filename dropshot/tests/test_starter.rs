@@ -54,13 +54,13 @@ async fn test_with_tls() {
         key: serialized_key.clone(),
     });
 
-    let client = reqwest::Client::builder()
-        .add_root_certificate(
-            reqwest::Certificate::from_der(&certs[0]).unwrap(),
-        )
-        .build()
-        .unwrap();
-
+    let cert = reqwest::Certificate::from_pem_bundle(&serialized_certs)
+        .unwrap()
+        .into_iter()
+        .next()
+        .expect("one certificate in the bundle");
+    let client =
+        reqwest::Client::builder().add_root_certificate(cert).build().unwrap();
     let api = demo_api();
     let starter = HttpServerStarter::new_with_tls(
         &ConfigDropshot::default(),
