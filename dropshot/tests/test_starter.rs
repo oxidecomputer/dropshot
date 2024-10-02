@@ -54,7 +54,7 @@ async fn test_with_tls() {
         key: serialized_key.clone(),
     });
 
-    let mut builder = reqwest::Client::builder();
+    let mut builder = reqwest::Client::builder().use_rustls_tls();
     let certs =
         reqwest::Certificate::from_pem_bundle(&serialized_certs).unwrap();
     for c in certs {
