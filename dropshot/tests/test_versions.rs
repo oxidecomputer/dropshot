@@ -16,7 +16,7 @@ use reqwest::Method;
 use reqwest::StatusCode;
 use schemars::JsonSchema;
 use semver::Version;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
 pub mod common;
@@ -35,6 +35,16 @@ fn api() -> ApiDescription<()> {
     api.register(handler3).unwrap();
     api.register(handler4).unwrap();
     api
+}
+
+fn api_to_openapi_string<C: dropshot::ServerContext>(
+    api: &ApiDescription<C>,
+    name: &str,
+    version: &semver::Version,
+) -> String {
+    let mut contents = Cursor::new(Vec::new());
+    api.openapi(name, version.clone()).write(&mut contents).unwrap();
+    String::from_utf8(contents.get_ref().to_vec()).unwrap()
 }
 
 #[tokio::test]
@@ -233,6 +243,8 @@ async fn test_versions() {
     }
 }
 
+/// Test that the generated OpenAPI spec only refers to handlers in that version
+/// and types that are used by those handlers.
 #[test]
 fn test_versions_openapi() {
     let api = api();
@@ -247,6 +259,190 @@ fn test_versions_openapi() {
             actual,
         );
     }
+}
+
+// The contents of this module logically belongs inside
+// test_versions_openapi_same_names().  It can't go there due to
+// oxidecomputer/dropshot#1128.
+mod trait_based {
+    use super::*;
+
+    #[derive(JsonSchema, Serialize)]
+    #[schemars(rename = "MyReturn")]
+    pub struct MyReturnV1 {
+        #[allow(dead_code)]
+        q: String,
+    }
+
+    #[derive(JsonSchema, Serialize)]
+    #[schemars(rename = "MyReturn")]
+    pub struct MyReturnV2 {
+        #[allow(dead_code)]
+        r: String,
+    }
+
+    #[dropshot::api_description]
+    // This `allow(dead_code)` works around oxidecomputer/dropshot#1129.
+    #[allow(dead_code)]
+    pub trait MyApi {
+        type Context;
+
+        #[endpoint {
+            method = GET,
+            path = "/demo",
+            versions = .."1.0.0",
+            operation_id = "the_operation",
+        }]
+        async fn the_operation_v1(
+            _rqctx: RequestContext<Self::Context>,
+        ) -> Result<HttpResponseOk<MyReturnV1>, HttpError>;
+
+        #[endpoint {
+            method = GET,
+            path = "/demo",
+            versions = "2.0.0"..,
+            operation_id = "the_operation"
+        }]
+        async fn the_operation_v2(
+            _rqctx: RequestContext<Self::Context>,
+        ) -> Result<HttpResponseOk<MyReturnV2>, HttpError>;
+    }
+}
+
+/// Test three different ways to define the same operation in two versions
+/// (using different handlers).  These should all produce the same pair of
+/// specs.
+#[test]
+fn test_versions_openapi_same_names() {
+    // This approach uses freestanding functions in separate modules.
+    let api_function_modules = {
+        mod v1 {
+            use super::*;
+
+            #[derive(JsonSchema, Serialize)]
+            pub struct MyReturn {
+                #[allow(dead_code)]
+                q: String,
+            }
+
+            #[endpoint {
+                method = GET,
+                path = "/demo",
+                versions = .."1.0.0"
+            }]
+            pub async fn the_operation(
+                _rqctx: RequestContext<()>,
+            ) -> Result<HttpResponseOk<MyReturn>, HttpError> {
+                unimplemented!();
+            }
+        }
+
+        mod v2 {
+            use super::*;
+
+            #[derive(JsonSchema, Serialize)]
+            pub struct MyReturn {
+                #[allow(dead_code)]
+                r: String,
+            }
+
+            #[endpoint {
+                method = GET,
+                path = "/demo",
+                versions = "2.0.0"..
+            }]
+            pub async fn the_operation(
+                _rqctx: RequestContext<()>,
+            ) -> Result<HttpResponseOk<MyReturn>, HttpError> {
+                unimplemented!();
+            }
+        }
+
+        let mut api = ApiDescription::new();
+        api.register(v1::the_operation).unwrap();
+        api.register(v2::the_operation).unwrap();
+        api
+    };
+
+    // This approach uses freestanding functions and types all in one module.
+    // This requires applying overrides to the names in order to have them show
+    // up with the same name in each version.
+    let api_function_overrides = {
+        #[derive(JsonSchema, Serialize)]
+        #[schemars(rename = "MyReturn")]
+        struct MyReturnV1 {
+            #[allow(dead_code)]
+            q: String,
+        }
+
+        #[endpoint {
+            method = GET,
+            path = "/demo",
+            versions = .."1.0.0",
+            operation_id = "the_operation",
+        }]
+        async fn the_operation_v1(
+            _rqctx: RequestContext<()>,
+        ) -> Result<HttpResponseOk<MyReturnV1>, HttpError> {
+            unimplemented!();
+        }
+
+        #[derive(JsonSchema, Serialize)]
+        #[schemars(rename = "MyReturn")]
+        struct MyReturnV2 {
+            #[allow(dead_code)]
+            r: String,
+        }
+
+        #[endpoint {
+            method = GET,
+            path = "/demo",
+            versions = "2.0.0"..,
+            operation_id = "the_operation"
+        }]
+        async fn the_operation_v2(
+            _rqctx: RequestContext<()>,
+        ) -> Result<HttpResponseOk<MyReturnV2>, HttpError> {
+            unimplemented!();
+        }
+
+        let mut api = ApiDescription::new();
+        api.register(the_operation_v1).unwrap();
+        api.register(the_operation_v2).unwrap();
+        api
+    };
+
+    // This approach uses the trait-based interface, which requires using
+    // `operation_id` to override the operation name if you want the name to be
+    // the same across versions.
+    let api_trait_overrides =
+        trait_based::my_api_mod::stub_api_description().unwrap();
+
+    const NAME: &str = "An API";
+    let v1 = semver::Version::new(1, 0, 0);
+    let v2 = semver::Version::new(2, 0, 0);
+    let func_mods_v1 = api_to_openapi_string(&api_function_modules, NAME, &v1);
+    let func_mods_v2 = api_to_openapi_string(&api_function_modules, NAME, &v2);
+    let func_overrides_v1 =
+        api_to_openapi_string(&api_function_overrides, NAME, &v1);
+    let func_overrides_v2 =
+        api_to_openapi_string(&api_function_overrides, NAME, &v2);
+    let traits_v1 = api_to_openapi_string(&api_trait_overrides, NAME, &v1);
+    let traits_v2 = api_to_openapi_string(&api_trait_overrides, NAME, &v2);
+
+    expectorate::assert_contents(
+        "tests/test_openapi_overrides_v1.json",
+        &func_overrides_v1,
+    );
+    expectorate::assert_contents(
+        "tests/test_openapi_overrides_v2.json",
+        &func_overrides_v2,
+    );
+
+    assert_eq!(func_mods_v1, func_overrides_v1);
+    assert_eq!(func_mods_v1, traits_v1);
+    assert_eq!(func_mods_v2, func_overrides_v2);
+    assert_eq!(func_mods_v2, traits_v2);
 }
 
 // This is just here so that we can tell that types are included in the spec iff
