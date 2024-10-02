@@ -47,6 +47,77 @@ fn api_to_openapi_string<C: dropshot::ServerContext>(
     String::from_utf8(contents.get_ref().to_vec()).unwrap()
 }
 
+// This is just here so that we can tell that types are included in the spec iff
+// they are referenced by endpoints in that version of the spec.
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct EarlyReturn {
+    real_message: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/demo",
+    versions = .."1.0.0",
+}]
+async fn handler1(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<EarlyReturn>, HttpError> {
+    Ok(HttpResponseOk(EarlyReturn { real_message: HANDLER1_MSG.to_string() }))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/demo",
+    versions = "1.1.0".."1.3.0",
+}]
+async fn handler2(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<&'static str>, HttpError> {
+    Ok(HttpResponseOk(HANDLER2_MSG))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/demo",
+    versions = "1.4.0"..,
+}]
+async fn handler3(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<&'static str>, HttpError> {
+    Ok(HttpResponseOk(HANDLER3_MSG))
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/demo",
+    versions = ..
+}]
+async fn handler4(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<&'static str>, HttpError> {
+    Ok(HttpResponseOk(HANDLER4_MSG))
+}
+
+#[derive(Debug)]
+struct TestVersionPolicy(ClientSpecifiesVersionInHeader);
+impl dropshot::DynamicVersionPolicy for TestVersionPolicy {
+    fn request_extract_version(
+        &self,
+        request: &http::Request<dropshot::Body>,
+        log: &slog::Logger,
+    ) -> Result<Version, HttpError> {
+        let v = self.0.request_extract_version(request, log)?;
+        if v.major == 4 && v.minor == 3 && v.patch == 2 {
+            Err(HttpError::for_bad_request(None, String::from(FORBIDDEN_MSG)))
+        } else {
+            Ok(v)
+        }
+    }
+}
+
+/// Define an API with different versions and run through an exhaustive battery
+/// of tests showing that we use the correct handler for each incoming request
+/// based on the version requested.
 #[tokio::test]
 async fn test_versions() {
     let logctx = common::create_log_context("test_versions");
@@ -65,10 +136,16 @@ async fn test_versions() {
 
     #[derive(Debug)]
     struct TestCase<'a> {
+        /// HTTP method for the request
         method: Method,
+        /// HTTP path for the request
         path: &'a str,
+        /// Value to pass for our requested version
+        /// (string supports providing bad (non-semver) input)
         header: Option<&'a str>,
+        /// expected HTTP response status code
         expected_status: StatusCode,
+        /// expected HTTP response body contents
         body_contents: String,
     }
 
@@ -274,54 +351,6 @@ fn test_versions_openapi() {
     }
 }
 
-// The contents of this module logically belongs inside
-// test_versions_openapi_same_names().  It can't go there due to
-// oxidecomputer/dropshot#1128.
-mod trait_based {
-    use super::*;
-
-    #[derive(JsonSchema, Serialize)]
-    #[schemars(rename = "MyReturn")]
-    pub struct MyReturnV1 {
-        #[allow(dead_code)]
-        q: String,
-    }
-
-    #[derive(JsonSchema, Serialize)]
-    #[schemars(rename = "MyReturn")]
-    pub struct MyReturnV2 {
-        #[allow(dead_code)]
-        r: String,
-    }
-
-    #[dropshot::api_description]
-    // This `allow(dead_code)` works around oxidecomputer/dropshot#1129.
-    #[allow(dead_code)]
-    pub trait MyApi {
-        type Context;
-
-        #[endpoint {
-            method = GET,
-            path = "/demo",
-            versions = .."1.0.0",
-            operation_id = "the_operation",
-        }]
-        async fn the_operation_v1(
-            _rqctx: RequestContext<Self::Context>,
-        ) -> Result<HttpResponseOk<MyReturnV1>, HttpError>;
-
-        #[endpoint {
-            method = GET,
-            path = "/demo",
-            versions = "2.0.0"..,
-            operation_id = "the_operation"
-        }]
-        async fn the_operation_v2(
-            _rqctx: RequestContext<Self::Context>,
-        ) -> Result<HttpResponseOk<MyReturnV2>, HttpError>;
-    }
-}
-
 /// Test three different ways to define the same operation in two versions
 /// (using different handlers).  These should all produce the same pair of
 /// specs.
@@ -458,70 +487,50 @@ fn test_versions_openapi_same_names() {
     assert_eq!(func_mods_v2, traits_v2);
 }
 
-// This is just here so that we can tell that types are included in the spec iff
-// they are referenced by endpoints in that version of the spec.
-#[derive(Deserialize, JsonSchema, Serialize)]
-struct EarlyReturn {
-    real_message: String,
-}
+// The contents of this module logically belongs inside
+// test_versions_openapi_same_names().  It can't go there due to
+// oxidecomputer/dropshot#1128.
+mod trait_based {
+    use super::*;
 
-#[endpoint {
-    method = GET,
-    path = "/demo",
-    versions = .."1.0.0",
-}]
-async fn handler1(
-    _rqctx: RequestContext<()>,
-) -> Result<HttpResponseOk<EarlyReturn>, HttpError> {
-    Ok(HttpResponseOk(EarlyReturn { real_message: HANDLER1_MSG.to_string() }))
-}
+    #[derive(JsonSchema, Serialize)]
+    #[schemars(rename = "MyReturn")]
+    pub struct MyReturnV1 {
+        #[allow(dead_code)]
+        q: String,
+    }
 
-#[endpoint {
-    method = GET,
-    path = "/demo",
-    versions = "1.1.0".."1.3.0",
-}]
-async fn handler2(
-    _rqctx: RequestContext<()>,
-) -> Result<HttpResponseOk<&'static str>, HttpError> {
-    Ok(HttpResponseOk(HANDLER2_MSG))
-}
+    #[derive(JsonSchema, Serialize)]
+    #[schemars(rename = "MyReturn")]
+    pub struct MyReturnV2 {
+        #[allow(dead_code)]
+        r: String,
+    }
 
-#[endpoint {
-    method = GET,
-    path = "/demo",
-    versions = "1.4.0"..,
-}]
-async fn handler3(
-    _rqctx: RequestContext<()>,
-) -> Result<HttpResponseOk<&'static str>, HttpError> {
-    Ok(HttpResponseOk(HANDLER3_MSG))
-}
+    #[dropshot::api_description]
+    // This `allow(dead_code)` works around oxidecomputer/dropshot#1129.
+    #[allow(dead_code)]
+    pub trait MyApi {
+        type Context;
 
-#[endpoint {
-    method = PUT,
-    path = "/demo",
-    versions = ..
-}]
-async fn handler4(
-    _rqctx: RequestContext<()>,
-) -> Result<HttpResponseOk<&'static str>, HttpError> {
-    Ok(HttpResponseOk(HANDLER4_MSG))
-}
+        #[endpoint {
+            method = GET,
+            path = "/demo",
+            versions = .."1.0.0",
+            operation_id = "the_operation",
+        }]
+        async fn the_operation_v1(
+            _rqctx: RequestContext<Self::Context>,
+        ) -> Result<HttpResponseOk<MyReturnV1>, HttpError>;
 
-#[derive(Debug)]
-struct TestVersionPolicy(ClientSpecifiesVersionInHeader);
-impl dropshot::DynamicVersionPolicy for TestVersionPolicy {
-    fn request_extract_version(
-        &self,
-        request: &http::Request<dropshot::Body>,
-        log: &slog::Logger,
-    ) -> Result<Version, HttpError> {
-        let v = self.0.request_extract_version(request, log)?;
-        if v.major == 4 && v.minor == 3 && v.patch == 2 {
-            Err(HttpError::for_bad_request(None, String::from(FORBIDDEN_MSG)))
-        } else {
-            Ok(v)
-        }
+        #[endpoint {
+            method = GET,
+            path = "/demo",
+            versions = "2.0.0"..,
+            operation_id = "the_operation"
+        }]
+        async fn the_operation_v2(
+            _rqctx: RequestContext<Self::Context>,
+        ) -> Result<HttpResponseOk<MyReturnV2>, HttpError>;
     }
 }

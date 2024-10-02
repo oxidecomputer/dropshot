@@ -318,7 +318,7 @@
 //! OpenAPI spec output.
 //!
 //! The versions field controls which versions of the API this endpoint appears
-//! in.  See [`API Versioning`] for more on this.
+//! in.  See "API Versioning" for more on this.
 //!
 //!
 //! ### Function parameters
