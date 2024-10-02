@@ -4,13 +4,12 @@
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
-use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+use dropshot::ServerBuilder;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -20,7 +19,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let config_dropshot: ConfigDropshot = Default::default();
+    // See dropshot/examples/basic.rs for more details on most of these pieces.
     let config_logging =
         ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
@@ -32,11 +31,9 @@ async fn main() -> Result<(), String> {
 
     let api_context = Arc::new(ExampleContext::new());
 
-    // Set up the server.
-    let server =
-        HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-            .map_err(|error| format!("failed to create server: {}", error))?
-            .start();
+    let server = ServerBuilder::new(api, api_context, log)
+        .start()
+        .map_err(|error| format!("failed to create server: {}", error))?;
     let shutdown = server.wait_for_shutdown();
 
     tokio::task::spawn(async move {

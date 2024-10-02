@@ -5,12 +5,11 @@
 use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ClientSpecifiesVersionInHeader;
-use dropshot::ConfigDropshot;
 use dropshot::HttpError;
 use dropshot::HttpErrorResponseBody;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
 use reqwest::Method;
 use reqwest::StatusCode;
@@ -34,20 +33,14 @@ async fn test_versions() {
     api.register(handler4).unwrap();
 
     let logctx = common::create_log_context("test_versions");
-    let server = HttpServerStarter::new_with_versioning(
-        &ConfigDropshot::default(),
-        api,
-        (),
-        &logctx.log,
-        None,
-        VersionPolicy::Dynamic(Box::new(TestVersionPolicy(
+    let server = ServerBuilder::new(api, (), logctx.log.clone())
+        .version_policy(VersionPolicy::Dynamic(Box::new(TestVersionPolicy(
             ClientSpecifiesVersionInHeader::new(
                 VERSION_HEADER_NAME.parse().unwrap(),
             ),
-        ))),
-    )
-    .unwrap()
-    .start();
+        ))))
+        .start()
+        .unwrap();
 
     let server_addr = server.local_addr();
     let mkurl = |path: &str| format!("http://{}{}", server_addr, path);
@@ -282,7 +275,7 @@ struct TestVersionPolicy(ClientSpecifiesVersionInHeader);
 impl dropshot::DynamicVersionPolicy for TestVersionPolicy {
     fn request_extract_version(
         &self,
-        request: &http::Request<hyper::Body>,
+        request: &http::Request<dropshot::Body>,
         log: &slog::Logger,
     ) -> Result<Version, HttpError> {
         let v = self.0.request_extract_version(request, log)?;

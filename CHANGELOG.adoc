@@ -13,7 +13,71 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...HEAD[Full list of commits]
+
+* https://github.com/oxidecomputer/dropshot/pull/1122[#1122] Adds a new `ServerBuilder` as the primary way of constructing a Dropshot server.  This replaces `HttpServerStarter::new()` and `HttpServerStarter::new_with_tls()`.  These older functions still exist for compatibility.  They may be removed in an upcoming release, along with the `HttpServerStarter`.
++
+In this release, using the builder interface is not very different from using these older functions.  But as we look at adding new construction-time options (e.g., for API versioning), those will only be added to the builder.
++
+The builder also provides structured errors rather than the `GenericError` provided by these older functions.
++
+Most non-TLS callers were using `HttpServerStarter::new()` and then calling `start()` right away.  In that case, you can replace:
++
+```rust
+HttpServerStarter::new(&config, api, private, &log).map_err(...)?.start()
+```
++
+with:
++
+```rust
+ServerBuilder::new(api, private, log).config(config).start().map_err(...)?
+```
++
+If you were using `HttpServerStarter::new_with_tls()`, you'd similarly replace:
++
+```rust
+HttpServerStarter::new_with_tls(&config, api, private, &log, tls).map_err(...)?.start()
+```
++
+with:
++
+```rust
+ServerBuilder::new(api, private, log).config(config).tls(tls).start().map_err(...)?
+```
++
+If you were _not_ invoking `start()` immediately before, you can still construct an intermediate starter object with `build_starter()`.  If you were doing this:
++
+```rust
+let starter = HttpServerStarter::new(&config, api, private, &log).map_err(...)?;
+...
+starter.start()
+```
++
+Then you can now do:
++
+```rust
+let starter = ServerBuilder::new(api, private, log).config(config).build_starter().map_err(...)?;
+...
+starter.start()
+```
++
+We'd like to remove the `HttpServerStarter` altogether, so let us know if you're still using it for some reason.
+
+== 0.12.0 (released 2024-09-26)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...v0.12.0[Full list of commits]
+
+=== Breaking Changes
+
+* https://github.com/oxidecomputer/dropshot/pull/1028[#1028] Updates Dropshot for `hyper` 1.0 and `http` 1.0.  Since consumers provide Dropshot with values from `hyper` and `http`, you'll need to update to `hyper` 1.0 and `http` 1.0 (or newer compatible versions), too.
+
+==== Upgrading to hyper 1.0
+
+1. Update your crate's dependencies on `hyper` and `http` to 1.0 (or a newer compatible version) in Cargo.toml.
+2. Replace any references to `hyper::Body` with `dropshot::Body` instead.
+3. You may need to update your use of `dropshot::Body`; the `http-body-util` can be helpful.
+
+There are no other known breaking changes in these crates that affect Dropshot.  If you have any trouble with this upgrade, please let us know by filing an issue.
 
 * https://github.com/oxidecomputer/dropshot/pull/1115[#1115] Dropshot now supports hosting multiple versions of an API at a single server and routing to the correct version based on the incoming request.  See documentation for details.  If you don't care about this, you can mostly ignore it, but see "Breaking Changes" below.
 

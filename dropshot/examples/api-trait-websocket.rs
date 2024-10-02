@@ -2,7 +2,7 @@
 
 //! Example use of `dropshot::api_description` with a WebSocket endpoint.
 
-use dropshot::{ConfigLogging, ConfigLoggingLevel, HttpServerStarter};
+use dropshot::{ConfigLogging, ConfigLoggingLevel, ServerBuilder};
 
 /// The interface.
 mod api {
@@ -134,9 +134,7 @@ mod imp {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let config_dropshot = Default::default();
-    // For simplicity, we'll configure an "info"-level logger that writes to
-    // stderr assuming that it's a terminal.
+    // See dropshot/examples/basic.rs for more details on most of these pieces.
     let config_logging =
         ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
@@ -149,14 +147,9 @@ async fn main() -> Result<(), String> {
 
     let my_server =
         api::counter_api_mod::api_description::<imp::CounterImpl>().unwrap();
-    let server = HttpServerStarter::new(
-        &config_dropshot,
-        my_server,
-        imp::AtomicCounter::new(),
-        &log,
-    )
-    .map_err(|error| format!("failed to create server: {}", error))?
-    .start();
+    let server = ServerBuilder::new(my_server, imp::AtomicCounter::new(), log)
+        .start()
+        .map_err(|error| format!("failed to create server: {}", error))?;
 
     server.await
 }

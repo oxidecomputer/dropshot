@@ -4,8 +4,8 @@
 //! mode, including certificate loading and supported modes.
 
 use dropshot::{
-    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk,
-    HttpServerStarter,
+    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk, HttpServer,
+    ServerBuilder,
 };
 use slog::{o, Logger};
 use std::convert::TryFrom;
@@ -90,8 +90,11 @@ fn make_https_client<
     T: rustls::client::danger::ServerCertVerifier + Send + Sync + 'static,
 >(
     verifier: Arc<T>,
-) -> hyper::Client<
-    hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+) -> hyper_util::client::legacy::Client<
+    hyper_rustls::HttpsConnector<
+        hyper_util::client::legacy::connect::HttpConnector,
+    >,
+    dropshot::Body,
 > {
     let tls_config = rustls::ClientConfig::builder()
         .dangerous()
@@ -102,14 +105,17 @@ fn make_https_client<
         .https_only()
         .enable_http1()
         .build();
-    hyper::Client::builder().build(https_connector)
+    hyper_util::client::legacy::Client::builder(
+        hyper_util::rt::TokioExecutor::new(),
+    )
+    .build(https_connector)
 }
 
 fn make_server(
-    log: &Logger,
+    log: Logger,
     cert_file: &Path,
     key_file: &Path,
-) -> HttpServerStarter<i32> {
+) -> HttpServer<i32> {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
@@ -120,14 +126,11 @@ fn make_server(
         cert_file: cert_file.to_path_buf(),
         key_file: key_file.to_path_buf(),
     });
-    HttpServerStarter::new_with_tls(
-        &config,
-        dropshot::ApiDescription::new(),
-        0,
-        log,
-        config_tls,
-    )
-    .unwrap()
+    ServerBuilder::new(dropshot::ApiDescription::new(), 0, log)
+        .config(config)
+        .tls(config_tls)
+        .start()
+        .unwrap()
 }
 
 fn make_pki_verifier(
@@ -149,7 +152,7 @@ async fn test_tls_certificate_loading() {
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let uri: hyper::Uri =
@@ -157,7 +160,7 @@ async fn test_tls_certificate_loading() {
     let request = hyper::Request::builder()
         .method(http::method::Method::GET)
         .uri(&uri)
-        .body(hyper::Body::empty())
+        .body(dropshot::Body::empty())
         .unwrap();
 
     let verifier_called = Arc::new(AtomicUsize::new(0));
@@ -204,7 +207,7 @@ async fn test_tls_only() {
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let https_uri: hyper::Uri =
@@ -212,14 +215,14 @@ async fn test_tls_only() {
     let https_request = hyper::Request::builder()
         .method(http::method::Method::GET)
         .uri(&https_uri)
-        .body(hyper::Body::empty())
+        .body(dropshot::Body::empty())
         .unwrap();
     let http_uri: hyper::Uri =
         format!("http://localhost:{}/", port).parse().unwrap();
     let http_request = hyper::Request::builder()
         .method(http::method::Method::GET)
         .uri(&http_uri)
-        .body(hyper::Body::empty())
+        .body(dropshot::Body::empty())
         .unwrap();
 
     let https_client = make_https_client(make_pki_verifier(&certs));
@@ -227,16 +230,20 @@ async fn test_tls_only() {
 
     // Send an HTTP request, it should fail due to parse error, since
     // the server and client are speaking different protocols
-    let http_client = hyper::Client::builder().build_http();
-    let error = http_client.request(http_request).await.unwrap_err();
-    assert!(error.is_parse());
+    let http_client = hyper_util::client::legacy::Client::builder(
+        hyper_util::rt::TokioExecutor::new(),
+    )
+    .build(hyper_util::client::legacy::connect::HttpConnector::new());
+    let _error = http_client.request(http_request).await.unwrap_err();
+    // cannot check if it is a "hyper parse error", but would like to if
+    // hyper::Error gains the ability in the future
 
     // Make an HTTPS request again, to make sure the HTTP client didn't
     // interfere with HTTPS request processing
     let https_request = hyper::Request::builder()
         .method(http::method::Method::GET)
         .uri(&https_uri)
-        .body(hyper::Body::empty())
+        .body(dropshot::Body::empty())
         .unwrap();
     https_client.request(https_request).await.unwrap();
 
@@ -254,7 +261,7 @@ async fn test_tls_refresh_certificates() {
     let (certs, key) = generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let https_uri: hyper::Uri =
@@ -264,7 +271,7 @@ async fn test_tls_refresh_certificates() {
         hyper::Request::builder()
             .method(http::method::Method::GET)
             .uri(&https_uri)
-            .body(hyper::Body::empty())
+            .body(dropshot::Body::empty())
             .unwrap()
     };
 
@@ -346,7 +353,7 @@ async fn test_tls_aborted_negotiation() {
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let uri: hyper::Uri =
@@ -435,10 +442,11 @@ async fn test_server_is_https() {
     });
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
-    let server =
-        HttpServerStarter::new_with_tls(&config, api, 0, &log, config_tls)
-            .unwrap()
-            .start();
+    let server = ServerBuilder::new(api, 0, log)
+        .tls(config_tls)
+        .config(config)
+        .start()
+        .unwrap();
     let port = server.local_addr().port();
 
     let https_client = make_https_client(make_pki_verifier(&certs));
@@ -447,7 +455,7 @@ async fn test_server_is_https() {
     let https_request = hyper::Request::builder()
         .method(http::method::Method::GET)
         .uri(format!("https://localhost:{}/?tls=true", port))
-        .body(hyper::Body::empty())
+        .body(dropshot::Body::empty())
         .unwrap();
     let res = https_client.request(https_request).await.unwrap();
     assert_eq!(res.status(), hyper::StatusCode::OK);
@@ -456,7 +464,7 @@ async fn test_server_is_https() {
     let https_request = hyper::Request::builder()
         .method(http::method::Method::GET)
         .uri(format!("https://localhost:{}/?tls=false", port))
-        .body(hyper::Body::empty())
+        .body(dropshot::Body::empty())
         .unwrap();
     let res = https_client.request(https_request).await.unwrap();
     assert_eq!(res.status(), hyper::StatusCode::BAD_REQUEST);

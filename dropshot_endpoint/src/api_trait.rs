@@ -955,17 +955,13 @@ async fn main() {{
     let context = /* some value of type `{trait_ident}Impl::{context_ident}` */;
 
     // Create a Dropshot server from the description.
-    let config = dropshot::ConfigDropshot::default();
     let log = /* ... */;
-    let server = dropshot::HttpServerStarter::new(
-        &config,
-        description,
-        context,
-        &log,
-    ).unwrap();
+    let server = dropshot::ServerBuilder::new(description, context, log)
+        .start()
+        .unwrap();
 
     // Run the server.
-    server.start().await
+    server.await
 }}
 ```
 

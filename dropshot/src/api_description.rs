@@ -1486,6 +1486,7 @@ mod test {
     use crate::handler::RequestContext;
     use crate::ApiDescription;
     use crate::ApiEndpoint;
+    use crate::Body;
     use crate::EndpointTagPolicy;
     use crate::Path;
     use crate::Query;
@@ -1493,7 +1494,6 @@ mod test {
     use crate::TagDetails;
     use crate::CONTENT_TYPE_JSON;
     use http::Method;
-    use hyper::Body;
     use hyper::Response;
     use openapiv3::OpenAPI;
     use schemars::JsonSchema;

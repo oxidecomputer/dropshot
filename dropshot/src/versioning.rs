@@ -2,9 +2,9 @@
 
 //! Support for API versioning
 
+use crate::Body;
 use crate::HttpError;
 use http::HeaderName;
-use hyper::Body;
 use hyper::Request;
 use semver::Version;
 use slog::Logger;

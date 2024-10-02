@@ -47,7 +47,7 @@
 //!   "message": "missing expected header \"dropshot-demo-version\""
 //! }
 //! ```
-//! 
+//!
 //! You can customize this behavior for your Dropshot server, but this one
 //! requires that the client specify a version.
 //!
@@ -71,7 +71,7 @@
 //! x-request-id: 0d3d25b8-4c48-43b2-a417-018ebce68870
 //! content-length: 84
 //! date: Thu, 26 Sep 2024 16:55:20 GMT
-//! 
+//!
 //! {
 //!   "request_id": "0d3d25b8-4c48-43b2-a417-018ebce68870",
 //!   "message": "Not Found"
@@ -93,7 +93,6 @@
 //! {"s":"hello from a LATE v1","number":12}
 //! ```
 
-
 use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ClientSpecifiesVersionInHeader;
@@ -102,8 +101,8 @@ use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
-use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
 use http::HeaderName;
 use schemars::JsonSchema;
@@ -162,16 +161,11 @@ async fn main() -> Result<(), String> {
             .map_err(|_| String::from("demo header name was not valid"))?;
         let version_impl = ClientSpecifiesVersionInHeader::new(header_name);
         let version_policy = VersionPolicy::Dynamic(Box::new(version_impl));
-        let server = HttpServerStarter::new_with_versioning(
-            &config_dropshot,
-            api,
-            api_context,
-            &log,
-            None,
-            version_policy,
-        )
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+        let server = ServerBuilder::new(api, api_context, log)
+            .config(config_dropshot)
+            .version_policy(version_policy)
+            .start()
+            .map_err(|error| format!("failed to create server: {}", error))?;
 
         server.await
     } else {

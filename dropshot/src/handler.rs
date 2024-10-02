@@ -42,6 +42,7 @@ use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::StubContext;
+use crate::body::Body;
 use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
 use crate::schema_util::make_subschema_for;
@@ -52,7 +53,6 @@ use crate::to_map::to_map;
 use async_trait::async_trait;
 use http::HeaderMap;
 use http::StatusCode;
-use hyper::Body;
 use hyper::Response;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -376,7 +376,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> HttpHandlerResult;
 }
 
@@ -439,7 +439,7 @@ where
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
-        request: hyper::Request<hyper::Body>,
+        request: hyper::Request<crate::Body>,
     ) -> HttpHandlerResult {
         // This is where the magic happens: in the code below, `funcparams` has
         // type `FuncParams`, which is a tuple type describing the extractor
@@ -514,7 +514,7 @@ impl RouteHandler<StubContext> for StubRouteHandler {
     async fn handle_request(
         &self,
         _: RequestContext<StubContext>,
-        _: hyper::Request<hyper::Body>,
+        _: hyper::Request<crate::Body>,
     ) -> HttpHandlerResult {
         unimplemented!("stub handler called, not implemented: {}", self.label)
     }
@@ -567,8 +567,8 @@ impl HttpResponse for Response<Body> {
     }
 }
 
-/// Wraps a [hyper::Body] so that it can be used with coded response types such
-/// as [HttpResponseOk].
+/// Wraps a [`Body`] so that it can be used with coded response types such as
+/// [HttpResponseOk].
 pub struct FreeformBody(pub Body);
 
 impl From<Body> for FreeformBody {

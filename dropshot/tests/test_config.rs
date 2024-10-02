@@ -3,11 +3,12 @@
 //! Tests for configuration file.
 
 use dropshot::test_util::read_config;
+use dropshot::Body;
 use dropshot::{
     ConfigDropshot, ConfigTls, HandlerTaskMode, HttpError, HttpResponseOk,
     RequestContext,
 };
-use dropshot::{HttpServer, HttpServerStarter};
+use dropshot::{HttpServer, ServerBuilder};
 use slog::o;
 use slog::Logger;
 use std::str::FromStr;
@@ -88,14 +89,15 @@ fn make_server<T: Send + Sync + 'static>(
     log: &Logger,
     tls: Option<ConfigTls>,
     api_description: Option<dropshot::ApiDescription<T>>,
-) -> HttpServerStarter<T> {
-    HttpServerStarter::new_with_tls(
-        config,
+) -> HttpServer<T> {
+    ServerBuilder::new(
         api_description.unwrap_or_else(dropshot::ApiDescription::new),
         context,
-        log,
-        tls,
+        log.clone(),
     )
+    .config(config.clone())
+    .tls(tls)
+    .start()
     .unwrap()
 }
 
@@ -119,11 +121,15 @@ fn make_config(
 // test logic
 trait TestConfigBindServer<C>
 where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+    C: hyper_util::client::legacy::connect::Connect
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     type Context: Send + Sync + 'static;
 
-    fn make_client(&self) -> hyper::Client<C>;
+    fn make_client(&self) -> hyper_util::client::legacy::Client<C, Body>;
     fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context>;
     fn make_uri(&self, bind_port: u16) -> hyper::Uri;
 }
@@ -132,7 +138,11 @@ where
 // it binds to ports as expected.
 async fn test_config_bind_server<C, T>(test_config: T, bind_port: u16)
 where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+    C: hyper_util::client::legacy::connect::Connect
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     T: TestConfigBindServer<C>,
 {
     let client = test_config.make_client();
@@ -185,15 +195,22 @@ async fn test_config_bind_address_http() {
     struct ConfigBindServerHttp {
         log: slog::Logger,
     }
-    impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+    impl
+        TestConfigBindServer<hyper_util::client::legacy::connect::HttpConnector>
         for ConfigBindServerHttp
     {
         type Context = i32;
 
         fn make_client(
             &self,
-        ) -> hyper::Client<hyper::client::connect::HttpConnector> {
-            hyper::Client::new()
+        ) -> hyper_util::client::legacy::Client<
+            hyper_util::client::legacy::connect::HttpConnector,
+            Body,
+        > {
+            hyper_util::client::legacy::Client::builder(
+                hyper_util::rt::TokioExecutor::new(),
+            )
+            .build(hyper_util::client::legacy::connect::HttpConnector::new())
         }
 
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
@@ -205,7 +222,7 @@ async fn test_config_bind_address_http() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, None, None).start()
+            make_server(0, &config, &self.log, None, None)
         }
     }
 
@@ -228,15 +245,20 @@ async fn test_config_bind_address_https() {
 
     impl<'a>
         TestConfigBindServer<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
         > for ConfigBindServerHttps<'a>
     {
         type Context = i32;
 
         fn make_client(
             &self,
-        ) -> hyper::Client<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        ) -> hyper_util::client::legacy::Client<
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
+            Body,
         > {
             // Configure TLS to trust the self-signed cert
             let mut root_store = rustls::RootCertStore { roots: vec![] };
@@ -252,7 +274,10 @@ async fn test_config_bind_address_https() {
                 .https_only()
                 .enable_http1()
                 .build();
-            hyper::Client::builder().build(https_connector)
+            hyper_util::client::legacy::Client::builder(
+                hyper_util::rt::TokioExecutor::new(),
+            )
+            .build(https_connector)
         }
 
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
@@ -269,7 +294,7 @@ async fn test_config_bind_address_https() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, tls, None).start()
+            make_server(0, &config, &self.log, tls, None)
         }
     }
 
@@ -300,15 +325,20 @@ async fn test_config_bind_address_https_buffer() {
 
     impl<'a>
         TestConfigBindServer<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
         > for ConfigBindServerHttps<'a>
     {
         type Context = i32;
 
         fn make_client(
             &self,
-        ) -> hyper::Client<
-            hyper_rustls::HttpsConnector<hyper::client::connect::HttpConnector>,
+        ) -> hyper_util::client::legacy::Client<
+            hyper_rustls::HttpsConnector<
+                hyper_util::client::legacy::connect::HttpConnector,
+            >,
+            Body,
         > {
             // Configure TLS to trust the self-signed cert
             let mut root_store = rustls::RootCertStore { roots: vec![] };
@@ -324,7 +354,11 @@ async fn test_config_bind_address_https_buffer() {
                 .https_only()
                 .enable_http1()
                 .build();
-            hyper::Client::builder().build(https_connector)
+
+            hyper_util::client::legacy::Client::builder(
+                hyper_util::rt::TokioExecutor::new(),
+            )
+            .build(https_connector)
         }
 
         fn make_uri(&self, bind_port: u16) -> hyper::Uri {
@@ -341,7 +375,7 @@ async fn test_config_bind_address_https_buffer() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, tls, None).start()
+            make_server(0, &config, &self.log, tls, None)
         }
     }
 
@@ -396,15 +430,21 @@ struct ConfigHandlerTaskModeHttp {
     log: slog::Logger,
 }
 
-impl TestConfigBindServer<hyper::client::connect::HttpConnector>
+impl TestConfigBindServer<hyper_util::client::legacy::connect::HttpConnector>
     for ConfigHandlerTaskModeHttp
 {
     type Context = HandlerTaskModeContext;
 
     fn make_client(
         &self,
-    ) -> hyper::Client<hyper::client::connect::HttpConnector> {
-        hyper::Client::new()
+    ) -> hyper_util::client::legacy::Client<
+        hyper_util::client::legacy::connect::HttpConnector,
+        Body,
+    > {
+        hyper_util::client::legacy::Client::builder(
+            hyper_util::rt::TokioExecutor::new(),
+        )
+        .build(hyper_util::client::legacy::connect::HttpConnector::new())
     }
 
     fn make_server(&self, bind_port: u16) -> HttpServer<Self::Context> {
@@ -464,8 +504,7 @@ impl TestConfigBindServer<hyper::client::connect::HttpConnector>
         let mut api = dropshot::ApiDescription::new();
         api.register(track_cancel_endpoint).unwrap();
 
-        let server =
-            make_server(context, &config, &self.log, None, Some(api)).start();
+        let server = make_server(context, &config, &self.log, None, Some(api));
 
         self.bound_port.store(server.local_addr().port(), Ordering::SeqCst);
 
@@ -597,33 +636,15 @@ async fn test_unversioned_servers_with_versioned_routes() {
 
     let logctx =
         create_log_context("test_unversioned_servers_with_versioned_routes");
-    let config_dropshot = ConfigDropshot::default();
-
-    // Test both the HTTP and HTTPS code paths because the check is present in
-    // both.
-    let (certs, key) = common::generate_tls_key();
-    let (serialized_certs, serialized_key) =
-        common::tls_key_to_buffer(&certs, &key);
-    let tls = Some(ConfigTls::AsBytes {
-        certs: serialized_certs.clone(),
-        key: serialized_key.clone(),
-    });
-    for tls_arg in [None, tls] {
-        let mut api = dropshot::ApiDescription::new();
-        api.register(versioned_handler).unwrap();
-        let Err(error) = HttpServerStarter::new_with_tls(
-            &config_dropshot,
-            api,
-            0,
-            &logctx.log,
-            tls_arg,
-        ) else {
-            panic!("expected failure to create server");
-        };
-        println!("{}", error);
-        assert_eq!(
-            error.to_string(),
-            "unversioned servers cannot have endpoints with specific versions"
-        );
-    }
+    let mut api = dropshot::ApiDescription::new();
+    api.register(versioned_handler).unwrap();
+    let Err(error) = ServerBuilder::new(api, 0, logctx.log.clone()).start()
+    else {
+        panic!("expected failure to create server");
+    };
+    println!("{}", error);
+    assert_eq!(
+        error.to_string(),
+        "unversioned servers cannot have endpoints with specific versions"
+    );
 }
