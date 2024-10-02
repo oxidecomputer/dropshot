@@ -32,7 +32,7 @@ use crate::error::HttpErrorResponseBody;
 use crate::http_util::CONTENT_TYPE_URL_ENCODED;
 use crate::logging::ConfigLogging;
 use crate::pagination::ResultsPage;
-use crate::server::{HttpServer, HttpServerStarter, ServerContext};
+use crate::server::{HttpServer, ServerBuilder, ServerContext};
 
 enum AllowedValue<'a> {
     Any,
@@ -490,10 +490,10 @@ impl<Context: ServerContext> TestContext<Context> {
         );
 
         // Set up the server itself.
-        let server =
-            HttpServerStarter::new(&config_dropshot, api, private, &log)
-                .unwrap()
-                .start();
+        let server = ServerBuilder::new(api, private, log.clone())
+            .config(config_dropshot.clone())
+            .start()
+            .unwrap();
 
         let server_addr = server.local_addr();
         let client_log = log.new(o!("http_client" => "dropshot test suite"));

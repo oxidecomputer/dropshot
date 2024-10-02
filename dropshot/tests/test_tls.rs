@@ -4,8 +4,8 @@
 //! mode, including certificate loading and supported modes.
 
 use dropshot::{
-    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk,
-    HttpServerStarter,
+    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk, HttpServer,
+    ServerBuilder,
 };
 use slog::{o, Logger};
 use std::convert::TryFrom;
@@ -112,10 +112,10 @@ fn make_https_client<
 }
 
 fn make_server(
-    log: &Logger,
+    log: Logger,
     cert_file: &Path,
     key_file: &Path,
-) -> HttpServerStarter<i32> {
+) -> HttpServer<i32> {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
         request_body_max_bytes: 1024,
@@ -126,14 +126,11 @@ fn make_server(
         cert_file: cert_file.to_path_buf(),
         key_file: key_file.to_path_buf(),
     });
-    HttpServerStarter::new_with_tls(
-        &config,
-        dropshot::ApiDescription::new(),
-        0,
-        log,
-        config_tls,
-    )
-    .unwrap()
+    ServerBuilder::new(dropshot::ApiDescription::new(), 0, log)
+        .config(config)
+        .tls(config_tls)
+        .start()
+        .unwrap()
 }
 
 fn make_pki_verifier(
@@ -155,7 +152,7 @@ async fn test_tls_certificate_loading() {
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let uri: hyper::Uri =
@@ -210,7 +207,7 @@ async fn test_tls_only() {
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let https_uri: hyper::Uri =
@@ -264,7 +261,7 @@ async fn test_tls_refresh_certificates() {
     let (certs, key) = generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let https_uri: hyper::Uri =
@@ -356,7 +353,7 @@ async fn test_tls_aborted_negotiation() {
     let (certs, key) = common::generate_tls_key();
     let (cert_file, key_file) = common::tls_key_to_file(&certs, &key);
 
-    let server = make_server(&log, cert_file.path(), key_file.path()).start();
+    let server = make_server(log, cert_file.path(), key_file.path());
     let port = server.local_addr().port();
 
     let uri: hyper::Uri =
@@ -445,10 +442,11 @@ async fn test_server_is_https() {
     });
     let mut api = dropshot::ApiDescription::new();
     api.register(tls_check_handler).unwrap();
-    let server =
-        HttpServerStarter::new_with_tls(&config, api, 0, &log, config_tls)
-            .unwrap()
-            .start();
+    let server = ServerBuilder::new(api, 0, log)
+        .tls(config_tls)
+        .config(config)
+        .start()
+        .unwrap();
     let port = server.local_addr().port();
 
     let https_client = make_https_client(make_pki_verifier(&certs));

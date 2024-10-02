@@ -7,8 +7,8 @@ use dropshot::Body;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
-use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+use dropshot::ServerBuilder;
 use dropshot::{endpoint, Path};
 use http::{Response, StatusCode};
 use schemars::JsonSchema;
@@ -22,34 +22,22 @@ struct FileServerContext {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    // We must specify a configuration with a bind address.  We'll use 127.0.0.1
-    // since it's available and won't expose this server outside the host.  We
-    // request port 0, which allows the operating system to pick any available
-    // port.
-    let config_dropshot = Default::default();
-
-    // For simplicity, we'll configure an "info"-level logger that writes to
-    // stderr assuming that it's a terminal.
+    // See dropshot/examples/basic.rs for more details on most of these pieces.
     let config_logging =
         ConfigLogging::StderrTerminal { level: ConfigLoggingLevel::Info };
     let log = config_logging
         .to_logger("example-basic")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
-    // Build a description of the API -- in this case it's not much of an API!.
     let mut api = ApiDescription::new();
     api.register(static_content).unwrap();
 
-    // Specify the directory we want to serve.
     let context = FileServerContext { base: PathBuf::from(".") };
 
-    // Set up the server.
-    let server = HttpServerStarter::new(&config_dropshot, api, context, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
-        .start();
+    let server = ServerBuilder::new(api, context, log)
+        .start()
+        .map_err(|error| format!("failed to create server: {}", error))?;
 
-    // Wait for the server to stop.  Note that there's not any code to shut down
-    // this server, so we should never get past this point.
     server.await
 }
 

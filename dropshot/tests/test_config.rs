@@ -8,7 +8,7 @@ use dropshot::{
     ConfigDropshot, ConfigTls, HandlerTaskMode, HttpError, HttpResponseOk,
     RequestContext,
 };
-use dropshot::{HttpServer, HttpServerStarter};
+use dropshot::{HttpServer, ServerBuilder};
 use slog::o;
 use slog::Logger;
 use std::str::FromStr;
@@ -89,14 +89,15 @@ fn make_server<T: Send + Sync + 'static>(
     log: &Logger,
     tls: Option<ConfigTls>,
     api_description: Option<dropshot::ApiDescription<T>>,
-) -> HttpServerStarter<T> {
-    HttpServerStarter::new_with_tls(
-        config,
+) -> HttpServer<T> {
+    ServerBuilder::new(
         api_description.unwrap_or_else(dropshot::ApiDescription::new),
         context,
-        log,
-        tls,
+        log.clone(),
     )
+    .config(config.clone())
+    .tls(tls)
+    .start()
     .unwrap()
 }
 
@@ -221,7 +222,7 @@ async fn test_config_bind_address_http() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, None, None).start()
+            make_server(0, &config, &self.log, None, None)
         }
     }
 
@@ -293,7 +294,7 @@ async fn test_config_bind_address_https() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, tls, None).start()
+            make_server(0, &config, &self.log, tls, None)
         }
     }
 
@@ -374,7 +375,7 @@ async fn test_config_bind_address_https_buffer() {
                 bind_port,
                 HandlerTaskMode::CancelOnDisconnect,
             );
-            make_server(0, &config, &self.log, tls, None).start()
+            make_server(0, &config, &self.log, tls, None)
         }
     }
 
@@ -503,8 +504,7 @@ impl TestConfigBindServer<hyper_util::client::legacy::connect::HttpConnector>
         let mut api = dropshot::ApiDescription::new();
         api.register(track_cancel_endpoint).unwrap();
 
-        let server =
-            make_server(context, &config, &self.log, None, Some(api)).start();
+        let server = make_server(context, &config, &self.log, None, Some(api));
 
         self.bound_port.store(server.local_addr().port(), Ordering::SeqCst);
 

@@ -104,6 +104,10 @@ pub struct ServerConfig {
     pub log_headers: Vec<String>,
 }
 
+/// See [`ServerBuilder`] instead.
+// It would be nice to remove this structure altogether once we've got
+// confidence that no consumers actually need to distinguish between the
+// configuration and start steps.
 pub struct HttpServerStarter<C: ServerContext> {
     app_state: Arc<DropshotState<C>>,
     local_addr: SocketAddr,
@@ -113,15 +117,23 @@ pub struct HttpServerStarter<C: ServerContext> {
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
+    /// Make an `HttpServerStarter` to start an `HttpServer`
+    ///
+    /// This function exists for backwards compatibility.  You should use
+    /// [`ServerBuilder`] instead.
     pub fn new(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
         private: C,
         log: &Logger,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        Self::new_with_tls(config, api, private, log, None)
+        HttpServerStarter::new_with_tls(config, api, private, log, None)
     }
 
+    /// Make an `HttpServerStarter` to start an `HttpServer`
+    ///
+    /// This function exists for backwards compatibility.  You should use
+    /// [`ServerBuilder`] instead.
     pub fn new_with_tls(
         config: &ConfigDropshot,
         api: ApiDescription<C>,
@@ -129,7 +141,10 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
         tls: Option<ConfigTls>,
     ) -> Result<HttpServerStarter<C>, GenericError> {
-        HttpServerStarter::new_internal(config, api, private, log, tls)
+        ServerBuilder::new(api, private, log.clone())
+            .config(config.clone())
+            .tls(tls)
+            .build_starter()
             .map_err(|e| Box::new(e) as GenericError)
     }
 
@@ -335,7 +350,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
     }
 }
 
-/// Accepts TCP connections like a `TcpListener`, but ignores transient errors rather than propagating them to the caller
+/// Accepts TCP connections like a `TcpListener`, but ignores transient errors
+/// rather than propagating them to the caller
 struct HttpAcceptor {
     tcp: TcpListener,
     log: slog::Logger,
@@ -1049,15 +1065,88 @@ pub enum BuildError {
 }
 
 impl BuildError {
+    /// Generate an error for failure to bind to `address`
     fn bind_error(error: std::io::Error, address: SocketAddr) -> BuildError {
         BuildError::BindError { address, error }
     }
 
+    /// Generate an error for any kind of `std::io::Error`
+    ///
+    /// `context` describes more about what we were trying to do that generated
+    /// the error.
     fn generic_system<S: Into<String>>(
         error: std::io::Error,
         context: S,
     ) -> BuildError {
         BuildError::SystemError { context: context.into(), error }
+    }
+}
+
+/// Start configuring a Dropshot server
+#[derive(Debug)]
+pub struct ServerBuilder<C: ServerContext> {
+    // required caller-provided values
+    private: C,
+    log: Logger,
+    api: DebugIgnore<ApiDescription<C>>,
+
+    // optional caller-provided values
+    config: ConfigDropshot,
+    tls: Option<ConfigTls>,
+}
+
+impl<C: ServerContext> ServerBuilder<C> {
+    /// Start configuring a new Dropshot server
+    ///
+    /// * `api`: the API to be hosted on this server
+    /// * `private`: your private data that will be made available in
+    ///   `RequestContext`
+    /// * `log`: a slog logger for all server events
+    pub fn new(
+        api: ApiDescription<C>,
+        private: C,
+        log: Logger,
+    ) -> ServerBuilder<C> {
+        ServerBuilder {
+            private,
+            log,
+            api: DebugIgnore(api),
+            config: Default::default(),
+            tls: Default::default(),
+        }
+    }
+
+    /// Specify the server configuration
+    pub fn config(mut self, config: ConfigDropshot) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Specify the TLS configuration, if any
+    ///
+    /// `None` (the default) means no TLS.  The server will listen for plain
+    /// HTTP.
+    pub fn tls(mut self, tls: Option<ConfigTls>) -> Self {
+        self.tls = tls;
+        self
+    }
+
+    /// Start the server
+    pub fn start(self) -> Result<HttpServer<C>, BuildError> {
+        Ok(self.build_starter()?.start())
+    }
+
+    /// Build an `HttpServerStarter` that can be used to start the server
+    ///
+    /// Most consumers probably want to use `start()` instead.
+    pub fn build_starter(self) -> Result<HttpServerStarter<C>, BuildError> {
+        HttpServerStarter::new_internal(
+            &self.config,
+            self.api.0,
+            self.private,
+            &self.log,
+            self.tls,
+        )
     }
 }
 
