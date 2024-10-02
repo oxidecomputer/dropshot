@@ -54,13 +54,18 @@ async fn test_with_tls() {
         key: serialized_key.clone(),
     });
 
-    let mut builder = reqwest::Client::builder().use_rustls_tls();
+    // Use Rustls-based TLS because the native TLS on Windows does not support
+    // appear to support adding the rcgen-generated P-256 certificate in this
+    // way.
     let certs =
         reqwest::Certificate::from_pem_bundle(&serialized_certs).unwrap();
-    for c in certs {
-        builder = builder.add_root_certificate(c);
-    }
-    let client = builder.build().unwrap();
+    let my_ca_root =
+        certs.into_iter().last().expect("at least one certificate");
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .add_root_certificate(my_ca_root)
+        .build()
+        .unwrap();
     let api = demo_api();
     let starter = HttpServerStarter::new_with_tls(
         &ConfigDropshot::default(),
