@@ -615,6 +615,31 @@ mod tests {
     }
 
     #[test]
+    fn test_channel_operation_id() {
+        let (item, errors) = do_channel(
+            quote! {
+                protocol = WEBSOCKETS,
+                path = "/my/ws/channel",
+                operation_id = "vzeroupper"
+            },
+            quote! {
+                async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                    _ws: WebsocketConnection,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/channel_operation_id.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
     fn test_channel_with_versions() {
         let input = quote! {
             async fn my_channel(

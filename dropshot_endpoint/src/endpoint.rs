@@ -1018,6 +1018,30 @@ mod tests {
     }
 
     #[test]
+    fn test_operation_id() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+                operation_id = "vzeroupper"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_operation_id.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    #[test]
     fn test_endpoint_bad_versions() {
         let (_, errors) = do_endpoint(
             quote! {

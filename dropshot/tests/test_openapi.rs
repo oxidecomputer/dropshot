@@ -1,8 +1,7 @@
 // Copyright 2023 Oxide Computer Company
 
-use dropshot::Body;
 use dropshot::{
-    endpoint, http_response_found, http_response_see_other,
+    channel, endpoint, http_response_found, http_response_see_other,
     http_response_temporary_redirect, ApiDescription,
     ApiDescriptionRegisterError, FreeformBody, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseFound,
@@ -11,6 +10,7 @@ use dropshot::{
     PaginationParams, Path, Query, RequestContext, ResultsPage, TagConfig,
     TagDetails, TypedBody, UntypedBody,
 };
+use dropshot::{Body, WebsocketConnection};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::Cursor, str::from_utf8};
@@ -473,6 +473,33 @@ async fn handler25(
     Ok(HttpResponseCreated(Response {}))
 }
 
+// test: Overridden operation id
+#[endpoint {
+    operation_id = "vzeroupper",
+    method = GET,
+    path = "/first_thing",
+    tags = ["it"]
+}]
+async fn handler26(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseCreated<Response>, HttpError> {
+    Ok(HttpResponseCreated(Response {}))
+}
+
+// test: websocket using overriden operation id
+#[channel {
+    protocol = WEBSOCKETS,
+    operation_id = "vzerolower",
+    path = "/other_thing",
+    tags = ["it"]
+}]
+async fn handler27(
+    _rqctx: RequestContext<()>,
+    _: WebsocketConnection,
+) -> dropshot::WebsocketChannelResult {
+    Ok(())
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
@@ -507,6 +534,8 @@ fn make_api(
     api.register(handler23)?;
     api.register(handler24)?;
     api.register(handler25)?;
+    api.register(handler26)?;
+    api.register(handler27)?;
     Ok(api)
 }
 

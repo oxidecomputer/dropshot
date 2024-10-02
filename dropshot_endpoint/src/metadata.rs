@@ -42,6 +42,8 @@ impl MethodType {
 
 #[derive(Deserialize, Debug)]
 pub(crate) struct EndpointMetadata {
+    #[serde(default)]
+    pub(crate) operation_id: Option<String>,
     pub(crate) method: MethodType,
     pub(crate) path: String,
     #[serde(default)]
@@ -61,7 +63,7 @@ impl EndpointMetadata {
         get_crate(self._dropshot_crate.as_deref())
     }
 
-    /// Validates metadata, returning an `EndpointMetadata` if valid.
+    /// Validates metadata, returning a `ValidatedEndpointMetadata` if valid.
     ///
     /// Note: the only reason we pass in attr here is to provide a span for
     /// error reporting. As of Rust 1.76, just passing in `attr.span()` produces
@@ -76,6 +78,7 @@ impl EndpointMetadata {
         let errors = errors.new();
 
         let EndpointMetadata {
+            operation_id,
             method,
             path,
             tags,
@@ -133,6 +136,7 @@ impl EndpointMetadata {
             None
         } else if let Some(content_type) = content_type {
             Some(ValidatedEndpointMetadata {
+                operation_id,
                 method,
                 path,
                 tags,
@@ -151,6 +155,7 @@ impl EndpointMetadata {
 
 /// A validated form of endpoint metadata.
 pub(crate) struct ValidatedEndpointMetadata {
+    operation_id: Option<String>,
     method: MethodType,
     path: String,
     tags: Vec<String>,
@@ -177,6 +182,8 @@ impl ValidatedEndpointMetadata {
     ) -> TokenStream {
         let path = &self.path;
         let content_type = self.content_type;
+        let operation_id =
+            self.operation_id.as_deref().unwrap_or(endpoint_name);
         let method_ident = format_ident!("{}", self.method.as_str());
 
         let summary = doc.summary.as_ref().map(|summary| {
@@ -236,7 +243,7 @@ impl ValidatedEndpointMetadata {
             ApiEndpointKind::Regular(endpoint_fn) => {
                 quote_spanned! {endpoint_fn.span()=>
                     #dropshot::ApiEndpoint::new(
-                        #endpoint_name.to_string(),
+                        #operation_id.to_string(),
                         #endpoint_fn,
                         #dropshot::Method::#method_ident,
                         #content_type,
@@ -257,7 +264,7 @@ impl ValidatedEndpointMetadata {
                 // Seems pretty unobjectionable.
                 quote_spanned! {attr.pound_token.span()=>
                     #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
-                        #endpoint_name.to_string(),
+                        #operation_id.to_string(),
                         #dropshot::Method::#method_ident,
                         #content_type,
                         #path,
@@ -368,6 +375,8 @@ pub(crate) enum ChannelProtocol {
 #[derive(Deserialize, Debug)]
 pub(crate) struct ChannelMetadata {
     pub(crate) protocol: ChannelProtocol,
+    #[serde(default)]
+    pub(crate) operation_id: Option<String>,
     pub(crate) path: String,
     #[serde(default)]
     pub(crate) tags: Vec<String>,
@@ -401,6 +410,7 @@ impl ChannelMetadata {
 
         let ChannelMetadata {
             protocol: ChannelProtocol::WEBSOCKETS,
+            operation_id,
             path,
             tags,
             unpublished,
@@ -436,6 +446,7 @@ impl ChannelMetadata {
             // Validating channel metadata also validates the corresponding
             // endpoint metadata.
             let inner = ValidatedEndpointMetadata {
+                operation_id,
                 method: MethodType::GET,
                 path,
                 tags,
