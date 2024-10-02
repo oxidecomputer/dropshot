@@ -1788,7 +1788,7 @@ mod tests {
                     #[channel {
                         protocol = WEBSOCKETS,
                         path = "/ws",
-                        operation_id = "vzeroupper", 
+                        operation_id = "vzeroupper",
                     }]
                     async fn handler_ws(
                         rqctx: RequestContext<Self::Context>,
