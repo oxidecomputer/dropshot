@@ -200,6 +200,32 @@
         }
       }
     },
+    "/first_thing": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "vzeroupper",
+        "responses": {
+          "201": {
+            "description": "successful creation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/impairment": {
       "get": {
         "tags": [
@@ -267,6 +293,25 @@
             "a_mandatory_string"
           ]
         }
+      }
+    },
+    "/other_thing": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "vzerolower",
+        "responses": {
+          "default": {
+            "description": "",
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "x-dropshot-websocket": {}
       }
     },
     "/playing/a/bit/nicer": {
