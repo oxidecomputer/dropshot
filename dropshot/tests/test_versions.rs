@@ -8,7 +8,6 @@ use dropshot::ClientSpecifiesVersionInHeader;
 use dropshot::HttpError;
 use dropshot::HttpErrorResponseBody;
 use dropshot::HttpResponseOk;
-use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
@@ -16,7 +15,8 @@ use reqwest::Method;
 use reqwest::StatusCode;
 use schemars::JsonSchema;
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::io::Cursor;
 
 pub mod common;
@@ -237,7 +237,20 @@ async fn test_versions() {
             let error: HttpErrorResponseBody = response.json().await.unwrap();
             assert_eq!(error.message, t.body_contents);
         } else {
-            let body: String = response.json().await.unwrap();
+            // This is ugly.  But it's concise!
+            //
+            // We want to use a different type for `handler1` just so that we
+            // can check in test_versions_openapi() that it appears in the
+            // OpenAPI spec only in the appropriate versions.  So if we're
+            // expecting to get something back from handler1, then parse the
+            // type a little differently.
+            let body: String = if t.body_contents == HANDLER1_MSG {
+                let body: EarlyReturn = response.json().await.unwrap();
+                body.real_message
+            } else {
+                response.json().await.unwrap()
+            };
+
             assert_eq!(body, t.body_contents);
         }
     }
@@ -447,10 +460,9 @@ fn test_versions_openapi_same_names() {
 
 // This is just here so that we can tell that types are included in the spec iff
 // they are referenced by endpoints in that version of the spec.
-#[derive(JsonSchema, Deserialize)]
-struct EarlyOptionalParams {
-    #[allow(dead_code)]
-    v: Option<String>,
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct EarlyReturn {
+    real_message: String,
 }
 
 #[endpoint {
@@ -460,9 +472,8 @@ struct EarlyOptionalParams {
 }]
 async fn handler1(
     _rqctx: RequestContext<()>,
-    _query: Query<EarlyOptionalParams>,
-) -> Result<HttpResponseOk<&'static str>, HttpError> {
-    Ok(HttpResponseOk(HANDLER1_MSG))
+) -> Result<HttpResponseOk<EarlyReturn>, HttpError> {
+    Ok(HttpResponseOk(EarlyReturn { real_message: HANDLER1_MSG.to_string() }))
 }
 
 #[endpoint {

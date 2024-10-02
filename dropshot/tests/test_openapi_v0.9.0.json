@@ -8,24 +8,13 @@
     "/demo": {
       "get": {
         "operationId": "handler1",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "v",
-            "schema": {
-              "nullable": true,
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "successful operation",
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "String",
-                  "type": "string"
+                  "$ref": "#/components/schemas/EarlyReturn"
                 }
               }
             }
@@ -64,6 +53,17 @@
   },
   "components": {
     "schemas": {
+      "EarlyReturn": {
+        "type": "object",
+        "properties": {
+          "real_message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "real_message"
+        ]
+      },
       "Error": {
         "description": "Error information from a response.",
         "type": "object",
