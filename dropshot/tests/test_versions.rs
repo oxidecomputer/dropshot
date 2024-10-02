@@ -8,12 +8,16 @@ use dropshot::ClientSpecifiesVersionInHeader;
 use dropshot::HttpError;
 use dropshot::HttpErrorResponseBody;
 use dropshot::HttpResponseOk;
+use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
 use reqwest::Method;
 use reqwest::StatusCode;
+use schemars::JsonSchema;
 use semver::Version;
+use serde::Deserialize;
+use std::io::Cursor;
 
 pub mod common;
 
@@ -24,16 +28,19 @@ const HANDLER3_MSG: &str = "handler3";
 const HANDLER4_MSG: &str = "handler3";
 const FORBIDDEN_MSG: &str = "THAT VALUE IS FORBIDDEN!!!";
 
-#[tokio::test]
-async fn test_versions() {
-    let mut api = ApiDescription::<()>::new();
+fn api() -> ApiDescription<()> {
+    let mut api = ApiDescription::new();
     api.register(handler1).unwrap();
     api.register(handler2).unwrap();
     api.register(handler3).unwrap();
     api.register(handler4).unwrap();
+    api
+}
 
+#[tokio::test]
+async fn test_versions() {
     let logctx = common::create_log_context("test_versions");
-    let server = ServerBuilder::new(api, (), logctx.log.clone())
+    let server = ServerBuilder::new(api(), (), logctx.log.clone())
         .version_policy(VersionPolicy::Dynamic(Box::new(TestVersionPolicy(
             ClientSpecifiesVersionInHeader::new(
                 VERSION_HEADER_NAME.parse().unwrap(),
@@ -226,6 +233,30 @@ async fn test_versions() {
     }
 }
 
+#[test]
+fn test_versions_openapi() {
+    let api = api();
+
+    for version in ["0.9.0", "1.0.0", "1.1.0", "1.3.1", "1.4.0"] {
+        let semver: semver::Version = version.parse().unwrap();
+        let mut found = Cursor::new(Vec::new());
+        api.openapi("Evolving API", semver).write(&mut found).unwrap();
+        let actual = std::str::from_utf8(found.get_ref()).unwrap();
+        expectorate::assert_contents(
+            &format!("tests/test_openapi_v{}.json", version),
+            actual,
+        );
+    }
+}
+
+// This is just here so that we can tell that types are included in the spec iff
+// they are referenced by endpoints in that version of the spec.
+#[derive(JsonSchema, Deserialize)]
+struct EarlyOptionalParams {
+    #[allow(dead_code)]
+    v: Option<String>,
+}
+
 #[endpoint {
     method = GET,
     path = "/demo",
@@ -233,6 +264,7 @@ async fn test_versions() {
 }]
 async fn handler1(
     _rqctx: RequestContext<()>,
+    _query: Query<EarlyOptionalParams>,
 ) -> Result<HttpResponseOk<&'static str>, HttpError> {
     Ok(HttpResponseOk(HANDLER1_MSG))
 }
