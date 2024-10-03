@@ -6,27 +6,6 @@
   },
   "paths": {
     "/demo": {
-      "get": {
-        "operationId": "handler1",
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EarlyReturn"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "$ref": "#/components/responses/Error"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
       "put": {
         "operationId": "handler4",
         "responses": {
@@ -53,17 +32,6 @@
   },
   "components": {
     "schemas": {
-      "EarlyReturn": {
-        "type": "object",
-        "properties": {
-          "real_message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "real_message"
-        ]
-      },
       "Error": {
         "description": "Error information from a response.",
         "type": "object",

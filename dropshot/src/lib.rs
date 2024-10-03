@@ -709,11 +709,12 @@
 //! // introduced in 1.0.0, present in all subsequent versions
 //! versions = "1.0.0"..    
 //!
-//! // removed *after* 2.0.0, present in all previous versions
-//! versions = "2.0.0"...
+//! // removed in 2.0.0, present in all previous versions
+//! // (not present in 2.0.0 itself)
+//! versions = .."2.0.0"
 //!
-//! // introduced in 1.0.0, removed after 2.0.0
-//! // (present only in versions 1.0.0 through 2.0.0, inclusive)
+//! // introduced in 1.0.0, removed in 2.0.0
+//! // (present only in all 1.x versions, NOT 2.0.0 or later)
 //! versions = "1.0.0".."2.0.0"
 //!
 //! // present in all versions (the default)

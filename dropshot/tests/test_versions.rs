@@ -68,7 +68,7 @@ async fn handler1(
 #[endpoint {
     method = GET,
     path = "/demo",
-    versions = "1.1.0".."1.3.0",
+    versions = "1.1.0".."1.2.0",
 }]
 async fn handler2(
     _rqctx: RequestContext<()>,
@@ -79,7 +79,7 @@ async fn handler2(
 #[endpoint {
     method = GET,
     path = "/demo",
-    versions = "1.4.0"..,
+    versions = "1.3.0"..,
 }]
 async fn handler3(
     _rqctx: RequestContext<()>,
@@ -191,7 +191,7 @@ async fn test_versions() {
                 VERSION_HEADER_NAME
             ),
         ),
-        // Versions prior to and including 1.0.0 get "handler1".
+        // Versions prior to (not including) 1.0.0 get "handler1".
         TestCase::new(
             Method::GET,
             "/demo",
@@ -199,21 +199,15 @@ async fn test_versions() {
             StatusCode::OK,
             HANDLER1_MSG,
         ),
-        TestCase::new(
-            Method::GET,
-            "/demo",
-            Some("1.0.0"),
-            StatusCode::OK,
-            HANDLER1_MSG,
-        ),
-        // Versions between 1.0.0 and 1.1.0 (non-inclusive) do not exist.
+        // Versions between 1.0.0 (inclusive) and 1.1.0 (exclusive) do not
+        // exist.
         //
         // Because there's a PUT handler for all versions, the expected error is
         // 405 ("Method Not Allowed"), not 404 ("Not Found").
         TestCase::new(
             Method::GET,
             "/demo",
-            Some("1.0.1"),
+            Some("1.0.0"),
             StatusCode::METHOD_NOT_ALLOWED,
             StatusCode::METHOD_NOT_ALLOWED.canonical_reason().unwrap(),
         ),
@@ -224,7 +218,8 @@ async fn test_versions() {
             StatusCode::METHOD_NOT_ALLOWED,
             StatusCode::METHOD_NOT_ALLOWED.canonical_reason().unwrap(),
         ),
-        // Versions between 1.1.0 and 1.3.0 (inclusive) get "handler2".
+        // Versions between 1.1.0 (inclusive) and 1.2.0 (exclusive) get
+        // "handler2".
         TestCase::new(
             Method::GET,
             "/demo",
@@ -235,31 +230,31 @@ async fn test_versions() {
         TestCase::new(
             Method::GET,
             "/demo",
-            Some("1.3.0"),
+            Some("1.1.99"),
             StatusCode::OK,
             HANDLER2_MSG,
         ),
-        // Versions between 1.3.0 and 1.4.0 (exclusive) do not exist.
-        // See above for why this is a 405.
+        // Versions between 1.2.0 (inclusive) and 1.3.0 (exclusive) do not
+        // exist.  See above for why this is a 405.
         TestCase::new(
             Method::GET,
             "/demo",
-            Some("1.3.1"),
+            Some("1.2.0"),
             StatusCode::METHOD_NOT_ALLOWED,
             StatusCode::METHOD_NOT_ALLOWED.canonical_reason().unwrap(),
         ),
         TestCase::new(
             Method::GET,
             "/demo",
-            Some("1.3.99"),
+            Some("1.2.99"),
             StatusCode::METHOD_NOT_ALLOWED,
             StatusCode::METHOD_NOT_ALLOWED.canonical_reason().unwrap(),
         ),
-        // Versions after 1.4.0 (inclusive) get "handler3".
+        // Versions after 1.3.0 (inclusive) get "handler3".
         TestCase::new(
             Method::GET,
             "/demo",
-            Some("1.4.0"),
+            Some("1.3.0"),
             StatusCode::OK,
             HANDLER3_MSG,
         ),
@@ -370,7 +365,7 @@ fn test_versions_openapi_same_names() {
             #[endpoint {
                 method = GET,
                 path = "/demo",
-                versions = .."1.0.0"
+                versions = .."2.0.0"
             }]
             pub async fn the_operation(
                 _rqctx: RequestContext<()>,
@@ -420,7 +415,7 @@ fn test_versions_openapi_same_names() {
         #[endpoint {
             method = GET,
             path = "/demo",
-            versions = .."1.0.0",
+            versions = .."2.0.0",
             operation_id = "the_operation",
         }]
         async fn the_operation_v1(
@@ -516,7 +511,7 @@ mod trait_based {
         #[endpoint {
             method = GET,
             path = "/demo",
-            versions = .."1.0.0",
+            versions = .."2.0.0",
             operation_id = "the_operation",
         }]
         async fn the_operation_v1(

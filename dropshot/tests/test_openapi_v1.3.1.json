@@ -6,6 +6,28 @@
   },
   "paths": {
     "/demo": {
+      "get": {
+        "operationId": "handler3",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "String",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
       "put": {
         "operationId": "handler4",
         "responses": {

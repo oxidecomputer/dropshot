@@ -1079,7 +1079,7 @@ pub enum ApiEndpointVersions {
     // We use an extra level of indirection to enforce that the versions here
     // are provided in order.
     FromUntil(OrderedVersionPair),
-    /// this endpoint was present in all versions up to (and including) this
+    /// this endpoint was present in all versions up to (but not including) this
     /// specific version
     Until(semver::Version),
 }
@@ -1087,7 +1087,7 @@ pub enum ApiEndpointVersions {
 #[derive(Debug, Eq, PartialEq)]
 pub struct OrderedVersionPair {
     earliest: semver::Version,
-    latest: semver::Version,
+    until: semver::Version,
 }
 
 impl ApiEndpointVersions {
@@ -1105,9 +1105,9 @@ impl ApiEndpointVersions {
 
     pub fn from_until(
         earliest: semver::Version,
-        latest: semver::Version,
+        until: semver::Version,
     ) -> Result<ApiEndpointVersions, &'static str> {
-        if latest < earliest {
+        if until < earliest {
             return Err(
                 "versions in a from-until version range must be provided \
                  in order",
@@ -1116,7 +1116,7 @@ impl ApiEndpointVersions {
 
         Ok(ApiEndpointVersions::FromUntil(OrderedVersionPair {
             earliest,
-            latest,
+            until,
         }))
     }
 
@@ -1140,9 +1140,13 @@ impl ApiEndpointVersions {
             ApiEndpointVersions::From(earliest) => version >= earliest,
             ApiEndpointVersions::FromUntil(OrderedVersionPair {
                 earliest,
-                latest,
-            }) => version >= earliest && version <= latest,
-            ApiEndpointVersions::Until(latest) => version <= latest,
+                until,
+            }) => {
+                version >= earliest
+                    && (version < until
+                        || (version == until && earliest == until))
+            }
+            ApiEndpointVersions::Until(until) => version < until,
         }
     }
 
@@ -1173,56 +1177,53 @@ impl ApiEndpointVersions {
             // more complicated cases
             (
                 ApiEndpointVersions::From(earliest),
-                ApiEndpointVersions::Until(latest),
-            ) => latest >= earliest,
+                u @ ApiEndpointVersions::Until(_),
+            ) => u.matches(Some(&earliest)),
             (
-                ApiEndpointVersions::Until(latest),
+                u @ ApiEndpointVersions::Until(_),
                 ApiEndpointVersions::From(earliest),
-            ) => latest >= earliest,
+            ) => u.matches(Some(&earliest)),
 
             (
                 ApiEndpointVersions::From(earliest),
                 ApiEndpointVersions::FromUntil(OrderedVersionPair {
                     earliest: _,
-                    latest,
+                    until,
                 }),
-            ) => earliest <= latest,
+            ) => earliest < until,
             (
                 ApiEndpointVersions::FromUntil(OrderedVersionPair {
                     earliest: _,
-                    latest,
+                    until,
                 }),
                 ApiEndpointVersions::From(earliest),
-            ) => earliest <= latest,
+            ) => earliest < until,
 
             (
-                ApiEndpointVersions::Until(latest),
+                u @ ApiEndpointVersions::Until(_),
                 ApiEndpointVersions::FromUntil(OrderedVersionPair {
                     earliest,
-                    latest: _,
+                    until: _,
                 }),
-            ) => earliest <= latest,
+            ) => u.matches(Some(&earliest)),
             (
                 ApiEndpointVersions::FromUntil(OrderedVersionPair {
                     earliest,
-                    latest: _,
+                    until: _,
                 }),
-                ApiEndpointVersions::Until(latest),
-            ) => earliest <= latest,
+                u @ ApiEndpointVersions::Until(_),
+            ) => u.matches(Some(&earliest)),
 
             (
-                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                r1 @ ApiEndpointVersions::FromUntil(OrderedVersionPair {
                     earliest: earliest1,
-                    latest: latest1,
+                    until: _,
                 }),
-                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                r2 @ ApiEndpointVersions::FromUntil(OrderedVersionPair {
                     earliest: earliest2,
-                    latest: latest2,
+                    until: _,
                 }),
-            ) => {
-                (earliest1 <= earliest2 && earliest2 <= latest1)
-                    || (earliest2 <= earliest1 && earliest1 <= latest2)
-            }
+            ) => r1.matches(Some(&earliest2)) || r2.matches(Some(&earliest1)),
         }
     }
 }
@@ -1242,7 +1243,7 @@ impl slog::Value for ApiEndpointVersions {
             ),
             ApiEndpointVersions::FromUntil(OrderedVersionPair {
                 earliest,
-                latest,
+                until: latest,
             }) => serializer.emit_arguments(
                 key,
                 &format_args!("from {} to {}", earliest, latest),
@@ -1856,14 +1857,14 @@ mod test {
             TestCase::new(&v_from, Version::new(5, 0, 0), true),
             TestCase::new(&v_until, Version::new(0, 0, 0), true),
             TestCase::new(&v_until, Version::new(4, 5, 5), true),
-            TestCase::new(&v_until, Version::new(4, 5, 6), true),
+            TestCase::new(&v_until, Version::new(4, 5, 6), false),
             TestCase::new(&v_until, Version::new(4, 5, 7), false),
             TestCase::new(&v_until, Version::new(37, 0, 0), false),
             TestCase::new(&v_fromuntil, Version::new(0, 0, 0), false),
             TestCase::new(&v_fromuntil, Version::new(1, 2, 2), false),
             TestCase::new(&v_fromuntil, Version::new(1, 2, 3), true),
             TestCase::new(&v_fromuntil, Version::new(4, 5, 5), true),
-            TestCase::new(&v_fromuntil, Version::new(4, 5, 6), true),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 6), false),
             TestCase::new(&v_fromuntil, Version::new(4, 5, 7), false),
             TestCase::new(&v_fromuntil, Version::new(12, 0, 0), false),
             TestCase::new(&v_oneversion, Version::new(1, 2, 2), false),
@@ -1954,23 +1955,23 @@ mod test {
             // "from" + "until": overlap is exactly one point
             TestCase::new(
                 &v_from,
-                &ApiEndpointVersions::until(Version::new(1, 2, 3)),
+                &ApiEndpointVersions::until(Version::new(1, 2, 4)),
                 true,
             ),
-            // "from" + "until": no overlap
+            // "from" + "until": no overlap (right on the edge)
             TestCase::new(
                 &v_from,
-                &ApiEndpointVersions::until(Version::new(1, 2, 2)),
+                &ApiEndpointVersions::until(Version::new(1, 2, 3)),
                 false,
             ),
-            // "from" from "from-until": overlap
+            // "from" + "from-until": overlap
             TestCase::new(&v_from, &v_fromuntil, true),
             // "from" + "from-until": no overlap
             TestCase::new(
                 &v_from,
                 &ApiEndpointVersions::from_until(
                     Version::new(1, 2, 0),
-                    Version::new(1, 2, 2),
+                    Version::new(1, 2, 3),
                 )
                 .unwrap(),
                 false,
@@ -1990,7 +1991,7 @@ mod test {
             TestCase::new(
                 &v_until,
                 &ApiEndpointVersions::from_until(
-                    Version::new(5, 0, 0),
+                    Version::new(4, 5, 6),
                     Version::new(6, 0, 0),
                 )
                 .unwrap(),
@@ -2005,7 +2006,7 @@ mod test {
                 &v_fromuntil,
                 &ApiEndpointVersions::from_until(
                     Version::new(0, 0, 1),
-                    Version::new(1, 2, 2),
+                    Version::new(1, 2, 3),
                 )
                 .unwrap(),
                 false,
@@ -2015,7 +2016,7 @@ mod test {
                 &v_fromuntil,
                 &ApiEndpointVersions::from_until(
                     Version::new(0, 0, 1),
-                    Version::new(1, 2, 3),
+                    Version::new(1, 2, 4),
                 )
                 .unwrap(),
                 true,

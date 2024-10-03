@@ -1315,6 +1315,9 @@ mod test {
     fn test_router_versioned() {
         // Install handlers for a particular route for a bunch of different
         // versions.
+        //
+        // This is not exhaustive because the matching logic is tested
+        // exhaustively elsewhere.
         let method = Method::GET;
         let path: super::InputPath<'static> = "/foo".into();
         let mut router = HttpRouter::new();
@@ -1346,13 +1349,8 @@ mod test {
             .lookup_route(&method, path, Some(&Version::new(1, 2, 2)))
             .unwrap();
         assert_eq!(result.handler.label(), "h1");
-        let result = router
-            .lookup_route(&method, path, Some(&Version::new(1, 2, 3)))
-            .unwrap();
-        assert_eq!(result.handler.label(), "h1");
-
         let error = router
-            .lookup_route(&method, path, Some(&Version::new(1, 2, 4)))
+            .lookup_route(&method, path, Some(&Version::new(1, 2, 3)))
             .unwrap_err();
         assert_eq!(error.status_code, StatusCode::NOT_FOUND);
 
@@ -1364,11 +1362,11 @@ mod test {
             .lookup_route(&method, path, Some(&Version::new(2, 1, 0)))
             .unwrap();
         assert_eq!(result.handler.label(), "h2");
-        let result = router
-            .lookup_route(&method, path, Some(&Version::new(3, 0, 0)))
-            .unwrap();
-        assert_eq!(result.handler.label(), "h2");
 
+        let error = router
+            .lookup_route(&method, path, Some(&Version::new(3, 0, 0)))
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
         let error = router
             .lookup_route(&method, path, Some(&Version::new(3, 0, 1)))
             .unwrap_err();
