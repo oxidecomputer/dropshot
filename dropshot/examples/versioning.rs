@@ -4,10 +4,10 @@
 //!
 //! This example defines a bunch of API versions:
 //!
-//! - Versions 1.0.0 through 1.0.3 contain an endpoint `GET /` that returns a
-//!   `Value` type with just one field: `s`.
-//! - Versions 1.0.5 and later contain an endpoint `GET /` that returns a
-//!   `Value` type with two fields: `s` and `number`.
+//! - Versions 1.x contain an endpoint `GET /` that returns a `Thing1` type with
+//!   just one field: `thing1_early`.
+//! - Versions 2.x and later contain an endpoint `GET /` that returns a `Thing1`
+//!   type with one field: `thing1_late`.
 //!
 //! The client chooses which version they want to use by specifying the
 //! `dropshot-demo-version` header with their request.
@@ -20,14 +20,16 @@
 //! $ cargo run --example=versioning -- openapi 1.0.0
 //! ```
 //!
-//! You'll see that the this spec contains one operation, it produces `Value`,
-//! and that the `Value` type only has the one field `s`.
+//! You'll see that the this spec contains one operation, it produces `Thing1`,
+//! and that the `Thing1` type only has the one field `thing1_early`.  It also
+//! contains an operation that produces a `Thing2`.
 //!
-//! You can generate the OpenAPI spec for 1.0.5 and see that the corresponding
-//! `Value` type has the extra field `number`, as expected.
+//! You can generate the OpenAPI spec for 2.0.0 and see that the corresponding
+//! `Thing1` type has a different field, `thing1_late`, as expected.  `Thing2`
+//! is also present and unchanged.
 //!
 //! You can generate the OpenAPI spec for any other version.  You'll see that
-//! 0.9.0, for example, has no operations and no `Value` type.
+//! 0.9.0, for example, has only the `Thing2` type and its associated getter.
 //!
 //! ## Running the server
 //!
@@ -41,7 +43,7 @@
 //! requests.  If we don't specify a version, we get an error:
 //!
 //! ```text
-//! $ curl http://127.0.0.1:12345
+//! $ curl http://127.0.0.1:12345/thing1
 //! {
 //!   "request_id": "73f62e8a-b363-488a-b662-662814e306ee",
 //!   "message": "missing expected header \"dropshot-demo-version\""
@@ -54,18 +56,18 @@
 //! If we provide a bogus one, we'll also get an error:
 //!
 //! ```text
-//! $ curl -H 'dropshot-demo-version: threeve'  http://127.0.0.1:12345
+//! $ curl -H 'dropshot-demo-version: threeve'  http://127.0.0.1:12345/thing1
 //! {
 //!   "request_id": "18c1964e-88c6-4122-8287-1f2f399871bd",
 //!   "message": "bad value for header \"dropshot-demo-version\": unexpected character 't' while parsing major version number: threeve"
 //! }
 //! ```
 //!
-//! If we provide version 0.9.0 (or 1.0.4), there is no endpoint at `/`, so we
-//! get a 404:
+//! If we provide version 0.9.0, there is no endpoint at `/thing1`, so we get a
+//! 404:
 //!
 //! ```text
-//! $ curl -i -H 'dropshot-demo-version: 0.9.0'  http://127.0.0.1:12345
+//! $ curl -i -H 'dropshot-demo-version: 0.9.0'  http://127.0.0.1:12345/thing1
 //! HTTP/1.1 404 Not Found
 //! content-type: application/json
 //! x-request-id: 0d3d25b8-4c48-43b2-a417-018ebce68870
@@ -81,16 +83,16 @@
 //! If we provide version 1.0.0, we get the v1 handler we defined:
 //!
 //! ```text
-//! $ curl -H 'dropshot-demo-version: 1.0.0'  http://127.0.0.1:12345
-//! {"s":"hello from an early v1"}
+//! $ curl -H 'dropshot-demo-version: 1.0.0'  http://127.0.0.1:12345/thing1
+//! {"thing1_early":"hello from an early v1"}
 //! ```
 //!
-//! If we provide version 1.0.5, we get the later version that we defined, with
+//! If we provide version 2.0.0, we get the later version that we defined, with
 //! a different response body type:
 //!
 //! ```text
-//! $ curl -H 'dropshot-demo-version: 1.0.5'  http://127.0.0.1:12345
-//! {"s":"hello from a LATE v1","number":12}
+//! $ curl -H 'dropshot-demo-version: 2.0.0'  http://127.0.0.1:12345/thing1
+//! {"thing1_late":"hello from a LATE v1"}
 //! ```
 
 use dropshot::endpoint;
@@ -122,8 +124,9 @@ async fn main() -> Result<(), String> {
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
     let mut api = ApiDescription::new();
-    api.register(v1::versioned_get).unwrap();
-    api.register(v2::versioned_get).unwrap();
+    api.register(v1::get_thing1).unwrap();
+    api.register(v2::get_thing1).unwrap();
+    api.register(get_thing2).unwrap();
 
     // Determine if we're generating the OpenAPI spec or starting the server.
     // Skip the first argument because that's just the name of the program.
@@ -177,55 +180,76 @@ async fn main() -> Result<(), String> {
 //
 // This API defines several different versions:
 //
-// - versions 1.0.0 through 1.0.3 use `v1::versioned_get`
-// - versions 1.0.5 and later use `v2::versioned_get`
-// - versions prior to 1.0.0 and version 1.0.4 do not exist
+// - versions prior to 1.0.0 do not contain a `get_thing1` endpoint
+// - versions 1.0.0 through 2.0.0 (exclusive) use `v1::get_thing1`
+// - versions 2.0.0 and later use `v2::get_thing1`
+//
+// `get_thing2` appears in all versions.
 
 mod v1 {
-    // The contents of this module define endpoints and types used in v1.0.0
-    // through v1.0.3.
+    // The contents of this module define endpoints and types used in all v1.x
+    // versions.
 
     use super::*;
 
     #[derive(Serialize, JsonSchema)]
-    struct Value {
-        s: &'static str,
+    struct Thing1 {
+        thing1_early: &'static str,
     }
 
-    /// Fetch the current value of the counter.
+    /// Fetch `thing1`
     #[endpoint {
         method = GET,
-        path = "/",
-        versions = "1.0.0".."1.0.3"
+        path = "/thing1",
+        versions = "1.0.0".."2.0.0"
     }]
-    pub async fn versioned_get(
+    pub async fn get_thing1(
         _rqctx: RequestContext<()>,
-    ) -> Result<HttpResponseOk<Value>, HttpError> {
-        Ok(HttpResponseOk(Value { s: "hello from an early v1" }))
+    ) -> Result<HttpResponseOk<Thing1>, HttpError> {
+        Ok(HttpResponseOk(Thing1 { thing1_early: "hello from an early v1" }))
     }
 }
 
 mod v2 {
-    // The contents of this module define endpoints and types used in v1.0.5 and
+    // The contents of this module define endpoints and types used in v2.x and
     // later.
 
     use super::*;
 
     #[derive(Serialize, JsonSchema)]
-    struct Value {
-        s: &'static str,
-        number: u32,
+    struct Thing1 {
+        thing1_late: &'static str,
     }
 
-    /// Fetch the current value of the counter.
+    /// Fetch `thing1`
     #[endpoint {
         method = GET,
-        path = "/",
-        versions = "1.0.5"..
+        path = "/thing1",
+        versions = "2.0.0"..
     }]
-    pub async fn versioned_get(
+    pub async fn get_thing1(
         _rqctx: RequestContext<()>,
-    ) -> Result<HttpResponseOk<Value>, HttpError> {
-        Ok(HttpResponseOk(Value { s: "hello from a LATE v1", number: 12 }))
+    ) -> Result<HttpResponseOk<Thing1>, HttpError> {
+        Ok(HttpResponseOk(Thing1 { thing1_late: "hello from a LATE v1" }))
     }
+}
+
+// The following are used in all API versions.  The delta for each version is
+// proportional to what actually changed in each version.  i.e., you don't have
+// to repeat the code for all the unchanged endpoints.
+
+#[derive(Serialize, JsonSchema)]
+struct Thing2 {
+    thing2: &'static str,
+}
+
+/// Fetch `thing2`
+#[endpoint {
+    method = GET,
+    path = "/thing2",
+}]
+pub async fn get_thing2(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<Thing2>, HttpError> {
+    Ok(HttpResponseOk(Thing2 { thing2: "hello from any version" }))
 }
