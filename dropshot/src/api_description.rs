@@ -1227,6 +1227,34 @@ impl ApiEndpointVersions {
     }
 }
 
+impl slog::Value for ApiEndpointVersions {
+    fn serialize(
+        &self,
+        _record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut dyn slog::Serializer,
+    ) -> slog::Result {
+        match self {
+            ApiEndpointVersions::All => serializer.emit_str(key, "all"),
+            ApiEndpointVersions::From(from) => serializer.emit_arguments(
+                key,
+                &format_args!("all starting from {}", from),
+            ),
+            ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                earliest,
+                latest,
+            }) => serializer.emit_arguments(
+                key,
+                &format_args!("from {} to {}", earliest, latest),
+            ),
+            ApiEndpointVersions::Until(until) => serializer.emit_arguments(
+                key,
+                &format_args!("all ending with {}", until),
+            ),
+        }
+    }
+}
+
 /// Returns true iff the schema represents the void schema that matches no data.
 fn is_empty(schema: &schemars::schema::Schema) -> bool {
     if let schemars::schema::Schema::Bool(false) = schema {

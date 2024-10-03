@@ -221,7 +221,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             debug!(&log, "registered endpoint";
                 "method" => &method,
                 "path" => &path,
-                "versions" => ?endpoint.versions,
+                "versions" => &endpoint.versions,
             );
         }
 
