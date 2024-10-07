@@ -21,7 +21,7 @@ bytes = "1"
 camino = { version = "1.1.9", features = ["serde1"] }
 debug-ignore = "1.0.5"
 form_urlencoded = "1.2.1"
-futures = "0.3.30"
+futures = "0.3.31"
 hostname = "0.4.0"
 http = "1.1.0"
 http-body-util = "0.1.2"
