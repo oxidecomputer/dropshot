@@ -1759,4 +1759,41 @@ mod tests {
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
+
+    #[test]
+    fn test_api_trait_operation_id() {
+        let (item, errors) = do_trait(
+            quote! {},
+            quote! {
+                trait MyTrait {
+                    type Context;
+
+                    #[endpoint {
+                        operation_id = "vzerolower",
+                        method = GET,
+                        path = "/xyz"
+                    }]
+                    async fn handler_xyz(
+                        rqctx: RequestContext<Self::Context>,
+                    ) -> Result<HttpResponseOk<()>, HttpError>;
+
+                    #[channel {
+                        protocol = WEBSOCKETS,
+                        path = "/ws",
+                        operation_id = "vzeroupper",
+                    }]
+                    async fn handler_ws(
+                        rqctx: RequestContext<Self::Context>,
+                        upgraded: WebsocketConnection,
+                    ) -> WebsocketChannelResult;
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/api_trait_operation_id.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
 }

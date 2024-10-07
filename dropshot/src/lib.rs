@@ -304,6 +304,7 @@
 //!     path = "/path/name/with/{named}/{variables}",
 //!
 //!     // Optional fields
+//!     operation_id = "my_operation" // (default: name of the function)
 //!     tags = [ "all", "your", "OpenAPI", "tags" ],
 //! }]
 //! ```

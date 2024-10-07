@@ -920,4 +920,28 @@ mod tests {
             Some("endpoint `handler_xyz` must have at least one RequestContext argument".to_string())
         );
     }
+
+    #[test]
+    fn test_operation_id() {
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/a/b/c",
+                operation_id = "vzeroupper"
+            },
+            quote! {
+                pub async fn handler_xyz(
+                    _rqctx: RequestContext<()>,
+                ) -> Result<HttpResponseOk<()>, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_operation_id.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
 }
