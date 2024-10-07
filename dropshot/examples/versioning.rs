@@ -155,14 +155,21 @@ async fn main() -> Result<(), String> {
         // tells Dropshot how to determine what API version is being used for
         // each incoming request.
         //
-        // For this example, we will say that the client always specifies the
-        // version using the "dropshot-demo-version" header.  You can provide
-        // your own impl of `DynamicVersionPolicy` that does this differently
-        // (e.g., filling in a default if the client doesn't provide one).
+        // For this example, we use `ClientSpecifiesVersionInHeader` to tell
+        // Dropshot that, as the name suggests, the client always specifies the
+        // version using the "dropshot-demo-version" header.  We specify a max
+        // API version of "2.0.0".  This is the "current" (latest) API that this
+        // example server is intended to support.
+        //
+        // You can provide your own impl of `DynamicVersionPolicy` that does
+        // this differently (e.g., filling in a default if the client doesn't
+        // provide one).  See `DynamicVersionPolicy` for details.
         let header_name = "dropshot-demo-version"
             .parse::<HeaderName>()
             .map_err(|_| String::from("demo header name was not valid"))?;
-        let version_impl = ClientSpecifiesVersionInHeader::new(header_name);
+        let max_version = semver::Version::new(2, 0, 0);
+        let version_impl =
+            ClientSpecifiesVersionInHeader::new(header_name, max_version);
         let version_policy = VersionPolicy::Dynamic(Box::new(version_impl));
         let server = ServerBuilder::new(api, api_context, log)
             .config(config_dropshot)

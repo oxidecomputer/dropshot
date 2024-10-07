@@ -117,14 +117,38 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
 /// Implementation of `DynamicVersionPolicy` where the client must specify a
 /// specific semver in a specific header and we always use whatever they
 /// requested
+///
+/// An incoming request will be rejected with a 400-level error if:
+///
+/// - the header value cannot be parsed as a semver, or
+/// - the requested version is newer than `max_version` (see
+///   [`ClientSpecifiesVersionInHeader::new()`], which implies that the client
+///   is trying to use a newer version of the API than this server supports.
+///
+/// If you need anything more flexible (e.g., validating the provided version
+/// against a fixed set of supported versions), you'll want to impl
+/// `DynamicVersionPolicy` yourself.
 #[derive(Debug)]
 pub struct ClientSpecifiesVersionInHeader {
     name: HeaderName,
+    max_version: Version,
 }
 
 impl ClientSpecifiesVersionInHeader {
-    pub fn new(name: HeaderName) -> ClientSpecifiesVersionInHeader {
-        ClientSpecifiesVersionInHeader { name }
+    /// Make a new `ClientSpecifiesVersionInHeader` policy
+    ///
+    /// Arguments:
+    ///
+    /// * `name`: name of the header that the client will use to specify the
+    ///   version
+    /// * `max_version`: the maximum version of the API that this server
+    ///   supports.  Requests for a version newer than this will be rejected
+    ///   with a 400-level error.
+    pub fn new(
+        name: HeaderName,
+        max_version: Version,
+    ) -> ClientSpecifiesVersionInHeader {
+        ClientSpecifiesVersionInHeader { name, max_version }
     }
 }
 
@@ -134,7 +158,15 @@ impl DynamicVersionPolicy for ClientSpecifiesVersionInHeader {
         request: &Request<Body>,
         _log: &Logger,
     ) -> Result<Version, HttpError> {
-        parse_header(request.headers(), &self.name)
+        let v = parse_header(request.headers(), &self.name)?;
+        if v <= self.max_version {
+            Ok(v)
+        } else {
+            Err(HttpError::for_bad_request(
+                None,
+                format!("server does not support this API version: {}", v),
+            ))
+        }
     }
 }
 

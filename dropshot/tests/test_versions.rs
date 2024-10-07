@@ -26,7 +26,6 @@ const HANDLER1_MSG: &str = "handler1";
 const HANDLER2_MSG: &str = "handler2";
 const HANDLER3_MSG: &str = "handler3";
 const HANDLER4_MSG: &str = "handler3";
-const FORBIDDEN_MSG: &str = "THAT VALUE IS FORBIDDEN!!!";
 
 fn api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
@@ -98,23 +97,6 @@ async fn handler4(
     Ok(HttpResponseOk(HANDLER4_MSG))
 }
 
-#[derive(Debug)]
-struct TestVersionPolicy(ClientSpecifiesVersionInHeader);
-impl dropshot::DynamicVersionPolicy for TestVersionPolicy {
-    fn request_extract_version(
-        &self,
-        request: &http::Request<dropshot::Body>,
-        log: &slog::Logger,
-    ) -> Result<Version, HttpError> {
-        let v = self.0.request_extract_version(request, log)?;
-        if v.major == 4 && v.minor == 3 && v.patch == 2 {
-            Err(HttpError::for_bad_request(None, String::from(FORBIDDEN_MSG)))
-        } else {
-            Ok(v)
-        }
-    }
-}
-
 /// Define an API with different versions and run through an exhaustive battery
 /// of tests showing that we use the correct handler for each incoming request
 /// based on the version requested.
@@ -122,11 +104,12 @@ impl dropshot::DynamicVersionPolicy for TestVersionPolicy {
 async fn test_versions() {
     let logctx = common::create_log_context("test_versions");
     let server = ServerBuilder::new(api(), (), logctx.log.clone())
-        .version_policy(VersionPolicy::Dynamic(Box::new(TestVersionPolicy(
+        .version_policy(VersionPolicy::Dynamic(Box::new(
             ClientSpecifiesVersionInHeader::new(
                 VERSION_HEADER_NAME.parse().unwrap(),
+                Version::new(1, 4, 0),
             ),
-        ))))
+        )))
         .start()
         .unwrap();
 
@@ -293,6 +276,13 @@ async fn test_versions() {
             Some("1.4.0"),
             StatusCode::OK,
             HANDLER4_MSG,
+        ),
+        TestCase::new(
+            Method::PUT,
+            "/demo",
+            Some("1.5.0"),
+            StatusCode::BAD_REQUEST,
+            "server does not support this API version: 1.5.0",
         ),
     ];
 
