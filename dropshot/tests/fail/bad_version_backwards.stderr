@@ -1,0 +1,5 @@
+error: semver range (from ... until ...) has the endpoints out of order
+  --> tests/fail/bad_version_backwards.rs:17:16
+   |
+17 |     versions = "1.2.3".."1.2.2"
+   |                ^^^^^^^

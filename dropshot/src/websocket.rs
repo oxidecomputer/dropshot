@@ -354,7 +354,7 @@ mod tests {
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
         ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
-        WebsocketUpgrade,
+        VersionPolicy, WebsocketUpgrade,
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
@@ -396,6 +396,7 @@ mod tests {
                 handler_waitgroup_worker: DebugIgnore(
                     WaitGroup::new().worker(),
                 ),
+                version_policy: VersionPolicy::Unversioned,
             }),
             request: RequestInfo::new(&request, remote_addr),
             path_variables: Default::default(),

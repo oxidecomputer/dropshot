@@ -10,7 +10,7 @@
     "license": {
       "name": "CDDL"
     },
-    "version": "1985.7"
+    "version": "1985.7.0"
   },
   "paths": {
     "/datagoeshere": {

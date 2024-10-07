@@ -48,7 +48,7 @@ fn test_pagination_schema() -> anyhow::Result<()> {
     let mut output = Cursor::new(Vec::new());
 
     let _ = api
-        .openapi("test", "1985.7")
+        .openapi("test", semver::Version::new(1985, 7, 0))
         .description("gusty winds may exist")
         .contact_name("old mate")
         .license_name("CDDL")

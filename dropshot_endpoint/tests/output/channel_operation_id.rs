@@ -58,6 +58,7 @@ for dropshot::ApiEndpoint<
             dropshot::Method::GET,
             "application/json",
             "/my/ws/channel",
+            dropshot::ApiEndpointVersions::All,
         )
     }
 }
