@@ -14,18 +14,18 @@ categories = ["network-programming", "web-programming::http-server"]
 workspace = true
 
 [dependencies]
-async-stream = "0.3.5"
+async-stream = "0.3.6"
 async-trait = "0.1.83"
 base64 = "0.22.1"
 bytes = "1"
 camino = { version = "1.1.9", features = ["serde1"] }
 debug-ignore = "1.0.5"
 form_urlencoded = "1.2.1"
-futures = "0.3.30"
+futures = "0.3.31"
 hostname = "0.4.0"
 http = "1.1.0"
 http-body-util = "0.1.2"
-indexmap = "2.5.0"
+indexmap = "2.6.0"
 multer = "3.1.0"
 paste = "1.0.15"
 percent-encoding = "2.3.1"
@@ -101,7 +101,7 @@ lazy_static = "1.5.0"
 libc = "0.2.159"
 mime_guess = "2.0.5"
 subprocess = "0.2.9"
-tempfile = "3.10"
+tempfile = "3.13"
 trybuild = "1.0.99"
 # Used by the https examples and tests
 pem = "3.0"
