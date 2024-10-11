@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub(crate) trait MyTrait: 'static {
     type Context: dropshot::ServerContext;
 }
