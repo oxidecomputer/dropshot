@@ -112,7 +112,7 @@ reqwest = { version = "0.12.8", features = ["json", "rustls-tls"] }
 tokio-tungstenite = "0.24.0"
 
 [dev-dependencies.rustls-pki-types]
-version = "1.8.0"
+version = "1.9.0"
 # Needed for CertificateDer::into_owned
 features = ["alloc"]
 
