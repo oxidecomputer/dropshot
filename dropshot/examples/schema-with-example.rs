@@ -51,7 +51,7 @@ fn main() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(get_foo).unwrap();
 
-    api.openapi("Examples", "0.0.0")
+    api.openapi("Examples", semver::Version::new(0, 0, 0))
         .write(&mut std::io::stdout())
         .map_err(|e| e.to_string())?;
 
