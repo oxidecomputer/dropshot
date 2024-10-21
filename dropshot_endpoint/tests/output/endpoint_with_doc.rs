@@ -62,6 +62,7 @@ for dropshot::ApiEndpoint<
                 dropshot::Method::GET,
                 "application/json",
                 "/a/b/c",
+                dropshot::ApiEndpointVersions::All,
             )
             .summary("handle \"xyz\" requests")
     }

@@ -43,14 +43,15 @@ mod api {
         pub(crate) counter: u8,
     }
 
-    // A simple function to generate an OpenAPI spec for the server, without having
-    // a real implementation available.
+    // A simple function to generate an OpenAPI spec for the server, without
+    // having a real implementation available.
     //
-    // If the interface and implementation (see below) are in different crates, then
-    // this function would live in the interface crate.
+    // If the interface and implementation (see below) are in different crates,
+    // then this function would live in the interface crate.
     pub(crate) fn generate_openapi_spec() -> String {
         let my_server = counter_api_mod::stub_api_description().unwrap();
-        let spec = my_server.openapi("Counter Server", "1.0.0");
+        let spec =
+            my_server.openapi("Counter Server", semver::Version::new(1, 0, 0));
         serde_json::to_string_pretty(&spec.json().unwrap()).unwrap()
     }
 }

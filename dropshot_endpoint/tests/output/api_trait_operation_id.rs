@@ -72,6 +72,7 @@ pub mod my_trait_mod {
                 dropshot::Method::GET,
                 "application/json",
                 "/xyz",
+                dropshot::ApiEndpointVersions::All,
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
                 dropshot_errors.push(error);
@@ -86,6 +87,7 @@ pub mod my_trait_mod {
                 dropshot::Method::GET,
                 "application/json",
                 "/ws",
+                dropshot::ApiEndpointVersions::All,
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
                 dropshot_errors.push(error);
@@ -155,6 +157,7 @@ pub mod my_trait_mod {
                 dropshot::Method::GET,
                 "application/json",
                 "/xyz",
+                dropshot::ApiEndpointVersions::All,
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
                 dropshot_errors.push(error);
@@ -178,6 +181,7 @@ pub mod my_trait_mod {
                     dropshot::Method::GET,
                     "application/json",
                     "/ws",
+                    dropshot::ApiEndpointVersions::All,
                 );
                 if let Err(error) = dropshot_api.register(endpoint_handler_ws) {
                     dropshot_errors.push(error);
