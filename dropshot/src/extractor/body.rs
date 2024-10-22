@@ -130,9 +130,11 @@ where
 {
     let server = &rqctx.server;
     let (parts, body) = request.into_parts();
+    info!(rqctx.log, "JOHN buffering request body");
     let body = StreamingBody::new(body, server.config.request_body_max_bytes)
         .into_bytes_mut()
         .await?;
+    info!(rqctx.log, "JOHN buffered request body"; "len" => body.len());
 
     // RFC 7231 §3.1.1.1: media types are case insensitive and may
     // be followed by whitespace and/or a parameter (e.g., charset),
@@ -158,6 +160,7 @@ where
 
     use ApiEndpointBodyContentType::*;
 
+    info!(rqctx.log, "JOHN deserializing request body");
     let content = match (expected_content_type, body_content_type) {
         (Json, Json) => {
             let jd = &mut serde_json::Deserializer::from_slice(&body);
@@ -190,6 +193,7 @@ where
             ))
         }
     };
+    info!(rqctx.log, "JOHN deserializing request body complete");
     Ok(TypedBody { inner: content })
 }
 

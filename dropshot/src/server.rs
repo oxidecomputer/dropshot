@@ -834,6 +834,8 @@ async fn http_request_handle_wrap<C: ServerContext>(
         "method" => request.method().as_str().to_string(),
         "uri" => format!("{}", request.uri()),
     ));
+    info!(request_log, "JOHN request started");
+
     // If we have been asked to include any headers from the request in the
     // log messages, do so here:
     for name in server.config.log_headers.iter() {
@@ -859,6 +861,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             request_log = request_log.new(o!(k => v));
         }
     }
+    info!(request_log, "JOHN updated log with headers");
 
     trace!(request_log, "incoming request");
     #[cfg(feature = "usdt-probes")]
@@ -999,6 +1002,7 @@ async fn http_request_handle<C: ServerContext>(
     };
     let handler = lookup_result.handler;
 
+    info!(rqctx.log, "JOHN constructed request context");
     let mut response = match server.config.default_handler_task_mode {
         HandlerTaskMode::CancelOnDisconnect => {
             // For CancelOnDisconnect, we run the request handler directly: if
