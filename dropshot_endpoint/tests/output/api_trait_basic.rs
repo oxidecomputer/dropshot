@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 trait MyTrait: 'static {
     type Context: dropshot::ServerContext;
     fn handler_xyz(

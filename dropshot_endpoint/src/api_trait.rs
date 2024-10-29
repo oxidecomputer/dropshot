@@ -365,8 +365,27 @@ impl<'ast> ApiParser<'ast> {
         let mut supertraits = item_trait.supertraits.clone();
         supertraits.push(parse_quote!('static));
 
+        // Also add dead_code if the visibility is not `pub`. (If it is `pub`,
+        // then it is expected to be exported, and so the dead code warning
+        // won't fire.)
+        //
+        // Why check for non-`pub` visibility? Because there is a downside to
+        // allow(dead_code): it also applies to any items defined within the
+        // trait. For example, if a provided method on the trait defines an
+        // unused function inside of it, then allow(dead_code) would suppress
+        // that.
+        //
+        // It would be ideal if there were a way to say "allow(dead_code), but
+        // don't propagate this to child items", but sadly there isn't as of
+        // Rust 1.81.
+        let mut attrs = item_trait.attrs.clone();
+        if !matches!(item_trait.vis, syn::Visibility::Public(_)) {
+            attrs.push(parse_quote!(#[allow(dead_code)]));
+        }
+
         // Everything else about the trait stays the same -- just the items change.
         let out_trait = ItemTraitPartParsed {
+            attrs,
             supertraits,
             items: out_items.collect(),
             ..item_trait.clone()
@@ -1773,7 +1792,7 @@ mod tests {
         let (item, errors) = do_trait(
             quote! {},
             quote! {
-                trait MyTrait {
+                pub trait MyTrait {
                     type Context;
 
                     #[endpoint {
