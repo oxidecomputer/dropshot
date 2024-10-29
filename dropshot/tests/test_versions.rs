@@ -330,7 +330,7 @@ fn test_versions_openapi() {
         api.openapi("Evolving API", semver).write(&mut found).unwrap();
         let actual = std::str::from_utf8(found.get_ref()).unwrap();
         expectorate::assert_contents(
-            &format!("tests/test_openapi_v{}.json", version),
+            &format!("tests/test_versions_v{}.json", version),
             actual,
         );
     }
