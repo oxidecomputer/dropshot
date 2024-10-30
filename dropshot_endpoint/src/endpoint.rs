@@ -1169,8 +1169,8 @@ mod tests {
         assert_eq!(
             errors.get(0).map(ToString::to_string),
             Some(
-                "semver range (from ... until ...) has the endpoints \
-                 out of order"
+                "\"from\" version (1.2.5) must be earlier \
+                than \"until\" version (1.2.3)"
                     .to_string()
             ),
         );

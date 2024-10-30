@@ -352,9 +352,10 @@ impl syn::parse::Parse for VersionRange {
                     .collect();
                     return Err(syn::Error::new_spanned(
                         span,
-                        String::from(
-                            "semver range (from ... until ...) has the \
-                             endpoints out of order",
+                        format!(
+                            "\"from\" version ({}) must be earlier than \
+                            \"until\" version ({})",
+                            earliest_semver, latest_semver,
                         ),
                     ));
                 }
