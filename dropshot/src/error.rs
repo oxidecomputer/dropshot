@@ -50,6 +50,18 @@ use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 
+/// Trait implemented by errors which can provide an HTTP response status code.
+///
+/// In order to be returned as an error from a Dropshot endpoint handler, a type
+/// must implement `AsStatusCode` (along with [`Serialize`] and [`JsonSchema`]).
+/// This trait is implemented by [`HttpError`], and may alternatively be
+/// implemented by user-defined error types.
+pub trait AsStatusCode {
+    /// Returns the HTTP status code that should be returned along with this
+    /// error.
+    fn as_status_code(&self) -> http::StatusCode;
+}
+
 /// `HttpError` represents an error generated as part of handling an API
 /// request.  When these bubble up to the top of the request handling stack
 /// (which is most of the time that they're generated), these are turned into an
@@ -313,6 +325,12 @@ impl fmt::Display for HttpError {
 impl Error for HttpError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
+    }
+}
+
+impl AsStatusCode for HttpError {
+    fn as_status_code(&self) -> http::StatusCode {
+        self.status_code
     }
 }
 
