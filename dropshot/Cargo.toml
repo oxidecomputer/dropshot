@@ -107,7 +107,7 @@ pem = "3.0"
 rcgen = "0.13.1"
 # Using rustls-tls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
-reqwest = { version = "0.12.8", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.9", features = ["json", "rustls-tls"] }
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.24.0"
 
