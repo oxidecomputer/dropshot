@@ -56,6 +56,53 @@ pub use crate::extractor::QueryError;
 pub use crate::extractor::StreamingBodyError;
 pub use crate::extractor::TypedBodyError;
 pub use crate::http_util::PathError;
+pub use crate::router::RouterError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    #[error(transparent)]
+    Route(#[from] RouterError),
+    #[error(transparent)]
+    Extractor(#[from] crate::error::ExtractorError),
+    #[error("response error: {0}")]
+    Response(ResponseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ResponseError {
+    #[error(transparent)]
+    Serialize(#[from] serde_json::Error),
+    #[error(transparent)]
+    Body(#[from] http::Error),
+    #[error("error processing headers: {0}")]
+    HeaderMap(String),
+    #[error(transparent)]
+    HeaderName(#[from] http::header::InvalidHeaderName),
+    #[error("invalid value for {} header", .name)]
+    HeaderValue {
+        name: http::header::HeaderName,
+        // This is skipped from the display output, because it just says
+        // "invalid header value" again.
+        #[source]
+        error: http::header::InvalidHeaderValue,
+    },
+}
+
+impl From<ServerError> for HttpError {
+    fn from(error: ServerError) -> Self {
+        match error {
+            ServerError::Route(e) => e.into(),
+            ServerError::Extractor(e) => e.into(),
+            ServerError::Response(e) => e.into(),
+        }
+    }
+}
+
+impl From<ResponseError> for HttpError {
+    fn from(error: ResponseError) -> Self {
+        HttpError::for_internal_error(error.to_string())
+    }
+}
 
 /// Trait implemented by errors which can provide an HTTP response status code.
 ///

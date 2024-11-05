@@ -31,6 +31,7 @@
 //! facilities don't seem that valuable right now since they largely don't affect
 //! OpenAPI document generation.
 
+use super::error::AsStatusCode;
 use super::error::HttpError;
 use super::extractor::RequestExtractor;
 use super::http_util::CONTENT_TYPE_JSON;
@@ -43,6 +44,8 @@ use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::StubContext;
 use crate::body::Body;
+use crate::error::ResponseError;
+use crate::error::ServerError;
 use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
 use crate::schema_util::make_subschema_for;
@@ -69,7 +72,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 /// Type alias for the result returned by HTTP handler functions.
-pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
+pub type HttpHandlerResult = Result<Response<Body>, HandlerError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
@@ -220,7 +223,7 @@ impl<T: 'static + ServerContext> RequestContextArgument for RequestContext<T> {
 
 /// `HttpHandlerFunc` is a trait providing a single function, `handle_request()`,
 /// which takes an HTTP request and produces an HTTP response (or
-/// `HttpError`).
+/// [`Self::Error`]).
 ///
 /// As described above, handler functions can have a number of different
 /// signatures.  They all consume a reference to the current request context.
@@ -241,6 +244,12 @@ where
     FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
+    type Error: Serialize
+        + JsonSchema
+        + AsStatusCode
+        + std::fmt::Display
+        + Send
+        + 'static;
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
@@ -330,18 +339,25 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     ($(($i:tt, $T:tt)),*) => {
 
     #[async_trait]
-    impl<Context, FuncType, FutureType, ResponseType, $($T,)*>
+    impl<Context, FuncType, FutureType, ResponseType, ErrorType, $($T,)*>
         HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
     where
         Context: ServerContext,
         FuncType: Fn(RequestContext<Context>, $($T,)*)
             -> FutureType + Send + Sync + 'static,
-        FutureType: Future<Output = Result<ResponseType, HttpError>>
+        FutureType: Future<Output = Result<ResponseType, ErrorType>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
+        ErrorType: Serialize
+            + JsonSchema
+            + AsStatusCode
+            + std::fmt::Display
+            + Send
+            + 'static,
         ($($T,)*): RequestExtractor,
         $($T: Send + Sync + 'static,)*
     {
+        type Error = ErrorType;
         async fn handle_request(
             &self,
             rqctx: RequestContext<Context>,
@@ -349,7 +365,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
         ) -> HttpHandlerResult
         {
             let response: ResponseType =
-                (self)(rqctx, $(_param_tuple.$i,)*).await?;
+                (self)(rqctx, $(_param_tuple.$i,)*).await.map_err(|e| HandlerError::Handler(Box::new(e)))?;
             response.to_result()
         }
     }
@@ -457,10 +473,53 @@ where
         // is resolved statically.makes them actual function arguments for the
         // actual handler function.  From this point down, all of this is
         // resolved statically.
-        let funcparams =
-            RequestExtractor::from_request(&rqctx, request).await?;
+        let funcparams = RequestExtractor::from_request(&rqctx, request)
+            .await
+            .map_err(ServerError::from)?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
+    }
+}
+
+pub trait HandlerFuncError: std::fmt::Display {
+    fn to_response(
+        &self,
+    ) -> Result<Response<Body>, crate::error::ResponseError>;
+}
+
+impl<T> HandlerFuncError for T
+where
+    T: Serialize + JsonSchema + AsStatusCode + std::fmt::Display,
+{
+    fn to_response(
+        &self,
+    ) -> Result<Response<Body>, crate::error::ResponseError> {
+        let serialized = serde_json::to_string(&self)?;
+        Ok(Response::builder()
+            .status(self.as_status_code())
+            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+            .body(serialized.into())?)
+    }
+}
+
+#[derive(thiserror::Error)]
+pub enum HandlerError {
+    #[error("{0}")]
+    Handler(Box<dyn HandlerFuncError + Send + 'static>),
+    #[error(transparent)]
+    Dropshot(#[from] ServerError),
+}
+
+impl std::fmt::Debug for HandlerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HandlerError::Handler(e) => {
+                f.debug_tuple("Handler").field(&format_args!("{e}")).finish()
+            }
+            HandlerError::Dropshot(e) => {
+                f.debug_tuple("Dropshot").field(e).finish()
+            }
+        }
     }
 }
 
@@ -593,8 +652,10 @@ pub struct Empty;
 /// and the [FreeformBody] type to add their content to a response builder
 /// object.
 pub trait HttpResponseContent {
-    fn to_response(self, builder: http::response::Builder)
-        -> HttpHandlerResult;
+    fn to_response(
+        self,
+        builder: http::response::Builder,
+    ) -> Result<Response<Body>, ResponseError>;
 
     // TODO the return type here could be something more elegant that is able
     // to produce the map of mime type -> openapiv3::MediaType that's needed in
@@ -609,7 +670,7 @@ impl HttpResponseContent for FreeformBody {
     fn to_response(
         self,
         builder: http::response::Builder,
-    ) -> HttpHandlerResult {
+    ) -> Result<Response<Body>, ResponseError> {
         Ok(builder
             .header(http::header::CONTENT_TYPE, CONTENT_TYPE_OCTET_STREAM)
             .body(self.0)?)
@@ -624,7 +685,7 @@ impl HttpResponseContent for Empty {
     fn to_response(
         self,
         builder: http::response::Builder,
-    ) -> HttpHandlerResult {
+    ) -> Result<Response<Body>, ResponseError> {
         Ok(builder.body(Body::empty())?)
     }
 
@@ -643,9 +704,8 @@ where
     fn to_response(
         self,
         builder: http::response::Builder,
-    ) -> HttpHandlerResult {
-        let serialized = serde_json::to_string(&self)
-            .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+    ) -> Result<Response<Body>, ResponseError> {
+        let serialized = serde_json::to_string(&self)?;
         Ok(builder
             .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
             .body(serialized.into())?)
@@ -674,7 +734,10 @@ pub trait HttpCodedResponse:
     /// and the STATUS_CODE specified by the implementing type. This is a default
     /// trait method to allow callers to avoid redundant type specification.
     fn for_object(body: Self::Body) -> HttpHandlerResult {
-        body.to_response(Response::builder().status(Self::STATUS_CODE))
+        let body = body
+            .to_response(Response::builder().status(Self::STATUS_CODE))
+            .map_err(ServerError::Response)?;
+        Ok(body)
     }
 }
 
@@ -1007,17 +1070,20 @@ impl<
         // Add in both the structured and other headers.
         let headers = result.headers_mut();
         let header_map = to_map(&structured_headers).map_err(|e| {
-            HttpError::for_internal_error(format!(
-                "error processing headers: {}",
-                e.0
-            ))
+            ServerError::Response(ResponseError::HeaderMap(e.0))
         })?;
 
         for (key, value) in header_map {
             let key = http::header::HeaderName::try_from(key)
-                .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
-            let value = http::header::HeaderValue::try_from(value)
-                .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+                .map_err(|e| ServerError::Response(ResponseError::from(e)))?;
+            let value = http::header::HeaderValue::try_from(value).map_err(
+                |error| {
+                    ServerError::Response(ResponseError::HeaderValue {
+                        name: key.clone(),
+                        error,
+                    })
+                },
+            )?;
             headers.insert(key, value);
         }
 

@@ -12,6 +12,7 @@ use crate::ApiEndpointBodyContentType;
 use http::Method;
 use http::StatusCode;
 use percent_encoding::percent_decode_str;
+use serde_json::error;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -221,6 +222,33 @@ impl<Context: ServerContext> HttpRouterNode<Context> {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum RouterError {
+    #[error("invalid path encoding: {0}")]
+    InvalidPath(String),
+    #[error("{0}")]
+    NotFound(&'static str),
+    #[error("method not allowed")]
+    MethodNotAllowed,
+}
+
+impl From<RouterError> for HttpError {
+    fn from(error: RouterError) -> Self {
+        match error {
+            RouterError::InvalidPath(_) => {
+                HttpError::for_bad_request(None, error.to_string())
+            }
+            RouterError::NotFound(s) => {
+                HttpError::for_not_found(None, s.to_string())
+            }
+            RouterError::MethodNotAllowed => HttpError::for_status(
+                None,
+                http::StatusCode::METHOD_NOT_ALLOWED,
+            ),
+        }
+    }
+}
+
 impl<Context: ServerContext> HttpRouter<Context> {
     /// Returns a new `HttpRouter` with no routes configured.
     pub fn new() -> Self {
@@ -407,13 +435,9 @@ impl<Context: ServerContext> HttpRouter<Context> {
         &self,
         method: &Method,
         path: InputPath<'_>,
-    ) -> Result<RouterLookupResult<Context>, HttpError> {
-        let all_segments = input_path_to_segments(&path).map_err(|_| {
-            HttpError::for_bad_request(
-                None,
-                String::from("invalid path encoding"),
-            )
-        })?;
+    ) -> Result<RouterLookupResult<Context>, RouterError> {
+        let all_segments =
+            input_path_to_segments(&path).map_err(RouterError::InvalidPath)?;
         let mut all_segments = all_segments.into_iter();
         let mut node = &self.root;
         let mut variables = VariableSet::new();
@@ -449,12 +473,9 @@ impl<Context: ServerContext> HttpRouter<Context> {
                     Some(node)
                 }
             }
-            .ok_or_else(|| {
-                HttpError::for_not_found(
-                    None,
-                    String::from("no route found (no path in router)"),
-                )
-            })?
+            .ok_or(RouterError::NotFound(
+                "no route found (no path in router)",
+            ))?
         }
 
         // The wildcard match consumes the implicit, empty path segment
@@ -472,10 +493,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         // As a somewhat special case, if one requests a node with no handlers
         // at all, report a 404.  We could probably treat this as a 405 as well.
         if node.methods.is_empty() {
-            return Err(HttpError::for_not_found(
-                None,
-                String::from("route has no handlers"),
-            ));
+            return Err(RouterError::NotFound("route has no handlers"));
         }
 
         let methodname = method.as_str().to_uppercase();
@@ -487,9 +505,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 variables,
                 body_content_type: handler.body_content_type.clone(),
             })
-            .ok_or_else(|| {
-                HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
-            })
+            .ok_or(RouterError::MethodNotAllowed)
     }
 }
 

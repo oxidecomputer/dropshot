@@ -6,7 +6,7 @@ use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
-use super::error::HttpError;
+use super::error::ServerError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
@@ -817,10 +817,12 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
     let latency_us = start_time.elapsed().as_micros();
     let response = match maybe_response {
-        Err(error) => {
-            let message_external = error.external_message.clone();
-            let message_internal = error.internal_message.clone();
-            let r = error.into_response(&request_id);
+        Err(crate::handler::HandlerError::Dropshot(error)) => todo!(),
+        Err(crate::handler::HandlerError::Handler(error)) => {
+            // TODO(eliza): how to pass the request ID in here?
+            let r = error
+                .to_response()
+                .expect("TODO(eliza): how to handle errors here");
 
             #[cfg(feature = "usdt-probes")]
             probes::request__done!(|| {
@@ -829,7 +831,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                     local_addr,
                     remote_addr,
                     status_code: r.status().as_u16(),
-                    message: message_external.clone(),
+                    message: error.to_string(),
                 }
             });
 
@@ -837,8 +839,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             info!(request_log, "request completed";
                 "response_code" => r.status().as_str(),
                 "latency_us" => latency_us,
-                "error_message_internal" => message_internal,
-                "error_message_external" => message_external,
+                "error" => %error,
             );
 
             r
@@ -875,7 +876,7 @@ async fn http_request_handle<C: ServerContext>(
     request_id: &str,
     request_log: Logger,
     remote_addr: std::net::SocketAddr,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<Response<Body>, crate::handler::HandlerError> {
     // TODO-hardening: is it correct to (and do we correctly) read the entire
     // request body even if we decide it's too large and are going to send a 400
     // response?
@@ -885,8 +886,10 @@ async fn http_request_handle<C: ServerContext>(
     let request = request.map(crate::Body::wrap);
     let method = request.method();
     let uri = request.uri();
-    let lookup_result =
-        server.router.lookup_route(&method, uri.path().into())?;
+    let lookup_result = server
+        .router
+        .lookup_route(&method, uri.path().into())
+        .map_err(ServerError::from)?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),
@@ -925,9 +928,7 @@ async fn http_request_handle<C: ServerContext>(
                         ),
                         Err(error) => {
                             warn!(request_log, "request completed after handler was already cancelled";
-                                "response_code" => error.status_code.as_str(),
-                                "error_message_internal" => error.external_message,
-                                "error_message_external" => error.internal_message,
+                                "error" => %error,
                             );
                         }
                     }
