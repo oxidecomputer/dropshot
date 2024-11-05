@@ -2,6 +2,7 @@
 
 //! Body-related extractor(s)
 
+use super::ExtractorError;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
@@ -52,39 +53,46 @@ pub struct MultipartBody {
     pub content: multer::Multipart<'static>,
 }
 
+/// Errors returned by the [`MultipartBody`] extractor.
+#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
+pub enum MultipartBodyError {
+    /// The request was missing a `Content-Type` header.
+    #[error("missing content-type header")]
+    MissingContentType,
+    /// The request's `Content-Type` header was not a valid UTF-8 string.
+    #[error("invalid content-type header (not a UTF-8 string)")]
+    InvalidContentType,
+    /// The request's `Content-Type` header was missing the `boundary=` part.
+    #[error("missing boundary in content-type header")]
+    MissingBoundary,
+}
+
+impl From<MultipartBodyError> for HttpError {
+    fn from(value: MultipartBodyError) -> Self {
+        HttpError::for_bad_request(None, value.to_string())
+    }
+}
+
 #[async_trait]
 impl ExclusiveExtractor for MultipartBody {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError> {
+    ) -> Result<Self, ExtractorError> {
         let (parts, body) = request.into_parts();
         // Get the content-type header.
         let content_type = parts
             .headers
             .get(http::header::CONTENT_TYPE)
-            .ok_or_else(|| {
-                HttpError::for_bad_request(
-                    None,
-                    "missing content-type header".to_string(),
-                )
-            })?
+            .ok_or(MultipartBodyError::MissingContentType)?
             .to_str()
-            .map_err(|e| {
-                HttpError::for_bad_request(
-                    None,
-                    format!("invalid content type: {}", e),
-                )
-            })?;
+            .map_err(|_| MultipartBodyError::InvalidContentType)?;
         // The boundary is the string after the "boundary=" part of the
         // content-type header.
-        let boundary =
-            content_type.split("boundary=").nth(1).ok_or_else(|| {
-                HttpError::for_bad_request(
-                    None,
-                    "missing boundary in content-type header".to_string(),
-                )
-            })?;
+        let boundary = content_type
+            .split("boundary=")
+            .nth(1)
+            .ok_or(MultipartBodyError::MissingBoundary)?;
         Ok(MultipartBody {
             content: multer::Multipart::new(
                 body.into_data_stream(),
@@ -119,12 +127,39 @@ impl ExclusiveExtractor for MultipartBody {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum TypedBodyError {
+    #[error("invalid content-type header")]
+    InvalidContentType,
+    #[error("unsupported mime type: {0:?}")]
+    UnsupportedMimeType(String),
+    #[error("expected content-type \"{}\", got \"{}\"", expected.mime_type(), requested.mime_type())]
+    UnexpectedMimeType {
+        expected: ApiEndpointBodyContentType,
+        requested: ApiEndpointBodyContentType,
+    },
+    #[error("unable to parse JSON body: {0}")]
+    JsonParse(#[from] serde_path_to_error::Error<serde_json::Error>),
+    #[error("unable to parse URL-encoded body: {0}")]
+    UrlEncodedParse(
+        #[from] serde_path_to_error::Error<serde_urlencoded::de::Error>,
+    ),
+    #[error(transparent)]
+    StreamingBody(#[from] StreamingBodyError),
+}
+
+impl From<TypedBodyError> for HttpError {
+    fn from(error: TypedBodyError) -> Self {
+        HttpError::for_bad_request(None, error.to_string())
+    }
+}
+
 /// Given an HTTP request, attempt to read the body, parse it according
 /// to the content type, and deserialize it to an instance of `BodyType`.
 async fn http_request_load_body<Context: ServerContext, BodyType>(
     rqctx: &RequestContext<Context>,
     request: hyper::Request<crate::Body>,
-) -> Result<TypedBody<BodyType>, HttpError>
+) -> Result<TypedBody<BodyType>, TypedBodyError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
@@ -140,20 +175,13 @@ where
     let content_type = parts
         .headers
         .get(http::header::CONTENT_TYPE)
-        .map(|hv| {
-            hv.to_str().map_err(|e| {
-                HttpError::for_bad_request(
-                    None,
-                    format!("invalid content type: {}", e),
-                )
-            })
-        })
+        .map(|hv| hv.to_str().map_err(|_| TypedBodyError::InvalidContentType))
         .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
     let end = content_type.find(';').unwrap_or_else(|| content_type.len());
     let mime_type = content_type[..end].trim_end().to_lowercase();
     let body_content_type =
         ApiEndpointBodyContentType::from_mime_type(&mime_type)
-            .map_err(|e| HttpError::for_bad_request(None, e))?;
+            .map_err(TypedBodyError::UnsupportedMimeType)?;
     let expected_content_type = rqctx.body_content_type.clone();
 
     use ApiEndpointBodyContentType::*;
@@ -161,33 +189,19 @@ where
     let content = match (expected_content_type, body_content_type) {
         (Json, Json) => {
             let jd = &mut serde_json::Deserializer::from_slice(&body);
-            serde_path_to_error::deserialize(jd).map_err(|e| {
-                HttpError::for_bad_request(
-                    None,
-                    format!("unable to parse JSON body: {}", e),
-                )
-            })?
+            serde_path_to_error::deserialize(jd)?
         }
         (UrlEncoded, UrlEncoded) => {
             let ud = serde_urlencoded::Deserializer::new(
                 form_urlencoded::parse(&body),
             );
-            serde_path_to_error::deserialize(ud).map_err(|e| {
-                HttpError::for_bad_request(
-                    None,
-                    format!("unable to parse URL-encoded body: {}", e),
-                )
-            })?
+            serde_path_to_error::deserialize(ud)?
         }
         (expected, requested) => {
-            return Err(HttpError::for_bad_request(
-                None,
-                format!(
-                    "expected content type \"{}\", got \"{}\"",
-                    expected.mime_type(),
-                    requested.mime_type()
-                ),
-            ))
+            return Err(TypedBodyError::UnexpectedMimeType {
+                expected,
+                requested,
+            })
         }
     };
     Ok(TypedBody { inner: content })
@@ -207,8 +221,8 @@ where
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<TypedBody<BodyType>, HttpError> {
-        http_request_load_body(rqctx, request).await
+    ) -> Result<TypedBody<BodyType>, ExtractorError> {
+        http_request_load_body(rqctx, request).await.map_err(Into::into)
     }
 
     fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
@@ -261,7 +275,7 @@ impl ExclusiveExtractor for UntypedBody {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<UntypedBody, HttpError> {
+    ) -> Result<UntypedBody, ExtractorError> {
         let server = &rqctx.server;
         let body = request.into_body();
         let body_bytes =
@@ -286,6 +300,20 @@ impl ExclusiveExtractor for UntypedBody {
 pub struct StreamingBody {
     body: crate::Body,
     cap: usize,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum StreamingBodyError {
+    #[error("error streaming request body: {0}")]
+    Stream(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    #[error("request body exceeded maximum size of {0} bytes")]
+    MaxSizeExceeded(usize),
+}
+
+impl From<StreamingBodyError> for HttpError {
+    fn from(error: StreamingBodyError) -> Self {
+        HttpError::for_bad_request(None, error.to_string())
+    }
 }
 
 impl StreamingBody {
@@ -375,29 +403,18 @@ impl StreamingBody {
     /// ```
     pub fn into_stream(
         mut self,
-    ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send {
+    ) -> impl Stream<Item = Result<Bytes, StreamingBodyError>> + Send {
         async_stream::try_stream! {
             let mut bytes_read: usize = 0;
             while let Some(frame_res) = self.body.frame().await {
-                let frame = frame_res.map_err(|e| HttpError::for_bad_request(
-                    None,
-                    format!("error streaming request body: {}", e),
-                ))?;
+                let frame = frame_res?;
                 let Ok(buf) = frame.into_data() else { continue }; // skip trailers
                 let len = buf.len();
 
                 if bytes_read + len > self.cap {
-                    http_dump_body(&mut self.body).await.map_err(|e| {
-                        HttpError::for_bad_request(
-                            None,
-                            format!("error streaming request body: {}", e),
-                        )
-                    })?;
+                    http_dump_body(&mut self.body).await?;
                     // TODO-correctness check status code
-                    Err(HttpError::for_bad_request(
-                        None,
-                        format!("request body exceeded maximum size of {} bytes", self.cap),
-                    ))?;
+                    Err(StreamingBodyError::MaxSizeExceeded(self.cap))?;
                 }
 
                 bytes_read += len;
@@ -409,7 +426,7 @@ impl StreamingBody {
     /// Converts `self` into a [`BytesMut`], buffering the entire response in
     /// memory. Not public API because most users of this should use
     /// `UntypedBody` instead.
-    async fn into_bytes_mut(self) -> Result<BytesMut, HttpError> {
+    async fn into_bytes_mut(self) -> Result<BytesMut, StreamingBodyError> {
         self.into_stream()
             .try_fold(BytesMut::new(), |mut out, chunk| {
                 out.put(chunk);
@@ -424,7 +441,7 @@ impl ExclusiveExtractor for StreamingBody {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError> {
+    ) -> Result<Self, ExtractorError> {
         let server = &rqctx.server;
 
         Ok(Self {

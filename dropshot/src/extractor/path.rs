@@ -3,9 +3,9 @@
 //! URL-related extractor(s)
 
 use super::metadata::get_metadata;
+use super::ExtractorError;
 use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointParameterLocation;
-use crate::error::HttpError;
 use crate::http_util::http_extract_path_params;
 use crate::server::ServerContext;
 use crate::ExtractorMetadata;
@@ -42,7 +42,7 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-    ) -> Result<Path<PathType>, HttpError> {
+    ) -> Result<Path<PathType>, ExtractorError> {
         let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
         Ok(Path { inner: params })
     }

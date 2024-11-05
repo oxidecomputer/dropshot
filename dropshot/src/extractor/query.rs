@@ -3,6 +3,7 @@
 //! Querystring-related extractor(s)
 
 use super::metadata::get_metadata;
+use super::ExtractorError;
 use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointParameterLocation;
 use crate::error::HttpError;
@@ -32,23 +33,29 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
     }
 }
 
+/// Errors returned by the [`Query`] extractor.
+#[derive(Debug, thiserror::Error)]
+#[error("unable to parse query string: {0}")]
+pub struct QueryError(#[from] serde_urlencoded::de::Error);
+
+impl From<QueryError> for HttpError {
+    fn from(error: QueryError) -> Self {
+        HttpError::for_bad_request(None, error.to_string())
+    }
+}
+
 /// Given an HTTP request, pull out the query string and attempt to deserialize
 /// it as an instance of `QueryType`.
 fn http_request_load_query<QueryType>(
     request: &RequestInfo,
-) -> Result<Query<QueryType>, HttpError>
+) -> Result<Query<QueryType>, QueryError>
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,
 {
     let raw_query_string = request.uri().query().unwrap_or("");
     // TODO-correctness: are query strings defined to be urlencoded in this way?
-    match serde_urlencoded::from_str(raw_query_string) {
-        Ok(q) => Ok(Query { inner: q }),
-        Err(e) => Err(HttpError::for_bad_request(
-            None,
-            format!("unable to parse query string: {}", e),
-        )),
-    }
+    let q = serde_urlencoded::from_str(raw_query_string)?;
+    Ok(Query { inner: q })
 }
 
 // The `SharedExtractor` implementation for Query<QueryType> describes how to
@@ -64,8 +71,8 @@ where
 {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-    ) -> Result<Query<QueryType>, HttpError> {
-        http_request_load_query(&rqctx.request)
+    ) -> Result<Query<QueryType>, ExtractorError> {
+        http_request_load_query(&rqctx.request).map_err(Into::into)
     }
 
     fn metadata(

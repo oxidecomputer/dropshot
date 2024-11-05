@@ -2,8 +2,8 @@
 
 //! Raw request extractor
 
+use super::ExtractorError;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
-use crate::error::HttpError;
 use crate::server::ServerContext;
 use crate::{ExclusiveExtractor, ExtractorMetadata, RequestContext};
 use async_trait::async_trait;
@@ -27,7 +27,7 @@ impl ExclusiveExtractor for RawRequest {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<RawRequest, HttpError> {
+    ) -> Result<RawRequest, ExtractorError> {
         Ok(RawRequest { request })
     }
 

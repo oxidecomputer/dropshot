@@ -742,7 +742,7 @@ mod dtrace;
 mod api_description;
 mod body;
 mod config;
-mod error;
+pub mod error;
 mod extractor;
 mod from_map;
 mod handler;

@@ -1,8 +1,8 @@
 // Copyright 2023 Oxide Computer Company
 
+use super::ExtractorError;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
-use crate::error::HttpError;
 use crate::server::ServerContext;
 use crate::RequestContext;
 
@@ -26,7 +26,7 @@ pub trait ExclusiveExtractor: Send + Sync + Sized {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError>;
+    ) -> Result<Self, ExtractorError>;
 
     fn metadata(
         body_content_type: ApiEndpointBodyContentType,
@@ -44,7 +44,7 @@ pub trait SharedExtractor: Send + Sync + Sized {
     /// Construct an instance of this type from a `RequestContext`.
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
-    ) -> Result<Self, HttpError>;
+    ) -> Result<Self, ExtractorError>;
 
     fn metadata(
         body_content_type: ApiEndpointBodyContentType,
@@ -57,7 +57,7 @@ impl<S: SharedExtractor> ExclusiveExtractor for S {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         _request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError> {
+    ) -> Result<Self, ExtractorError> {
         <S as SharedExtractor>::from_request(rqctx).await
     }
 
@@ -97,7 +97,7 @@ pub trait RequestExtractor: Send + Sync + Sized {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError>;
+    ) -> Result<Self, ExtractorError>;
 
     fn metadata(
         body_content_type: ApiEndpointBodyContentType,
@@ -110,7 +110,7 @@ impl RequestExtractor for () {
     async fn from_request<Context: ServerContext>(
         _rqctx: &RequestContext<Context>,
         _request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError> {
+    ) -> Result<Self, ExtractorError> {
         Ok(())
     }
 
@@ -130,7 +130,7 @@ impl<X: ExclusiveExtractor + 'static> RequestExtractor for (X,) {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> Result<Self, HttpError> {
+    ) -> Result<Self, ExtractorError> {
         Ok((X::from_request(rqctx, request).await?,))
     }
 
@@ -163,7 +163,7 @@ macro_rules! impl_rqextractor_for_tuple {
         async fn from_request<Context: ServerContext>(
             rqctx: &RequestContext<Context>,
             request: hyper::Request<crate::Body>
-        ) -> Result<( $($S,)+ X ), HttpError>
+        ) -> Result<( $($S,)+ X ), ExtractorError>
         {
             futures::try_join!(
                 $($S::from_request(rqctx),)+

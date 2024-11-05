@@ -50,6 +50,13 @@ use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 
+pub use crate::extractor::ExtractorError;
+pub use crate::extractor::MultipartBodyError;
+pub use crate::extractor::QueryError;
+pub use crate::extractor::StreamingBodyError;
+pub use crate::extractor::TypedBodyError;
+pub use crate::http_util::PathError;
+
 /// Trait implemented by errors which can provide an HTTP response status code.
 ///
 /// In order to be returned as an error from a Dropshot endpoint handler, a type
