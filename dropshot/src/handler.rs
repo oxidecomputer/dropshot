@@ -475,14 +475,14 @@ where
 }
 
 pub trait HandlerFuncError: std::fmt::Display {
-    fn into_response(&self, request_id: &str) -> Response<Body>;
+    fn into_response(&self, ctx: &str) -> Response<Body>;
 }
 
 impl<T: crate::error::IntoErrorResponse + std::fmt::Display> HandlerFuncError
     for T
 {
     fn into_response(&self, request_id: &str) -> Response<Body> {
-        IntoErrorResponse::into_error_response(&self, request_id)
+        IntoErrorResponse::into_error_response(self, request_id)
     }
 }
 

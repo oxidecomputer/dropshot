@@ -56,7 +56,6 @@ pub trait ServerContext: Send + Sync + 'static {}
 impl<T: 'static> ServerContext for T where T: Send + Sync {}
 
 /// Stores shared state used by the Dropshot server.
-#[derive(Debug)]
 pub struct DropshotState<C: ServerContext> {
     /// caller-specific state
     pub private: C,
@@ -73,6 +72,37 @@ pub struct DropshotState<C: ServerContext> {
     /// Worker for the handler_waitgroup associated with this server, allowing
     /// graceful shutdown to wait for all handlers to complete.
     pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
+    /// Determines how to construct responses for server errors.
+    pub(crate) error_handler: Box<
+        dyn Fn(ErrorContext<'_, C>, ServerError) -> Response<Body>
+            + Send
+            + Sync,
+    >,
+}
+
+impl<C: ServerContext + std::fmt::Debug> std::fmt::Debug for DropshotState<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            private,
+            config,
+            router,
+            log,
+            local_addr,
+            tls_acceptor,
+            handler_waitgroup_worker,
+            error_handler: _,
+        } = self;
+        f.debug_struct("DropshotState")
+            .field("private", &private)
+            .field("config", &config)
+            .field("router", &router)
+            .field("log", &log)
+            .field("local_addr", &local_addr)
+            .field("tls_acceptor", &tls_acceptor)
+            .field("handler_waitgroup_worker", &handler_waitgroup_worker)
+            .field("error_handler", &"<function>")
+            .finish()
+    }
 }
 
 impl<C: ServerContext> DropshotState<C> {
@@ -114,6 +144,18 @@ pub struct HttpServerStarter<C: ServerContext> {
     handler_waitgroup: WaitGroup,
     http_acceptor: HttpAcceptor,
     tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
+}
+
+/// Context provided to error handlers.
+pub struct ErrorContext<'ctx, Context: ServerContext> {
+    /// shared server state
+    pub server: &'ctx DropshotState<Context>,
+    /// unique id assigned to this request
+    pub request_id: &'ctx String,
+    /// logger for this specific request
+    pub log: &'ctx Logger,
+    /// basic request information (method, URI, etc.)
+    pub request: RequestInfo,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
@@ -202,6 +244,12 @@ impl<C: ServerContext> HttpServerStarter<C> {
             local_addr,
             tls_acceptor: tls_acceptor.clone(),
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup.worker()),
+            error_handler: Box::new(
+                |ErrorContext { request_id, .. }, error| {
+                    crate::error::HttpError::from(error)
+                        .into_response(&request_id)
+                },
+            ),
         });
 
         for (path, method, _) in &app_state.router {
@@ -802,8 +850,9 @@ async fn http_request_handle_wrap<C: ServerContext>(
         });
     });
 
+    let err_reqinfo = RequestInfo::new(&request, remote_addr);
     let maybe_response = http_request_handle(
-        server,
+        server.clone(),
         request,
         &request_id,
         request_log.new(o!()),
@@ -817,9 +866,25 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
     let latency_us = start_time.elapsed().as_micros();
     let response = match maybe_response {
-        Err(crate::handler::HandlerError::Dropshot(error)) => todo!(),
-        Err(crate::handler::HandlerError::Handler(error)) => {
-            let r = error.into_response(&request_id);
+        Err(error) => {
+            let message = error.to_string();
+            let r = match error {
+                crate::handler::HandlerError::Dropshot(error) => {
+                    let handler = &server.error_handler;
+                    handler(
+                        ErrorContext {
+                            server: &server,
+                            request_id: &request_id,
+                            log: &request_log,
+                            request: err_reqinfo,
+                        },
+                        error,
+                    )
+                }
+                crate::handler::HandlerError::Handler(error) => {
+                    error.into_response(&request_id)
+                }
+            };
 
             #[cfg(feature = "usdt-probes")]
             probes::request__done!(|| {
@@ -828,7 +893,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                     local_addr,
                     remote_addr,
                     status_code: r.status().as_u16(),
-                    message: error.to_string(),
+                    message: message.clone(),
                 }
             });
 
@@ -836,7 +901,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
             info!(request_log, "request completed";
                 "response_code" => r.status().as_str(),
                 "latency_us" => latency_us,
-                "error" => %error,
+                "error" => &message,
             );
 
             r

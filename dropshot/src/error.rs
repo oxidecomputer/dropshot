@@ -119,21 +119,17 @@ pub trait IntoErrorResponse: JsonSchema {
     ) -> http::Response<crate::Body>;
 }
 
-impl<T> IntoErrorResponse for T
-where
-    T: Into<http::Response<crate::Body>> + JsonSchema,
-{
-    fn into_error_response(&self, _: &str) -> http::Response<crate::Body> {
-        self.into()
-    }
-}
-
 impl IntoErrorResponse for HttpError {
     fn into_error_response(
         &self,
         request_id: &str,
     ) -> http::Response<crate::Body> {
-        self.into_response(request_id)
+        HttpErrorResponseBody {
+            request_id: request_id.to_string(),
+            message: self.external_message.clone(),
+            error_code: self.error_code.clone(),
+        }
+        .into_response(self.status_code)
     }
 }
 
@@ -247,6 +243,31 @@ impl JsonSchema for HttpErrorResponseBody {
             ..Default::default()
         }
         .into()
+    }
+}
+
+impl HttpErrorResponseBody {
+    fn into_response(
+        &self,
+        status_code: http::StatusCode,
+    ) -> hyper::Response<crate::Body> {
+        // TODO-hardening: consider handling the operational errors that the
+        // Serde serialization fails or the response construction fails.  In
+        // those cases, we should probably try to report this as a serious
+        // problem (e.g., to the log) and send back a 500-level response.  (Of
+        // course, that could fail in the same way, but it's less likely because
+        // there's only one possible set of input and we can test it.  We'll
+        // probably have to use unwrap() there and make sure we've tested that
+        // code at least once!)
+        hyper::Response::builder()
+            .status(status_code)
+            .header(
+                http::header::CONTENT_TYPE,
+                super::http_util::CONTENT_TYPE_JSON,
+            )
+            .header(super::http_util::HEADER_REQUEST_ID, &self.request_id)
+            .body(serde_json::to_string_pretty(&self).unwrap().into())
+            .unwrap()
     }
 }
 
@@ -375,31 +396,12 @@ impl HttpError {
         self,
         request_id: &str,
     ) -> hyper::Response<crate::Body> {
-        // TODO-hardening: consider handling the operational errors that the
-        // Serde serialization fails or the response construction fails.  In
-        // those cases, we should probably try to report this as a serious
-        // problem (e.g., to the log) and send back a 500-level response.  (Of
-        // course, that could fail in the same way, but it's less likely because
-        // there's only one possible set of input and we can test it.  We'll
-        // probably have to use unwrap() there and make sure we've tested that
-        // code at least once!)
-        hyper::Response::builder()
-            .status(self.status_code)
-            .header(
-                http::header::CONTENT_TYPE,
-                super::http_util::CONTENT_TYPE_JSON,
-            )
-            .header(super::http_util::HEADER_REQUEST_ID, request_id)
-            .body(
-                serde_json::to_string_pretty(&HttpErrorResponseBody {
-                    request_id: request_id.to_string(),
-                    message: self.external_message,
-                    error_code: self.error_code,
-                })
-                .unwrap()
-                .into(),
-            )
-            .unwrap()
+        HttpErrorResponseBody {
+            request_id: request_id.to_string(),
+            message: self.external_message,
+            error_code: self.error_code,
+        }
+        .into_response(self.status_code)
     }
 }
 
@@ -412,12 +414,6 @@ impl fmt::Display for HttpError {
 impl Error for HttpError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
-    }
-}
-
-impl AsStatusCode for HttpError {
-    fn as_status_code(&self) -> http::StatusCode {
-        self.status_code
     }
 }
 
