@@ -244,12 +244,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             local_addr,
             tls_acceptor: tls_acceptor.clone(),
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup.worker()),
-            error_handler: Box::new(
-                |ErrorContext { request_id, .. }, error| {
-                    crate::error::HttpError::from(error)
-                        .into_response(&request_id)
-                },
-            ),
+            error_handler: Box::new(default_error_handler::<C>),
         });
 
         for (path, method, _) in &app_state.router {
@@ -396,6 +391,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
             join_future: join_handle.boxed().shared(),
         }
     }
+}
+
+pub(crate) fn default_error_handler<C: ServerContext>(
+    ErrorContext { request_id, .. }: ErrorContext<'_, C>,
+    error: ServerError,
+) -> Response<Body> {
+    crate::error::HttpError::from(error).into_response(&request_id)
 }
 
 /// Accepts TCP connections like a `TcpListener`, but ignores transient errors

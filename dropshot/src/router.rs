@@ -220,7 +220,7 @@ impl<Context: ServerContext> HttpRouterNode<Context> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Eq, PartialEq)]
 pub enum RouterError {
     #[error("invalid path encoding: {0}")]
     InvalidPath(String),
@@ -228,6 +228,14 @@ pub enum RouterError {
     NotFound(&'static str),
     #[error("method not allowed")]
     MethodNotAllowed,
+}
+
+impl RouterError {
+    /// Returns `true` if this error indicates that a route was not found for
+    /// the requested URI.
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Self::NotFound(_))
+    }
 }
 
 impl From<RouterError> for HttpError {
@@ -744,6 +752,7 @@ mod test {
     use super::input_path_to_segments;
     use super::HttpRouter;
     use super::PathSegment;
+    use super::RouterError;
     use crate::api_description::ApiEndpointBodyContentType;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
@@ -751,7 +760,6 @@ mod test {
     use crate::ApiEndpointResponse;
     use crate::Body;
     use http::Method;
-    use http::StatusCode;
     use hyper::Response;
     use serde::Deserialize;
     use std::collections::BTreeMap;
@@ -985,17 +993,17 @@ mod test {
 
         // Check a few initial conditions.
         let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
         let error =
             router.lookup_route(&Method::GET, "////".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
         let error =
             router.lookup_route(&Method::GET, "/foo/bar".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
         let error = router
             .lookup_route(&Method::GET, "//foo///bar".into())
             .unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
 
         // Insert a route into the middle of the tree.  This will let us look at
         // parent nodes, sibling nodes, and child nodes.
@@ -1015,24 +1023,30 @@ mod test {
         // read-only router and does validation like making sure that there's a
         // GET route on all nodes?
         let error = router.lookup_route(&Method::GET, "/".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
         let error =
             router.lookup_route(&Method::GET, "/foo".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
         let error =
             router.lookup_route(&Method::GET, "//foo".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
         let error = router
             .lookup_route(&Method::GET, "/foo/bar/baz".into())
             .unwrap_err();
-        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        assert!(error.is_not_found(), "error {error:?} should be not found");
 
         let error =
             router.lookup_route(&Method::PUT, "/foo/bar".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
+        assert!(
+            matches!(error, RouterError::MethodNotAllowed),
+            "error {error:?} should be method not allowed"
+        );
         let error =
             router.lookup_route(&Method::PUT, "/foo/bar/".into()).unwrap_err();
-        assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
+        assert!(
+            matches!(error, RouterError::MethodNotAllowed),
+            "error {error:?} should be method not allowed"
+        );
     }
 
     #[test]

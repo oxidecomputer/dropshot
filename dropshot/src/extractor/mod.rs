@@ -57,6 +57,10 @@ pub enum ExtractorError {
     /// Errors returned by the [`Query`] extractor.
     #[error(transparent)]
     QueryParams(#[from] QueryError),
+    /// Errors returned by the
+    /// [`WebsocketUpgrade`](crate::websocket::WebsocketUpgrade) extractor.
+    #[error(transparent)]
+    Websocket(#[from] crate::websocket::WebsocketUpgradeError),
 }
 
 impl From<ExtractorError> for HttpError {
@@ -67,6 +71,7 @@ impl From<ExtractorError> for HttpError {
             ExtractorError::TypedBody(e) => e.into(),
             ExtractorError::PathParams(e) => e.into(),
             ExtractorError::QueryParams(e) => e.into(),
+            ExtractorError::Websocket(e) => e.into(),
         }
     }
 }

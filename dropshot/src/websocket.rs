@@ -8,6 +8,7 @@
 
 use crate::api_description::ExtensionMode;
 use crate::body::Body;
+use crate::extractor::ExtractorError;
 use crate::{
     ApiEndpointBodyContentType, ExclusiveExtractor, ExtractorMetadata,
     HttpError, RequestContext, ServerContext,
@@ -86,6 +87,24 @@ fn derive_accept_key(request_key: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(&sha1.finalize())
 }
 
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum WebsocketUpgradeError {
+    #[error("expected connection upgrade")]
+    NoUpgradeHeader,
+    #[error("unexpected protocol for upgrade")]
+    NotWebsocket,
+    #[error("missing or invalid websocket version")]
+    BadVersion,
+    #[error("missing websocket key")]
+    NoKey,
+}
+
+impl From<WebsocketUpgradeError> for HttpError {
+    fn from(e: WebsocketUpgradeError) -> Self {
+        HttpError::for_bad_request(None, e.to_string())
+    }
+}
+
 /// This `ExclusiveExtractor` implementation constructs an instance of
 /// `WebsocketUpgrade` from an HTTP request, and returns an error if the given
 /// request does not contain websocket upgrade headers.
@@ -94,7 +113,7 @@ impl ExclusiveExtractor for WebsocketUpgrade {
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
         request: hyper::Request<Body>,
-    ) -> Result<Self, HttpError> {
+    ) -> Result<Self, ExtractorError> {
         if !request
             .headers()
             .get(header::CONNECTION)
@@ -105,10 +124,7 @@ impl ExclusiveExtractor for WebsocketUpgrade {
             })
             .unwrap_or(false)
         {
-            return Err(HttpError::for_bad_request(
-                None,
-                "expected connection upgrade".to_string(),
-            ));
+            return Err(WebsocketUpgradeError::NoUpgradeHeader.into());
         }
 
         if !request
@@ -121,10 +137,7 @@ impl ExclusiveExtractor for WebsocketUpgrade {
             })
             .unwrap_or(false)
         {
-            return Err(HttpError::for_bad_request(
-                None,
-                "unexpected protocol for upgrade".to_string(),
-            ));
+            return Err(WebsocketUpgradeError::NotWebsocket.into());
         }
 
         if request
@@ -133,10 +146,7 @@ impl ExclusiveExtractor for WebsocketUpgrade {
             .map(|v| v.as_bytes())
             != Some(b"13")
         {
-            return Err(HttpError::for_bad_request(
-                None,
-                "missing or invalid websocket version".to_string(),
-            ));
+            return Err(WebsocketUpgradeError::BadVersion.into());
         }
 
         let accept_key = request
@@ -144,12 +154,7 @@ impl ExclusiveExtractor for WebsocketUpgrade {
             .get(header::SEC_WEBSOCKET_KEY)
             .map(|hv| hv.as_bytes())
             .map(|key| derive_accept_key(key))
-            .ok_or_else(|| {
-                HttpError::for_bad_request(
-                    None,
-                    "missing websocket key".to_string(),
-                )
-            })?;
+            .ok_or(WebsocketUpgradeError::NoKey)?;
 
         let route = request.uri().to_string();
         let upgrade_fut = hyper::upgrade::on(request);
@@ -353,7 +358,7 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
+        error, ExclusiveExtractor, RequestContext, RequestInfo,
         WebsocketUpgrade,
     };
     use debug_ignore::DebugIgnore;
@@ -364,7 +369,8 @@ mod tests {
     use std::time::Duration;
     use waitgroup::WaitGroup;
 
-    async fn ws_upg_from_mock_rqctx() -> Result<WebsocketUpgrade, HttpError> {
+    async fn ws_upg_from_mock_rqctx(
+    ) -> Result<WebsocketUpgrade, error::ExtractorError> {
         let log = slog::Logger::root(slog::Discard, slog::o!()).new(slog::o!());
         let request = Request::builder()
             .header(http::header::CONNECTION, "Upgrade")
@@ -396,6 +402,7 @@ mod tests {
                 handler_waitgroup_worker: DebugIgnore(
                     WaitGroup::new().worker(),
                 ),
+                error_handler: Box::new(crate::server::default_error_handler),
             }),
             request: RequestInfo::new(&request, remote_addr),
             path_variables: Default::default(),

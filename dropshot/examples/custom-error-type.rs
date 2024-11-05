@@ -11,24 +11,41 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 
-/// Any type implementing the [`serde::Serialize`], [`schemars::JsonSchema`],
-/// and [`dropshot::error::AsStatusCode`] traits may be returned from a
-/// handler function. In this case, let's use an enum rather than a struct, just
-/// to demonstrate that this is possible.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+/// Any type implementing the [`dropshot::error::IntoErrorResponse`],
+/// [`schemars::JsonSchema`], and [`std::fmt::Display`] traits may be returned
+/// from a handler function. In this case, let's use an enum rather than a
+/// struct, just to demonstrate that this is possible.
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 pub enum MyError {
     CantGetYeFlask,
-    OverfullHbox { badness: usize, }
+    OverfullHbox { badness: usize },
 }
 
-/// In order to return a user-defined error type, it must implement
-/// `dropshot::error::AsStatusCode`, which determines the HTTP status code to
-/// return for this error.
-impl dropshot::error::AsStatusCode for MyError {
-    fn as_status_code(&self) -> http::StatusCode {
+impl dropshot::error::IntoErrorResponse for MyError {
+    fn into_error_response(
+        &self,
+        _request_id: &str,
+    ) -> http::Response<dropshot::Body> {
+        http::Response::builder()
+            .status(http::StatusCode::BAD_REQUEST)
+            .body(
+                serde_json::to_string(self)
+                    .expect("serialization of MyError should never fail")
+                    .into(),
+            )
+            .expect("building response should never fail")
+    }
+}
+
+impl std::fmt::Display for MyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CantGetYeFlask => http::StatusCode::FORBIDDEN,
-            Self::OverfullHbox { .. } => http::StatusCode::BAD_REQUEST,
+            MyError::CantGetYeFlask => f.write_str("can't get ye flask"),
+            MyError::OverfullHbox { badness } => {
+                write!(f, "overfull hbox, badness {badness}")
+            }
         }
     }
 }
@@ -42,7 +59,21 @@ async fn get_ye_flask(
 ) -> Result<http::Response<Body>, MyError> {
     Err(MyError::CantGetYeFlask)
 }
+#[endpoint {
+    method = GET,
+    path = "/pdflatex/{filename}",
+}]
+async fn get_pdflatex(
+    _rqctx: RequestContext<()>,
+    _path: dropshot::Path<PdflatexPathParams>,
+) -> Result<http::Response<Body>, MyError> {
+    Err(MyError::OverfullHbox { badness: 1000 })
+}
 
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+struct PdflatexPathParams {
+    filename: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -55,6 +86,7 @@ async fn main() -> Result<(), String> {
 
     let mut api = ApiDescription::new();
     api.register(get_ye_flask).unwrap();
+    api.register(get_pdflatex).unwrap();
 
     let server = ServerBuilder::new(api, (), log)
         .start()
