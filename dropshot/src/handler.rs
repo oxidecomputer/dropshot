@@ -31,8 +31,8 @@
 //! facilities don't seem that valuable right now since they largely don't affect
 //! OpenAPI document generation.
 
-use super::error::AsStatusCode;
 use super::error::HttpError;
+use super::error::IntoErrorResponse;
 use super::extractor::RequestExtractor;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
@@ -244,12 +244,7 @@ where
     FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
-    type Error: Serialize
-        + JsonSchema
-        + AsStatusCode
-        + std::fmt::Display
-        + Send
-        + 'static;
+    type Error: IntoErrorResponse + std::fmt::Display + Send + 'static;
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
@@ -348,9 +343,7 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
         FutureType: Future<Output = Result<ResponseType, ErrorType>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
-        ErrorType: Serialize
-            + JsonSchema
-            + AsStatusCode
+        ErrorType: IntoErrorResponse
             + std::fmt::Display
             + Send
             + 'static,
@@ -482,23 +475,14 @@ where
 }
 
 pub trait HandlerFuncError: std::fmt::Display {
-    fn to_response(
-        &self,
-    ) -> Result<Response<Body>, crate::error::ResponseError>;
+    fn into_response(&self, request_id: &str) -> Response<Body>;
 }
 
-impl<T> HandlerFuncError for T
-where
-    T: Serialize + JsonSchema + AsStatusCode + std::fmt::Display,
+impl<T: crate::error::IntoErrorResponse + std::fmt::Display> HandlerFuncError
+    for T
 {
-    fn to_response(
-        &self,
-    ) -> Result<Response<Body>, crate::error::ResponseError> {
-        let serialized = serde_json::to_string(&self)?;
-        Ok(Response::builder()
-            .status(self.as_status_code())
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-            .body(serialized.into())?)
+    fn into_response(&self, request_id: &str) -> Response<Body> {
+        IntoErrorResponse::into_error_response(&self, request_id)
     }
 }
 

@@ -104,16 +104,37 @@ impl From<ResponseError> for HttpError {
     }
 }
 
-/// Trait implemented by errors which can provide an HTTP response status code.
+/// Trait implemented by errors which can be converted into an HTTP response.
 ///
 /// In order to be returned as an error from a Dropshot endpoint handler, a type
 /// must implement `AsStatusCode` (along with [`Serialize`] and [`JsonSchema`]).
 /// This trait is implemented by [`HttpError`], and may alternatively be
 /// implemented by user-defined error types.
-pub trait AsStatusCode {
+pub trait IntoErrorResponse: JsonSchema {
     /// Returns the HTTP status code that should be returned along with this
     /// error.
-    fn as_status_code(&self) -> http::StatusCode;
+    fn into_error_response(
+        &self,
+        request_id: &str,
+    ) -> http::Response<crate::Body>;
+}
+
+impl<T> IntoErrorResponse for T
+where
+    T: Into<http::Response<crate::Body>> + JsonSchema,
+{
+    fn into_error_response(&self, _: &str) -> http::Response<crate::Body> {
+        self.into()
+    }
+}
+
+impl IntoErrorResponse for HttpError {
+    fn into_error_response(
+        &self,
+        request_id: &str,
+    ) -> http::Response<crate::Body> {
+        self.into_response(request_id)
+    }
 }
 
 /// `HttpError` represents an error generated as part of handling an API
@@ -171,6 +192,18 @@ pub struct HttpErrorResponseBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
     pub message: String,
+}
+
+impl JsonSchema for HttpError {
+    fn schema_name() -> String {
+        HttpErrorResponseBody::schema_name()
+    }
+
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        HttpErrorResponseBody::json_schema(gen)
+    }
 }
 
 // We hand-roll our JSON schema to avoid `error_code` being "nullable".

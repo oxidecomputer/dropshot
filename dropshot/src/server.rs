@@ -819,10 +819,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     let response = match maybe_response {
         Err(crate::handler::HandlerError::Dropshot(error)) => todo!(),
         Err(crate::handler::HandlerError::Handler(error)) => {
-            // TODO(eliza): how to pass the request ID in here?
-            let r = error
-                .to_response()
-                .expect("TODO(eliza): how to handle errors here");
+            let r = error.into_response(&request_id);
 
             #[cfg(feature = "usdt-probes")]
             probes::request__done!(|| {
