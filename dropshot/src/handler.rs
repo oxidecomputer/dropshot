@@ -39,6 +39,7 @@ use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
 use super::server::ServerContext;
 use crate::api_description::ApiEndpointBodyContentType;
+use crate::api_description::ApiEndpointErrorMetadata;
 use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;

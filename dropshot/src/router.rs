@@ -754,6 +754,7 @@ mod test {
     use super::PathSegment;
     use super::RouterError;
     use crate::api_description::ApiEndpointBodyContentType;
+    use crate::api_description::ApiEndpointErrorMetadata;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
     use crate::ApiEndpoint;
@@ -798,6 +799,7 @@ mod test {
             extension_mode: Default::default(),
             visible: true,
             deprecated: false,
+            error_type: ApiEndpointErrorMetadata::for_error::<HttpError>(),
         }
     }
 

@@ -5,25 +5,37 @@
 
 use dropshot::endpoint;
 use dropshot::ApiDescription;
-use dropshot::Body;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 
-/// Any type implementing the [`dropshot::error::IntoErrorResponse`],
-/// [`schemars::JsonSchema`], and [`std::fmt::Display`] traits may be returned
-/// from a handler function. In this case, let's use an enum rather than a
-/// struct, just to demonstrate that this is possible.
+// Any type implementing the `dropshot::error::IntoErrorResponse`,
+// `schemars::JsonSchema`, and `std::fmt::Display` traits may be returned
+// from a handler function.
+//
+// In this case, let's use an enum rather than a struct, just to demonstrate
+// that this is possible.
+/// Errors returned by pdflatex.
+///
+/// Good luck figuring out what these mean!
 #[derive(
     Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
 )]
-pub enum MyError {
-    CantGetYeFlask,
-    OverfullHbox { badness: usize },
+pub enum LaTeXError {
+    /// An hbox is overfull.
+    OverfullHbox {
+        /// The amount of badness in the overfull hbox.
+        badness: usize,
+    },
+    /// Like an overfull hbox, except the opposite of that.
+    UnderfullHbox {
+        /// This one also has badness.
+        badness: usize,
+    },
 }
 
-impl dropshot::error::IntoErrorResponse for MyError {
+impl dropshot::error::IntoErrorResponse for LaTeXError {
     fn into_error_response(
         &self,
         _request_id: &str,
@@ -39,12 +51,14 @@ impl dropshot::error::IntoErrorResponse for MyError {
     }
 }
 
-impl std::fmt::Display for MyError {
+impl std::fmt::Display for LaTeXError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MyError::CantGetYeFlask => f.write_str("can't get ye flask"),
-            MyError::OverfullHbox { badness } => {
-                write!(f, "overfull hbox, badness {badness}")
+            LaTeXError::OverfullHbox { badness } => {
+                write!(f, "overfull hbox, badness {}", badness)
+            }
+            LaTeXError::UnderfullHbox { badness } => {
+                write!(f, "underfull hbox, badness {badness}")
             }
         }
     }
@@ -52,27 +66,44 @@ impl std::fmt::Display for MyError {
 
 #[endpoint {
     method = GET,
-    path = "/ye-flask",
-}]
-async fn get_ye_flask(
-    _rqctx: RequestContext<()>,
-) -> Result<http::Response<Body>, MyError> {
-    Err(MyError::CantGetYeFlask)
-}
-#[endpoint {
-    method = GET,
     path = "/pdflatex/{filename}",
 }]
 async fn get_pdflatex(
     _rqctx: RequestContext<()>,
     _path: dropshot::Path<PdflatexPathParams>,
-) -> Result<http::Response<Body>, MyError> {
-    Err(MyError::OverfullHbox { badness: 1000 })
+) -> Result<dropshot::HttpResponseCreated<Pdf>, LaTeXError> {
+    Err(LaTeXError::OverfullHbox { badness: 1000 })
+}
+
+// Endpoints returning user-defined error types can coexist with those
+// returning the standard dropshot::HttpError type.
+/// Gets ye flask.
+#[endpoint {
+    method = GET,
+    path = "/ye-flask",
+}]
+async fn get_ye_flask(
+    _rqctx: RequestContext<()>,
+) -> Result<dropshot::HttpResponseOk<Flask>, dropshot::HttpError> {
+    Err(dropshot::HttpError::for_bad_request(
+        Some("ENOFLASK".to_string()),
+        "can't get ye flask".to_string(),
+    ))
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 struct PdflatexPathParams {
     filename: String,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+struct Pdf {
+    filename: String,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+struct Flask {
+    name: String,
 }
 
 #[tokio::main]
@@ -87,6 +118,12 @@ async fn main() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(get_ye_flask).unwrap();
     api.register(get_pdflatex).unwrap();
+
+    // Print the OpenAPI spec to stdout as an example.
+    println!("OpenAPI spec:");
+    api.openapi("Custom Error Example", "1.0")
+        .write(&mut std::io::stdout())
+        .unwrap();
 
     let server = ServerBuilder::new(api, (), log)
         .start()

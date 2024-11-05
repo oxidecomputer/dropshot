@@ -59,6 +59,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub extension_mode: ExtensionMode,
     pub visible: bool,
     pub deprecated: bool,
+    pub error_type: ApiEndpointErrorMetadata,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -93,6 +94,8 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
+            error_type: ApiEndpointErrorMetadata::for_error::<HandlerType::Error>(
+            ),
         }
     }
 
@@ -190,19 +193,24 @@ impl<'a> ApiEndpoint<StubContext> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
+            error_type: ApiEndpointErrorMetadata::for_error::<ResultType::Error>(
+            ),
         }
     }
 }
 
 pub trait HttpResultType {
     type Response: HttpResponse + Send + Sync + 'static;
+    type Error: crate::error::IntoErrorResponse;
 }
 
-impl<T> HttpResultType for Result<T, HttpError>
+impl<T, E> HttpResultType for Result<T, E>
 where
     T: HttpResponse + Send + Sync + 'static,
+    E: crate::error::IntoErrorResponse,
 {
     type Response = T;
+    type Error = E;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a
@@ -325,6 +333,13 @@ pub struct ApiEndpointResponse {
     pub headers: Vec<ApiEndpointHeader>,
     pub success: Option<StatusCode>,
     pub description: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct ApiEndpointErrorMetadata {
+    pub name: String,
+    pub schema:
+        fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
 }
 
 /// Wrapper for both dynamically generated and pre-generated schemas.
@@ -656,6 +671,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
         let mut definitions =
             indexmap::IndexMap::<String, schemars::schema::Schema>::new();
+        let mut errors =
+            indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
         for (path, method, endpoint) in &self.router {
             if !endpoint.visible {
@@ -914,11 +931,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     openapiv3::StatusCode::Code(code.as_u16()),
                     openapiv3::ReferenceOr::Item(response),
                 );
+                let ApiEndpointErrorMetadata { ref name, ref schema } =
+                    endpoint.error_type;
+                let err_ref = openapiv3::ReferenceOr::Reference {
+                    reference: format!("#/components/responses/{name}"),
+                };
+                errors
+                    .entry(endpoint.error_type.name.clone())
+                    .or_insert_with(|| schema(&mut generator));
 
-                // 4xx and 5xx responses all use the same error information
-                let err_ref = openapiv3::ReferenceOr::ref_(
-                    "#/components/responses/Error",
-                );
                 operation
                     .responses
                     .responses
@@ -940,28 +961,26 @@ impl<Context: ServerContext> ApiDescription<Context> {
             .components
             .get_or_insert_with(openapiv3::Components::default);
 
-        // All endpoints share an error response
         let responses = &mut components.responses;
-        let mut content = indexmap::IndexMap::new();
-        content.insert(
-            CONTENT_TYPE_JSON.to_string(),
-            openapiv3::MediaType {
-                schema: Some(j2oas_schema(
-                    None,
-                    &generator.subschema_for::<HttpErrorResponseBody>(),
-                )),
-                ..Default::default()
-            },
-        );
+        for (err_name, schema) in errors {
+            let mut content = indexmap::IndexMap::new();
+            content.insert(
+                CONTENT_TYPE_JSON.to_string(),
+                openapiv3::MediaType {
+                    schema: Some(j2oas_schema(Some(&err_name), &schema)),
+                    ..Default::default()
+                },
+            );
 
-        responses.insert(
-            "Error".to_string(),
-            openapiv3::ReferenceOr::Item(openapiv3::Response {
-                description: "Error".to_string(),
-                content,
-                ..Default::default()
-            }),
-        );
+            responses.insert(
+                err_name.clone(),
+                openapiv3::ReferenceOr::Item(openapiv3::Response {
+                    description: err_name.clone(),
+                    content,
+                    ..Default::default()
+                }),
+            );
+        }
 
         // Add the schemas for which we generated references.
         let schemas = &mut components.schemas;
@@ -1242,6 +1261,15 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         )?;
         writeln!(out).map_err(serde_json::Error::custom)?;
         Ok(())
+    }
+}
+
+impl ApiEndpointErrorMetadata {
+    pub(crate) fn for_error<E: crate::error::IntoErrorResponse>() -> Self {
+        ApiEndpointErrorMetadata {
+            name: <E>::schema_name(),
+            schema: crate::schema_util::make_subschema_for::<E>,
+        }
     }
 }
 
