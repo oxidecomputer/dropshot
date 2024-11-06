@@ -20,7 +20,7 @@ note: required by a bound in `need_shared_extractor`
    |          ------ required by a bound in this function
    = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `fn(RequestContext<()>, std::string::String, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {non_extractor_as_last_argument_adapter}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(RequestContext<()>, std::string::String, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<dropshot::Body>, HttpError>> {non_extractor_as_last_argument_adapter}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_channel19.rs:23:1
    |
 19 | / #[channel {
@@ -29,7 +29,7 @@ error[E0277]: the trait bound `fn(RequestContext<()>, std::string::String, Webso
 22 | | }]
    | |__- required by a bound introduced by this call
 23 |   async fn non_extractor_as_last_argument(
-   |   ^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, std::string::String, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {non_extractor_as_last_argument_adapter}`
+   |   ^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, std::string::String, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<dropshot::Body>, HttpError>> {non_extractor_as_last_argument_adapter}`
    |
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs

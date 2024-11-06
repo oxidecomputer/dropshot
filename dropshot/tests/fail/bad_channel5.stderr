@@ -81,7 +81,7 @@ note: required by a bound in `dropshot::Query`
    |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
    = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `fn(RequestContext<()>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
+error[E0277]: the trait bound `fn(RequestContext<()>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<dropshot::Body>, HttpError>> {bad_channel_adapter}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_channel5.rs:22:1
    |
 18 | / #[channel {
@@ -90,7 +90,7 @@ error[E0277]: the trait bound `fn(RequestContext<()>, dropshot::Query<QueryParam
 21 | | }]
    | |__- required by a bound introduced by this call
 22 |   async fn bad_channel(
-   |   ^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter}`
+   |   ^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<dropshot::Body>, HttpError>> {bad_channel_adapter}`
    |
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
