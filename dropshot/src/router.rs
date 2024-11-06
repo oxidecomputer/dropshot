@@ -253,11 +253,18 @@ impl RouterError {
 
 impl From<RouterError> for HttpError {
     fn from(error: RouterError) -> Self {
-        HttpError::for_client_error(
-            None,
-            error.recommended_status_code(),
-            error.to_string(),
-        )
+        match error {
+            RouterError::InvalidPath(message) => {
+                HttpError::for_bad_request(None, message)
+            }
+            RouterError::NotFound(internal_message) => {
+                HttpError::for_not_found(None, internal_message.to_string())
+            }
+            RouterError::MethodNotAllowed => HttpError::for_status(
+                None,
+                http::StatusCode::METHOD_NOT_ALLOWED,
+            ),
+        }
     }
 }
 impl<Context: ServerContext> HttpRouter<Context> {
