@@ -236,25 +236,30 @@ impl RouterError {
     pub fn is_not_found(&self) -> bool {
         matches!(self, Self::NotFound(_))
     }
-}
 
-impl From<RouterError> for HttpError {
-    fn from(error: RouterError) -> Self {
-        match error {
-            RouterError::InvalidPath(_) => {
-                HttpError::for_bad_request(None, error.to_string())
-            }
-            RouterError::NotFound(s) => {
-                HttpError::for_not_found(None, s.to_string())
-            }
-            RouterError::MethodNotAllowed => HttpError::for_status(
-                None,
-                http::StatusCode::METHOD_NOT_ALLOWED,
-            ),
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<RouterError>`
+    /// implementation for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            Self::InvalidPath(_) => http::StatusCode::BAD_REQUEST,
+            Self::NotFound(_) => http::StatusCode::NOT_FOUND,
+            Self::MethodNotAllowed => http::StatusCode::METHOD_NOT_ALLOWED,
         }
     }
 }
 
+impl From<RouterError> for HttpError {
+    fn from(error: RouterError) -> Self {
+        HttpError::for_client_error(
+            None,
+            error.recommended_status_code(),
+            error.to_string(),
+        )
+    }
+}
 impl<Context: ServerContext> HttpRouter<Context> {
     /// Returns a new `HttpRouter` with no routes configured.
     pub fn new() -> Self {

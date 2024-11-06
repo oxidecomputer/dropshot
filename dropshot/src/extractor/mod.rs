@@ -75,3 +75,21 @@ impl From<ExtractorError> for HttpError {
         }
     }
 }
+
+impl ExtractorError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<ExtractorError>`
+    /// implementation for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            Self::MultipartBody(e) => e.recommended_status_code(),
+            Self::StreamingBody(e) => e.recommended_status_code(),
+            Self::TypedBody(e) => e.recommended_status_code(),
+            Self::PathParams(e) => e.recommended_status_code(),
+            Self::QueryParams(e) => e.recommended_status_code(),
+            Self::Websocket(e) => e.recommended_status_code(),
+        }
+    }
+}

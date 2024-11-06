@@ -68,6 +68,31 @@ pub enum ServerError {
     Response(ResponseError),
 }
 
+impl From<ServerError> for HttpError {
+    fn from(error: ServerError) -> Self {
+        match error {
+            ServerError::Route(e) => e.into(),
+            ServerError::Extractor(e) => e.into(),
+            ServerError::Response(e) => e.into(),
+        }
+    }
+}
+
+impl ServerError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<ServerError>`
+    /// implementation for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            Self::Route(e) => e.recommended_status_code(),
+            Self::Extractor(e) => e.recommended_status_code(),
+            Self::Response(e) => e.recommended_status_code(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ResponseError {
     #[error(transparent)]
@@ -88,19 +113,20 @@ pub enum ResponseError {
     },
 }
 
-impl From<ServerError> for HttpError {
-    fn from(error: ServerError) -> Self {
-        match error {
-            ServerError::Route(e) => e.into(),
-            ServerError::Extractor(e) => e.into(),
-            ServerError::Response(e) => e.into(),
-        }
-    }
-}
-
 impl From<ResponseError> for HttpError {
     fn from(error: ResponseError) -> Self {
         HttpError::for_internal_error(error.to_string())
+    }
+}
+
+impl ResponseError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<ResponseError>`
+    /// implementation for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        http::StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 

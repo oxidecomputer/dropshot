@@ -40,7 +40,22 @@ pub struct QueryError(#[from] serde_urlencoded::de::Error);
 
 impl From<QueryError> for HttpError {
     fn from(error: QueryError) -> Self {
-        HttpError::for_bad_request(None, error.to_string())
+        HttpError::for_client_error(
+            None,
+            error.recommended_status_code(),
+            error.to_string(),
+        )
+    }
+}
+
+impl QueryError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<QueryError>` implementation
+    /// for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        http::StatusCode::BAD_REQUEST
     }
 }
 

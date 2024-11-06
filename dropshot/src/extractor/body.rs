@@ -68,8 +68,31 @@ pub enum MultipartBodyError {
 }
 
 impl From<MultipartBodyError> for HttpError {
-    fn from(value: MultipartBodyError) -> Self {
-        HttpError::for_bad_request(None, value.to_string())
+    fn from(error: MultipartBodyError) -> Self {
+        HttpError::for_client_error(
+            None,
+            error.recommended_status_code(),
+            error.to_string(),
+        )
+    }
+}
+
+impl MultipartBodyError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<MultipartBodyError>` implementation
+    /// for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            // Invalid or unsupported content-type headers should return 415
+            // Unsupported Media Type
+            Self::MissingContentType | Self::InvalidContentType(_) => {
+                http::StatusCode::UNSUPPORTED_MEDIA_TYPE
+            }
+            // Everything else gets a generic `400 Bad Request`.
+            _ => http::StatusCode::BAD_REQUEST,
+        }
     }
 }
 
@@ -150,7 +173,36 @@ pub enum TypedBodyError {
 
 impl From<TypedBodyError> for HttpError {
     fn from(error: TypedBodyError) -> Self {
-        HttpError::for_bad_request(None, error.to_string())
+        match error {
+            TypedBodyError::StreamingBody(e) => e.into(),
+            _ => HttpError::for_client_error(
+                None,
+                error.recommended_status_code(),
+                error.to_string(),
+            ),
+        }
+    }
+}
+
+impl TypedBodyError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<TypedBodyError>` implementation
+    /// for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            // Invalid or unsupported content-type headers should return 415
+            // Unsupported Media Type
+            Self::InvalidContentType(_)
+            | Self::UnsupportedMimeType(_)
+            | Self::UnexpectedMimeType { .. } => {
+                http::StatusCode::UNSUPPORTED_MEDIA_TYPE
+            }
+            Self::StreamingBody(e) => e.recommended_status_code(),
+            // Everything else gets a generic `400 Bad Request`.
+            _ => http::StatusCode::BAD_REQUEST,
+        }
     }
 }
 
@@ -312,7 +364,28 @@ pub enum StreamingBodyError {
 
 impl From<StreamingBodyError> for HttpError {
     fn from(error: StreamingBodyError) -> Self {
-        HttpError::for_bad_request(None, error.to_string())
+        HttpError::for_client_error(
+            None,
+            error.recommended_status_code(),
+            error.to_string(),
+        )
+    }
+}
+
+impl StreamingBodyError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<StreamingBodyError>` implementation
+    /// for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            // If the max body size was exceeded, return 413 Payload Too Large
+            // (nee Content Too Large).
+            Self::MaxSizeExceeded(_) => http::StatusCode::PAYLOAD_TOO_LARGE,
+            // Everything else gets a generic `400 Bad Request`.
+            _ => http::StatusCode::BAD_REQUEST,
+        }
     }
 }
 

@@ -93,15 +93,59 @@ pub enum WebsocketUpgradeError {
     NoUpgradeHeader,
     #[error("unexpected protocol for upgrade")]
     NotWebsocket,
-    #[error("missing or invalid websocket version")]
-    BadVersion,
+    #[error("missing websocket version header")]
+    NoVersion,
+    #[error("unsupported websocket version")]
+    WrongVersion,
     #[error("missing websocket key")]
     NoKey,
 }
 
 impl From<WebsocketUpgradeError> for HttpError {
-    fn from(e: WebsocketUpgradeError) -> Self {
-        HttpError::for_bad_request(None, e.to_string())
+    fn from(error: WebsocketUpgradeError) -> Self {
+        HttpError::for_client_error(
+            None,
+            error.recommended_status_code(),
+            error.to_string(),
+        )
+    }
+}
+
+impl WebsocketUpgradeError {
+    /// Returns the recommended status code for this error.
+    ///
+    /// This can be used when constructing a HTTP response for this error. These
+    /// are the status codes used by the `From<WebsocketUpgradeError>`
+    /// implementation for [`HttpError`].
+    pub fn recommended_status_code(&self) -> http::StatusCode {
+        match self {
+            // TODO(eliza): in this case, the response should also include an
+            // `Upgrade: websocket` header to indicate what protocol the client
+            // must upgrade to. We should eventually figure out an API for
+            // errors to indicate "recommended headers" as well as recommended
+            // statuses...
+            Self::NoUpgradeHeader | Self::NotWebsocket => {
+                http::StatusCode::UPGRADE_REQUIRED
+            }
+            // Per RFC 6455 § 4.2.2, if the client has requested an unsupported
+            // websocket version, the server should respond with a 426 Upgrade
+            // Required status code:
+            // https://datatracker.ietf.org/doc/html/rfc6455#section-4.2.2
+            //
+            // Again, we should also include a header (Sec-WebSocket-Version)
+            // indicating the supported cversions, but we gotta figure that out
+            // later...
+            Self::WrongVersion => http::StatusCode::UPGRADE_REQUIRED,
+            // Note that we differentiate between "missing version header" and
+            // "wrong version" because RFC 6455 § 4.2.1 kind of vaguely implies
+            // that if any of the expected websocket headers are not present,
+            // the server responds with a 400, but if the version header is
+            // present but has the wrong value, that's an 426 Upgrade Required:
+            // https://datatracker.ietf.org/doc/html/rfc6455#section-4.2.1
+            Self::NoVersion => http::StatusCode::BAD_REQUEST,
+            // Similarly, a missing `Sec-Websocket-Key` also gets Bad Request'd.
+            Self::NoKey => http::StatusCode::BAD_REQUEST,
+        }
     }
 }
 
@@ -143,10 +187,11 @@ impl ExclusiveExtractor for WebsocketUpgrade {
         if request
             .headers()
             .get(header::SEC_WEBSOCKET_VERSION)
-            .map(|v| v.as_bytes())
-            != Some(b"13")
+            .ok_or(WebsocketUpgradeError::NoVersion)?
+            .as_bytes()
+            != b"13"
         {
-            return Err(WebsocketUpgradeError::BadVersion.into());
+            return Err(WebsocketUpgradeError::WrongVersion.into());
         }
 
         let accept_key = request
