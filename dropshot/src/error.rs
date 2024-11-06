@@ -115,14 +115,24 @@ pub trait IntoErrorResponse: JsonSchema + 'static {
     /// error.
     fn into_error_response(
         &self,
-        request_id: &str,
+        err_ctx: ErrorContext<'_>,
     ) -> http::Response<crate::Body>;
+}
+
+/// Context provided to error handlers.
+pub struct ErrorContext<'ctx> {
+    /// unique id assigned to this request
+    pub request_id: &'ctx str,
+    /// logger for this specific request
+    pub log: &'ctx slog::Logger,
+    /// basic request information (method, URI, etc.)
+    pub request: crate::RequestInfo,
 }
 
 impl IntoErrorResponse for HttpError {
     fn into_error_response(
         &self,
-        request_id: &str,
+        ErrorContext { request_id, .. }: ErrorContext<'_>,
     ) -> http::Response<crate::Body> {
         HttpErrorResponseBody {
             request_id: request_id.to_string(),

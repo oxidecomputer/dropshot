@@ -6,6 +6,7 @@ use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
+use super::error::ErrorContext;
 use super::error::ServerError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
@@ -79,9 +80,7 @@ pub struct DropshotState<C: ServerContext> {
     // ServerError) -> Response<Body> + Send + Sync`, which has its own downsides...
     #[allow(clippy::type_complexity)]
     pub(crate) error_handler: Box<
-        dyn Fn(ErrorContext<'_, C>, ServerError) -> Response<Body>
-            + Send
-            + Sync,
+        dyn Fn(ErrorContext<'_>, ServerError) -> Response<Body> + Send + Sync,
     >,
 }
 
@@ -149,18 +148,6 @@ pub struct HttpServerStarter<C: ServerContext> {
     handler_waitgroup: WaitGroup,
     http_acceptor: HttpAcceptor,
     tls_acceptor: Option<Arc<Mutex<TlsAcceptor>>>,
-}
-
-/// Context provided to error handlers.
-pub struct ErrorContext<'ctx, Context: ServerContext> {
-    /// shared server state
-    pub server: &'ctx DropshotState<Context>,
-    /// unique id assigned to this request
-    pub request_id: &'ctx String,
-    /// logger for this specific request
-    pub log: &'ctx Logger,
-    /// basic request information (method, URI, etc.)
-    pub request: RequestInfo,
 }
 
 impl<C: ServerContext> HttpServerStarter<C> {
@@ -249,7 +236,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             local_addr,
             tls_acceptor: tls_acceptor.clone(),
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup.worker()),
-            error_handler: Box::new(default_error_handler::<C>),
+            error_handler: Box::new(default_error_handler),
         });
 
         for (path, method, _) in &app_state.router {
@@ -398,8 +385,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
     }
 }
 
-pub(crate) fn default_error_handler<C: ServerContext>(
-    ErrorContext { request_id, .. }: ErrorContext<'_, C>,
+pub(crate) fn default_error_handler(
+    ErrorContext { request_id, .. }: ErrorContext<'_>,
     error: ServerError,
 ) -> Response<Body> {
     crate::error::HttpError::from(error).into_response(&request_id)
@@ -875,21 +862,18 @@ async fn http_request_handle_wrap<C: ServerContext>(
     let response = match maybe_response {
         Err(error) => {
             let message = error.to_string();
+            let ctx = ErrorContext {
+                request_id: &request_id,
+                log: &request_log,
+                request: err_reqinfo,
+            };
             let r = match error {
                 crate::handler::HandlerError::Dropshot(error) => {
                     let handler = &server.error_handler;
-                    handler(
-                        ErrorContext {
-                            server: &server,
-                            request_id: &request_id,
-                            log: &request_log,
-                            request: err_reqinfo,
-                        },
-                        error,
-                    )
+                    handler(ctx, error)
                 }
                 crate::handler::HandlerError::Handler(error) => {
-                    error.into_response(&request_id)
+                    error.into_response(ctx)
                 }
             };
 
