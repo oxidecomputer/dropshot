@@ -73,6 +73,11 @@ pub struct DropshotState<C: ServerContext> {
     /// graceful shutdown to wait for all handlers to complete.
     pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
     /// Determines how to construct responses for server errors.
+    // Since most of the complex type here is the `dyn Fn` trait, we can't
+    // easily simplify it by just stuffing it in a type alias --- we'd have to
+    // add our own trait that's implemented for `T: Fn(ErrorContext<'_, C>,
+    // ServerError) -> Response<Body> + Send + Sync`, which has its own downsides...
+    #[allow(clippy::type_complexity)]
     pub(crate) error_handler: Box<
         dyn Fn(ErrorContext<'_, C>, ServerError) -> Response<Body>
             + Send

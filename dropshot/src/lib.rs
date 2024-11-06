@@ -827,6 +827,7 @@ pub use pagination::PaginationParams;
 pub use pagination::ResultsPage;
 pub use pagination::WhichPage;
 pub use server::BuildError;
+pub use server::ErrorContext;
 pub use server::ServerBuilder;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
