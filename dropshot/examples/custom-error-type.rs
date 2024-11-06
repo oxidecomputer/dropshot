@@ -38,13 +38,14 @@ pub enum LaTeXError {
 impl dropshot::error::IntoErrorResponse for LaTeXError {
     fn into_error_response(
         &self,
-        _request_id: &str,
+        ctx: dropshot::error::ErrorContext<'_>,
     ) -> http::Response<dropshot::Body> {
         http::Response::builder()
             .status(http::StatusCode::BAD_REQUEST)
+            .header("x-request-id", ctx.request_id)
             .body(
                 serde_json::to_string(self)
-                    .expect("serialization of MyError should never fail")
+                    .expect("serialization of LaTeXError should never fail")
                     .into(),
             )
             .expect("building response should never fail")

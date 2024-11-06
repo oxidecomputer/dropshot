@@ -111,8 +111,6 @@ impl From<ResponseError> for HttpError {
 /// This trait is implemented by [`HttpError`], and may alternatively be
 /// implemented by user-defined error types.
 pub trait IntoErrorResponse: JsonSchema + 'static {
-    /// Returns the HTTP status code that should be returned along with this
-    /// error.
     fn into_error_response(
         &self,
         err_ctx: ErrorContext<'_>,

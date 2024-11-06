@@ -39,7 +39,7 @@ mod latex {
         ) -> http::Response<dropshot::Body> {
             http::Response::builder()
                 .status(http::StatusCode::BAD_REQUEST)
-                .header()
+                .header("x-request-id", ctx.request_id)
                 .body(
                     serde_json::to_string(self)
                         .expect("serialization of MyError should never fail")
@@ -106,10 +106,11 @@ mod flask {
     impl dropshot::error::IntoErrorResponse for Error {
         fn into_error_response(
             &self,
-            _request_id: &str,
+            ctx: dropshot::error::ErrorContext<'_>,
         ) -> http::Response<dropshot::Body> {
             http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
+                .header("x-request-id", ctx.request_id)
                 .body(
                     serde_json::to_string(self)
                         .expect("serialization of Error should never fail")
