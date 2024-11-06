@@ -377,7 +377,7 @@ async fn test_demo2urlencoded() {
             Method::GET,
             "/testing/demo2urlencoded",
             Some(input),
-            StatusCode::BAD_REQUEST,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
         )
         .await
         .expect_err("expected failure");
@@ -662,7 +662,7 @@ async fn test_untyped_body() {
             Method::PUT,
             "/testing/untyped_body",
             big_body.into(),
-            StatusCode::BAD_REQUEST,
+            StatusCode::PAYLOAD_TOO_LARGE,
         )
         .await
         .unwrap_err();
@@ -775,7 +775,7 @@ async fn test_streaming_body() {
             Method::PUT,
             "/testing/streaming_body",
             big_body.into(),
-            StatusCode::BAD_REQUEST,
+            StatusCode::PAYLOAD_TOO_LARGE,
         )
         .await
         .unwrap_err();

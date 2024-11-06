@@ -126,7 +126,10 @@ async fn no_content_type() {
         .expect("attempted to construct invalid request");
     let response = testctx
         .client_testctx
-        .make_request_with_request(request, http::StatusCode::BAD_REQUEST)
+        .make_request_with_request(
+            request,
+            http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        )
         .await;
     let err = response.unwrap_err();
     assert_eq!(err.message, "missing content-type header");
@@ -155,7 +158,10 @@ async fn weird_content_type() {
         .expect("attempted to construct invalid request");
     let response = testctx
         .client_testctx
-        .make_request_with_request(request, http::StatusCode::BAD_REQUEST)
+        .make_request_with_request(
+            request,
+            http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        )
         .await;
     let err = response.unwrap_err();
     assert_eq!(
