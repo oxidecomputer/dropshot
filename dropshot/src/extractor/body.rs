@@ -133,7 +133,7 @@ pub enum TypedBodyError {
     InvalidContentType(#[source] http::header::ToStrError),
     #[error("unsupported mime type: {0:?}")]
     UnsupportedMimeType(String),
-    #[error("expected content-type \"{}\", got \"{}\"", expected.mime_type(), requested.mime_type())]
+    #[error("expected content type \"{}\", got \"{}\"", expected.mime_type(), requested.mime_type())]
     UnexpectedMimeType {
         expected: ApiEndpointBodyContentType,
         requested: ApiEndpointBodyContentType,
