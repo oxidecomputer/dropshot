@@ -348,11 +348,11 @@ impl StreamingBody {
     ///
     /// ```
     /// use buf_list::BufList;
-    /// use dropshot::{HttpError, StreamingBody};
+    /// use dropshot::{StreamingBody, error::StreamingBodyError};
     /// use futures::prelude::*;
     /// # use std::iter::FromIterator;
     ///
-    /// async fn into_buf_list(body: StreamingBody) -> Result<BufList, HttpError> {
+    /// async fn into_buf_list(body: StreamingBody) -> Result<BufList, StreamingBodyError> {
     ///     body.into_stream().try_collect().await
     /// }
     ///
