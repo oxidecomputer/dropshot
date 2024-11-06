@@ -54,14 +54,14 @@ pub struct MultipartBody {
 }
 
 /// Errors returned by the [`MultipartBody`] extractor.
-#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum MultipartBodyError {
     /// The request was missing a `Content-Type` header.
     #[error("missing content-type header")]
     MissingContentType,
     /// The request's `Content-Type` header was not a valid UTF-8 string.
-    #[error("invalid content-type header (not a UTF-8 string)")]
-    InvalidContentType,
+    #[error("invalid content type: {0}")]
+    InvalidContentType(http::header::ToStrError),
     /// The request's `Content-Type` header was missing the `boundary=` part.
     #[error("missing boundary in content-type header")]
     MissingBoundary,
@@ -86,7 +86,7 @@ impl ExclusiveExtractor for MultipartBody {
             .get(http::header::CONTENT_TYPE)
             .ok_or(MultipartBodyError::MissingContentType)?
             .to_str()
-            .map_err(|_| MultipartBodyError::InvalidContentType)?;
+            .map_err(MultipartBodyError::InvalidContentType)?;
         // The boundary is the string after the "boundary=" part of the
         // content-type header.
         let boundary = content_type
@@ -129,8 +129,8 @@ impl ExclusiveExtractor for MultipartBody {
 
 #[derive(Debug, thiserror::Error)]
 pub enum TypedBodyError {
-    #[error("invalid content-type header")]
-    InvalidContentType,
+    #[error("invalid content type: {0}")]
+    InvalidContentType(#[source] http::header::ToStrError),
     #[error("unsupported mime type: {0:?}")]
     UnsupportedMimeType(String),
     #[error("expected content-type \"{}\", got \"{}\"", expected.mime_type(), requested.mime_type())]
@@ -175,7 +175,7 @@ where
     let content_type = parts
         .headers
         .get(http::header::CONTENT_TYPE)
-        .map(|hv| hv.to_str().map_err(|_| TypedBodyError::InvalidContentType))
+        .map(|hv| hv.to_str().map_err(TypedBodyError::InvalidContentType))
         .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
     let end = content_type.find(';').unwrap_or_else(|| content_type.len());
     let mime_type = content_type[..end].trim_end().to_lowercase();
