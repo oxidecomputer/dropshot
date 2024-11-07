@@ -12,6 +12,7 @@ use crate::ApiEndpointBodyContentType;
 use http::Method;
 use http::StatusCode;
 use percent_encoding::percent_decode_str;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -408,36 +409,41 @@ impl<Context: ServerContext> HttpRouter<Context> {
         method: &Method,
         path: InputPath<'_>,
     ) -> Result<RouterLookupResult<Context>, HttpError> {
-        let all_segments = input_path_to_segments(&path).map_err(|_| {
-            HttpError::for_bad_request(
-                None,
-                String::from("invalid path encoding"),
-            )
-        })?;
-        let mut all_segments = all_segments.into_iter();
+        let mut all_segments = input_path_to_segments(&path);
         let mut node = &self.root;
         let mut variables = VariableSet::new();
 
-        while let Some(segment) = all_segments.next() {
-            let segment_string = segment.to_string();
+        while let Some(maybe_segment) = all_segments.next() {
+            let segment = maybe_segment.map_err(|e| {
+                HttpError::for_bad_request(
+                    None,
+                    format!("invalid path encoding: {e}"),
+                )
+            })?;
 
             node = match &node.edges {
                 None => None,
 
                 Some(HttpRouterEdges::Literals(edges)) => {
-                    edges.get(&segment_string)
+                    edges.get(segment.as_ref())
                 }
                 Some(HttpRouterEdges::VariableSingle(varname, ref node)) => {
                     variables.insert(
                         varname.clone(),
-                        VariableValue::String(segment_string),
+                        VariableValue::String(segment.into_owned()),
                     );
                     Some(node)
                 }
                 Some(HttpRouterEdges::VariableRest(varname, node)) => {
-                    let mut rest = vec![segment];
-                    while let Some(segment) = all_segments.next() {
-                        rest.push(segment);
+                    let mut rest = vec![segment.into_owned()];
+                    while let Some(maybe_segment) = all_segments.next() {
+                        let segment = maybe_segment.map_err(|e| {
+                            HttpError::for_bad_request(
+                                None,
+                                format!("invalid path encoding: {e}"),
+                            )
+                        })?;
+                        rest.push(segment.into_owned());
                     }
                     variables.insert(
                         varname.clone(),
@@ -629,6 +635,14 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+enum InputPathError {
+    #[error(transparent)]
+    PercentDecode(#[from] std::str::Utf8Error),
+    #[error("dot-segments are not permitted")]
+    DotSegment,
+}
+
 /// Helper function for taking a Uri path and producing a `Vec<String>` of
 /// URL-decoded strings, each representing one segment of the path. The input is
 /// percent-encoded. Empty segments i.e. due to consecutive "/" characters or a
@@ -652,7 +666,9 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
 /// that consumers may be susceptible to other information leaks, for example
 /// if a client were able to follow a symlink to the root of the filesystem. As
 /// always, it is incumbent on the consumer and *critical* to validate input.
-fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
+fn input_path_to_segments<'path>(
+    path: &'path InputPath,
+) -> impl Iterator<Item = Result<Cow<'path, str>, InputPathError>> + 'path {
     // We're given the "path" portion of a URI and we want to construct an
     // array of the segments of the path.   Relevant references:
     //
@@ -681,17 +697,12 @@ fn input_path_to_segments(path: &InputPath) -> Result<Vec<String>, String> {
     // should be ignored). The net result is that that crate doesn't buy us
     // much here, but it does create more work, so we'll just split it
     // ourselves.
-    path.0
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .map(|segment| match segment {
-            "." | ".." => Err("dot-segments are not permitted".to_string()),
-            _ => Ok(percent_decode_str(segment)
-                .decode_utf8()
-                .map_err(|e| e.to_string())?
-                .to_string()),
-        })
-        .collect()
+    path.0.split('/').filter(|segment| !segment.is_empty()).map(|segment| {
+        match segment {
+            "." | ".." => Err(InputPathError::DotSegment),
+            _ => Ok(percent_decode_str(segment).decode_utf8()?),
+        }
+    })
 }
 
 /// Whereas in `input_path_to_segments()` we must accommodate any user input, when
@@ -728,6 +739,7 @@ mod test {
     use super::super::handler::RouteHandler;
     use super::input_path_to_segments;
     use super::HttpRouter;
+    use super::InputPathError;
     use super::PathSegment;
     use crate::api_description::ApiEndpointBodyContentType;
     use crate::from_map::from_map;
@@ -1342,8 +1354,10 @@ mod test {
 
     #[test]
     fn test_segments() {
-        let segs =
-            input_path_to_segments(&"//foo/bar/baz%2fbuzz".into()).unwrap();
+        let segs = input_path_to_segments(&"//foo/bar/baz%2fbuzz".into())
+            .map(|seg| Ok::<String, InputPathError>(seg?.into_owned()))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(segs, vec!["foo", "bar", "baz/buzz"]);
     }
 
