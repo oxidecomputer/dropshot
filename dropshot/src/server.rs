@@ -206,7 +206,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
 
         for (path, method, _) in &app_state.router {
             debug!(&log, "registered endpoint";
-                "method" => &method,
+                "method" => %method,
                 "path" => &path
             );
         }

@@ -14,6 +14,7 @@ use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// `HttpRouter` is a simple data structure for routing incoming HTTP requests to
@@ -81,7 +82,7 @@ pub struct HttpRouter<Context: ServerContext> {
 #[derive(Debug)]
 struct HttpRouterNode<Context: ServerContext> {
     /// Handlers, etc. for each of the HTTP methods defined for this node.
-    methods: BTreeMap<String, ApiEndpoint<Context>>,
+    methods: HashMap<Method, ApiEndpoint<Context>>,
     /// Edges linking to child nodes.
     edges: Option<HttpRouterEdges<Context>>,
 }
@@ -217,7 +218,7 @@ pub struct RouterLookupResult<Context: ServerContext> {
 
 impl<Context: ServerContext> HttpRouterNode<Context> {
     pub fn new() -> Self {
-        HttpRouterNode { methods: BTreeMap::new(), edges: None }
+        HttpRouterNode { methods: HashMap::new(), edges: None }
     }
 }
 
@@ -385,8 +386,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
             };
         }
 
-        let methodname = method.as_str().to_uppercase();
-        if node.methods.contains_key(&methodname) {
+        if node.methods.contains_key(&method) {
             panic!(
                 "URI path \"{}\": attempted to create duplicate route for \
                  method \"{}\"",
@@ -394,7 +394,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
             );
         }
 
-        node.methods.insert(methodname, endpoint);
+        node.methods.insert(method, endpoint);
     }
 
     /// Look up the route handler for an HTTP request having method `method` and
@@ -478,9 +478,8 @@ impl<Context: ServerContext> HttpRouter<Context> {
             ));
         }
 
-        let methodname = method.as_str().to_uppercase();
         node.methods
-            .get(&methodname)
+            .get(&method)
             .map(|handler| RouterLookupResult {
                 handler: Arc::clone(&handler.handler),
                 operation_id: handler.operation_id.clone(),
@@ -512,7 +511,7 @@ fn insert_var(
 }
 
 impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
-    type Item = (String, String, &'a ApiEndpoint<Context>);
+    type Item = (String, Method, &'a ApiEndpoint<Context>);
     type IntoIter = HttpRouterIter<'a, Context>;
     fn into_iter(self) -> Self::IntoIter {
         HttpRouterIter::new(self)
@@ -529,7 +528,7 @@ impl<'a, Context: ServerContext> IntoIterator for &'a HttpRouter<Context> {
 /// blank string and an iterator over the root node's children.
 pub struct HttpRouterIter<'a, Context: ServerContext> {
     method:
-        Box<dyn Iterator<Item = (&'a String, &'a ApiEndpoint<Context>)> + 'a>,
+        Box<dyn Iterator<Item = (&'a Method, &'a ApiEndpoint<Context>)> + 'a>,
     path: Vec<(PathSegment, Box<PathIter<'a, Context>>)>,
 }
 type PathIter<'a, Context> =
@@ -592,7 +591,7 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
 }
 
 impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
-    type Item = (String, String, &'a ApiEndpoint<Context>);
+    type Item = (String, Method, &'a ApiEndpoint<Context>);
 
     fn next(&mut self) -> Option<Self::Item> {
         // If there are no path components left then we've reached the end of
@@ -1309,10 +1308,10 @@ mod test {
         assert_eq!(
             ret,
             vec![
-                ("/".to_string(), "GET".to_string(),),
+                ("/".to_string(), http::Method::GET,),
                 (
                     "/projects/{project_id}/instances".to_string(),
-                    "GET".to_string(),
+                    http::Method::GET,
                 ),
             ]
         );
@@ -1335,8 +1334,8 @@ mod test {
         assert_eq!(
             ret,
             vec![
-                ("/".to_string(), "GET".to_string(),),
-                ("/".to_string(), "POST".to_string(),),
+                ("/".to_string(), http::Method::GET,),
+                ("/".to_string(), http::Method::POST),
             ]
         );
     }
