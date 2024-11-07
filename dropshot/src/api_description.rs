@@ -985,9 +985,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     endpoint.error_type;
                 let err = errors.entry(identity).or_insert_with(|| {
                     // How many error types in the API share a name with this error?
-                    let same_name_errors = error_names.get(name)
-                        .expect("we should have collected all error types before trying to generate endpoints!");
-                    debug_assert!(!same_name_errors.is_empty(), "there should be at least one error type with this name");
+                    let same_name_errors = error_names.get(name).expect(
+                        "we should have collected all error types before \
+                             trying to generate endpoints!",
+                    );
+                    debug_assert!(
+                        !same_name_errors.is_empty(),
+                        "if an error schema name is in the map of errors, there
+                         should be at least one error schema with that name",
+                    );
                     let disambiguated_name = if same_name_errors.len() == 1 {
                         // If there's only one error type with this name, just
                         // use the schema's name.
@@ -997,21 +1003,29 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         // need to disambiguate them by using the fully qualified
                         // name.
                         use std::fmt::Write;
-                        let mut name = String::with_capacity(identity.rust_name.len());
-                        let mut current_prefix = String::with_capacity(identity.rust_name.len());
+                        let mut name =
+                            String::with_capacity(identity.rust_name.len());
+                        let mut current_prefix =
+                            String::with_capacity(identity.rust_name.len());
                         for part in identity.rust_name.split_inclusive("::") {
                             current_prefix.push_str(part);
                             // Skip up to the prefix shared by all errors with
                             // the ambiguous name (e.g. the crate name, or
                             // `crate::module_that_defines_all_error_types`).
-                            if same_name_errors.iter().all(|other| other.rust_name.starts_with(&current_prefix)) {
+                            if same_name_errors.iter().all(|other| {
+                                other.rust_name.starts_with(&current_prefix)
+                            }) {
                                 continue;
                             }
 
                             // Convert the whole name to UpperCamelCase,
                             // skipping underscores.
                             let mut capitalize_next = true;
-                            for c in part.trim_start_matches("::").trim_end_matches("::").chars() {
+                            for c in part
+                                .trim_start_matches("::")
+                                .trim_end_matches("::")
+                                .chars()
+                            {
                                 if c == '_' {
                                     capitalize_next = true;
                                 } else if capitalize_next {
@@ -1020,7 +1034,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
                                     // returns an iterator of chars for unicode
                                     // reasons.
                                     write!(&mut name, "{}", c.to_uppercase())
-                                        .expect("writing to a string should never fail");
+                                        .expect(
+                                        "writing to a string should never fail",
+                                    );
                                     capitalize_next = false;
                                 } else {
                                     name.push(c)
