@@ -353,8 +353,8 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
-        WebsocketUpgrade,
+        ExclusiveExtractor, HttpError, RequestContext, RequestEndpointMetadata,
+        RequestInfo, WebsocketUpgrade,
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
@@ -379,7 +379,7 @@ mod tests {
             server: Arc::new(DropshotState {
                 private: (),
                 config: ServerConfig {
-                    request_body_max_bytes: 0,
+                    default_request_body_max_bytes: 0,
                     page_max_nitems: NonZeroU32::new(1).unwrap(),
                     page_default_nitems: NonZeroU32::new(1).unwrap(),
                     default_handler_task_mode:
@@ -398,9 +398,12 @@ mod tests {
                 ),
             }),
             request: RequestInfo::new(&request, remote_addr),
-            path_variables: Default::default(),
-            body_content_type: Default::default(),
-            operation_id: "".to_string(),
+            endpoint_metadata: RequestEndpointMetadata {
+                variables: Default::default(),
+                body_content_type: Default::default(),
+                operation_id: "".to_string(),
+                request_body_max_bytes: None,
+            },
             request_id: "".to_string(),
             log: log.clone(),
         };

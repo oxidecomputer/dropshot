@@ -16,8 +16,31 @@ use std::sync::atomic::{AtomicU16, Ordering};
 use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
 
-pub mod common;
-use common::create_log_context;
+use crate::common::{self, create_log_context};
+
+#[test]
+fn test_valid_config_basic() {
+    let parsed = read_config::<ConfigDropshot>(
+        "valid_config_basic",
+        r#"
+        bind_address = "127.0.0.1:12345"
+        default_request_body_max_bytes = 1048576
+        default_handler_task_mode = "cancel-on-disconnect"
+        log_headers = ["X-Forwarded-For"]
+        "#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        parsed,
+        ConfigDropshot {
+            bind_address: "127.0.0.1:12345".parse().unwrap(),
+            default_request_body_max_bytes: 1048576,
+            default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+            log_headers: vec!["X-Forwarded-For".to_string()],
+        },
+    );
+}
 
 // Bad values for "bind_address"
 
@@ -63,7 +86,7 @@ fn test_config_bad_bind_address_garbage() {
 fn test_config_bad_request_body_max_bytes_negative() {
     let error = read_config::<ConfigDropshot>(
         "bad_request_body_max_bytes_negative",
-        "request_body_max_bytes = -1024",
+        "default_request_body_max_bytes = -1024",
     )
     .unwrap_err()
     .to_string();
@@ -75,12 +98,28 @@ fn test_config_bad_request_body_max_bytes_negative() {
 fn test_config_bad_request_body_max_bytes_too_large() {
     let error = read_config::<ConfigDropshot>(
         "bad_request_body_max_bytes_too_large",
-        "request_body_max_bytes = 999999999999999999999999999999",
+        "default_request_body_max_bytes = 999999999999999999999999999999",
     )
     .unwrap_err()
     .to_string();
     println!("found error: {}", error);
     assert!(error.starts_with(""));
+}
+
+#[test]
+fn test_config_deprecated_request_body_max_bytes() {
+    let error = read_config::<ConfigDropshot>(
+        "deprecated_request_body_max_bytes",
+        "request_body_max_bytes = 1024",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "invalid type: integer `1024`, \
+         expected the field to be absent \
+         (request_body_max_bytes has been renamed to \
+         default_request_body_max_bytes)",
+    );
 }
 
 fn make_server<T: Send + Sync + 'static>(
@@ -111,7 +150,7 @@ fn make_config(
             std::net::IpAddr::from_str(bind_ip_str).unwrap(),
             bind_port,
         ),
-        request_body_max_bytes: 1024,
+        default_request_body_max_bytes: 1024,
         default_handler_task_mode,
         log_headers: Default::default(),
     }

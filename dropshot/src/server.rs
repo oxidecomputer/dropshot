@@ -86,7 +86,7 @@ impl<C: ServerContext> DropshotState<C> {
 #[derive(Debug)]
 pub struct ServerConfig {
     /// maximum allowed size of a request body
-    pub request_body_max_bytes: usize,
+    pub default_request_body_max_bytes: usize,
     /// maximum size of any page of results
     pub page_max_nitems: NonZeroU32,
     /// default size for a page of results
@@ -178,7 +178,8 @@ impl<C: ServerContext> HttpServerStarter<C> {
 
         let server_config = ServerConfig {
             // We start aggressively to ensure test coverage.
-            request_body_max_bytes: config.request_body_max_bytes,
+            default_request_body_max_bytes: config
+                .default_request_body_max_bytes,
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
@@ -890,9 +891,7 @@ async fn http_request_handle<C: ServerContext>(
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),
-        path_variables: lookup_result.variables,
-        body_content_type: lookup_result.body_content_type,
-        operation_id: lookup_result.operation_id,
+        endpoint_metadata: lookup_result.metadata,
         request_id: request_id.to_string(),
         log: request_log,
     };

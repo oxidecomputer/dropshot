@@ -811,6 +811,7 @@ pub use handler::HttpResponseTemporaryRedirect;
 pub use handler::HttpResponseUpdatedNoContent;
 pub use handler::NoHeaders;
 pub use handler::RequestContext;
+pub use handler::RequestEndpointMetadata;
 pub use handler::RequestInfo;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_MULTIPART_FORM_DATA;

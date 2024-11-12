@@ -41,6 +41,8 @@ mod util;
 ///     deprecated = { true | false },
 ///     // A value of `true` causes the operation to be omitted from the API description
 ///     unpublished = { true | false },
+///     // Optional maximum request body size in bytes
+///     request_body_max_bytes = 1 * 1024 * 1024,
 /// }]
 /// ```
 ///

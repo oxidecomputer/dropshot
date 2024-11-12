@@ -52,6 +52,10 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub path: String,
     pub parameters: Vec<ApiEndpointParameter>,
     pub body_content_type: ApiEndpointBodyContentType,
+    /// An override for the maximum allowed size of the request body.
+    ///
+    /// `None` means that the server default is used.
+    pub request_body_max_bytes: Option<usize>,
     pub response: ApiEndpointResponse,
     pub summary: Option<String>,
     pub description: Option<String>,
@@ -86,6 +90,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             path: path.to_string(),
             parameters: func_parameters.parameters,
             body_content_type,
+            request_body_max_bytes: None,
             response,
             summary: None,
             description: None,
@@ -103,6 +108,11 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
 
     pub fn description<T: ToString>(mut self, description: T) -> Self {
         self.description.replace(description.to_string());
+        self
+    }
+
+    pub fn request_body_max_bytes(mut self, max_bytes: usize) -> Self {
+        self.request_body_max_bytes = Some(max_bytes);
         self
     }
 
@@ -183,6 +193,7 @@ impl<'a> ApiEndpoint<StubContext> {
             path: path.to_string(),
             parameters: func_parameters.parameters,
             body_content_type,
+            request_body_max_bytes: None,
             response,
             summary: None,
             description: None,

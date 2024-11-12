@@ -58,9 +58,9 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
 
-extern crate slog;
+use crate::common;
 
-pub mod common;
+extern crate slog;
 
 fn demo_api() -> ApiDescription<usize> {
     let mut api = ApiDescription::<usize>::new();
@@ -73,8 +73,11 @@ fn demo_api() -> ApiDescription<usize> {
     api.register(demo_handler_path_param_string).unwrap();
     api.register(demo_handler_path_param_uuid).unwrap();
     api.register(demo_handler_path_param_u32).unwrap();
+    api.register(demo_large_typed_body).unwrap();
     api.register(demo_handler_untyped_body).unwrap();
+    api.register(demo_handler_large_untyped_body).unwrap();
     api.register(demo_handler_streaming_body).unwrap();
+    api.register(demo_handler_large_streaming_body).unwrap();
     api.register(demo_handler_raw_request).unwrap();
     api.register(demo_handler_delete).unwrap();
     api.register(demo_handler_head_get).unwrap();
@@ -648,6 +651,48 @@ async fn test_demo_path_param_u32() {
     testctx.teardown().await;
 }
 
+// Test a `TypedBody` with a large payload.
+#[tokio::test]
+async fn test_large_typed_body() {
+    let api = demo_api();
+    let testctx = common::test_setup("test_large_typed_body", api);
+    let client = &testctx.client_testctx;
+
+    // This serializes to exactly 2048 bytes.
+    let body = DemoLargeTypedBody { body: vec![0; 1019] };
+    let body_json = serde_json::to_string(&body).unwrap();
+    assert_eq!(body_json.len(), 2048);
+    let mut response = client
+        .make_request_with_body(
+            Method::GET,
+            "/testing/large_typed_body",
+            body_json.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let response_json: DemoLargeTypedBody = read_json(&mut response).await;
+    assert_eq!(body, response_json);
+
+    // This serializes to 2050 bytes, which is over the limit.
+    let body = DemoLargeTypedBody { body: vec![0; 1020] };
+    let body_json = serde_json::to_string(&body).unwrap();
+    assert_eq!(body_json.len(), 2050);
+    let error = client
+        .make_request_with_body(
+            Method::GET,
+            "/testing/large_typed_body",
+            body_json.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 2048 bytes"
+    );
+}
+
 // Test `UntypedBody`.
 #[tokio::test]
 async fn test_untyped_body() {
@@ -731,6 +776,36 @@ async fn test_untyped_body() {
     assert_eq!(json.nbytes, 4);
     assert_eq!(json.as_utf8, Some(String::from("tμv")));
 
+    // Success case: large body endpoint.
+    let large_body = vec![0u8; 2048];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/large_untyped_body",
+            large_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 2048);
+
+    // Error case: large body endpoint failure.
+    let large_body = vec![0u8; 2049];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/large_untyped_body",
+            large_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 2048 bytes"
+    );
+
     testctx.teardown().await;
 }
 
@@ -783,6 +858,38 @@ async fn test_streaming_body() {
         error.message,
         "request body exceeded maximum size of 1024 bytes"
     );
+
+    // Success case: large body endpoint.
+    let large_body = vec![0u8; 2048];
+    let mut response = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/large_streaming_body",
+            large_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .unwrap();
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 2048);
+
+    // Error case: large body endpoint failure.
+    let large_body = vec![0u8; 2049];
+    let error = client
+        .make_request_with_body(
+            Method::PUT,
+            "/testing/large_streaming_body",
+            large_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 2048 bytes"
+    );
+
+    testctx.teardown().await;
 }
 
 // Test `RawRequest`.
@@ -1193,6 +1300,22 @@ async fn demo_handler_path_param_u32(
     http_echo(&path_params.into_inner())
 }
 
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+pub struct DemoLargeTypedBody {
+    pub body: Vec<u8>,
+}
+#[endpoint {
+    method = GET,
+    path = "/testing/large_typed_body",
+    request_body_max_bytes = 2048,
+}]
+async fn demo_large_typed_body(
+    _rqctx: RequestCtx,
+    body: TypedBody<DemoLargeTypedBody>,
+) -> Result<Response<Body>, HttpError> {
+    http_echo(&body.into_inner())
+}
+
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoUntyped {
     pub nbytes: usize,
@@ -1221,6 +1344,26 @@ async fn demo_handler_untyped_body(
     Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
 }
 
+#[endpoint {
+    method = PUT,
+    path = "/testing/large_untyped_body",
+    request_body_max_bytes = 2048,
+}]
+async fn demo_handler_large_untyped_body(
+    _rqctx: RequestContext<usize>,
+    query: Query<DemoUntypedQuery>,
+    body: UntypedBody,
+) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
+    let nbytes = body.as_bytes().len();
+    let as_utf8 = if query.into_inner().parse_str.unwrap_or(false) {
+        Some(String::from(body.as_str()?))
+    } else {
+        None
+    };
+
+    Ok(HttpResponseOk(DemoUntyped { nbytes, as_utf8 }))
+}
+
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DemoStreaming {
     pub nbytes: usize,
@@ -1230,6 +1373,23 @@ pub struct DemoStreaming {
     path = "/testing/streaming_body"
 }]
 async fn demo_handler_streaming_body(
+    _rqctx: RequestContext<usize>,
+    body: StreamingBody,
+) -> Result<HttpResponseOk<DemoStreaming>, HttpError> {
+    let nbytes = body
+        .into_stream()
+        .try_fold(0, |acc, v| futures::future::ok(acc + v.len()))
+        .await?;
+
+    Ok(HttpResponseOk(DemoStreaming { nbytes }))
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/testing/large_streaming_body",
+    request_body_max_bytes = 2048,
+}]
+async fn demo_handler_large_streaming_body(
     _rqctx: RequestContext<usize>,
     body: StreamingBody,
 ) -> Result<HttpResponseOk<DemoStreaming>, HttpError> {

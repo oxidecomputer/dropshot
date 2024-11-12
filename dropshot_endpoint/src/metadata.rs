@@ -3,8 +3,9 @@
 //! Code to handle metadata associated with an endpoint.
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote_spanned, ToTokens};
 use serde::Deserialize;
+use serde_tokenstream::ParseWrapper;
 use syn::{spanned::Spanned, Error};
 
 use crate::{
@@ -51,6 +52,9 @@ pub(crate) struct EndpointMetadata {
     pub(crate) unpublished: bool,
     #[serde(default)]
     pub(crate) deprecated: bool,
+    // Optional expression of type `usize`.
+    #[serde(default)]
+    pub(crate) request_body_max_bytes: Option<ParseWrapper<syn::Expr>>,
     pub(crate) content_type: Option<String>,
     pub(crate) _dropshot_crate: Option<String>,
 }
@@ -82,6 +86,7 @@ impl EndpointMetadata {
             tags,
             unpublished,
             deprecated,
+            request_body_max_bytes,
             content_type,
             _dropshot_crate,
         } = self;
@@ -139,6 +144,8 @@ impl EndpointMetadata {
                 tags,
                 unpublished,
                 deprecated,
+                request_body_max_bytes: request_body_max_bytes
+                    .map(|x| x.into_inner()),
                 content_type,
             })
         } else {
@@ -155,6 +162,7 @@ pub(crate) struct ValidatedEndpointMetadata {
     tags: Vec<String>,
     unpublished: bool,
     deprecated: bool,
+    request_body_max_bytes: Option<syn::Expr>,
     content_type: ValidContentType,
 }
 
@@ -172,32 +180,9 @@ impl ValidatedEndpointMetadata {
             self.operation_id.as_deref().unwrap_or(endpoint_name);
         let method_ident = format_ident!("{}", self.method.as_str());
 
-        let summary = doc.summary.as_ref().map(|summary| {
-            quote! { .summary(#summary) }
-        });
-        let description = doc.description.as_ref().map(|description| {
-            quote! { .description(#description) }
-        });
-
-        let tags = self
-            .tags
-            .iter()
-            .map(|tag| {
-                quote! { .tag(#tag) }
-            })
-            .collect::<Vec<_>>();
-
-        let visible = self.unpublished.then(|| {
-            quote! { .visible(false) }
-        });
-
-        let deprecated = self.deprecated.then(|| {
-            quote! { .deprecated(true) }
-        });
-
-        let fn_call = match kind {
+        let (span, fn_call) = match kind {
             ApiEndpointKind::Regular(endpoint_fn) => {
-                quote_spanned! {endpoint_fn.span()=>
+                let fn_call = quote_spanned! {endpoint_fn.span()=>
                     #dropshot::ApiEndpoint::new(
                         #operation_id.to_string(),
                         #endpoint_fn,
@@ -205,7 +190,8 @@ impl ValidatedEndpointMetadata {
                         #content_type,
                         #path,
                     )
-                }
+                };
+                (endpoint_fn.span(), fn_call)
             }
             ApiEndpointKind::Stub { attr, extractor_types, ret_ty } => {
                 // We need to point at the closest possible span to the actual
@@ -217,24 +203,57 @@ impl ValidatedEndpointMetadata {
                 // So we point at the `#`, which seems out-of-the-way enough
                 // for successful generation while being close by for errors.
                 // Seems pretty unobjectionable.
-                quote_spanned! {attr.pound_token.span()=>
+                let fn_call = quote_spanned! {attr.pound_token.span()=>
                     #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
                         #operation_id.to_string(),
                         #dropshot::Method::#method_ident,
                         #content_type,
                         #path,
                     )
-                }
+                };
+                (attr.pound_token.span(), fn_call)
             }
         };
 
-        quote! {
+        // Set the span for all of the function calls below. Most of these
+        // fields are unlikely to produce compile errors or warnings, but some
+        // of them (like request_body_max_bytes) can do so.
+        let summary = doc.summary.as_ref().map(|summary| {
+            quote_spanned! {span=> .summary(#summary) }
+        });
+        let description = doc.description.as_ref().map(|description| {
+            quote_spanned! {span=> .description(#description) }
+        });
+
+        let tags = self
+            .tags
+            .iter()
+            .map(|tag| {
+                quote_spanned! {span=> .tag(#tag) }
+            })
+            .collect::<Vec<_>>();
+
+        let visible = self.unpublished.then(|| {
+            quote_spanned! {span=> .visible(false) }
+        });
+
+        let deprecated = self.deprecated.then(|| {
+            quote_spanned! {span=> .deprecated(true) }
+        });
+
+        let request_body_max_bytes =
+            self.request_body_max_bytes.as_ref().map(|max_bytes| {
+                quote_spanned! {span=> .request_body_max_bytes(#max_bytes) }
+            });
+
+        quote_spanned! {span=>
             #fn_call
             #summary
             #description
             #(#tags)*
             #visible
             #deprecated
+            #request_body_max_bytes
         }
     }
 }
@@ -324,6 +343,9 @@ impl ChannelMetadata {
                 unpublished,
                 deprecated,
                 content_type: ValidContentType::ApplicationJson,
+                // Channels are arbitrary-length and don't have a limit on
+                // request body size.
+                request_body_max_bytes: None,
             };
 
             Some(ValidatedChannelMetadata { inner })

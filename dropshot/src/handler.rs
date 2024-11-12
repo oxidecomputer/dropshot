@@ -73,19 +73,16 @@ pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct RequestContext<Context: ServerContext> {
     /// shared server state
     pub server: Arc<DropshotState<Context>>,
-    /// HTTP request routing variables
-    pub path_variables: VariableSet,
-    /// expected request body mime type
-    pub body_content_type: ApiEndpointBodyContentType,
+    /// Endpoint-specific information.
+    pub endpoint_metadata: RequestEndpointMetadata,
     /// unique id assigned to this request
     pub request_id: String,
     /// logger for this specific request
     pub log: Logger,
-    /// The operation ID for the endpoint handler method
-    pub operation_id: String,
     /// basic request information (method, URI, etc.)
     pub request: RequestInfo,
 }
@@ -176,6 +173,17 @@ impl<Context: ServerContext> RequestContext<Context> {
         &self.server.private
     }
 
+    /// Returns the maximum request body size.
+    ///
+    /// This is typically the same as
+    /// `self.server.config.request_body_max_bytes`, but can be overridden for
+    /// an individual request.
+    pub fn request_body_max_bytes(&self) -> usize {
+        self.endpoint_metadata
+            .request_body_max_bytes
+            .unwrap_or(self.server.config.default_request_body_max_bytes)
+    }
+
     /// Returns the appropriate count of items to return for a paginated request
     ///
     /// This first looks at any client-requested limit and clamps it based on the
@@ -201,6 +209,24 @@ impl<Context: ServerContext> RequestContext<Context> {
             // default.
             .unwrap_or(server_config.page_default_nitems))
     }
+}
+
+/// Endpoint-specific information for a request.
+///
+/// This is part of [`RequestContext`] and [`RouterLookupResult`].
+#[derive(Debug)]
+pub struct RequestEndpointMetadata {
+    /// The operation ID for the endpoint handler method.
+    pub operation_id: String,
+
+    /// HTTP request routing variables.
+    pub variables: VariableSet,
+
+    /// The expected request body MIME type.
+    pub body_content_type: ApiEndpointBodyContentType,
+
+    /// The maximum number of bytes allowed in the request body, if overridden.
+    pub request_body_max_bytes: Option<usize>,
 }
 
 /// Helper trait for extracting the underlying Context type from the
