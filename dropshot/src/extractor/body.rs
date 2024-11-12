@@ -128,9 +128,8 @@ async fn http_request_load_body<Context: ServerContext, BodyType>(
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
-    let server = &rqctx.server;
     let (parts, body) = request.into_parts();
-    let body = StreamingBody::new(body, server.config.request_body_max_bytes)
+    let body = StreamingBody::new(body, rqctx.request_body_max_bytes())
         .into_bytes_mut()
         .await?;
 
@@ -154,7 +153,8 @@ where
     let body_content_type =
         ApiEndpointBodyContentType::from_mime_type(&mime_type)
             .map_err(|e| HttpError::for_bad_request(None, e))?;
-    let expected_content_type = rqctx.body_content_type.clone();
+    let expected_content_type =
+        rqctx.endpoint_metadata.body_content_type.clone();
 
     use ApiEndpointBodyContentType::*;
 
@@ -262,10 +262,9 @@ impl ExclusiveExtractor for UntypedBody {
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
     ) -> Result<UntypedBody, HttpError> {
-        let server = &rqctx.server;
         let body = request.into_body();
         let body_bytes =
-            StreamingBody::new(body, server.config.request_body_max_bytes)
+            StreamingBody::new(body, rqctx.request_body_max_bytes())
                 .into_bytes_mut()
                 .await?;
         Ok(UntypedBody { content: body_bytes.freeze() })
@@ -425,11 +424,9 @@ impl ExclusiveExtractor for StreamingBody {
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
-        let server = &rqctx.server;
-
         Ok(Self {
             body: request.into_body(),
-            cap: server.config.request_body_max_bytes,
+            cap: rqctx.request_body_max_bytes(),
         })
     }
 

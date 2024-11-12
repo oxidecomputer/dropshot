@@ -13,10 +13,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-pub mod common;
-use common::create_log_context;
-
-use crate::common::generate_tls_key;
+use crate::common::{self, create_log_context, generate_tls_key};
 
 /// See rustls::client::ServerCertVerifier::verify_server_cert for argument
 /// meanings
@@ -118,7 +115,7 @@ fn make_server(
 ) -> HttpServer<i32> {
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
-        request_body_max_bytes: 1024,
+        default_request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         log_headers: Default::default(),
     };
@@ -432,7 +429,7 @@ async fn test_server_is_https() {
 
     let config = ConfigDropshot {
         bind_address: "127.0.0.1:0".parse().unwrap(),
-        request_body_max_bytes: 1024,
+        default_request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         log_headers: Default::default(),
     };
