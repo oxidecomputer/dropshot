@@ -178,12 +178,12 @@ impl<Context: ServerContext> RequestContext<Context> {
     /// This is typically the same as
     /// `self.server.config.request_body_max_bytes`, but can be overridden for
     /// an individual request.
-    pub fn request_body_max_bytes(&self) -> usize {
+     pub fn request_body_max_bytes(&self) -> usize {
         self.endpoint_metadata
             .request_body_max_bytes
             .unwrap_or(self.server.config.default_request_body_max_bytes)
-    }
-
+     }
+ 
     /// Returns the appropriate count of items to return for a paginated request
     ///
     /// This first looks at any client-requested limit and clamps it based on the

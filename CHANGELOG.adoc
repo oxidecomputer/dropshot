@@ -71,7 +71,7 @@ starter.start()
 +
 We'd like to remove the `HttpServerStarter` altogether, so let us know if you're still using it for some reason.
 
-* Dropshot now supports per-request size limits, via the `request_body_max_bytes` parameter to `#[endpoint]`. For example, to set a limit of 1 MiB on an endpoint:
+* Dropshot now supports per-endpoint size limits, via the `request_body_max_bytes` parameter to `#[endpoint]`. For example, to set a limit of 1 MiB on an endpoint:
 +
 ```rust
 #[endpoint {
