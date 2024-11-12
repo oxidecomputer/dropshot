@@ -18,6 +18,58 @@ use tokio::sync::mpsc;
 
 use crate::common::{self, create_log_context};
 
+#[test]
+fn test_valid_config_empty() {
+    let parsed =
+        read_config::<ConfigDropshot>("valid_config_empty", "").unwrap();
+    assert_eq!(parsed, ConfigDropshot::default());
+}
+
+#[test]
+fn test_valid_config_basic() {
+    // Ensure that a basic config which leaves optional fields unset is
+    // correctly parsed.
+    let parsed = read_config::<ConfigDropshot>(
+        "valid_config_basic",
+        r#"
+        bind_address = "127.0.0.1:12345"
+        "#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        parsed,
+        ConfigDropshot {
+            bind_address: "127.0.0.1:12345".parse().unwrap(),
+            ..ConfigDropshot::default()
+        }
+    );
+}
+
+#[test]
+fn test_valid_config_all_settings() {
+    let parsed = read_config::<ConfigDropshot>(
+        "valid_config_basic",
+        r#"
+        bind_address = "127.0.0.1:12345"
+        request_body_max_bytes = 1048576
+        default_handler_task_mode = "cancel-on-disconnect"
+        log_headers = ["X-Forwarded-For"]
+        "#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        parsed,
+        ConfigDropshot {
+            bind_address: "127.0.0.1:12345".parse().unwrap(),
+            request_body_max_bytes: 1048576,
+            default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
+            log_headers: vec!["X-Forwarded-For".to_string()],
+        },
+    );
+}
+
 // Bad values for "bind_address"
 
 #[test]
