@@ -13,10 +13,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-pub mod common;
-use common::create_log_context;
-
-use crate::common::generate_tls_key;
+use crate::common::{self, create_log_context, generate_tls_key};
 
 /// See rustls::client::ServerCertVerifier::verify_server_cert for argument
 /// meanings
