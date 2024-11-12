@@ -3,9 +3,6 @@
 //! Quick check that the "legacy" HttpServerStarter::new() and
 //! HttpServerStarter::new_with_tls() interfaces work.
 
-pub mod common;
-
-use common::create_log_context;
 use dropshot::endpoint;
 use dropshot::test_util::read_json;
 use dropshot::test_util::ClientTestContext;
@@ -16,6 +13,9 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+
+use crate::common;
+use crate::common::create_log_context;
 
 extern crate slog;
 
