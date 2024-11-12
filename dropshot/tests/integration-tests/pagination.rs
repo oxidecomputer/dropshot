@@ -46,12 +46,7 @@ use subprocess::NullFile;
 use subprocess::Popen;
 use uuid::Uuid;
 
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate lazy_static;
-
-pub mod common;
+use crate::common;
 
 // Common helpers
 
@@ -571,7 +566,7 @@ lazy_static! {
 }
 
 fn make_word_list() -> BTreeSet<String> {
-    let word_list = include_str!("wordlist.txt");
+    let word_list = include_str!("../wordlist.txt");
     word_list.lines().map(|s| s.to_string()).collect()
 }
 
