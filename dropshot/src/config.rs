@@ -44,7 +44,6 @@ pub type RawTlsConfig = rustls::ServerConfig;
 /// ```
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(
-    default,
     from = "DeserializedConfigDropshot",
     into = "DeserializedConfigDropshot"
 )]
@@ -64,99 +63,6 @@ pub struct ConfigDropshot {
     /// is made to deal with headers that appear multiple times in a single
     /// request.
     pub log_headers: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-struct DeserializedConfigDropshot {
-    bind_address: SocketAddr,
-    default_request_body_max_bytes: usize,
-    // Previous name for default_request_body_max_bytes. Present only to guide
-    // users to the new name.
-    #[serde(
-        default,
-        deserialize_with = "deserialize_invalid_request_body_max_bytes",
-        skip_serializing_if = "Option::is_none"
-    )]
-    request_body_max_bytes: Option<InvalidConfig>,
-    default_handler_task_mode: HandlerTaskMode,
-    log_headers: Vec<String>,
-}
-
-impl From<DeserializedConfigDropshot> for ConfigDropshot {
-    fn from(v: DeserializedConfigDropshot) -> Self {
-        ConfigDropshot {
-            bind_address: v.bind_address,
-            default_request_body_max_bytes: v.default_request_body_max_bytes,
-            default_handler_task_mode: v.default_handler_task_mode,
-            log_headers: v.log_headers,
-        }
-    }
-}
-
-impl From<ConfigDropshot> for DeserializedConfigDropshot {
-    fn from(v: ConfigDropshot) -> Self {
-        DeserializedConfigDropshot {
-            bind_address: v.bind_address,
-            default_request_body_max_bytes: v.default_request_body_max_bytes,
-            request_body_max_bytes: None,
-            default_handler_task_mode: v.default_handler_task_mode,
-            log_headers: v.log_headers,
-        }
-    }
-}
-
-/// A marker type to indicate that the configuration is invalid.
-///
-/// This type can never be constructed, which means that for any valid config,
-/// `Option<InvalidConfig>` is always none.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub enum InvalidConfig {}
-
-fn deserialize_invalid_request_body_max_bytes<'de, D>(
-    deserializer: D,
-) -> Result<Option<InvalidConfig>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    deserialize_invalid(
-        deserializer,
-        "request_body_max_bytes has been renamed to \
-         default_request_body_max_bytes",
-    )
-}
-
-fn deserialize_invalid<'de, D>(
-    deserializer: D,
-    msg: &'static str,
-) -> Result<Option<InvalidConfig>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error;
-
-    struct V {
-        msg: &'static str,
-    }
-
-    impl<'de> serde::de::Visitor<'de> for V {
-        type Value = Option<InvalidConfig>;
-
-        fn expecting(
-            &self,
-            formatter: &mut std::fmt::Formatter,
-        ) -> std::fmt::Result {
-            write!(formatter, "the field to be absent ({})", self.msg)
-        }
-
-        fn visit_some<D>(self, _: D) -> Result<Self::Value, D::Error>
-        where
-            D: serde::Deserializer<'de>,
-        {
-            Err(D::Error::custom(self.msg))
-        }
-    }
-
-    deserializer.deserialize_any(V { msg })
 }
 
 /// Enum specifying options for how a Dropshot server should run its handler
@@ -215,4 +121,103 @@ impl Default for ConfigDropshot {
             log_headers: Default::default(),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(default)]
+struct DeserializedConfigDropshot {
+    bind_address: SocketAddr,
+    default_request_body_max_bytes: usize,
+    // Previous name for default_request_body_max_bytes. Present only to guide
+    // users to the new name.
+    #[serde(
+        deserialize_with = "deserialize_invalid_request_body_max_bytes",
+        skip_serializing_if = "Option::is_none"
+    )]
+    request_body_max_bytes: Option<InvalidConfig>,
+    default_handler_task_mode: HandlerTaskMode,
+    log_headers: Vec<String>,
+}
+
+impl From<DeserializedConfigDropshot> for ConfigDropshot {
+    fn from(v: DeserializedConfigDropshot) -> Self {
+        ConfigDropshot {
+            bind_address: v.bind_address,
+            default_request_body_max_bytes: v.default_request_body_max_bytes,
+            default_handler_task_mode: v.default_handler_task_mode,
+            log_headers: v.log_headers,
+        }
+    }
+}
+
+impl From<ConfigDropshot> for DeserializedConfigDropshot {
+    fn from(v: ConfigDropshot) -> Self {
+        DeserializedConfigDropshot {
+            bind_address: v.bind_address,
+            default_request_body_max_bytes: v.default_request_body_max_bytes,
+            request_body_max_bytes: None,
+            default_handler_task_mode: v.default_handler_task_mode,
+            log_headers: v.log_headers,
+        }
+    }
+}
+
+impl Default for DeserializedConfigDropshot {
+    fn default() -> Self {
+        ConfigDropshot::default().into()
+    }
+}
+
+/// A marker type to indicate that the configuration is invalid.
+///
+/// This type can never be constructed, which means that for any valid config,
+/// `Option<InvalidConfig>` is always none.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum InvalidConfig {}
+
+fn deserialize_invalid_request_body_max_bytes<'de, D>(
+    deserializer: D,
+) -> Result<Option<InvalidConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_invalid(
+        deserializer,
+        "request_body_max_bytes has been renamed to \
+         default_request_body_max_bytes",
+    )
+}
+
+fn deserialize_invalid<'de, D>(
+    deserializer: D,
+    msg: &'static str,
+) -> Result<Option<InvalidConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    struct V {
+        msg: &'static str,
+    }
+
+    impl<'de> serde::de::Visitor<'de> for V {
+        type Value = Option<InvalidConfig>;
+
+        fn expecting(
+            &self,
+            formatter: &mut std::fmt::Formatter,
+        ) -> std::fmt::Result {
+            write!(formatter, "the field to be absent ({})", self.msg)
+        }
+
+        fn visit_some<D>(self, _: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            Err(D::Error::custom(self.msg))
+        }
+    }
+
+    deserializer.deserialize_any(V { msg })
 }
