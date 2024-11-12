@@ -8,9 +8,9 @@ use dropshot::{
 };
 use http::{Method, Response, StatusCode};
 
-extern crate slog;
+use crate::common;
 
-pub mod common;
+extern crate slog;
 
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();

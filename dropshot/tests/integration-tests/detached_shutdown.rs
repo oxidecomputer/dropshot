@@ -11,7 +11,7 @@ use http::{Method, Response, StatusCode};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-pub mod common;
+use crate::common;
 
 struct Context {
     endpoint_started_tx: mpsc::UnboundedSender<()>,
