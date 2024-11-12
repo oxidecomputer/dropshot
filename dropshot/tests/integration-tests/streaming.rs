@@ -8,9 +8,9 @@ use http::{Method, Response, StatusCode};
 use http_body_util::BodyExt;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
-extern crate slog;
+use crate::common;
 
-pub mod common;
+extern crate slog;
 
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
