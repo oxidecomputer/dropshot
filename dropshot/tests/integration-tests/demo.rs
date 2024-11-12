@@ -58,9 +58,9 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
 
-extern crate slog;
+use crate::common;
 
-pub mod common;
+extern crate slog;
 
 fn demo_api() -> ApiDescription<usize> {
     let mut api = ApiDescription::<usize>::new();
