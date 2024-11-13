@@ -63,6 +63,16 @@ starter.start()
 +
 We'd like to remove the `HttpServerStarter` altogether, so let us know if you're still using it for some reason.
 
+* https://github.com/oxidecomputer/dropshot/pull/1115[#1115] Dropshot now includes **experimental** support for hosting multiple versions of an API at a single server and routing to the correct version based on the incoming request.  See documentation for details.  If you don't care about this, you can mostly ignore it, but see "Breaking Changes" below.
++
+By "experimental" we only mean that the API may change in upcoming releases.
+
+=== Breaking Changes
+
+* Dropshot now expects that APIs use https://semver.org/[Semver] values for their version string.  Concretely, this only means that the `version` argument to `ApiDescription::openapi` (which generates an OpenAPI document) must be a `semver::Version`.  Previously, it was `AsRef<str>`.
+* If you're invoking `ApiEndpoint::new` directly or constructing one as a literal (both of which are uncommon), you must provide a new `ApiEndpointVersions` value describing which versions this endpoint implements.  You can use `ApiEndpointVersions::All` if you don't care about versioning.
+
+
 == 0.12.0 (released 2024-09-26)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.11.0\...v0.12.0[Full list of commits]

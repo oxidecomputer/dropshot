@@ -544,7 +544,8 @@ fn test_openapi() -> anyhow::Result<()> {
     let api = make_api(None)?;
     let mut output = Cursor::new(Vec::new());
 
-    let _ = api.openapi("test", "threeve").write(&mut output);
+    let _ =
+        api.openapi("test", semver::Version::new(3, 5, 0)).write(&mut output);
     let actual = from_utf8(output.get_ref()).unwrap();
 
     expectorate::assert_contents("tests/test_openapi.json", actual);
@@ -570,7 +571,7 @@ fn test_openapi_fuller() -> anyhow::Result<()> {
     let mut output = Cursor::new(Vec::new());
 
     let _ = api
-        .openapi("test", "1985.7")
+        .openapi("test", semver::Version::new(1985, 7, 0))
         .description("gusty winds may exist")
         .contact_name("old mate")
         .license_name("CDDL")
