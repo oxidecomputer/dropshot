@@ -670,15 +670,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 _ => panic!("reference not expected"),
             };
 
-            let method_ref = match &method[..] {
-                "GET" => &mut pathitem.get,
-                "PUT" => &mut pathitem.put,
-                "POST" => &mut pathitem.post,
-                "DELETE" => &mut pathitem.delete,
-                "OPTIONS" => &mut pathitem.options,
-                "HEAD" => &mut pathitem.head,
-                "PATCH" => &mut pathitem.patch,
-                "TRACE" => &mut pathitem.trace,
+            let method_ref = match method {
+                http::Method::GET => &mut pathitem.get,
+                http::Method::PUT => &mut pathitem.put,
+                http::Method::POST => &mut pathitem.post,
+                http::Method::DELETE => &mut pathitem.delete,
+                http::Method::OPTIONS => &mut pathitem.options,
+                http::Method::HEAD => &mut pathitem.head,
+                http::Method::PATCH => &mut pathitem.patch,
+                http::Method::TRACE => &mut pathitem.trace,
                 other => panic!("unexpected method `{}`", other),
             };
             let mut operation = openapiv3::Operation::default();
