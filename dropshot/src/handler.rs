@@ -245,7 +245,69 @@ where
         &self,
         rqctx: RequestContext<Context>,
         p: FuncParams,
-    ) -> HttpHandlerResult;
+    ) -> Result<Response<Body>, HandlerError>;
+}
+
+pub struct HandlerError(ErrorInner);
+
+impl HandlerError {
+    pub(crate) fn status_code(&self) -> StatusCode {
+        match self.0 {
+            ErrorInner::Handler { ref rsp, .. } => rsp.status(),
+            ErrorInner::Dropshot(ref e) => e.status_code,
+        }
+    }
+
+    pub(crate) fn internal_message(&self) -> &String {
+        match self.0 {
+            ErrorInner::Handler { ref message, .. } => message,
+            ErrorInner::Dropshot(ref e) => &e.internal_message,
+        }
+    }
+
+    pub(crate) fn external_message(&self) -> Option<&String> {
+        match self.0 {
+            ErrorInner::Handler { .. } => None,
+            ErrorInner::Dropshot(ref e) => Some(&e.internal_message),
+        }
+    }
+
+    pub(crate) fn into_response(self, request_id: &str) -> Response<Body> {
+        match self.0 {
+            ErrorInner::Handler { rsp, .. } => rsp,
+            ErrorInner::Dropshot(e) => e.into_response(request_id),
+        }
+    }
+}
+
+enum ErrorInner {
+    Handler { message: String, rsp: Response<Body> },
+    Dropshot(HttpError),
+}
+
+impl From<HttpError> for HandlerError {
+    fn from(e: HttpError) -> Self {
+        Self(ErrorInner::Dropshot(e))
+    }
+}
+
+impl<E> From<E> for HandlerError
+where
+    E: HttpResponse + std::fmt::Display,
+{
+    fn from(e: E) -> Self {
+        let message = e.to_string();
+        Self(match e.to_result() {
+            Ok(rsp) => ErrorInner::Handler { message, rsp },
+            Err(e) => ErrorInner::Dropshot(e),
+        })
+    }
+}
+
+impl From<HttpError> for ErrorInner {
+    fn from(e: HttpError) -> Self {
+        Self::Dropshot(e)
+    }
 }
 
 /// Defines an implementation of the `HttpHandlerFunc` trait for functions
@@ -330,15 +392,17 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     ($(($i:tt, $T:tt)),*) => {
 
     #[async_trait]
-    impl<Context, FuncType, FutureType, ResponseType, $($T,)*>
+    impl<Context, FuncType, FutureType, ResponseType, ErrorType, $($T,)*>
         HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
     where
         Context: ServerContext,
         FuncType: Fn(RequestContext<Context>, $($T,)*)
             -> FutureType + Send + Sync + 'static,
-        FutureType: Future<Output = Result<ResponseType, HttpError>>
+        FutureType: Future<Output = Result<ResponseType, ErrorType>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
+        HandlerError: From<ErrorType>,
+        ErrorType: JsonSchema,
         ($($T,)*): RequestExtractor,
         $($T: Send + Sync + 'static,)*
     {
@@ -346,11 +410,10 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
             &self,
             rqctx: RequestContext<Context>,
             _param_tuple: ($($T,)*)
-        ) -> HttpHandlerResult
+        ) -> Result<Response<Body>, HandlerError>
         {
-            let response: ResponseType =
-                (self)(rqctx, $(_param_tuple.$i,)*).await?;
-            response.to_result()
+            let response: ResponseType = (self)(rqctx, $(_param_tuple.$i,)*).await?;
+            response.to_result().map_err(Into::into)
         }
     }
 }}
@@ -377,7 +440,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
         &self,
         rqctx: RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> HttpHandlerResult;
+    ) -> Result<Response<Body>, HandlerError>;
 }
 
 /// `HttpRouteHandler` is the only type that implements `RouteHandler`.  The
@@ -440,7 +503,7 @@ where
         &self,
         rqctx: RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> HttpHandlerResult {
+    ) -> Result<Response<Body>, HandlerError> {
         // This is where the magic happens: in the code below, `funcparams` has
         // type `FuncParams`, which is a tuple type describing the extractor
         // arguments to the handler function.  This could be `()`, `(Query<Q>)`,
@@ -457,8 +520,9 @@ where
         // is resolved statically.makes them actual function arguments for the
         // actual handler function.  From this point down, all of this is
         // resolved statically.
-        let funcparams =
-            RequestExtractor::from_request(&rqctx, request).await?;
+        let funcparams = RequestExtractor::from_request(&rqctx, request)
+            .await
+            .map_err(HandlerError::from)?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -515,7 +579,7 @@ impl RouteHandler<StubContext> for StubRouteHandler {
         &self,
         _: RequestContext<StubContext>,
         _: hyper::Request<crate::Body>,
-    ) -> HttpHandlerResult {
+    ) -> Result<Response<Body>, HandlerError> {
         unimplemented!("stub handler called, not implemented: {}", self.label)
     }
 }

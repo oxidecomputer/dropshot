@@ -107,6 +107,18 @@ pub struct HttpErrorResponseBody {
     pub message: String,
 }
 
+impl JsonSchema for HttpError {
+    fn schema_name() -> String {
+        HttpErrorResponseBody::schema_name()
+    }
+
+    fn json_schema(
+        r#gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        HttpErrorResponseBody::json_schema(r#gen)
+    }
+}
+
 // We hand-roll our JSON schema to avoid `error_code` being "nullable".
 impl JsonSchema for HttpErrorResponseBody {
     fn schema_name() -> String {

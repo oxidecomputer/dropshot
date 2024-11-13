@@ -398,15 +398,9 @@ impl<'ast> EndpointParams<'ast> {
                 struct NeedHttpResponse(
                     <#ret_ty as ResultTrait>::T,
                 );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
                 fn validate_result_error_type<T>()
                 where
-                    T: ?Sized + TypeEq<This = #dropshot::HttpError>,
+                    #dropshot::HandlerError: From<T>,
                 {
                 }
                 validate_result_error_type::<
