@@ -63,7 +63,9 @@ starter.start()
 +
 We'd like to remove the `HttpServerStarter` altogether, so let us know if you're still using it for some reason.
 
-* https://github.com/oxidecomputer/dropshot/pull/1115[#1115] Dropshot now supports hosting multiple versions of an API at a single server and routing to the correct version based on the incoming request.  See documentation for details.  If you don't care about this, you can mostly ignore it, but see "Breaking Changes" below.
+* https://github.com/oxidecomputer/dropshot/pull/1115[#1115] Dropshot now includes **experimental** support for hosting multiple versions of an API at a single server and routing to the correct version based on the incoming request.  See documentation for details.  If you don't care about this, you can mostly ignore it, but see "Breaking Changes" below.
++
+By "experimental" we only mean that the API may change in upcoming releases.
 
 === Breaking Changes
 
