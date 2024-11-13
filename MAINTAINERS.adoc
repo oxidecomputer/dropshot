@@ -87,47 +87,14 @@ cargo install cargo-release
 +
 Make sure you have a compatible version.  These instructions were written for v0.25.4.  "release.toml" in this repo should also include the version it was written for.  If you've got a different version, https://github.com/crate-ci/cargo-release/blob/master/CHANGELOG.md[check the changelog to make sure it's compatible].
 +
-**You should be able to just run:**
+Run:
 +
 [source,text]
 ----
 $ cargo release --prev-tag-name=PREV_RELEASE_TAG -vv --execute RELEASE_KIND|NEW_VERSION
 ----
 +
-**and then remember to push the commit and the tag!**  (You may have to temporarily allow administrators to override branch protection in order to do this.)
-+
-If you want to be extra careful, you can do this in a dry-run form.  First, check that the log output here looks right (and especially that you got the version number that you expected!):
-+
-[source,text]
-----
-$ cargo release --prev-tag-name=PREV_RELEASE_TAG -vv RELEASE_KIND|NEW_VERSION
-----
-+
-Now, run `cargo release` for real (i.e. with `--execute`), but without publishing to crates.io or pushing the git tags:
-+
-[source,text]
-----
-$ cargo release --execute --no-push --no-publish --no-tag --prev-tag-name=PREV_RELEASE_TAG -vv RELEASE_KIND|NEW_VERSION
-----
-+
-Inspect the resulting commit and the new tag. The commit should modify the CHANGELOG.adoc, Cargo.lock, and 2 Cargo.toml files.
-+
-Then undo the above step:
-+
-[source,text]
-----
-$ git reset --hard THE_COMMIT_YOU_STARTED_WITH
-$ git tag -d THE_NEW_TAG
-----
-+
-and do the release again with the publish step:
-+
-[source,text]
-----
-$ cargo release --execute --no-push --prev-tag-name=PREV_RELEASE_TAG -vv minor
-----
-+
-At this point, the new crates should be published to crates.io.  Check and push the commit and the tag.
+At this point, the new crates should be published to crates.io.  **Check and push the commit and the tag.**
 +
 [source,text]
 ----
@@ -136,25 +103,7 @@ $ git push --tags
 ----
 +
 You may have to temporarily allow administrators to override branch protection in order to do this.
-. Increment to a dev version. Add 1 to the patch version and a "-dev" suffix on NEW_VERSION to form DEV_VERSION (e.g. `0.9.0` -> `0.9.1-dev`). Then do:
-+
-[source,text]
-----
-$ cargo release --execute --no-push --no-publish --no-tag DEV_VERSION
-----
-+
-Rewrite the message for the commit with changed Cargo.toml and Cargo.lock files ("starting DEV_VERSION after releasing NEW_VERSION"); there should not be changes to CHANGELOG.adoc. Push to main.
-
-=== Why all that checking?  Is that going overboard?
-
-dap's not familiar enough with Cargo to know what all the safeties are.  Other language package managers (well, npm) make it easy to publish packages that are missing files, contain extra files (like local-only notes or private keys), fail tests, etc.  The worst is not knowing the published package is broken or leaked private information until somebody reports it.
-
-We could automate more of this with a script that takes a commit, checks the GitHub CI status, then does a fresh clone and publishes the release.
 
 === What if something goes wrong
 
-At the end of the day, the release is just a few commits that update the crate versions, a git tag, and the crates.io publish.
-
-If something went wrong prior to the crates.io publish, then you can `git reset` your local clone to the commit you started with, delete your local tag, and try again.  (If you followed the above steps, you won't have pushed any git tags, so there's nothing on GitHub to undo.)
-
-If something went wrong after the crates.io publish, you could try to fix up the Git state to match what it should be.  Or you could yank the version you published, reset your local state, and try again.
+At the end of the day, the release is just a commit that updates the crate versions, a git tag, and the crates.io publish.  These can be un-done by deleting the tag, undoing the commits, and yanking the release.
