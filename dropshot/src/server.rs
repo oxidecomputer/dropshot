@@ -1154,6 +1154,9 @@ impl<C: ServerContext> ServerBuilder<C> {
 
     /// Specifies whether and how this server determines the API version to use
     /// for incoming requests
+    ///
+    /// All the interfaces related to [`VersionPolicy`] are considered
+    /// experimental and may change in an upcoming release.
     pub fn version_policy(mut self, version_policy: VersionPolicy) -> Self {
         self.version_policy = version_policy;
         self
