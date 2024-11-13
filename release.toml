@@ -1,5 +1,5 @@
 # This file is used by cargo-release.
-# This version is written for cargo-release 0.25.4.
+# This version is written for cargo-release 0.25.5.
 
 # Update the change log to reflect the new release and set us up for the next release.
 pre-release-replacements = [
