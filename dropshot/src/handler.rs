@@ -293,11 +293,12 @@ impl From<HttpError> for HandlerError {
 
 impl<E> From<E> for HandlerError
 where
-    E: HttpResponse + std::fmt::Display,
+    E: HttpResponseContent + HttpResponseError + std::fmt::Display,
 {
     fn from(e: E) -> Self {
         let message = e.to_string();
-        Self(match e.to_result() {
+        let status = e.status_code();
+        Self(match e.to_response(Response::builder().status(status)) {
             Ok(rsp) => ErrorInner::Handler { message, rsp },
             Err(e) => ErrorInner::Dropshot(e),
         })
@@ -308,6 +309,10 @@ impl From<HttpError> for ErrorInner {
     fn from(e: HttpError) -> Self {
         Self::Dropshot(e)
     }
+}
+
+pub trait HttpResponseError {
+    fn status_code(&self) -> StatusCode;
 }
 
 /// Defines an implementation of the `HttpHandlerFunc` trait for functions

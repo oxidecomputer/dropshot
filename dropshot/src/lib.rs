@@ -804,6 +804,7 @@ pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
+pub use handler::HttpResponseError;
 pub use handler::HttpResponseFound;
 pub use handler::HttpResponseHeaders;
 pub use handler::HttpResponseOk;

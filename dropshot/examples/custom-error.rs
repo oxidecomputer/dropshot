@@ -7,7 +7,7 @@ use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
-use dropshot::HttpResponse;
+use dropshot::HttpResponseError;
 use dropshot::HttpResponseOk;
 use dropshot::Path;
 use dropshot::RequestContext;
@@ -24,13 +24,14 @@ enum ThingyError {
     InvalidThingy { name: String },
 }
 
-/// Any type implementing `dropshot::HttpResponse` may be used as an error
+/// Any type implementing `dropshot::HttpResponseError` and `HttpResponseContent` may be used as an error
 /// return value from an endpoint handler.
-impl HttpResponse for ThingyError {
-    fn to_result(self) -> HttpHandlerResult {
-        http::Response::builder()
-            .status(self.status_code())
-            .body(serde_json::to)
+impl HttpResponseError for ThingyError {
+    fn status_code(&self) -> http::StatusCode {
+        match self {
+            ThingyError::NoThingies => http::StatusCode::SERVICE_UNAVAILABLE,
+            ThingyError::InvalidThingy { .. } => http::StatusCode::BAD_REQUEST,
+        }
     }
 }
 
@@ -51,7 +52,7 @@ struct ThingyPathParams {
     path = "/thingy/{name}",
 }]
 async fn get_thingy(
-    rqctx: RequestContext<()>,
+    _rqctx: RequestContext<()>,
     path_params: Path<ThingyPathParams>,
 ) -> Result<HttpResponseOk<Thingy>, ThingyError> {
     let ThingyPathParams { name } = path_params.into_inner();
@@ -70,13 +71,13 @@ async fn main() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(get_thingy).unwrap();
 
-    let server = ServerBuilder::new(api, (), log)
-        .start()
-        .map_err(|error| format!("failed to create server: {}", error))?;
-
     api.openapi("Custom Error Example", "0.0.0")
         .write(&mut std::io::stdout())
         .map_err(|e| e.to_string())?;
+
+    let server = ServerBuilder::new(api, (), log)
+        .start()
+        .map_err(|error| format!("failed to create server: {}", error))?;
 
     server.await
 }
