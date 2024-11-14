@@ -37,7 +37,9 @@ use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
 use super::server::ServerContext;
+use crate::api_description;
 use crate::api_description::ApiEndpointBodyContentType;
+use crate::api_description::ApiEndpointErrorResponse;
 use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
@@ -241,6 +243,7 @@ where
     FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
+    type Error: HttpErrorMetadata;
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
@@ -313,6 +316,30 @@ impl From<HttpError> for ErrorInner {
 
 pub trait HttpResponseError {
     fn status_code(&self) -> StatusCode;
+}
+
+pub trait HttpErrorMetadata {
+    fn error_metadata() -> Option<ApiEndpointErrorResponse>;
+}
+
+impl HttpErrorMetadata for HttpError {
+    fn error_metadata() -> Option<ApiEndpointErrorResponse> {
+        // HttpError is a member of all handlers currently, so we will always
+        // generate it.
+        None
+    }
+}
+
+impl<T> HttpErrorMetadata for T
+where
+    T: HttpResponseContent + 'static,
+{
+    fn error_metadata() -> Option<ApiEndpointErrorResponse> {
+        Some(ApiEndpointErrorResponse {
+            schema: Self::content_metadata()?,
+            identity: api_description::TypeIdentity::for_type::<Self>(),
+        })
+    }
 }
 
 /// Defines an implementation of the `HttpHandlerFunc` trait for functions
@@ -406,11 +433,13 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
         FutureType: Future<Output = Result<ResponseType, ErrorType>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
+        ErrorType: HttpErrorMetadata,
         HandlerError: From<ErrorType>,
-        ErrorType: JsonSchema,
         ($($T,)*): RequestExtractor,
         $($T: Send + Sync + 'static,)*
     {
+        type Error = ErrorType;
+
         async fn handle_request(
             &self,
             rqctx: RequestContext<Context>,

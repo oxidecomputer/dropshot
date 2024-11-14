@@ -2,8 +2,10 @@
 //! Describes the endpoints and handler functions in your API
 
 use crate::extractor::RequestExtractor;
+use crate::handler::HttpErrorMetadata;
 use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
+use crate::handler::HttpResponseContent;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
 use crate::handler::StubRouteHandler;
@@ -16,6 +18,7 @@ use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
 use crate::HttpError;
 use crate::HttpErrorResponseBody;
+use crate::HttpResponseError;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
 use crate::CONTENT_TYPE_OCTET_STREAM;
@@ -53,6 +56,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub parameters: Vec<ApiEndpointParameter>,
     pub body_content_type: ApiEndpointBodyContentType,
     pub response: ApiEndpointResponse,
+    pub error_response: Option<ApiEndpointErrorResponse>,
     pub summary: Option<String>,
     pub description: Option<String>,
     pub tags: Vec<String>,
@@ -87,6 +91,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             parameters: func_parameters.parameters,
             body_content_type,
             response,
+            error_response: <HandlerType::Error>::error_metadata(),
             summary: None,
             description: None,
             tags: vec![],
@@ -175,6 +180,7 @@ impl<'a> ApiEndpoint<StubContext> {
                 .expect("unsupported mime type");
         let func_parameters = FuncParams::metadata(body_content_type.clone());
         let response = ResultType::Response::response_metadata();
+        let error_response = ResultType::Error::error_metadata();
         let handler = StubRouteHandler::new_with_name(&operation_id);
         ApiEndpoint {
             operation_id,
@@ -184,6 +190,7 @@ impl<'a> ApiEndpoint<StubContext> {
             parameters: func_parameters.parameters,
             body_content_type,
             response,
+            error_response,
             summary: None,
             description: None,
             tags: vec![],
@@ -196,6 +203,7 @@ impl<'a> ApiEndpoint<StubContext> {
 
 pub trait HttpResultType {
     type Response: HttpResponse + Send + Sync + 'static;
+    type Error: HttpErrorMetadata;
 }
 
 impl<T> HttpResultType for Result<T, HttpError>
@@ -203,6 +211,16 @@ where
     T: HttpResponse + Send + Sync + 'static,
 {
     type Response = T;
+    type Error = HttpError;
+}
+
+impl<T, E> HttpResultType for Result<T, E>
+where
+    T: HttpResponse + Send + Sync + 'static,
+    E: HttpResponseContent + HttpResponseError + Send + Sync + 'static,
+{
+    type Response = T;
+    type Error = E;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a
@@ -325,6 +343,27 @@ pub struct ApiEndpointResponse {
     pub headers: Vec<ApiEndpointHeader>,
     pub success: Option<StatusCode>,
     pub description: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct ApiEndpointErrorResponse {
+    pub(crate) identity: TypeIdentity,
+    pub(crate) schema: ApiSchemaGenerator,
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub(crate) struct TypeIdentity {
+    rust_name: &'static str,
+    type_id: std::any::TypeId,
+}
+
+impl TypeIdentity {
+    pub(crate) fn for_type<T: 'static>() -> Self {
+        TypeIdentity {
+            rust_name: std::any::type_name::<T>(),
+            type_id: std::any::TypeId::of::<T>(),
+        }
+    }
 }
 
 /// Wrapper for both dynamically generated and pre-generated schemas.
