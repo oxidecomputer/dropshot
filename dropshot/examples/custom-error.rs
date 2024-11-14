@@ -41,9 +41,6 @@ struct Thingy {
     magic_number: u64,
 }
 
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct NoThingy {}
-
 #[derive(Deserialize, JsonSchema)]
 struct ThingyPathParams {
     name: String,
@@ -62,15 +59,6 @@ async fn get_thingy(
     Err(ThingyError::InvalidThingy { name })
 }
 
-/// An example of an endpoint which does not return a `Result<_, _>`.
-#[endpoint {
-    method = GET,
-    path = "/nothing",
-}]
-async fn get_nothing(_rqctx: RequestContext<()>) -> HttpResponseOk<NoThingy> {
-    HttpResponseOk(NoThingy {})
-}
-
 #[tokio::main]
 async fn main() -> Result<(), String> {
     // See dropshot/examples/basic.rs for more details on most of these pieces.
@@ -82,7 +70,6 @@ async fn main() -> Result<(), String> {
 
     let mut api = ApiDescription::new();
     api.register(get_thingy).unwrap();
-    api.register(get_nothing).unwrap();
 
     api.openapi("Custom Error Example", "0.0.0")
         .write(&mut std::io::stdout())
