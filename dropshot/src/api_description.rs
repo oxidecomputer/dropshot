@@ -324,7 +324,53 @@ pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
     pub headers: Vec<ApiEndpointHeader>,
     pub success: Option<StatusCode>,
+    pub error: Option<ApiEndpointErrorResponse>,
     pub description: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct ApiEndpointErrorResponse {
+    identity: TypeIdentity,
+    schema: ErrorSchema,
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+struct TypeIdentity {
+    rust_name: &'static str,
+    type_id: std::any::TypeId,
+}
+
+#[derive(Debug)]
+enum ErrorSchema {
+    DropshotHttpError,
+    Schema(ApiSchemaGenerator),
+}
+
+impl ApiEndpointErrorResponse {
+    pub(crate) fn for_error<
+        E: crate::handler::HttpResponseContent + 'static,
+    >() -> Option<Self> {
+        Some(ApiEndpointErrorResponse {
+            schema: ErrorSchema::Schema(<E>::content_metadata()?),
+            identity: TypeIdentity::for_type::<E>(),
+        })
+    }
+
+    pub(crate) fn dropshot_http_error() -> Self {
+        ApiEndpointErrorResponse {
+            schema: ErrorSchema::DropshotHttpError,
+            identity: TypeIdentity::for_type::<HttpErrorResponseBody>(),
+        }
+    }
+}
+
+impl TypeIdentity {
+    fn for_type<T: 'static>() -> Self {
+        TypeIdentity {
+            rust_name: std::any::type_name::<T>(),
+            type_id: std::any::TypeId::of::<T>(),
+        }
+    }
 }
 
 /// Wrapper for both dynamically generated and pre-generated schemas.
