@@ -10,6 +10,7 @@ use super::error::HttpError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
+use super::versioning::VersionPolicy;
 use super::ProbeRegistration;
 
 use async_stream::stream;
@@ -45,7 +46,7 @@ use crate::RequestInfo;
 use slog::Logger;
 use thiserror::Error;
 
-// TODO Replace this with something else?
+// TODO Remove when we can remove `HttpServerStarter`
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 /// Endpoint-accessible context associated with a server.
@@ -73,6 +74,8 @@ pub struct DropshotState<C: ServerContext> {
     /// Worker for the handler_waitgroup associated with this server, allowing
     /// graceful shutdown to wait for all handlers to complete.
     pub(crate) handler_waitgroup_worker: DebugIgnore<waitgroup::Worker>,
+    /// specifies how incoming requests are mapped to handlers based on versions
+    pub(crate) version_policy: VersionPolicy,
 }
 
 impl<C: ServerContext> DropshotState<C> {
@@ -154,6 +157,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         private: C,
         log: &Logger,
         tls: Option<ConfigTls>,
+        version_policy: VersionPolicy,
     ) -> Result<HttpServerStarter<C>, BuildError> {
         let tcp = {
             let std_listener = std::net::TcpListener::bind(
@@ -195,20 +199,30 @@ impl<C: ServerContext> HttpServerStarter<C> {
             })
             .transpose()?;
         let handler_waitgroup = WaitGroup::new();
+
+        let router = api.into_router();
+        if let VersionPolicy::Unversioned = version_policy {
+            if router.has_versioned_routes() {
+                return Err(BuildError::UnversionedServerHasVersionedRoutes);
+            }
+        }
+
         let app_state = Arc::new(DropshotState {
             private,
             config: server_config,
-            router: api.into_router(),
+            router,
             log: log.clone(),
             local_addr,
             tls_acceptor: tls_acceptor.clone(),
             handler_waitgroup_worker: DebugIgnore(handler_waitgroup.worker()),
+            version_policy,
         });
 
-        for (path, method, _) in &app_state.router {
+        for (path, method, endpoint) in app_state.router.endpoints(None) {
             debug!(&log, "registered endpoint";
                 "method" => &method,
-                "path" => &path
+                "path" => &path,
+                "versions" => &endpoint.versions,
             );
         }
 
@@ -886,8 +900,13 @@ async fn http_request_handle<C: ServerContext>(
     let request = request.map(crate::Body::wrap);
     let method = request.method();
     let uri = request.uri();
-    let lookup_result =
-        server.router.lookup_route(&method, uri.path().into())?;
+    let found_version =
+        server.version_policy.request_version(&request, &request_log)?;
+    let lookup_result = server.router.lookup_route(
+        &method,
+        uri.path().into(),
+        found_version.as_ref(),
+    )?;
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),
@@ -1051,16 +1070,16 @@ pub enum BuildError {
     },
     #[error("expected exactly one TLS private key")]
     NotOnePrivateKey,
-    #[error("must register an API")]
-    MissingApi,
-    #[error("only one API can be registered with a server")]
-    TooManyApis,
     #[error("{context}")]
     SystemError {
         context: String,
         #[source]
         error: std::io::Error,
     },
+    #[error(
+        "unversioned servers cannot have endpoints with specific versions"
+    )]
+    UnversionedServerHasVersionedRoutes,
 }
 
 impl BuildError {
@@ -1091,6 +1110,7 @@ pub struct ServerBuilder<C: ServerContext> {
 
     // optional caller-provided values
     config: ConfigDropshot,
+    version_policy: VersionPolicy,
     tls: Option<ConfigTls>,
 }
 
@@ -1111,6 +1131,7 @@ impl<C: ServerContext> ServerBuilder<C> {
             log,
             api: DebugIgnore(api),
             config: Default::default(),
+            version_policy: VersionPolicy::Unversioned,
             tls: Default::default(),
         }
     }
@@ -1130,7 +1151,21 @@ impl<C: ServerContext> ServerBuilder<C> {
         self
     }
 
+    /// Specifies whether and how this server determines the API version to use
+    /// for incoming requests
+    ///
+    /// All the interfaces related to [`VersionPolicy`] are considered
+    /// experimental and may change in an upcoming release.
+    pub fn version_policy(mut self, version_policy: VersionPolicy) -> Self {
+        self.version_policy = version_policy;
+        self
+    }
+
     /// Start the server
+    ///
+    /// # Errors
+    ///
+    /// See [`ServerBuilder::build_starter()`].
     pub fn start(self) -> Result<HttpServer<C>, BuildError> {
         Ok(self.build_starter()?.start())
     }
@@ -1138,6 +1173,18 @@ impl<C: ServerContext> ServerBuilder<C> {
     /// Build an `HttpServerStarter` that can be used to start the server
     ///
     /// Most consumers probably want to use `start()` instead.
+    ///
+    /// # Errors
+    ///
+    /// This fails if:
+    ///
+    /// * We could not bind to the requested IP address and TCP port
+    /// * The provided `tls` configuration was not valid
+    /// * The `version_policy` is `VersionPolicy::Unversioned` and `api` (the
+    ///   `ApiDescription`) contains any endpoints that are version-restricted
+    ///   (i.e., have "versions" set to anything other than
+    ///   `ApiEndpointVersions::All)`.  Versioned routes are not supported with
+    ///   unversioned servers.
     pub fn build_starter(self) -> Result<HttpServerStarter<C>, BuildError> {
         HttpServerStarter::new_internal(
             &self.config,
@@ -1145,6 +1192,7 @@ impl<C: ServerContext> ServerBuilder<C> {
             self.private,
             &self.log,
             self.tls,
+            self.version_policy,
         )
     }
 }

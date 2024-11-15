@@ -63,6 +63,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub extension_mode: ExtensionMode,
     pub visible: bool,
     pub deprecated: bool,
+    pub versions: ApiEndpointVersions,
 }
 
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
@@ -72,6 +73,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
         method: Method,
         content_type: &'a str,
         path: &'a str,
+        versions: ApiEndpointVersions,
     ) -> Self
     where
         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
@@ -98,6 +100,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
+            versions,
         }
     }
 
@@ -146,7 +149,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// type parameters.
     ///
     /// ```rust
-    /// use dropshot::{ApiDescription, ApiEndpoint, HttpError, HttpResponseOk, Query, StubContext};
+    /// use dropshot::{ApiDescription, ApiEndpoint, ApiEndpointVersions, HttpError, HttpResponseOk, Query, StubContext};
     /// use schemars::JsonSchema;
     /// use serde::Deserialize;
     ///
@@ -167,6 +170,7 @@ impl<'a> ApiEndpoint<StubContext> {
     ///     http::Method::GET,
     ///     "application/json",
     ///     "/value",
+    ///     ApiEndpointVersions::All,
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
@@ -175,6 +179,7 @@ impl<'a> ApiEndpoint<StubContext> {
         method: Method,
         content_type: &'a str,
         path: &'a str,
+        versions: ApiEndpointVersions,
     ) -> Self
     where
         FuncParams: RequestExtractor + 'static,
@@ -201,6 +206,7 @@ impl<'a> ApiEndpoint<StubContext> {
             extension_mode: func_parameters.extension_mode,
             visible: true,
             deprecated: false,
+            versions,
         }
     }
 }
@@ -362,9 +368,9 @@ impl std::fmt::Debug for ApiSchemaGenerator {
     }
 }
 
-/// An ApiDescription represents the endpoints and handler functions in your API.
-/// Other metadata could also be provided here.  This object can be used to
-/// generate an OpenAPI spec or to run an HTTP server implementing the API.
+/// An ApiDescription represents the endpoints and handler functions in your
+/// API.  Other metadata could also be provided here.  This object can be used
+/// to generate an OpenAPI spec or to run an HTTP server implementing the API.
 pub struct ApiDescription<Context: ServerContext> {
     /// In practice, all the information we need is encoded in the router.
     router: HttpRouter<Context>,
@@ -603,32 +609,36 @@ impl<Context: ServerContext> ApiDescription<Context> {
     /// [`OpenApiDefinition`] which can be used to specify the contents of the
     /// definition and select an output format.
     ///
-    /// The arguments to this function will be used for the mandatory `title` and
-    /// `version` properties that the `Info` object in an OpenAPI definition must
-    /// contain.
-    pub fn openapi<S1, S2>(
+    /// The arguments to this function will be used for the mandatory `title`
+    /// and `version` properties that the `Info` object in an OpenAPI definition
+    /// must contain.
+    pub fn openapi<S>(
         &self,
-        title: S1,
-        version: S2,
+        title: S,
+        version: semver::Version,
     ) -> OpenApiDefinition<Context>
     where
-        S1: AsRef<str>,
-        S2: AsRef<str>,
+        S: AsRef<str>,
     {
-        OpenApiDefinition::new(self, title.as_ref(), version.as_ref())
+        OpenApiDefinition::new(self, title.as_ref(), version)
     }
 
     /// Internal routine for constructing the OpenAPI definition describing this
     /// API in its JSON form.
-    fn gen_openapi(&self, info: openapiv3::Info) -> openapiv3::OpenAPI {
+    fn gen_openapi(
+        &self,
+        info: openapiv3::Info,
+        version: &semver::Version,
+    ) -> openapiv3::OpenAPI {
         let mut openapi = openapiv3::OpenAPI::default();
 
         openapi.openapi = "3.0.3".to_string();
         openapi.info = info;
 
         // Gather up the ad hoc tags from endpoints
-        let endpoint_tags = (&self.router)
-            .into_iter()
+        let endpoint_tags = self
+            .router
+            .endpoints(Some(version))
             .flat_map(|(_, _, endpoint)| {
                 endpoint
                     .tags
@@ -668,7 +678,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let mut definitions =
             indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
-        for (path, method, endpoint) in &self.router {
+        for (path, method, endpoint) in self.router.endpoints(Some(version)) {
             if !endpoint.visible {
                 continue;
             }
@@ -1067,6 +1077,196 @@ impl fmt::Display for ApiDescriptionRegisterError {
 
 impl std::error::Error for ApiDescriptionRegisterError {}
 
+/// Describes which versions of the API this endpoint is defined for
+#[derive(Debug, Eq, PartialEq)]
+pub enum ApiEndpointVersions {
+    /// this endpoint covers all versions of the API
+    All,
+    /// this endpoint was introduced in a specific version and is present in all
+    /// subsequent versions
+    From(semver::Version),
+    /// this endpoint was introduced in a specific version and removed in a
+    /// subsequent version
+    // We use an extra level of indirection to enforce that the versions here
+    // are provided in order.
+    FromUntil(OrderedVersionPair),
+    /// this endpoint was present in all versions up to (but not including) this
+    /// specific version
+    Until(semver::Version),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct OrderedVersionPair {
+    earliest: semver::Version,
+    until: semver::Version,
+}
+
+impl ApiEndpointVersions {
+    pub fn all() -> ApiEndpointVersions {
+        ApiEndpointVersions::All
+    }
+
+    pub fn from(v: semver::Version) -> ApiEndpointVersions {
+        ApiEndpointVersions::From(v)
+    }
+
+    pub fn until(v: semver::Version) -> ApiEndpointVersions {
+        ApiEndpointVersions::Until(v)
+    }
+
+    pub fn from_until(
+        earliest: semver::Version,
+        until: semver::Version,
+    ) -> Result<ApiEndpointVersions, &'static str> {
+        if until < earliest {
+            return Err(
+                "versions in a from-until version range must be provided \
+                 in order",
+            );
+        }
+
+        Ok(ApiEndpointVersions::FromUntil(OrderedVersionPair {
+            earliest,
+            until,
+        }))
+    }
+
+    /// Returns whether the given `version` matches this endpoint version
+    ///
+    /// Recall that `ApiEndpointVersions` essentially defines a _range_ of
+    /// API versions that an API endpoint will appear in.  This returns true if
+    /// `version` is contained in that range.  This is used to determine if an
+    /// endpoint satisfies the requirements for an incoming request.
+    ///
+    /// If `version` is `None`, that means that the request doesn't care what
+    /// version it's getting.  `matches()` always returns true in that case.
+    pub(crate) fn matches(&self, version: Option<&semver::Version>) -> bool {
+        let Some(version) = version else {
+            // If there's no version constraint at all, then all versions match.
+            return true;
+        };
+
+        match self {
+            ApiEndpointVersions::All => true,
+            ApiEndpointVersions::From(earliest) => version >= earliest,
+            ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                earliest,
+                until,
+            }) => {
+                version >= earliest
+                    && (version < until
+                        || (version == until && earliest == until))
+            }
+            ApiEndpointVersions::Until(until) => version < until,
+        }
+    }
+
+    /// Returns whether one version range overlaps with another
+    ///
+    /// This is used to disallow registering multiple API endpoints where, if
+    /// given a particular version, it would be ambiguous which endpoint to use.
+    pub(crate) fn overlaps_with(&self, other: &ApiEndpointVersions) -> bool {
+        // There must be better ways to do this.  You might think:
+        //
+        // - `semver` has a `VersionReq`, which represents a range similar to
+        //   our variants.  But it does not have a way to programmatically
+        //   construct it and it does not support an "intersection" operator.
+        //
+        // - These are basically Rust ranges, right?  Yes, but Rust also doesn't
+        //   have a range "intersection" operator.
+        match (self, other) {
+            // easy degenerate cases
+            (ApiEndpointVersions::All, _) => true,
+            (_, ApiEndpointVersions::All) => true,
+            (ApiEndpointVersions::From(_), ApiEndpointVersions::From(_)) => {
+                true
+            }
+            (ApiEndpointVersions::Until(_), ApiEndpointVersions::Until(_)) => {
+                true
+            }
+
+            // more complicated cases
+            (
+                ApiEndpointVersions::From(earliest),
+                u @ ApiEndpointVersions::Until(_),
+            ) => u.matches(Some(&earliest)),
+            (
+                u @ ApiEndpointVersions::Until(_),
+                ApiEndpointVersions::From(earliest),
+            ) => u.matches(Some(&earliest)),
+
+            (
+                ApiEndpointVersions::From(earliest),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: _,
+                    until,
+                }),
+            ) => earliest < until,
+            (
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: _,
+                    until,
+                }),
+                ApiEndpointVersions::From(earliest),
+            ) => earliest < until,
+
+            (
+                u @ ApiEndpointVersions::Until(_),
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest,
+                    until: _,
+                }),
+            ) => u.matches(Some(&earliest)),
+            (
+                ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest,
+                    until: _,
+                }),
+                u @ ApiEndpointVersions::Until(_),
+            ) => u.matches(Some(&earliest)),
+
+            (
+                r1 @ ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: earliest1,
+                    until: _,
+                }),
+                r2 @ ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                    earliest: earliest2,
+                    until: _,
+                }),
+            ) => r1.matches(Some(&earliest2)) || r2.matches(Some(&earliest1)),
+        }
+    }
+}
+
+impl slog::Value for ApiEndpointVersions {
+    fn serialize(
+        &self,
+        _record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut dyn slog::Serializer,
+    ) -> slog::Result {
+        match self {
+            ApiEndpointVersions::All => serializer.emit_str(key, "all"),
+            ApiEndpointVersions::From(from) => serializer.emit_arguments(
+                key,
+                &format_args!("all starting from {}", from),
+            ),
+            ApiEndpointVersions::FromUntil(OrderedVersionPair {
+                earliest,
+                until: latest,
+            }) => serializer.emit_arguments(
+                key,
+                &format_args!("from {} to {}", earliest, latest),
+            ),
+            ApiEndpointVersions::Until(until) => serializer.emit_arguments(
+                key,
+                &format_args!("all ending with {}", until),
+            ),
+        }
+    }
+}
+
 /// Returns true iff the schema represents the void schema that matches no data.
 fn is_empty(schema: &schemars::schema::Schema) -> bool {
     if let schemars::schema::Schema::Bool(false) = schema {
@@ -1131,27 +1331,28 @@ fn is_empty(schema: &schemars::schema::Schema) -> bool {
 pub struct OpenApiDefinition<'a, Context: ServerContext> {
     api: &'a ApiDescription<Context>,
     info: openapiv3::Info,
+    version: semver::Version,
 }
 
 impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     fn new(
         api: &'a ApiDescription<Context>,
         title: &str,
-        version: &str,
+        version: semver::Version,
     ) -> OpenApiDefinition<'a, Context> {
         let info = openapiv3::Info {
             title: title.to_string(),
             version: version.to_string(),
             ..Default::default()
         };
-        OpenApiDefinition { api, info }
+        OpenApiDefinition { api, info, version }
     }
 
     /// Provide a short description of the API.  CommonMark syntax may be
     /// used for rich text representation.
     ///
-    /// This routine will set the `description` field of the `Info` object in the
-    /// OpenAPI definition.
+    /// This routine will set the `description` field of the `Info` object in
+    /// the OpenAPI definition.
     pub fn description<S: AsRef<str>>(&mut self, description: S) -> &mut Self {
         self.info.description = Some(description.as_ref().to_string());
         self
@@ -1238,7 +1439,9 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
 
     /// Build a JSON object containing the OpenAPI definition for this API.
     pub fn json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(&self.api.gen_openapi(self.info.clone()))
+        serde_json::to_value(
+            &self.api.gen_openapi(self.info.clone(), &self.version),
+        )
     }
 
     /// Build a JSON object containing the OpenAPI definition for this API and
@@ -1249,7 +1452,7 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
     ) -> serde_json::Result<()> {
         serde_json::to_writer_pretty(
             &mut *out,
-            &self.api.gen_openapi(self.info.clone()),
+            &self.api.gen_openapi(self.info.clone(), &self.version),
         )?;
         writeln!(out).map_err(serde_json::Error::custom)?;
         Ok(())
@@ -1339,6 +1542,8 @@ mod test {
     use std::str::from_utf8;
 
     use crate as dropshot; // for "endpoint" macro
+    use crate::api_description::ApiEndpointVersions;
+    use semver::Version;
 
     #[derive(Deserialize, JsonSchema)]
     #[allow(dead_code)]
@@ -1363,6 +1568,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(
@@ -1380,6 +1586,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/{a}/{aa}/{b}/{bb}",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(error.message(), "path parameters are not consumed (aa,bb)");
@@ -1394,6 +1601,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/{c}/{d}",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(
@@ -1466,6 +1674,7 @@ mod test {
             Method::GET,
             CONTENT_TYPE_JSON,
             "/{a}/{b}",
+            ApiEndpointVersions::All,
         ));
         let error = ret.unwrap_err();
         assert_eq!(error.message(), "At least one tag is required".to_string());
@@ -1485,6 +1694,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("howdy")
             .tag("pardner"),
@@ -1507,6 +1717,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("a-tag"),
         );
@@ -1536,6 +1747,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/xx/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("a-tag")
             .tag("z-tag"),
@@ -1548,6 +1760,7 @@ mod test {
                 Method::GET,
                 CONTENT_TYPE_JSON,
                 "/yy/{a}/{b}",
+                ApiEndpointVersions::All,
             )
             .tag("b-tag")
             .tag("y-tag"),
@@ -1555,7 +1768,7 @@ mod test {
         .unwrap();
 
         let mut out = Vec::new();
-        api.openapi("", "").write(&mut out).unwrap();
+        api.openapi("", Version::new(1, 0, 0)).write(&mut out).unwrap();
         let out = from_utf8(&out).unwrap();
         let spec = serde_json::from_str::<OpenAPI>(out).unwrap();
 
@@ -1586,5 +1799,279 @@ mod test {
         let config: TagConfig = serde_json::from_str(config).unwrap();
         assert_eq!(config.policy, EndpointTagPolicy::AtLeastOne);
         assert_eq!(config.tags.len(), 2);
+    }
+
+    #[test]
+    fn test_endpoint_versions_range() {
+        let error = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 2),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "versions in a from-until version range must be provided in order"
+        );
+    }
+
+    #[test]
+    fn test_endpoint_versions_matches() {
+        let v_all = ApiEndpointVersions::all();
+        let v_from = ApiEndpointVersions::from(Version::new(1, 2, 3));
+        let v_until = ApiEndpointVersions::until(Version::new(4, 5, 6));
+        let v_fromuntil = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(4, 5, 6),
+        )
+        .unwrap();
+        let v_oneversion = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 3),
+        )
+        .unwrap();
+
+        struct TestCase<'a> {
+            versions: &'a ApiEndpointVersions,
+            check: Option<Version>,
+            expected: bool,
+        }
+        impl<'a> TestCase<'a> {
+            fn new(
+                versions: &'a ApiEndpointVersions,
+                check: Version,
+                expected: bool,
+            ) -> TestCase<'a> {
+                TestCase { versions, check: Some(check), expected }
+            }
+
+            fn new_empty(versions: &'a ApiEndpointVersions) -> TestCase<'a> {
+                // Every type of ApiEndpointVersions ought to match when
+                // provided no version constraint.
+                TestCase { versions, check: None, expected: true }
+            }
+        }
+
+        let mut nerrors = 0;
+        for test_case in &[
+            TestCase::new_empty(&v_all),
+            TestCase::new_empty(&v_from),
+            TestCase::new_empty(&v_until),
+            TestCase::new_empty(&v_fromuntil),
+            TestCase::new_empty(&v_oneversion),
+            TestCase::new(&v_all, Version::new(0, 0, 0), true),
+            TestCase::new(&v_all, Version::new(1, 0, 0), true),
+            TestCase::new(&v_all, Version::new(1, 2, 3), true),
+            TestCase::new(&v_from, Version::new(0, 0, 0), false),
+            TestCase::new(&v_from, Version::new(1, 2, 2), false),
+            TestCase::new(&v_from, Version::new(1, 2, 3), true),
+            TestCase::new(&v_from, Version::new(1, 2, 4), true),
+            TestCase::new(&v_from, Version::new(5, 0, 0), true),
+            TestCase::new(&v_until, Version::new(0, 0, 0), true),
+            TestCase::new(&v_until, Version::new(4, 5, 5), true),
+            TestCase::new(&v_until, Version::new(4, 5, 6), false),
+            TestCase::new(&v_until, Version::new(4, 5, 7), false),
+            TestCase::new(&v_until, Version::new(37, 0, 0), false),
+            TestCase::new(&v_fromuntil, Version::new(0, 0, 0), false),
+            TestCase::new(&v_fromuntil, Version::new(1, 2, 2), false),
+            TestCase::new(&v_fromuntil, Version::new(1, 2, 3), true),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 5), true),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 6), false),
+            TestCase::new(&v_fromuntil, Version::new(4, 5, 7), false),
+            TestCase::new(&v_fromuntil, Version::new(12, 0, 0), false),
+            TestCase::new(&v_oneversion, Version::new(1, 2, 2), false),
+            TestCase::new(&v_oneversion, Version::new(1, 2, 3), true),
+            TestCase::new(&v_oneversion, Version::new(1, 2, 4), false),
+        ] {
+            print!(
+                "test case: {:?} matches {}: expected {}, got ",
+                test_case.versions,
+                match &test_case.check {
+                    Some(x) => format!("Some({x})"),
+                    None => String::from("None"),
+                },
+                test_case.expected
+            );
+
+            let result = test_case.versions.matches(test_case.check.as_ref());
+            if result != test_case.expected {
+                println!("{} (FAIL)", result);
+                nerrors += 1;
+            } else {
+                println!("{} (PASS)", result);
+            }
+        }
+
+        if nerrors > 0 {
+            panic!("test cases failed: {}", nerrors);
+        }
+    }
+
+    #[test]
+    fn test_endpoint_versions_overlaps() {
+        let v_all = ApiEndpointVersions::all();
+        let v_from = ApiEndpointVersions::from(Version::new(1, 2, 3));
+        let v_until = ApiEndpointVersions::until(Version::new(4, 5, 6));
+        let v_fromuntil = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(4, 5, 6),
+        )
+        .unwrap();
+        let v_oneversion = ApiEndpointVersions::from_until(
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 3),
+        )
+        .unwrap();
+
+        struct TestCase<'a> {
+            v1: &'a ApiEndpointVersions,
+            v2: &'a ApiEndpointVersions,
+            expected: bool,
+        }
+
+        impl<'a> TestCase<'a> {
+            fn new(
+                v1: &'a ApiEndpointVersions,
+                v2: &'a ApiEndpointVersions,
+                expected: bool,
+            ) -> TestCase<'a> {
+                TestCase { v1, v2, expected }
+            }
+        }
+
+        let mut nerrors = 0;
+        for test_case in &[
+            // All of our canned intervals overlap with themselves.
+            TestCase::new(&v_all, &v_all, true),
+            TestCase::new(&v_from, &v_from, true),
+            TestCase::new(&v_until, &v_until, true),
+            TestCase::new(&v_fromuntil, &v_fromuntil, true),
+            TestCase::new(&v_oneversion, &v_oneversion, true),
+            //
+            // "all" test cases.
+            //
+            // "all" overlaps with all of our other canned intervals.
+            TestCase::new(&v_all, &v_from, true),
+            TestCase::new(&v_all, &v_until, true),
+            TestCase::new(&v_all, &v_fromuntil, true),
+            TestCase::new(&v_all, &v_oneversion, true),
+            //
+            // "from" test cases.
+            //
+            // "from" + "from" always overlap
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::from(Version::new(0, 1, 2)),
+                true,
+            ),
+            // "from" + "until": overlap is exactly one point
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::until(Version::new(1, 2, 4)),
+                true,
+            ),
+            // "from" + "until": no overlap (right on the edge)
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::until(Version::new(1, 2, 3)),
+                false,
+            ),
+            // "from" + "from-until": overlap
+            TestCase::new(&v_from, &v_fromuntil, true),
+            // "from" + "from-until": no overlap
+            TestCase::new(
+                &v_from,
+                &ApiEndpointVersions::from_until(
+                    Version::new(1, 2, 0),
+                    Version::new(1, 2, 3),
+                )
+                .unwrap(),
+                false,
+            ),
+            //
+            // "until" test cases
+            //
+            // "until" + "until" always overlap.
+            TestCase::new(
+                &v_until,
+                &ApiEndpointVersions::until(Version::new(2, 0, 0)),
+                true,
+            ),
+            // "until" plus "from-until": overlap
+            TestCase::new(&v_until, &v_fromuntil, true),
+            // "until" plus "from-until": no overlap
+            TestCase::new(
+                &v_until,
+                &ApiEndpointVersions::from_until(
+                    Version::new(4, 5, 6),
+                    Version::new(6, 0, 0),
+                )
+                .unwrap(),
+                false,
+            ),
+            //
+            // "from-until" test cases
+            //
+            // We've tested everything except two "from-until" ranges.
+            // first: no overlap
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(1, 2, 3),
+                )
+                .unwrap(),
+                false,
+            ),
+            // overlap at one endpoint
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(1, 2, 4),
+                )
+                .unwrap(),
+                true,
+            ),
+            // overlap in the middle somewhere
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(2, 0, 0),
+                )
+                .unwrap(),
+                true,
+            ),
+            // one contained entirely inside the other
+            TestCase::new(
+                &v_fromuntil,
+                &ApiEndpointVersions::from_until(
+                    Version::new(0, 0, 1),
+                    Version::new(12, 0, 0),
+                )
+                .unwrap(),
+                true,
+            ),
+        ] {
+            print!(
+                "test case: {:?} overlaps {:?}: expected {}, got ",
+                test_case.v1, test_case.v2, test_case.expected
+            );
+
+            // Make sure to test both directions.  The result should be the
+            // same.
+            let result1 = test_case.v1.overlaps_with(&test_case.v2);
+            let result2 = test_case.v2.overlaps_with(&test_case.v1);
+            if result1 != test_case.expected || result2 != test_case.expected {
+                println!("{} {} (FAIL)", result1, result2);
+                nerrors += 1;
+            } else {
+                println!("{} (PASS)", result1);
+            }
+        }
+
+        if nerrors > 0 {
+            panic!("test cases failed: {}", nerrors);
+        }
     }
 }

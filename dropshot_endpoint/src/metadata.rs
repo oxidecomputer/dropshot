@@ -2,7 +2,7 @@
 
 //! Code to handle metadata associated with an endpoint.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, TokenTree};
 use quote::{format_ident, quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::ParseWrapper;
@@ -57,6 +57,7 @@ pub(crate) struct EndpointMetadata {
     pub(crate) request_body_max_bytes: Option<ParseWrapper<syn::Expr>>,
     pub(crate) content_type: Option<String>,
     pub(crate) _dropshot_crate: Option<String>,
+    pub(crate) versions: Option<ParseWrapper<VersionRange>>,
 }
 
 impl EndpointMetadata {
@@ -89,6 +90,7 @@ impl EndpointMetadata {
             request_body_max_bytes,
             content_type,
             _dropshot_crate,
+            versions,
         } = self;
 
         if kind == MacroKind::Trait && _dropshot_crate.is_some() {
@@ -147,6 +149,9 @@ impl EndpointMetadata {
                 request_body_max_bytes: request_body_max_bytes
                     .map(|x| x.into_inner()),
                 content_type,
+                versions: versions
+                    .map(|h| h.into_inner())
+                    .unwrap_or(VersionRange::All),
             })
         } else {
             unreachable!("no validation errors, but content_type is None")
@@ -164,6 +169,14 @@ pub(crate) struct ValidatedEndpointMetadata {
     deprecated: bool,
     request_body_max_bytes: Option<syn::Expr>,
     content_type: ValidContentType,
+    versions: VersionRange,
+}
+
+fn semver_parts(x: &semver::Version) -> (u64, u64, u64) {
+    // This was validated during validation.
+    assert_eq!(x.pre, semver::Prerelease::EMPTY);
+    assert_eq!(x.build, semver::BuildMetadata::EMPTY);
+    (x.major, x.minor, x.patch)
 }
 
 impl ValidatedEndpointMetadata {
@@ -180,20 +193,10 @@ impl ValidatedEndpointMetadata {
             self.operation_id.as_deref().unwrap_or(endpoint_name);
         let method_ident = format_ident!("{}", self.method.as_str());
 
-        let (span, fn_call) = match kind {
-            ApiEndpointKind::Regular(endpoint_fn) => {
-                let fn_call = quote_spanned! {endpoint_fn.span()=>
-                    #dropshot::ApiEndpoint::new(
-                        #operation_id.to_string(),
-                        #endpoint_fn,
-                        #dropshot::Method::#method_ident,
-                        #content_type,
-                        #path,
-                    )
-                };
-                (endpoint_fn.span(), fn_call)
-            }
-            ApiEndpointKind::Stub { attr, extractor_types, ret_ty } => {
+        // Apply a span to all generated code to avoid call-site attribution.
+        let span = match kind {
+            ApiEndpointKind::Regular(endpoint_fn) => endpoint_fn.span(),
+            ApiEndpointKind::Stub { attr, .. } => {
                 // We need to point at the closest possible span to the actual
                 // error, but we can't point at something nice like the
                 // function name. That's because if we do, rust-analyzer will
@@ -203,21 +206,13 @@ impl ValidatedEndpointMetadata {
                 // So we point at the `#`, which seems out-of-the-way enough
                 // for successful generation while being close by for errors.
                 // Seems pretty unobjectionable.
-                let fn_call = quote_spanned! {attr.pound_token.span()=>
-                    #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
-                        #operation_id.to_string(),
-                        #dropshot::Method::#method_ident,
-                        #content_type,
-                        #path,
-                    )
-                };
-                (attr.pound_token.span(), fn_call)
+                attr.pound_token.span()
             }
         };
 
-        // Set the span for all of the function calls below. Most of these
-        // fields are unlikely to produce compile errors or warnings, but some
-        // of them (like request_body_max_bytes) can do so.
+        // Set the span for all of the bits and pieces. Most of these fields are
+        // unlikely to produce compile errors or warnings, but some of them
+        // (like request_body_max_bytes) can do so.
         let summary = doc.summary.as_ref().map(|summary| {
             quote_spanned! {span=> .summary(#summary) }
         });
@@ -246,6 +241,64 @@ impl ValidatedEndpointMetadata {
                 quote_spanned! {span=> .request_body_max_bytes(#max_bytes) }
             });
 
+        let versions = match &self.versions {
+            VersionRange::All => {
+                quote_spanned! {span=> #dropshot::ApiEndpointVersions::All }
+            }
+            VersionRange::From(x) => {
+                let (major, minor, patch) = semver_parts(&x);
+                quote_spanned! {span=>
+                    #dropshot::ApiEndpointVersions::From(
+                        semver::Version::new(#major, #minor, #patch)
+                    )
+                }
+            }
+            VersionRange::Until(y) => {
+                let (major, minor, patch) = semver_parts(&y);
+                quote_spanned! {span=>
+                    #dropshot::ApiEndpointVersions::Until(
+                        semver::Version::new(#major, #minor, #patch)
+                    )
+                }
+            }
+            VersionRange::FromUntil(x, y) => {
+                let (xmajor, xminor, xpatch) = semver_parts(&x);
+                let (ymajor, yminor, ypatch) = semver_parts(&y);
+                quote_spanned! {span=>
+                    #dropshot::ApiEndpointVersions::from_until(
+                        semver::Version::new(#xmajor, #xminor, #xpatch),
+                        semver::Version::new(#ymajor, #yminor, #ypatch),
+                    ).unwrap()
+                }
+            }
+        };
+
+        let fn_call = match kind {
+            ApiEndpointKind::Regular(endpoint_fn) => {
+                quote_spanned! {span=>
+                    #dropshot::ApiEndpoint::new(
+                        #operation_id.to_string(),
+                        #endpoint_fn,
+                        #dropshot::Method::#method_ident,
+                        #content_type,
+                        #path,
+                        #versions,
+                    )
+                }
+            }
+            ApiEndpointKind::Stub { attr: _, extractor_types, ret_ty } => {
+                quote_spanned! {span=>
+                    #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
+                        #operation_id.to_string(),
+                        #dropshot::Method::#method_ident,
+                        #content_type,
+                        #path,
+                        #versions,
+                    )
+                }
+            }
+        };
+
         quote_spanned! {span=>
             #fn_call
             #summary
@@ -254,6 +307,88 @@ impl ValidatedEndpointMetadata {
             #visible
             #deprecated
             #request_body_max_bytes
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum VersionRange {
+    All,
+    From(semver::Version),
+    Until(semver::Version),
+    FromUntil(semver::Version, semver::Version),
+}
+
+fn parse_semver(v: &syn::LitStr) -> syn::Result<semver::Version> {
+    v.value()
+        .parse::<semver::Version>()
+        .map_err(|e| {
+            syn::Error::new_spanned(v, format!("expected semver: {}", e))
+        })
+        .and_then(|s| {
+            if s.pre == semver::Prerelease::EMPTY {
+                Ok(s)
+            } else {
+                Err(syn::Error::new_spanned(
+                    v,
+                    String::from(
+                        "semver pre-release string is not supported here",
+                    ),
+                ))
+            }
+        })
+        .and_then(|s| {
+            if s.build == semver::BuildMetadata::EMPTY {
+                Ok(s)
+            } else {
+                Err(syn::Error::new_spanned(
+                    v,
+                    String::from("semver build metadata is not supported here"),
+                ))
+            }
+        })
+}
+
+impl syn::parse::Parse for VersionRange {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::Token![..]) {
+            let _ = input.parse::<syn::Token![..]>()?;
+            if input.is_empty() {
+                Ok(VersionRange::All)
+            } else {
+                let latest = input.parse::<syn::LitStr>()?;
+                let latest_semver = parse_semver(&latest)?;
+                Ok(VersionRange::Until(latest_semver))
+            }
+        } else {
+            let earliest = input.parse::<syn::LitStr>()?;
+            let earliest_semver = parse_semver(&earliest)?;
+            let _ = input.parse::<syn::Token![..]>()?;
+            let lookahead = input.lookahead1();
+            if lookahead.peek(syn::LitStr) {
+                let latest = input.parse::<syn::LitStr>()?;
+                let latest_semver = parse_semver(&latest)?;
+                if latest_semver < earliest_semver {
+                    let span: TokenStream = [
+                        TokenTree::from(earliest.token()),
+                        TokenTree::from(latest.token()),
+                    ]
+                    .into_iter()
+                    .collect();
+                    return Err(syn::Error::new_spanned(
+                        span,
+                        format!(
+                            "\"from\" version ({}) must be earlier than \
+                            \"until\" version ({})",
+                            earliest_semver, latest_semver,
+                        ),
+                    ));
+                }
+                Ok(VersionRange::FromUntil(earliest_semver, latest_semver))
+            } else {
+                Ok(VersionRange::From(earliest_semver))
+            }
         }
     }
 }
@@ -277,6 +412,7 @@ pub(crate) struct ChannelMetadata {
     #[serde(default)]
     pub(crate) deprecated: bool,
     pub(crate) _dropshot_crate: Option<String>,
+    pub(crate) versions: Option<ParseWrapper<VersionRange>>,
 }
 
 impl ChannelMetadata {
@@ -307,6 +443,7 @@ impl ChannelMetadata {
             unpublished,
             deprecated,
             _dropshot_crate,
+            versions,
         } = self;
 
         if kind == MacroKind::Trait && _dropshot_crate.is_some() {
@@ -343,6 +480,9 @@ impl ChannelMetadata {
                 unpublished,
                 deprecated,
                 content_type: ValidContentType::ApplicationJson,
+                versions: versions
+                    .map(|h| h.into_inner())
+                    .unwrap_or(VersionRange::All),
                 // Channels are arbitrary-length and don't have a limit on
                 // request body size.
                 request_body_max_bytes: None,
