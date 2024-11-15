@@ -12,7 +12,7 @@ fn main() -> Result<(), String> {
     api.register(update_pet_with_form).unwrap();
     api.register(find_pets_by_tags).unwrap();
 
-    api.openapi("Pet Shop", "")
+    api.openapi("Pet Shop", semver::Version::new(1, 0, 0))
         .write(&mut std::io::stdout())
         .map_err(|e| e.to_string())?;
 
