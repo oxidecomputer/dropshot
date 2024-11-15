@@ -16,8 +16,7 @@ use std::sync::atomic::{AtomicU16, Ordering};
 use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
 
-pub mod common;
-use common::create_log_context;
+use crate::common::{self, create_log_context};
 
 // Bad values for "bind_address"
 

@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::io::Cursor;
 
-pub mod common;
+use crate::common;
 
 const VERSION_HEADER_NAME: &str = "dropshot-test-version";
 const HANDLER1_MSG: &str = "handler1";
