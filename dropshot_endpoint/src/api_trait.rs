@@ -1676,12 +1676,20 @@ mod tests {
                 trait MyTrait {
                     type Context;
 
-                    #[endpoint { method = GET, path = "/xyz" }]
+                    #[endpoint {
+                        method = GET,
+                        path = "/xyz",
+                        versions = "1.2.3"..
+                    }]
                     async fn handler_xyz(
                         rqctx: RequestContext<Self::Context>,
                     ) -> Result<HttpResponseOk<()>, HttpError>;
 
-                    #[channel { protocol = WEBSOCKETS, path = "/ws" }]
+                    #[channel {
+                        protocol = WEBSOCKETS,
+                        path = "/ws",
+                        versions = ..
+                    }]
                     async fn handler_ws(
                         rqctx: RequestContext<Self::Context>,
                         upgraded: WebsocketConnection,
