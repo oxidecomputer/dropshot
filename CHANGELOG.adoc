@@ -13,7 +13,18 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.13.0\...HEAD[Full list of commits]
+
+== 0.13.0 (released 2024-11-13)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...v0.13.0[Full list of commits]
+
+=== Breaking Changes
+
+* Dropshot now expects that APIs use https://semver.org/[Semver] values for their version string.  Concretely, this only means that the `version` argument to `ApiDescription::openapi` (which generates an OpenAPI document) must be a `semver::Version`.  Previously, it was `AsRef<str>`.
+* If you're invoking `ApiEndpoint::new` directly or constructing one as a literal (both of which are uncommon), you must provide a new `ApiEndpointVersions` value describing which versions this endpoint implements.  You can use `ApiEndpointVersions::All` if you don't care about versioning.
+
+=== Other notable changes
 
 * https://github.com/oxidecomputer/dropshot/pull/1122[#1122] Adds a new `ServerBuilder` as the primary way of constructing a Dropshot server.  This replaces `HttpServerStarter::new()` and `HttpServerStarter::new_with_tls()`.  These older functions still exist for compatibility.  They may be removed in an upcoming release, along with the `HttpServerStarter`.
 +
@@ -62,6 +73,10 @@ starter.start()
 ```
 +
 We'd like to remove the `HttpServerStarter` altogether, so let us know if you're still using it for some reason.
+
+* https://github.com/oxidecomputer/dropshot/pull/1115[#1115] Dropshot now includes **experimental** support for hosting multiple versions of an API at a single server and routing to the correct version based on the incoming request.  See documentation for details.  If you don't care about this, you can mostly ignore it, but see "Breaking Changes" below.
++
+By "experimental" we only mean that the API may change in upcoming releases.
 
 == 0.12.0 (released 2024-09-26)
 

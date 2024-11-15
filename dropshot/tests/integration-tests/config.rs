@@ -619,3 +619,31 @@ async fn test_config_handler_task_mode_detached() {
 
     logctx.cleanup_successful();
 }
+
+#[tokio::test]
+async fn test_unversioned_servers_with_versioned_routes() {
+    #[dropshot::endpoint {
+        method = GET,
+        path = "/handler",
+        versions = "1.0.1".."1.0.1",
+    }]
+    async fn versioned_handler(
+        _rqctx: RequestContext<i32>,
+    ) -> Result<HttpResponseOk<u64>, HttpError> {
+        Ok(HttpResponseOk(3))
+    }
+
+    let logctx =
+        create_log_context("test_unversioned_servers_with_versioned_routes");
+    let mut api = dropshot::ApiDescription::new();
+    api.register(versioned_handler).unwrap();
+    let Err(error) = ServerBuilder::new(api, 0, logctx.log.clone()).start()
+    else {
+        panic!("expected failure to create server");
+    };
+    println!("{}", error);
+    assert_eq!(
+        error.to_string(),
+        "unversioned servers cannot have endpoints with specific versions"
+    );
+}
