@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "test",
-    "version": "threeve"
+    "version": "3.5.0"
   },
   "paths": {
     "/datagoeshere": {
