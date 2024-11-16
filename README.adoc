@@ -50,8 +50,6 @@ include:
 |No
 |Specifies the maximum number of bytes allowed in a request body. Larger requests will receive a 400 error. Defaults to 1024.
 
-Can be overridden per-endpoint via the `request_body_max_bytes` parameter to `#[endpoint { ... }]`.
-
 |`tls.type`
 |`"AsFile"`
 |No
