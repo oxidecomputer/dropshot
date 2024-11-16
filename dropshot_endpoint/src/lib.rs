@@ -29,19 +29,22 @@ mod util;
 ///
 /// ```ignore
 /// #[endpoint {
-///     // Required fields
+///     // --- Required fields ---
+///     // The HTTP method for the endpoint
 ///     method = { DELETE | HEAD | GET | OPTIONS | PATCH | POST | PUT },
+///     // The path to the endpoint, along with path variables
 ///     path = "/path/name/with/{named}/{variables}",
 ///
-///     // Optional tags for the operation's description
+///     // --- Optional fields ---
+///     // Tags for the operation's description (default: empty)
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
-///     // Specifies the media type used to encode the request body
+///     // The media type used to encode the request body (default: application/json)
 ///     content_type = { "application/json" | "application/x-www-form-urlencoded" | "multipart/form-data" }
-///     // A value of `true` marks the operation as deprecated
+///     // True if the operation is deprecated (default: false)
 ///     deprecated = { true | false },
-///     // A value of `true` causes the operation to be omitted from the API description
+///     // True causes the operation to be omitted from the API description (default: false)
 ///     unpublished = { true | false },
-///     // Optional maximum request body size in bytes
+///     // Maximum request body size in bytes (default: server config default_request_body_max_bytes)
 ///     request_body_max_bytes = 1 * 1024 * 1024,
 /// }]
 /// ```
