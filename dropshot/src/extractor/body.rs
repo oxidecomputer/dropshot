@@ -154,7 +154,7 @@ where
         ApiEndpointBodyContentType::from_mime_type(&mime_type)
             .map_err(|e| HttpError::for_bad_request(None, e))?;
     let expected_content_type =
-        rqctx.endpoint_metadata.body_content_type.clone();
+        rqctx.endpoint.body_content_type.clone();
 
     use ApiEndpointBodyContentType::*;
 

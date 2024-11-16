@@ -399,10 +399,10 @@ mod tests {
                 version_policy: VersionPolicy::Unversioned,
             }),
             request: RequestInfo::new(&request, remote_addr),
-            endpoint_metadata: RequestEndpointMetadata {
+            endpoint: RequestEndpointMetadata {
+                operation_id: "".to_string(),
                 variables: Default::default(),
                 body_content_type: Default::default(),
-                operation_id: "".to_string(),
             },
             request_id: "".to_string(),
             log: log.clone(),

@@ -78,7 +78,7 @@ pub struct RequestContext<Context: ServerContext> {
     /// shared server state
     pub server: Arc<DropshotState<Context>>,
     /// Endpoint-specific information.
-    pub endpoint_metadata: RequestEndpointMetadata,
+    pub endpoint: RequestEndpointMetadata,
     /// unique id assigned to this request
     pub request_id: String,
     /// logger for this specific request
@@ -207,7 +207,7 @@ impl<Context: ServerContext> RequestContext<Context> {
 
 /// Endpoint-specific information for a request.
 ///
-/// This is part of [`RequestContext`] and [`RouterLookupResult`].
+/// This is part of [`RequestContext`].
 #[derive(Debug)]
 pub struct RequestEndpointMetadata {
     /// The operation ID for the endpoint handler method.
