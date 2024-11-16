@@ -128,11 +128,11 @@ impl Default for ConfigDropshot {
 struct DeserializedConfigDropshot {
     bind_address: SocketAddr,
     default_request_body_max_bytes: usize,
-    // Previous name for default_request_body_max_bytes. Present only to guide
-    // users to the new name.
+    // Previous name for default_request_body_max_bytes, in Dropshot < 0.14.
+    // Present only to guide users to the new name.
     #[serde(
         deserialize_with = "deserialize_invalid_request_body_max_bytes",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing
     )]
     request_body_max_bytes: Option<InvalidConfig>,
     default_handler_task_mode: HandlerTaskMode,
@@ -172,9 +172,14 @@ impl Default for DeserializedConfigDropshot {
 ///
 /// This type can never be constructed, which means that for any valid config,
 /// `Option<InvalidConfig>` is always none.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum InvalidConfig {}
 
+// We prefer having a deserialize function over `impl Deserialize for
+// InvalidConfig` for two reasons:
+//
+// 1. This returns an `Option<InvalidConfig>`, not an `InvalidConfig`.
+// 2. This way, the deserializer has a custom message associated with it.
 fn deserialize_invalid_request_body_max_bytes<'de, D>(
     deserializer: D,
 ) -> Result<Option<InvalidConfig>, D::Error>
