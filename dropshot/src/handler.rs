@@ -78,7 +78,7 @@ pub struct RequestContext<Context: ServerContext> {
     /// shared server state
     pub server: Arc<DropshotState<Context>>,
     /// Endpoint-specific information.
-    pub endpoint_metadata: RequestEndpointMetadata,
+    pub endpoint: RequestEndpointMetadata,
     /// unique id assigned to this request
     pub request_id: String,
     /// logger for this specific request
@@ -178,12 +178,12 @@ impl<Context: ServerContext> RequestContext<Context> {
     /// This is typically the same as
     /// `self.server.config.request_body_max_bytes`, but can be overridden for
     /// an individual request.
-     pub fn request_body_max_bytes(&self) -> usize {
-        self.endpoint_metadata
+    pub fn request_body_max_bytes(&self) -> usize {
+        self.endpoint
             .request_body_max_bytes
             .unwrap_or(self.server.config.default_request_body_max_bytes)
-     }
- 
+    }
+
     /// Returns the appropriate count of items to return for a paginated request
     ///
     /// This first looks at any client-requested limit and clamps it based on the
@@ -213,7 +213,7 @@ impl<Context: ServerContext> RequestContext<Context> {
 
 /// Endpoint-specific information for a request.
 ///
-/// This is part of [`RequestContext`] and [`RouterLookupResult`].
+/// This is part of [`RequestContext`].
 #[derive(Debug)]
 pub struct RequestEndpointMetadata {
     /// The operation ID for the endpoint handler method.

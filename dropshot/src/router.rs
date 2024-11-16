@@ -214,7 +214,7 @@ impl MapValue for VariableValue {
 #[derive(Debug)]
 pub struct RouterLookupResult<Context: ServerContext> {
     pub handler: Arc<dyn RouteHandler<Context>>,
-    pub metadata: RequestEndpointMetadata,
+    pub endpoint: RequestEndpointMetadata,
 }
 
 impl<Context: ServerContext> HttpRouterNode<Context> {
@@ -516,7 +516,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         ) {
             return Ok(RouterLookupResult {
                 handler: Arc::clone(&handler.handler),
-                metadata: RequestEndpointMetadata {
+                endpoint: RequestEndpointMetadata {
                     operation_id: handler.operation_id.clone(),
                     variables,
                     body_content_type: handler.body_content_type.clone(),
@@ -1227,16 +1227,16 @@ mod test {
         let result =
             router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result =
             router.lookup_route_unversioned(&Method::GET, "//".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result = router
             .lookup_route_unversioned(&Method::GET, "///".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
 
         // Now insert a handler for a different method at the root.  Verify that
         // we get both this handler and the previous one if we ask for the
@@ -1249,11 +1249,11 @@ mod test {
         let result =
             router.lookup_route_unversioned(&Method::PUT, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h2");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result =
             router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         assert!(router
             .lookup_route_unversioned(&Method::DELETE, "/".into())
             .is_err());
@@ -1272,31 +1272,31 @@ mod test {
         let result =
             router.lookup_route_unversioned(&Method::PUT, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h2");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result =
             router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result = router
             .lookup_route_unversioned(&Method::GET, "/foo".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h3");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result = router
             .lookup_route_unversioned(&Method::GET, "/foo/".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h3");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result = router
             .lookup_route_unversioned(&Method::GET, "//foo//".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h3");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         let result = router
             .lookup_route_unversioned(&Method::GET, "/foo//".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h3");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         assert!(router
             .lookup_route_unversioned(&Method::PUT, "/foo".into())
             .is_err());
@@ -1404,7 +1404,7 @@ mod test {
             .lookup_route_unversioned(&Method::GET, "/not{a}variable".into())
             .unwrap();
         assert_eq!(result.handler.label(), "h4");
-        assert!(result.metadata.variables.is_empty());
+        assert!(result.endpoint.variables.is_empty());
         assert!(router
             .lookup_route_unversioned(&Method::GET, "/not{b}variable".into())
             .is_err());
@@ -1433,11 +1433,11 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
-            result.metadata.variables.keys().collect::<Vec<&String>>(),
+            result.endpoint.variables.keys().collect::<Vec<&String>>(),
             vec!["project_id"]
         );
         assert_eq!(
-            *result.metadata.variables.get("project_id").unwrap(),
+            *result.endpoint.variables.get("project_id").unwrap(),
             VariableValue::String("p12345".to_string())
         );
         assert!(router
@@ -1451,7 +1451,7 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
-            *result.metadata.variables.get("project_id").unwrap(),
+            *result.endpoint.variables.get("project_id").unwrap(),
             VariableValue::String("p12345".to_string())
         );
         let result = router
@@ -1462,7 +1462,7 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
-            *result.metadata.variables.get("project_id").unwrap(),
+            *result.endpoint.variables.get("project_id").unwrap(),
             VariableValue::String("p12345".to_string())
         );
         // Trick question!
@@ -1474,7 +1474,7 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h5");
         assert_eq!(
-            *result.metadata.variables.get("project_id").unwrap(),
+            *result.endpoint.variables.get("project_id").unwrap(),
             VariableValue::String("{project_id}".to_string())
         );
     }
@@ -1497,19 +1497,19 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h6");
         assert_eq!(
-            result.metadata.variables.keys().collect::<Vec<&String>>(),
+            result.endpoint.variables.keys().collect::<Vec<&String>>(),
             vec!["fwrule_id", "instance_id", "project_id"]
         );
         assert_eq!(
-            *result.metadata.variables.get("project_id").unwrap(),
+            *result.endpoint.variables.get("project_id").unwrap(),
             VariableValue::String("p1".to_string())
         );
         assert_eq!(
-            *result.metadata.variables.get("instance_id").unwrap(),
+            *result.endpoint.variables.get("instance_id").unwrap(),
             VariableValue::String("i2".to_string())
         );
         assert_eq!(
-            *result.metadata.variables.get("fwrule_id").unwrap(),
+            *result.endpoint.variables.get("fwrule_id").unwrap(),
             VariableValue::String("fw3".to_string())
         );
     }
@@ -1568,7 +1568,7 @@ mod test {
             .unwrap();
 
         assert_eq!(
-            result.metadata.variables.get("path"),
+            result.endpoint.variables.get("path"),
             Some(&VariableValue::Components(vec![
                 "missiles".to_string(),
                 "launch".to_string()
@@ -1604,7 +1604,7 @@ mod test {
             .unwrap();
 
         let path =
-            from_map::<MyPath, VariableValue>(&result.metadata.variables)
+            from_map::<MyPath, VariableValue>(&result.endpoint.variables)
                 .unwrap();
 
         assert_eq!(path.t, "console");

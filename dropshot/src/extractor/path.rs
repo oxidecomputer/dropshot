@@ -44,7 +44,7 @@ where
         rqctx: &RequestContext<Context>,
     ) -> Result<Path<PathType>, HttpError> {
         let params: PathType =
-            http_extract_path_params(&rqctx.endpoint_metadata.variables)?;
+            http_extract_path_params(&rqctx.endpoint.variables)?;
         Ok(Path { inner: params })
     }
 

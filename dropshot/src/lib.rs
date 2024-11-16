@@ -707,7 +707,7 @@
 //!
 //! ```text
 //! // introduced in 1.0.0, present in all subsequent versions
-//! versions = "1.0.0"..    
+//! versions = "1.0.0"..
 //!
 //! // removed in 2.0.0, present in all previous versions
 //! // (not present in 2.0.0 itself)
