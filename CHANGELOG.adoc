@@ -21,6 +21,11 @@ https://github.com/oxidecomputer/dropshot/compare/v0.13.0\...HEAD[Full list of c
 +
 Defining the old config option will produce an error, guiding you to perform the rename.
 
+* Within `RequestContext`, endpoint-specific metadata has been moved to an `endpoint` field:
+** `rqctx.operation_id` is now `rqctx.endpoint.operation_id`.
+** `rqctx.path_variables` is now `rqctx.endpoint.variables`.
+** `rqctx.body_content_type` is now `rqctx.endpoint.body_content_type`.
+
 == 0.13.0 (released 2024-11-13)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...v0.13.0[Full list of commits]

@@ -43,7 +43,8 @@ where
     async fn from_request<Context: ServerContext>(
         rqctx: &RequestContext<Context>,
     ) -> Result<Path<PathType>, HttpError> {
-        let params: PathType = http_extract_path_params(&rqctx.path_variables)?;
+        let params: PathType =
+            http_extract_path_params(&rqctx.endpoint.variables)?;
         Ok(Path { inner: params })
     }
 

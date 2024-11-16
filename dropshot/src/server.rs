@@ -910,9 +910,7 @@ async fn http_request_handle<C: ServerContext>(
     let rqctx = RequestContext {
         server: Arc::clone(&server),
         request: RequestInfo::new(&request, remote_addr),
-        path_variables: lookup_result.variables,
-        body_content_type: lookup_result.body_content_type,
-        operation_id: lookup_result.operation_id,
+        endpoint: lookup_result.endpoint,
         request_id: request_id.to_string(),
         log: request_log,
     };

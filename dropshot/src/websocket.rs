@@ -353,8 +353,8 @@ mod tests {
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
-        ExclusiveExtractor, HttpError, RequestContext, RequestInfo,
-        VersionPolicy, WebsocketUpgrade,
+        ExclusiveExtractor, HttpError, RequestContext, RequestEndpointMetadata,
+        RequestInfo, VersionPolicy, WebsocketUpgrade,
     };
     use debug_ignore::DebugIgnore;
     use http::Request;
@@ -399,9 +399,11 @@ mod tests {
                 version_policy: VersionPolicy::Unversioned,
             }),
             request: RequestInfo::new(&request, remote_addr),
-            path_variables: Default::default(),
-            body_content_type: Default::default(),
-            operation_id: "".to_string(),
+            endpoint: RequestEndpointMetadata {
+                operation_id: "".to_string(),
+                variables: Default::default(),
+                body_content_type: Default::default(),
+            },
             request_id: "".to_string(),
             log: log.clone(),
         };
