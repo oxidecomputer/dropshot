@@ -176,6 +176,11 @@ impl<Context: ServerContext> RequestContext<Context> {
         &self.server.private
     }
 
+    /// Returns the maximum request body size.
+    pub fn request_body_max_bytes(&self) -> usize {
+        self.server.config.default_request_body_max_bytes
+    }
+
     /// Returns the appropriate count of items to return for a paginated request
     ///
     /// This first looks at any client-requested limit and clamps it based on the
