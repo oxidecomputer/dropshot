@@ -670,7 +670,7 @@ where
 
     fn response_metadata() -> ApiEndpointResponse {
         ApiEndpointResponse {
-            error: Some(ApiEndpointErrorResponse::dropshot_http_error()),
+            error: None, // TODO
             ..T::response_metadata()
         }
     }
