@@ -748,7 +748,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
             disambiguated_name: String,
         }
         let mut errors = indexmap::IndexMap::<TypeIdentity, ErrorSchema>::new();
-        let mut error_responses = HashSet::<String>::new();
+        let mut error_responses =
+            HashMap::<String, schemars::schema::Schema>::new();
 
         fn error_schema<'a>(
             error_names: &mut HashMap<String, HashSet<TypeIdentity>>,
@@ -1102,17 +1103,18 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 );
 
                 let err_ref = if let Some(ref error) = endpoint.response.error {
-                    let err_name = error_schema(
-                        &mut error_names,
-                        &mut errors,
-                        &mut definitions,
-                        error,
-                        &mut generator,
-                    );
-                    error_responses.insert(err_name.clone());
+                    let name = match error.schema {
+                        ApiSchemaGenerator::Gen { ref name, ref schema } => {
+                            error_responses
+                                .insert(name(), schema(&mut generator));
+                            name()
+                        }
+                        ApiSchemaGenerator::Static { .. } => {
+                            todo!()
+                        }
+                    };
                     openapiv3::ReferenceOr::ref_(&format!(
-                        "#/components/responses/{}",
-                        err_name
+                        "#/components/responses/{name}",
                     ))
                 } else {
                     openapiv3::ReferenceOr::ref_("#/components/responses/Error")
@@ -1163,14 +1165,12 @@ impl<Context: ServerContext> ApiDescription<Context> {
             }),
         );
 
-        for name in error_responses {
+        for (name, schema) in error_responses {
             let mut content = indexmap::IndexMap::new();
             content.insert(
                 CONTENT_TYPE_JSON.to_string(),
                 openapiv3::MediaType {
-                    schema: Some(openapiv3::ReferenceOr::ref_(&format!(
-                        "#/components/schemas/{name}"
-                    ))),
+                    schema: Some(j2oas_schema(Some(&name), &schema)),
                     ..Default::default()
                 },
             );
@@ -1197,13 +1197,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
             if !schemas.contains_key(&key) {
                 schemas.insert(key, j2oas_schema(None, &schema));
             }
-        });
-
-        errors.into_iter().for_each(|(_, error)| {
-            schemas.insert(
-                error.disambiguated_name.clone(),
-                j2oas_schema(None, &error.schema),
-            );
         });
 
         openapi
