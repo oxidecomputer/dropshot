@@ -26,6 +26,26 @@ Defining the old config option will produce an error, guiding you to perform the
 ** `rqctx.path_variables` is now `rqctx.endpoint.variables`.
 ** `rqctx.body_content_type` is now `rqctx.endpoint.body_content_type`.
 
+=== Other notable changes
+
+* Dropshot now supports per-endpoint size limits, via the `request_body_max_bytes` parameter to `#[endpoint]`. For example, to set a limit of 1 MiB on an endpoint:
++
+```rust
+#[endpoint {
+    method = POST,
+    path = "/upload-bundle",
+    request_body_max_bytes = 1 * 1024 * 1024,
+}]
+async fn upload_bundle(
+    rqctx: RequestContext<MyContext>,  // or RequestContext<Self::Context> with API traits
+    body: UntypedBody,
+) -> /* ... */ {
+    // ...
+}
+```
++
+If not specified, the limit defaults to the server configuration's `default_request_body_max_bytes`.
+
 == 0.13.0 (released 2024-11-13)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...v0.13.0[Full list of commits]

@@ -1,0 +1,5 @@
+error: endpoint `bad_channel` has invalid attributes: extraneous member `request_body_max_bytes`
+  --> tests/fail/bad_trait_channel28.rs:18:9
+   |
+18 |         request_body_max_bytes = 1024,
+   |         ^^^^^^^^^^^^^^^^^^^^^^

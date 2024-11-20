@@ -21,27 +21,67 @@ mod syn_parsing;
 mod test_util;
 mod util;
 
-/// This attribute transforms a handler function into a Dropshot endpoint
+/// Transforms a handler function into a Dropshot endpoint
 /// suitable to be used as a parameter to
 /// [`ApiDescription::register()`](../dropshot/struct.ApiDescription.html#method.register).
-/// It encodes information relevant to the operation of an API endpoint beyond
-/// what is expressed by the parameter and return types of a handler function.
+///
+/// The arguments to this macro encode information relevant to the operation of
+/// an API endpoint beyond what is expressed by the parameter and return types
+/// of a handler function.
+///
+/// ## Arguments
+///
+/// The `#[dropshot::endpoint]` macro accepts the following arguments:
+///
+/// * `method`: The [HTTP request method] (HTTP verb) for the endpoint. Can be
+///   one of `DELETE`, `HEAD`, `GET`, `OPTIONS`, `PATCH`, `POST`, or `PUT`.
+///   Required.
+/// * `path`: The path to the endpoint, along with path variables. Path
+///   variables are enclosed in curly braces. For example, `path =
+///   "/widget/{id}"`. Required.
+/// * `tags`: An array of [OpenAPI tags] for the operation. Optional, defaults
+///   to an empty list.
+/// * `content_type`: The media type used to encode the request body. Can be one
+///   of `application/json`, `application/x-www-form-urlencoded`, or
+///   `multipart/form-data`. Optional, defaults to `application/json`.
+/// * `deprecated`: A boolean indicating whether the operation is marked
+///   deprecated in the OpenAPI document. Optional, defaults to false.
+/// * `unpublished`: A boolean indicating whether the operation is omitted from
+///   the OpenAPI document. Optional, defaults to false.
+/// * `request_body_max_bytes`: The maximum size of the request body in bytes.
+///   Accepts literals as well as constants of type `usize`. Optional, defaults
+///   to the server configuration's `default_request_body_max_bytes`.
+///
+/// [HTTP request method]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
+/// [OpenAPI tags]: https://swagger.io/docs/specification/v3_0/grouping-operations-with-tags/
+///
+/// ### Example: configuring an endpoint
 ///
 /// ```ignore
+/// const LARGE_REQUEST_BODY_MAX_BYTES: usize = 1 * 1024 * 1024;
+///
 /// #[endpoint {
-///     // Required fields
+///     // --- Required fields ---
+///     // The HTTP method for the endpoint
 ///     method = { DELETE | HEAD | GET | OPTIONS | PATCH | POST | PUT },
+///     // The path to the endpoint, along with path variables
 ///     path = "/path/name/with/{named}/{variables}",
 ///
-///     // Optional tags for the operation's description
+///     // --- Optional fields ---
+///     // Tags for the operation's description
 ///     tags = [ "all", "your", "OpenAPI", "tags" ],
-///     // Specifies the media type used to encode the request body
+///     // The media type used to encode the request body
 ///     content_type = { "application/json" | "application/x-www-form-urlencoded" | "multipart/form-data" }
-///     // A value of `true` marks the operation as deprecated
+///     // True if the operation is deprecated
 ///     deprecated = { true | false },
-///     // A value of `true` causes the operation to be omitted from the API description
+///     // True causes the operation to be omitted from the API description
 ///     unpublished = { true | false },
+///     // Maximum request body size in bytes
+///     request_body_max_bytes = LARGE_REQUEST_BODY_MAX_BYTES,
 /// }]
+/// async fn my_endpoint(/* ... */) -> Result<HttpResponseOk, HttpError> {
+///     // ...
+/// }
 /// ```
 ///
 /// See the dropshot documentation for
