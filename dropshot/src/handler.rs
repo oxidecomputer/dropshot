@@ -222,8 +222,8 @@ impl<T: 'static + ServerContext> RequestContextArgument for RequestContext<T> {
 }
 
 /// `HttpHandlerFunc` is a trait providing a single function, `handle_request()`,
-/// which takes an HTTP request and produces an HTTP response (or
-/// `HttpError`).
+/// which takes an HTTP request and produces an HTTP response (or a
+/// [`HandlerError`]).
 ///
 /// As described above, handler functions can have a number of different
 /// signatures.  They all consume a reference to the current request context.
@@ -745,6 +745,25 @@ where
 
 impl HttpResponseContent for HttpError {
     fn to_response(self, _: http::response::Builder) -> HttpContentResult {
+        // Okay, here is where we do a devious little bit of slight-of-hand.
+        // When an endpoint's handler function returns an error, we typically
+        // call `HttpResponseContent::to_response()` on it and return the error
+        // response to the server, so that the error response is then sent to
+        // the client. However, when the error type of the handler is
+        // `dropshot::HttpError`, we'd like to be able to handle this a little
+        // differently: unlike arbitrary user-defined types that implement
+        // `HttpResponseError`, `HttpError` carries both internal message and
+        // external message fields, and has its own `HttpError::into_response`,
+        // method which takes a request ID as an argument. We'd like to be able
+        // to log both messages and construct a response body including the
+        // request ID.
+        //
+        // To special-case `dropshot::HttpError`s, we do something a little bit
+        // sneaky. Converting a type implementing `HttpResponseContent` into a
+        // response body is fallible; normally intended for stuff like
+        // serialization errors. Rather than serializing the error, we can just
+        // return it here, so that it's handled as a `HttpError` instead of an
+        // opaque response body.
         Err(self)
     }
 
