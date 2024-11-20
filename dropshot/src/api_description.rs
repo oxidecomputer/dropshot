@@ -15,7 +15,6 @@ use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
 use crate::HttpError;
-use crate::HttpErrorResponseBody;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
 use crate::CONTENT_TYPE_OCTET_STREAM;
@@ -328,38 +327,10 @@ pub struct ApiEndpointResponse {
     pub description: Option<String>,
 }
 
+/// Metadata for an API endpoint's error response type.
 #[derive(Debug)]
 pub struct ApiEndpointErrorResponse {
-    pub(crate) identity: TypeIdentity,
     pub(crate) schema: ApiSchemaGenerator,
-    pub(crate) status: Option<StatusCode>,
-}
-
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub(crate) struct TypeIdentity {
-    rust_name: &'static str,
-    type_id: std::any::TypeId,
-}
-
-impl ApiEndpointErrorResponse {
-    pub(crate) fn for_error<
-        E: crate::handler::HttpResponseContent + 'static,
-    >() -> Option<Self> {
-        Some(ApiEndpointErrorResponse {
-            schema: <E>::content_metadata()?,
-            identity: TypeIdentity::for_type::<E>(),
-            status: None,
-        })
-    }
-}
-
-impl TypeIdentity {
-    fn for_type<T: 'static>() -> Self {
-        TypeIdentity {
-            rust_name: std::any::type_name::<T>(),
-            type_id: std::any::TypeId::of::<T>(),
-        }
-    }
 }
 
 /// Wrapper for both dynamically generated and pre-generated schemas.
@@ -687,155 +658,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // Sort the tags for stability
         openapi.tags.sort_by(|a, b| a.name.cmp(&b.name));
 
-        // Error return types are a bit complex.
-        //
-        // We anticipate that multiple API endpoints may return the same error
-        // type, and in that case, we would prefer for the error type to be
-        // defined once in the OpenAPI document and referenced by all endpoints
-        // that return it, so that client code generators can generate a single
-        // type that's used for all endpoints that return a given error type.
-        // However, there's a catch: the `schemars::JsonSchema` trait's `derive`
-        // macro generates the name of the Rust type as the name of the schema,
-        // *not* the fully qualified name (i.e. the type name and module path).
-        // This means that if one API endpoint returns a `foo::Error`, and
-        // another one returns a `bar::Error`, and we use the schema name
-        // according to schemars as the key for referencing the schema, both
-        // endpoints will return the same schema in the OpenAPI document, but
-        // the actual Rust types may serialize according to totally different
-        // schemas. Therefore, we must ensure that if two error return types
-        // have the same Rust type name, we instead refer to their schemas by
-        // the fully-qualified module path, rather than just the type name.
-        // However, this is ugly, so we would prefer to only do it when it's
-        // necessary to disambiguate stuff.
-        //
-        // In theory, the same issue would apply to response type names.
-        // However, we don't presently attempt to de-duplicate response types by
-        // placing them in the global "components.responses" object in the
-        // OpenAPI spec; instead, they are inlined in the spec for the
-        // individual endpoint that returns them. Thus, response types are
-        // namespaced, while error response types are not and must be
-        // disambiguated.
-        //
-        // To do this, we first gather up all the error types defined in the API
-        // in order to see if any have colliding names that must be
-        // disambiguated:
-        let mut error_names = HashMap::new();
-        for (_, _, endpoint) in &self.router {
-            if !endpoint.visible {
-                continue;
-            }
-            if let Some(ApiEndpointErrorResponse {
-                identity,
-                schema: ApiSchemaGenerator::Gen { name, .. },
-                ..
-            }) = endpoint.response.error
-            {
-                error_names
-                    .entry(name())
-                    .or_insert_with(HashSet::new)
-                    .insert(identity);
-            }
-        }
-        // Now, as we generate the OpenAPI for endpoints, we'll track the
-        // generated error type schemas, and ensure that any errors with the
-        // same Rust type name have disambiguated names in the OpenAPI document.
-        // This is done by constructing a map of Rust type identity (fully
-        // qualified  name + type ID) to the generated schema and a
-        // disambiguated name for the schema.
-        struct ErrorSchema {
-            schema: schemars::schema::Schema,
-            schema_name: String,
-            disambiguated_name: String,
-        }
-        let mut errors = indexmap::IndexMap::<TypeIdentity, ErrorSchema>::new();
-        let mut error_responses =
-            HashMap::<String, schemars::schema::Schema>::new();
-
-        fn error_schema<'a>(
-            error_names: &mut HashMap<String, HashSet<TypeIdentity>>,
-            errors: &'a mut indexmap::IndexMap<TypeIdentity, ErrorSchema>,
-            definitions: &mut indexmap::IndexMap<
-                String,
-                schemars::schema::Schema,
-            >,
-            &ApiEndpointErrorResponse { identity, ref schema, ..}: &ApiEndpointErrorResponse,
-            generator: &mut schemars::r#gen::SchemaGenerator,
-        ) -> &'a String {
-            let (name, schema_fn) = match schema {
-                ApiSchemaGenerator::Gen { name, schema } => (name(), schema),
-                ApiSchemaGenerator::Static { schema, dependencies } => todo!(),
-            };
-            let err = errors.entry(identity).or_insert_with(|| {
-                // How many error types in the API share a name with this error?
-                let same_name_errors = error_names.get(&name).expect(
-                    "we should have collected all error types before \
-                             trying to generate endpoints!",
-                );
-                debug_assert!(
-                    !same_name_errors.is_empty(),
-                    "if an error schema name is in the map of errors, there
-                         should be at least one error schema with that name",
-                );
-                let disambiguated_name = if same_name_errors.len() == 1 {
-                    // If there's only one error type with this name, just
-                    // use the schema's name.
-                    name.clone()
-                } else {
-                    // If there are multiple error types with this name, we
-                    // need to disambiguate them by using the fully qualified
-                    // name.
-                    use std::fmt::Write;
-                    let mut name =
-                        String::with_capacity(identity.rust_name.len());
-                    let mut current_prefix =
-                        String::with_capacity(identity.rust_name.len());
-                    for part in identity.rust_name.split_inclusive("::") {
-                        current_prefix.push_str(part);
-                        // Skip up to the prefix shared by all errors with
-                        // the ambiguous name (e.g. the crate name, or
-                        // `crate::module_that_defines_all_error_types`).
-                        if same_name_errors.iter().all(|other| {
-                            other.rust_name.starts_with(&current_prefix)
-                        }) {
-                            continue;
-                        }
-
-                        // Convert the whole name to UpperCamelCase,
-                        // skipping underscores.
-                        let mut capitalize_next = true;
-                        for c in part
-                            .trim_start_matches("::")
-                            .trim_end_matches("::")
-                            .chars()
-                        {
-                            if c == '_' {
-                                capitalize_next = true;
-                            } else if capitalize_next {
-                                // `write!` (rather than `push_char`) is
-                                // necesssary here, as `to_uppercase()`
-                                // returns an iterator of chars for unicode
-                                // reasons.
-                                write!(&mut name, "{}", c.to_uppercase())
-                                    .expect(
-                                        "writing to a string should never fail",
-                                    );
-                                capitalize_next = false;
-                            } else {
-                                name.push(c)
-                            }
-                        }
-                    }
-                    name
-                };
-                ErrorSchema {
-                    schema: schema_fn(generator),
-                    schema_name: name.clone(),
-                    disambiguated_name,
-                }
-            });
-            &err.disambiguated_name
-        }
-
         let settings = schemars::gen::SchemaSettings::openapi3();
         let mut generator = schemars::gen::SchemaGenerator::new(settings);
         let mut definitions =
@@ -1096,26 +918,42 @@ impl<Context: ServerContext> ApiDescription<Context> {
             // If the endpoint defines an error type, emit that for
             // the 4xx and 5xx responses.
             if let Some(ref error) = endpoint.response.error {
-                let name = match error.schema {
+                let error_schema = match error.schema {
                     ApiSchemaGenerator::Gen { ref name, ref schema } => {
-                        error_responses.insert(name(), schema(&mut generator));
-                        name()
+                        j2oas_schema(Some(&name()), &schema(&mut generator))
                     }
-                    ApiSchemaGenerator::Static { .. } => {
-                        todo!()
+                    ApiSchemaGenerator::Static {
+                        ref schema,
+                        ref dependencies,
+                    } => {
+                        definitions.extend(dependencies.clone());
+                        j2oas_schema(None, &schema)
                     }
                 };
-                let err_ref = openapiv3::ReferenceOr::ref_(&format!(
-                    "#/components/responses/{name}",
-                ));
-                operation
-                    .responses
-                    .responses
-                    .insert(openapiv3::StatusCode::Range(4), err_ref.clone());
-                operation
-                    .responses
-                    .responses
-                    .insert(openapiv3::StatusCode::Range(5), err_ref);
+                let mut content = indexmap::IndexMap::new();
+                content.insert(
+                    CONTENT_TYPE_JSON.to_string(),
+                    openapiv3::MediaType {
+                        schema: Some(error_schema),
+                        ..Default::default()
+                    },
+                );
+                operation.responses.responses.insert(
+                    openapiv3::StatusCode::Range(4),
+                    openapiv3::ReferenceOr::Item(openapiv3::Response {
+                        // description: name,
+                        content: content.clone(),
+                        ..Default::default()
+                    }),
+                );
+                operation.responses.responses.insert(
+                    openapiv3::StatusCode::Range(5),
+                    openapiv3::ReferenceOr::Item(openapiv3::Response {
+                        // description: name,
+                        content: content.clone(),
+                        ..Default::default()
+                    }),
+                );
             }
 
             if let Some(code) = &endpoint.response.success {
@@ -1139,49 +977,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
         let components = &mut openapi
             .components
             .get_or_insert_with(openapiv3::Components::default);
-
-        // All endpoints share an error response
-        let responses = &mut components.responses;
-        let mut content = indexmap::IndexMap::new();
-        content.insert(
-            CONTENT_TYPE_JSON.to_string(),
-            openapiv3::MediaType {
-                schema: Some(j2oas_schema(
-                    None,
-                    &generator.subschema_for::<HttpErrorResponseBody>(),
-                )),
-                ..Default::default()
-            },
-        );
-
-        responses.insert(
-            "Error".to_string(),
-            openapiv3::ReferenceOr::Item(openapiv3::Response {
-                description: "Error".to_string(),
-                content,
-                ..Default::default()
-            }),
-        );
-
-        for (name, schema) in error_responses {
-            let mut content = indexmap::IndexMap::new();
-            content.insert(
-                CONTENT_TYPE_JSON.to_string(),
-                openapiv3::MediaType {
-                    schema: Some(j2oas_schema(Some(&name), &schema)),
-                    ..Default::default()
-                },
-            );
-
-            responses.insert(
-                name.clone(),
-                openapiv3::ReferenceOr::Item(openapiv3::Response {
-                    description: name,
-                    content,
-                    ..Default::default()
-                }),
-            );
-        }
 
         // Add the schemas for which we generated references.
         let schemas = &mut components.schemas;
@@ -1523,50 +1318,6 @@ pub enum ExtensionMode {
     None,
     Paginated(serde_json::Value),
     Websocket,
-}
-
-/// Generates a schema for a `Result<T, E>` of the given success and error
-/// schemas.
-///
-/// This generates a schema similar to the one produced by `Result`'s
-/// `JsonSchema` implementation here:
-/// https://docs.rs/schemars/latest/src/schemars/json_schema_impls/core.rs.html#72-104
-fn gen_result_schema(
-    r#gen: &mut schemars::gen::SchemaGenerator,
-    ok_schema: ApiSchemaGenerator,
-    err_schema: ApiSchemaGenerator,
-) -> schemars::schema::Schema {
-    use schemars::schema::InstanceType;
-    use schemars::schema::SchemaObject;
-    let ok_value_schema = match ok_schema {
-        ApiSchemaGenerator::Gen { schema, .. } => schema(r#gen),
-        ApiSchemaGenerator::Static { schema, .. } => *schema,
-    };
-    let err_value_schema = match err_schema {
-        ApiSchemaGenerator::Gen { schema, .. } => schema(r#gen),
-        ApiSchemaGenerator::Static { schema, .. } => *schema,
-    };
-
-    let mut ok_schema = SchemaObject {
-        instance_type: Some(InstanceType::Object.into()),
-        ..Default::default()
-    };
-    let obj = ok_schema.object();
-    obj.required.insert("Ok".to_owned());
-    obj.properties.insert("Ok".to_owned(), ok_value_schema);
-
-    let mut err_schema = SchemaObject {
-        instance_type: Some(InstanceType::Object.into()),
-        ..Default::default()
-    };
-    let obj = err_schema.object();
-    obj.required.insert("Err".to_owned());
-    obj.properties.insert("Err".to_owned(), err_value_schema);
-
-    let mut schema = SchemaObject::default();
-    schema.subschemas().one_of =
-        Some(vec![ok_schema.into(), err_schema.into()]);
-    schema.into()
 }
 
 #[cfg(test)]

@@ -638,10 +638,9 @@ where
     }
 
     fn response_metadata() -> ApiEndpointResponse {
-        ApiEndpointResponse {
-            error: ApiEndpointErrorResponse::for_error::<E>(),
-            ..T::response_metadata()
-        }
+        let error = E::content_metadata()
+            .map(|schema| ApiEndpointErrorResponse { schema });
+        ApiEndpointResponse { error, ..T::response_metadata() }
     }
 
     fn status_code(&self) -> StatusCode {
