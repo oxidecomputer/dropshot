@@ -28,20 +28,45 @@
 //!       `std::io::Error` and Hyper returning `hyper::Error`, for examples.
 //! * We'd like to take advantage of Rust's built-in error handling control flow
 //!   tools, like Results and the '?' operator.
+//! * API handlers should be able to return user-defined error types, provided
+//!   that those types can be serialized as response bodies, and user-defined
+//!   error types should be part of a generated OpenAPI document when they have
+//!   a known `JsonSchema`.
 //!
 //! Dropshot itself is concerned only with HTTP errors.  We define `HttpError`,
 //! which provides a status code, error code (via an Enum), external message (for
 //! sending in the response), optional metadata, and an internal message (for the
 //! log file or other instrumentation).  The HTTP layers of the request-handling
-//! stack may use this struct directly.  **The set of possible error codes here
-//! is part of a service's OpenAPI contract, as is the schema for any metadata.**
+//! stack may use this struct directly.  Furthermore, we also define the
+//! `HttpResponseError` trait (in `handler.rs`).  This trait provides an
+//! interface for error types to indicate how they may be converted into an HTTP
+//! response body.  In particular, such types must be capable of providing a
+//! status code for the response, and that status code must be a 4xx or 5xx
+//! status. **The set of possible error codes here is part of a service's
+//! OpenAPI contract, as is the schema for any metadata.**
 //! By the time an error bubbles up to the top of the request handling stack, it
-//! must be an HttpError.
+//! must be a type which implements `HttpResponseError`, either via an
+//! implementation for a user-defined type, or by converting it into a Dropshot
+//! `HttpError`.
+//!
+//! Because we generate separate error responses in the OpenAPI document for an
+//! endpoint function's error types, the code that produces HTTP responses for
+//! those errors may only produce a response with a 4xx or 5xx status code.
+//! Therefore, we define the `ErrorStatusCode` and `ClientErrorStatusCode` types
+//! in this module, which represent refinements of the `http::StatusCode` type.
+//! While `http::StatusCode` can represent any status code, `ErrorStatusCode`
+//! is validated upon construction to represent only 4xx and 5xx status codes,
+//! and `ClientErrorStatusCode` is validated to only be a 4xx.  These types may
+//! be constructed from any status code at runtime, failing if the status code
+//! is not in the respective error status code ranges; alternatively, constants
+//! are provided for well-known error status codes, so that users may reference
+//! them by name without requiring fallible runtime valdiation.
 //!
 //! For the HTTP-agnostic layers of an API server (i.e., consumers of Dropshot),
 //! we recommend a separate enum to represent their errors in an HTTP-agnostic
 //! way.  Consumers can provide a `From` implementation that converts these
-//! errors into HttpErrors.
+//! errors into `HttpError`s, or implement the [`HttpResponseError`] trait to
+//! provide their own mechanism
 
 use hyper::Error as HyperError;
 use schemars::JsonSchema;
