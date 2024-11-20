@@ -812,7 +812,6 @@ pub use handler::http_response_found;
 pub use handler::http_response_see_other;
 pub use handler::http_response_temporary_redirect;
 pub use handler::FreeformBody;
-pub use handler::HandlerError;
 pub use handler::HttpCodedResponse;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;

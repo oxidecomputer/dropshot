@@ -51,7 +51,6 @@ use crate::schema_util::make_subschema_for;
 use crate::schema_util::schema2struct;
 use crate::schema_util::ReferenceVisitor;
 use crate::to_map::to_map;
-use crate::HttpErrorResponseBody;
 
 use async_trait::async_trait;
 use http::HeaderMap;
@@ -252,57 +251,61 @@ where
     ) -> Result<Response<Body>, HandlerError>;
 }
 
-pub struct HandlerError(ErrorInner);
-
-impl HandlerError {
-    pub(crate) fn status_code(&self) -> StatusCode {
-        match self.0 {
-            ErrorInner::Handler { ref rsp, .. } => rsp.status(),
-            ErrorInner::Dropshot(ref e) => e.status_code.as_status(),
-        }
-    }
-
-    pub(crate) fn internal_message(&self) -> &String {
-        match self.0 {
-            ErrorInner::Handler { ref message, .. } => message,
-            ErrorInner::Dropshot(ref e) => &e.internal_message,
-        }
-    }
-
-    pub(crate) fn external_message(&self) -> Option<&String> {
-        match self.0 {
-            ErrorInner::Handler { .. } => None,
-            ErrorInner::Dropshot(ref e) => Some(&e.internal_message),
-        }
-    }
-
-    pub(crate) fn into_response(self, request_id: &str) -> Response<Body> {
-        match self.0 {
-            ErrorInner::Handler { rsp, .. } => rsp,
-            ErrorInner::Dropshot(e) => e.into_response(request_id),
-        }
-    }
-}
-
-enum ErrorInner {
+/// Errors returned by an endpoint handler function.
+///
+/// A function implementing an HTTP endpoint must return a `Result` with this
+/// error type. Typically, user code will only interact with this type via its
+/// `From` implementation, which allows it to be constructed from any value
+/// implementing the [`HttpResponseError`] trait. This type is largely an
+/// implementation detail, which is necessary to represent errors which may be
+/// errors returned by the endpoint's handler function *or* generated internally
+/// (i.e. by extractors).
+pub enum HandlerError {
     Handler { message: String, rsp: Response<Body> },
     Dropshot(HttpError),
 }
 
+impl HandlerError {
+    pub(crate) fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Handler { ref rsp, .. } => rsp.status(),
+            Self::Dropshot(ref e) => e.status_code.as_status(),
+        }
+    }
+
+    pub(crate) fn internal_message(&self) -> &String {
+        match self {
+            Self::Handler { ref message, .. } => message,
+            Self::Dropshot(ref e) => &e.internal_message,
+        }
+    }
+
+    pub(crate) fn external_message(&self) -> Option<&String> {
+        match self {
+            Self::Handler { .. } => None,
+            Self::Dropshot(ref e) => Some(&e.internal_message),
+        }
+    }
+
+    pub(crate) fn into_response(self, request_id: &str) -> Response<Body> {
+        match self {
+            Self::Handler { rsp, .. } => rsp,
+            Self::Dropshot(e) => e.into_response(request_id),
+        }
+    }
+}
+
 impl<E> From<E> for HandlerError
 where
-    E: HttpResponseContent + HttpResponseError + std::fmt::Display,
+    E: HttpResponseError,
 {
     fn from(e: E) -> Self {
         let message = e.to_string();
         let status = e.status_code();
-        Self(
-            match e.to_response(Response::builder().status(status.as_status()))
-            {
-                Ok(rsp) => ErrorInner::Handler { message, rsp },
-                Err(e) => ErrorInner::Dropshot(e),
-            },
-        )
+        match e.to_response(Response::builder().status(status.as_status())) {
+            Ok(rsp) => Self::Handler { message, rsp },
+            Err(e) => Self::Dropshot(e),
+        }
     }
 }
 
