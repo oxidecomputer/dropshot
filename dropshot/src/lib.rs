@@ -412,9 +412,17 @@
 //! we say "return type" below, we use that as shorthand for the output of the
 //! future.
 //!
-//! An endpoint function must return a type that implements `HttpResponse`.
+//! An endpoint function must return a type that implements [`HttpResponse`].
 //! Typically this should be a type that implements `HttpTypedResponse` (either
 //! one of the Dropshot-provided ones or one of your own creation).
+//!
+//! A [`Result`]`<T, E>` implements `HttpResponse` when the `Ok` type (`T`)
+//! implements `HttpResponse` and the `Err` type (`E`) implements the
+//! [`HttpResponseError`] trait, so endpoint functions may be fallible.
+//! User-defined error types may implement the [`HttpResponseError`] trait in
+//! order to define how to produce an HTTP response from that error.
+//! Alternatively, Dropshot's [`HttpError`] type implements
+//! [`HttpResponseError`] and can be used as the handler's error type.
 //!
 //! The more specific a type returned by the handler function, the more can be
 //! validated at build-time, and the more specific an OpenAPI schema can be

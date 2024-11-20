@@ -305,7 +305,27 @@ where
     }
 }
 
-pub trait HttpResponseError: HttpResponseContent + Sized + 'static {
+/// An error type which can be converted into an HTTP response.
+///
+/// If a handler function's return value is a [`Result`], the error type must
+/// implement this trait, so that a response can be generated when the handler
+/// returns an error.  In order to implement this trait, a type must:
+///
+/// 1. Implement the [`HttpResponseContent`] trait, defining the content of the
+///    error's response body.  This trait is implemented for all types that
+///   implement the [`Serialize`] and [`JsonSchema`] traits.
+/// 2. Implement [`std::fmt::Display`].  This is used in order to log an internal
+///    error message when returning an error response to the client.
+/// 3. Implement this trait's [`HttpResponseError::status_code`] method, which
+///    determines the status code for the error response.  Note that this method
+///    returns an [`ErrorStatusCode`]: a refinement of the [`http::StatusCode`]
+///    type which is constrained to only 4xx and 5xx status codes.
+///
+/// Dropshot's [`HttpError`] type also implements `HttpResponseError`, so
+/// handler functions may return `Result<T, HttpError>`.
+///
+pub trait HttpResponseError: HttpResponseContent + std::fmt::Display {
+    /// Returns the status code for a response generated from this error.
     fn status_code(&self) -> ErrorStatusCode;
 }
 
@@ -631,7 +651,7 @@ impl HttpResponse for Response<Body> {
 impl<T, E> HttpResponse for Result<T, E>
 where
     T: HttpResponse,
-    E: HttpResponseContent + HttpResponseError + std::fmt::Display + 'static,
+    E: HttpResponseError,
 {
     fn to_result(self) -> HttpHandlerResult {
         self?.to_result()

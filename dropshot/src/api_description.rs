@@ -941,7 +941,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 operation.responses.responses.insert(
                     openapiv3::StatusCode::Range(4),
                     openapiv3::ReferenceOr::Item(openapiv3::Response {
-                        // description: name,
+                        description: "client error".to_string(),
                         content: content.clone(),
                         ..Default::default()
                     }),
@@ -949,7 +949,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 operation.responses.responses.insert(
                     openapiv3::StatusCode::Range(5),
                     openapiv3::ReferenceOr::Item(openapiv3::Response {
-                        // description: name,
+                        description: "server error".to_string(),
                         content: content.clone(),
                         ..Default::default()
                     }),
