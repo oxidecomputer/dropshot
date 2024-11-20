@@ -288,12 +288,6 @@ enum ErrorInner {
     Dropshot(HttpError),
 }
 
-impl From<HttpError> for HandlerError {
-    fn from(e: HttpError) -> Self {
-        Self(ErrorInner::Dropshot(e))
-    }
-}
-
 impl<E> From<E> for HandlerError
 where
     E: HttpResponseContent + HttpResponseError + std::fmt::Display,
@@ -308,12 +302,6 @@ where
                 Err(e) => ErrorInner::Dropshot(e),
             },
         )
-    }
-}
-
-impl From<HttpError> for ErrorInner {
-    fn from(e: HttpError) -> Self {
-        Self::Dropshot(e)
     }
 }
 
@@ -664,29 +652,6 @@ where
     }
 }
 
-impl<T> HttpResponse for Result<T, HttpError>
-where
-    T: HttpResponse,
-{
-    fn to_result(self) -> HttpHandlerResult {
-        self?.to_result()
-    }
-
-    fn response_metadata() -> ApiEndpointResponse {
-        ApiEndpointResponse {
-            error: None, // TODO
-            ..T::response_metadata()
-        }
-    }
-
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Ok(t) => t.status_code(),
-            Err(e) => e.status_code.as_status(),
-        }
-    }
-}
-
 /// Wraps a [`Body`] so that it can be used with coded response types such as
 /// [HttpResponseOk].
 pub struct FreeformBody(pub Body);
@@ -789,6 +754,12 @@ impl HttpResponseContent for HttpError {
             name: Self::schema_name,
             schema: make_subschema_for::<Self>,
         })
+    }
+}
+
+impl HttpResponseError for HttpError {
+    fn status_code(&self) -> ErrorStatusCode {
+        self.status_code
     }
 }
 
