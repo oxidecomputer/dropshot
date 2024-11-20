@@ -51,6 +51,7 @@ use crate::schema_util::make_subschema_for;
 use crate::schema_util::schema2struct;
 use crate::schema_util::ReferenceVisitor;
 use crate::to_map::to_map;
+use crate::HttpErrorResponseBody;
 
 use async_trait::async_trait;
 use http::HeaderMap;
@@ -788,9 +789,10 @@ impl HttpResponseContent for HttpError {
     }
 
     fn content_metadata() -> Option<ApiSchemaGenerator> {
+        use crate::error::HttpErrorResponseBody;
         Some(ApiSchemaGenerator::Gen {
-            name: Self::schema_name,
-            schema: make_subschema_for::<Self>,
+            name: HttpErrorResponseBody::schema_name,
+            schema: make_subschema_for::<HttpErrorResponseBody>,
         })
     }
 }
