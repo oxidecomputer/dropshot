@@ -894,7 +894,7 @@ impl ClientErrorStatusCode {
     /// assert_eq!(ok, ClientErrorStatusCode::NOT_FOUND);
     ///
     /// // 444 is a client error (although it lacks a well known meaning)
-    /// let _ok = ClientErrorStatusCode::from_u16(555).unwrap();
+    /// let _ok = ClientErrorStatusCode::from_u16(444).unwrap();
     ///
     /// // 500 is a status code, but not an error.
     /// let err = ClientErrorStatusCode::from_u16(200);
