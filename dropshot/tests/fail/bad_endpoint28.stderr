@@ -1,0 +1,14 @@
+error[E0308]: mismatched types
+  --> tests/fail/bad_endpoint28.rs:15:30
+   |
+15 |     request_body_max_bytes = "not_a_number"
+   |                              ^^^^^^^^^^^^^^ expected `usize`, found `&str`
+16 | }]
+17 | async fn bad_endpoint(
+   |          ------------ arguments to this method are incorrect
+   |
+note: method defined here
+  --> src/api_description.rs
+   |
+   |     pub fn request_body_max_bytes(mut self, max_bytes: usize) -> Self {
+   |            ^^^^^^^^^^^^^^^^^^^^^^

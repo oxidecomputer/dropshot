@@ -174,8 +174,14 @@ impl<Context: ServerContext> RequestContext<Context> {
     }
 
     /// Returns the maximum request body size.
+    ///
+    /// This is typically the same as
+    /// `self.server.config.request_body_max_bytes`, but can be overridden on a
+    /// per-endpoint basis.
     pub fn request_body_max_bytes(&self) -> usize {
-        self.server.config.default_request_body_max_bytes
+        self.endpoint
+            .request_body_max_bytes
+            .unwrap_or(self.server.config.default_request_body_max_bytes)
     }
 
     /// Returns the appropriate count of items to return for a paginated request
@@ -218,6 +224,9 @@ pub struct RequestEndpointMetadata {
 
     /// The expected request body MIME type.
     pub body_content_type: ApiEndpointBodyContentType,
+
+    /// The maximum number of bytes allowed in the request body, if overridden.
+    pub request_body_max_bytes: Option<usize>,
 }
 
 /// Helper trait for extracting the underlying Context type from the
