@@ -176,8 +176,8 @@ impl<Context: ServerContext> RequestContext<Context> {
     /// Returns the maximum request body size.
     ///
     /// This is typically the same as
-    /// `self.server.config.request_body_max_bytes`, but can be overridden for
-    /// an individual request.
+    /// `self.server.config.request_body_max_bytes`, but can be overridden on a
+    /// per-endpoint basis.
     pub fn request_body_max_bytes(&self) -> usize {
         self.endpoint
             .request_body_max_bytes

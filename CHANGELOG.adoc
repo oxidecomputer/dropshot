@@ -43,6 +43,8 @@ async fn upload_bundle(
     // ...
 }
 ```
++
+If not specified, the limit defaults to the server configuration's `default_request_body_max_bytes`.
 
 == 0.13.0 (released 2024-11-13)
 
