@@ -4,33 +4,11 @@ const _: fn() = || {
     );
 };
 const _: fn() = || {
-    trait ResultTrait {
-        type T;
-        type E;
-    }
-    impl<TT, EE> ResultTrait for Result<TT, EE>
+    fn validate_response_type<T>()
     where
-        TT: dropshot::HttpResponse,
-    {
-        type T = TT;
-        type E = EE;
-    }
-    struct NeedHttpResponse(
-        <Result<HttpResponseUpdatedNoContent, HttpError> as ResultTrait>::T,
-    );
-    trait TypeEq {
-        type This: ?Sized;
-    }
-    impl<T: ?Sized> TypeEq for T {
-        type This = Self;
-    }
-    fn validate_result_error_type<T>()
-    where
-        T: ?Sized + TypeEq<This = dropshot::HttpError>,
+        T: dropshot::HttpResponse,
     {}
-    validate_result_error_type::<
-        <Result<HttpResponseUpdatedNoContent, HttpError> as ResultTrait>::E,
-    >();
+    validate_response_type::<Result<HttpResponseUpdatedNoContent, HttpError>>();
 };
 #[allow(non_camel_case_types, missing_docs)]
 /**API Endpoint: handler_xyz
