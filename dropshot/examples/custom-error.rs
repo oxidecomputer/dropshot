@@ -24,13 +24,32 @@ enum ThingyError {
     InvalidThingy { name: String },
 }
 
-/// Any type implementing `dropshot::HttpResponseError` and `HttpResponseContent` may be used as an error
+/// Any type implementing `dropshot::HttpResponseError` and
+/// `HttpResponseContent` may be used as an error type for a
 /// return value from an endpoint handler.
 impl HttpResponseError for ThingyError {
-    fn status_code(&self) -> http::StatusCode {
+    // Note that this method returns a `dropshot::ErrorStatusCode`, rather than
+    // an `http::StatusCode`. This type is a refinement of `http::StatusCode`
+    // that can only be constructed from status codes in 4xx (client error) or
+    // 5xx (server error) ranges.
+    fn status_code(&self) -> dropshot::ErrorStatusCode {
         match self {
-            ThingyError::NoThingies => http::StatusCode::SERVICE_UNAVAILABLE,
-            ThingyError::InvalidThingy { .. } => http::StatusCode::BAD_REQUEST,
+            ThingyError::NoThingies => {
+                // The `dropshot::ErrorStatusCode` type provides constants for
+                // all well-known 4xx and 5xx status codes, such as 503 Service
+                // Unavailable.
+                dropshot::ErrorStatusCode::SERVICE_UNAVAILABLE
+            }
+            ThingyError::InvalidThingy { .. } => {
+                // Alternatively, an `ErrorStatusCode` can be constructed from a
+                // u16, but the `ErrorStatusCode::from_u16` constructor
+                // validates that the status code is a 4xx or 5xx.
+                //
+                // This allows using extended status codes, while still
+                // validating that they are errors.
+                dropshot::ErrorStatusCode::from_u16(442)
+                    .expect("442 is a 4xx status code")
+            }
         }
     }
 }
@@ -71,6 +90,19 @@ async fn get_nothing(_rqctx: RequestContext<()>) -> HttpResponseOk<NoThingy> {
     HttpResponseOk(NoThingy {})
 }
 
+/// An example of an endpoint which returns a `Result<_, HttpError>`.
+///
+/// Note that
+#[endpoint {
+    method = GET,
+    path = "/something",
+}]
+async fn get_something(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<Thingy>, dropshot::HttpError> {
+    Ok(HttpResponseOk(Thingy { magic_number: 42 }))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), String> {
     // See dropshot/examples/basic.rs for more details on most of these pieces.
@@ -83,6 +115,7 @@ async fn main() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(get_thingy).unwrap();
     api.register(get_nothing).unwrap();
+    api.register(get_something).unwrap();
 
     api.openapi("Custom Error Example", "0.0.0")
         .write(&mut std::io::stdout())

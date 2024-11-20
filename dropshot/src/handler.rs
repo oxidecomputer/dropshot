@@ -31,6 +31,7 @@
 //! facilities don't seem that valuable right now since they largely don't affect
 //! OpenAPI document generation.
 
+use super::error::ErrorStatusCode;
 use super::error::HttpError;
 use super::extractor::RequestExtractor;
 use super::http_util::CONTENT_TYPE_JSON;
@@ -256,7 +257,7 @@ impl HandlerError {
     pub(crate) fn status_code(&self) -> StatusCode {
         match self.0 {
             ErrorInner::Handler { ref rsp, .. } => rsp.status(),
-            ErrorInner::Dropshot(ref e) => e.status_code,
+            ErrorInner::Dropshot(ref e) => e.status_code.as_status(),
         }
     }
 
@@ -300,10 +301,13 @@ where
     fn from(e: E) -> Self {
         let message = e.to_string();
         let status = e.status_code();
-        Self(match e.to_response(Response::builder().status(status)) {
-            Ok(rsp) => ErrorInner::Handler { message, rsp },
-            Err(e) => ErrorInner::Dropshot(e),
-        })
+        Self(
+            match e.to_response(Response::builder().status(status.as_status()))
+            {
+                Ok(rsp) => ErrorInner::Handler { message, rsp },
+                Err(e) => ErrorInner::Dropshot(e),
+            },
+        )
     }
 }
 
@@ -314,7 +318,7 @@ impl From<HttpError> for ErrorInner {
 }
 
 pub trait HttpResponseError: HttpResponseContent + Sized + 'static {
-    fn status_code(&self) -> StatusCode;
+    fn status_code(&self) -> ErrorStatusCode;
 }
 
 /// Defines an implementation of the `HttpHandlerFunc` trait for functions
@@ -655,7 +659,7 @@ where
     fn status_code(&self) -> StatusCode {
         match self {
             Ok(t) => t.status_code(),
-            Err(e) => e.status_code(),
+            Err(e) => e.status_code().as_status(),
         }
     }
 }
@@ -678,7 +682,7 @@ where
     fn status_code(&self) -> StatusCode {
         match self {
             Ok(t) => t.status_code(),
-            Err(e) => e.status_code,
+            Err(e) => e.status_code.as_status(),
         }
     }
 }
@@ -765,6 +769,19 @@ where
         Ok(builder
             .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
             .body(serialized.into())?)
+    }
+
+    fn content_metadata() -> Option<ApiSchemaGenerator> {
+        Some(ApiSchemaGenerator::Gen {
+            name: Self::schema_name,
+            schema: make_subschema_for::<Self>,
+        })
+    }
+}
+
+impl HttpResponseContent for HttpError {
+    fn to_response(self, _: http::response::Builder) -> HttpContentResult {
+        Err(self)
     }
 
     fn content_metadata() -> Option<ApiSchemaGenerator> {

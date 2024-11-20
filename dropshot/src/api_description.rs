@@ -336,7 +336,7 @@ pub struct ApiEndpointErrorResponse {
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-struct TypeIdentity {
+pub(crate) struct TypeIdentity {
     rust_name: &'static str,
     type_id: std::any::TypeId,
 }
@@ -758,14 +758,14 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 String,
                 schemars::schema::Schema,
             >,
-            ApiEndpointErrorResponse { identity, schema, ..}: &ApiEndpointErrorResponse,
+            &ApiEndpointErrorResponse { identity, ref schema, ..}: &ApiEndpointErrorResponse,
             generator: &mut schemars::r#gen::SchemaGenerator,
         ) -> &'a String {
             let (name, schema_fn) = match schema {
                 ApiSchemaGenerator::Gen { name, schema } => (name(), schema),
                 ApiSchemaGenerator::Static { schema, dependencies } => todo!(),
             };
-            let err = errors.entry(identity.clone()).or_insert_with(|| {
+            let err = errors.entry(identity).or_insert_with(|| {
                 // How many error types in the API share a name with this error?
                 let same_name_errors = error_names.get(&name).expect(
                     "we should have collected all error types before \
@@ -1093,32 +1093,21 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 }
             };
 
-            if let Some(code) = &endpoint.response.success {
-                // Successful response has a known status code. In this case,
-                // generate one response for the success cases, and separate
-                // ones for error cases.
-                operation.responses.responses.insert(
-                    openapiv3::StatusCode::Code(code.as_u16()),
-                    openapiv3::ReferenceOr::Item(response),
-                );
-
-                let err_ref = if let Some(ref error) = endpoint.response.error {
-                    let name = match error.schema {
-                        ApiSchemaGenerator::Gen { ref name, ref schema } => {
-                            error_responses
-                                .insert(name(), schema(&mut generator));
-                            name()
-                        }
-                        ApiSchemaGenerator::Static { .. } => {
-                            todo!()
-                        }
-                    };
-                    openapiv3::ReferenceOr::ref_(&format!(
-                        "#/components/responses/{name}",
-                    ))
-                } else {
-                    openapiv3::ReferenceOr::ref_("#/components/responses/Error")
+            // If the endpoint defines an error type, emit that for
+            // the 4xx and 5xx responses.
+            if let Some(ref error) = endpoint.response.error {
+                let name = match error.schema {
+                    ApiSchemaGenerator::Gen { ref name, ref schema } => {
+                        error_responses.insert(name(), schema(&mut generator));
+                        name()
+                    }
+                    ApiSchemaGenerator::Static { .. } => {
+                        todo!()
+                    }
                 };
+                let err_ref = openapiv3::ReferenceOr::ref_(&format!(
+                    "#/components/responses/{name}",
+                ));
                 operation
                     .responses
                     .responses
@@ -1127,11 +1116,20 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     .responses
                     .responses
                     .insert(openapiv3::StatusCode::Range(5), err_ref);
-            } else if let Some(ref error) = endpoint.response.error {
-                todo!("generate schema for `Result<T, E>` responses");
+            }
+
+            if let Some(code) = &endpoint.response.success {
+                // `Ok` response has a known status code. In this case,
+                // emit it as the response for that status code only.
+                operation.responses.responses.insert(
+                    openapiv3::StatusCode::Code(code.as_u16()),
+                    openapiv3::ReferenceOr::Item(response),
+                );
             } else {
+                // The `Ok` response could be any status code, so emit it as
+                // the default response.
                 operation.responses.default =
-                    Some(openapiv3::ReferenceOr::Item(response))
+                    Some(openapiv3::ReferenceOr::Item(response));
             }
 
             // Drop in the operation.

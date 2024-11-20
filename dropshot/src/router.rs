@@ -1,6 +1,7 @@
 // Copyright 2021 Oxide Computer Company
 //! Routes incoming HTTP requests to handler functions
 
+use super::error::ClientErrorStatusCode;
 use super::error::HttpError;
 use super::handler::RouteHandler;
 
@@ -10,7 +11,6 @@ use crate::server::ServerContext;
 use crate::ApiEndpoint;
 use crate::ApiEndpointBodyContentType;
 use http::Method;
-use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -488,7 +488,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 body_content_type: handler.body_content_type.clone(),
             })
             .ok_or_else(|| {
-                HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED)
+                HttpError::for_status(
+                    None,
+                    ClientErrorStatusCode::METHOD_NOT_ALLOWED,
+                )
             })
     }
 }
