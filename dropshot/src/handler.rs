@@ -271,7 +271,7 @@ where
 /// Errors returned by an endpoint handler function.
 ///
 /// A function implementing an HTTP endpoint must return a `Result` with this
-/// error type. Typically, user code will only interact with this type via its
+/// error type. Typically, consumers will only interact with this type via its
 /// `From` implementation, which allows it to be constructed from any value
 /// implementing the [`HttpResponseError`] trait. This type is largely an
 /// implementation detail, which is necessary to represent errors which may be
@@ -338,13 +338,12 @@ where
 /// 2. Implement [`std::fmt::Display`].  This is used in order to log an internal
 ///    error message when returning an error response to the client.
 /// 3. Implement this trait's [`HttpResponseError::status_code`] method, which
-///    determines the status code for the error response.  Note that this method
+///    specifies the status code for the error response.  Note that this method
 ///    returns an [`ErrorStatusCode`]: a refinement of the [`http::StatusCode`]
 ///    type which is constrained to only 4xx and 5xx status codes.
 ///
-/// Dropshot's [`HttpError`] type also implements `HttpResponseError`, so
-/// handler functions may return `Result<T, HttpError>`.
-///
+/// [`HttpError`] type implements `HttpResponseError`, so
+/// handlers may return `Result<T, HttpError>` without the need to define a custom error type.
 pub trait HttpResponseError: HttpResponseContent + std::fmt::Display {
     /// Returns the status code for a response generated from this error.
     fn status_code(&self) -> ErrorStatusCode;
@@ -786,7 +785,7 @@ where
 
 impl HttpResponseContent for HttpError {
     fn to_response(self, _: http::response::Builder) -> HttpContentResult {
-        // Okay, here is where we do a devious little bit of slight-of-hand.
+        // Okay, here is where we do a devious little bit of sleight-of-hand.
         // When an endpoint's handler function returns an error, we typically
         // call `HttpResponseContent::to_response()` on it and return the error
         // response to the server, so that the error response is then sent to
