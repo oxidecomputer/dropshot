@@ -14,7 +14,6 @@ use crate::schema_util::j2oas_schema;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
-use crate::HttpError;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
 use crate::CONTENT_TYPE_OCTET_STREAM;
@@ -163,7 +162,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
-    pub fn new_for_types<FuncParams, ResultType>(
+    pub fn new_for_types<FuncParams, ReturnType>(
         operation_id: String,
         method: Method,
         content_type: &'a str,
@@ -172,13 +171,13 @@ impl<'a> ApiEndpoint<StubContext> {
     ) -> Self
     where
         FuncParams: RequestExtractor + 'static,
-        ResultType: HttpResultType,
+        ReturnType: HttpResponse + Send + Sync + 'static,
     {
         let body_content_type =
             ApiEndpointBodyContentType::from_mime_type(content_type)
                 .expect("unsupported mime type");
         let func_parameters = FuncParams::metadata(body_content_type.clone());
-        let response = ResultType::Response::response_metadata();
+        let response = ReturnType::response_metadata();
         let handler = StubRouteHandler::new_with_name(&operation_id);
         ApiEndpoint {
             operation_id,
@@ -197,17 +196,6 @@ impl<'a> ApiEndpoint<StubContext> {
             versions,
         }
     }
-}
-
-pub trait HttpResultType {
-    type Response: HttpResponse + Send + Sync + 'static;
-}
-
-impl<T> HttpResultType for Result<T, HttpError>
-where
-    T: HttpResponse + Send + Sync + 'static,
-{
-    type Response = T;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a
