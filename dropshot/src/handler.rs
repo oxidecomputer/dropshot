@@ -268,17 +268,38 @@ where
     ) -> Result<Response<Body>, HandlerError>;
 }
 
-/// Errors returned by an endpoint handler function.
+/// Errors returned by [`HttpHandlerFunc::handle_request`].
+/// `handle_request` may return an error in the following cases:
 ///
-/// A function implementing an HTTP endpoint must return a `Result` with this
-/// error type. Typically, consumers will only interact with this type via its
-/// `From` implementation, which allows it to be constructed from any value
-/// implementing the [`HttpResponseError`] trait. This type is largely an
-/// implementation detail, which is necessary to represent errors which may be
-/// errors returned by the endpoint's handler function *or* generated internally
-/// (i.e. by extractors).
+/// 1. A request extractor fails before calling the user-defined handler
+///    function.
+/// 2. The handler function itself is fallible and returns an error.
+/// 3. The response returned by the handler function fails to be converted into
+///    a `Response<Body>`.
+///
+/// In cases (1) and (3), the error will always be an [`HttpError`], but in case
+/// (2) it may be any type that implements the [`HttpResponseError`] trait.  This
+/// type can therefore be either a [`HttpError`] or the response body produced
+/// by a handler's error type.
 pub enum HandlerError {
+    /// An error returned by a fallible handler function itself.
+    ///
+    /// The user-defined endpoint handler function may return a `Result` where
+    /// the `Err` type is any type that implements the [`HttpResponseError`]
+    /// trait.  In order to allow an API to consist of handlers with any number
+    /// of different error types, we erase the individual handler's error type
+    /// before returning the error to the server by eagerly converting it into
+    /// an HTTP response.  However, we hang onto the internal message produced
+    /// by the user-defined error type so that we can log the error when
+    /// returning the HTTP response to the client.
     Handler { message: String, rsp: Response<Body> },
+    /// An error returned by an extractor prior to calling the endpoint handler
+    /// function, or by calling [`HttpResponse::to_result`] on the handler
+    /// function's return value.
+    ///
+    /// These are always [`HttpError`]s, so we can return them to the server
+    /// without eagerly constructing the response; the server will turn this
+    /// into a response for us.
     Dropshot(HttpError),
 }
 
@@ -333,8 +354,10 @@ where
 /// returns an error.  In order to implement this trait, a type must:
 ///
 /// 1. Implement the [`HttpResponseContent`] trait, defining the content of the
-///    error's response body.  This trait is implemented for all types that
-///   implement the [`Serialize`] and [`JsonSchema`] traits.
+///    error's response body.  This is most simply done by implementing the
+///    [`Serialize`] and [`JsonSchema`] traits, for which there's a blanket
+///    implementation of [`HttpResponseContent`] for `T: Serialize +
+///    JsonSchema`.
 /// 2. Implement [`std::fmt::Display`].  This is used in order to log an internal
 ///    error message when returning an error response to the client.
 /// 3. Implement this trait's [`HttpResponseError::status_code`] method, which

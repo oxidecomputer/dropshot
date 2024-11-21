@@ -91,8 +91,6 @@ async fn get_nothing(_rqctx: RequestContext<()>) -> HttpResponseOk<NoThingy> {
 }
 
 /// An example of an endpoint which returns a `Result<_, HttpError>`.
-///
-/// Note that
 #[endpoint {
     method = GET,
     path = "/something",
