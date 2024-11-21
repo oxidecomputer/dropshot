@@ -123,6 +123,24 @@ note: required by a bound in `dropshot::HttpResponseOk`
    | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
    |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
 
+error[E0277]: endpoint handler functions must return a value that implements `dropshot::HttpResponse`
+  --> tests/fail/bad_trait_endpoint7.rs:28:10
+   |
+28 |     ) -> Result<HttpResponseOk<Ret>, HttpError>;
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `HttpResponse` is not implemented for `Result<dropshot::HttpResponseOk<Ret>, dropshot::HttpError>`
+   |
+   = note: `HttpResponse` is implemented for `Result<T, E>` where `T: HttpResponse` and `E: HttpResponseError`
+   = note: `HttpResponse` is implemented for `http::Response<dropshot::Body>`
+   = help: the trait `HttpResponse` is implemented for `Result<T, E>`
+note: required by a bound in `ApiEndpoint::<StubContext>::new_for_types`
+  --> src/api_description.rs
+   |
+   |     pub fn new_for_types<FuncParams, ReturnType>(
+   |            ------------- required by a bound in this associated function
+...
+   |         ReturnType: HttpResponse + Send + Sync + 'static,
+   |                     ^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<StubContext>::new_for_types`
+
 error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
   --> tests/fail/bad_trait_endpoint7.rs:28:10
    |
