@@ -532,9 +532,9 @@ impl<Context: ServerContext> HttpRouter<Context> {
             find_handler_matching_version(handlers, version).is_some()
         }) {
             Err(HttpError::for_status(
-              None,
-              ClientErrorStatusCode::METHOD_NOT_ALLOWED,
-          ))
+                None,
+                ClientErrorStatusCode::METHOD_NOT_ALLOWED,
+            ))
         } else {
             Err(HttpError::for_not_found(
                 None,
