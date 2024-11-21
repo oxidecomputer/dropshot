@@ -691,6 +691,13 @@ impl HttpResponse for Response<Body> {
     }
 }
 
+// Implement `HttpResponse` for any `Result` where the `Ok` type implements
+// `HttpResponse`, and the `Err` type implements `HttpResponseError`.
+//
+// This is probably the most common return type for endpoint handlers, and
+// includes `Result<T, dropshot::HttpError>` as well as any user-defined error
+// type.
+
 impl<T, E> HttpResponse for Result<T, E>
 where
     T: HttpResponse,

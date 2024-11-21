@@ -383,7 +383,6 @@ macro_rules! impl_status_code_wrapper {
             /// included as an inherent method because that implementation doesn't
             /// appear in rustdocs, as well as a way to force the type instead of
             /// relying on inference.
-            #[inline]
             pub fn as_status(&self) -> http::StatusCode {
                 self.0
             }
@@ -398,7 +397,6 @@ macro_rules! impl_status_code_wrapper {
             /// relying on inference.
             ///
             /// This method wraps the [`http::StatusCode::as_u16`] method.
-            #[inline]
             pub fn as_u16(&self) -> u16 {
                 self.0.as_u16()
             }
@@ -409,7 +407,6 @@ macro_rules! impl_status_code_wrapper {
             /// status code. The canonical reason is not included.
             ///
             /// This method wraps the [`http::StatusCode::as_str`] method.
-            #[inline]
             pub fn as_str(&self) -> &str {
                 self.0.as_str()
             }
@@ -427,7 +424,6 @@ macro_rules! impl_status_code_wrapper {
             /// find.
             ///
             /// This method wraps the [`http::StatusCode::canonical_reason`] method.
-            #[inline]
             pub fn canonical_reason(&self) -> Option<&'static str> {
                 self.0.canonical_reason()
             }
@@ -703,7 +699,6 @@ impl ErrorStatusCode {
     /// let err = ErrorStatusCode::from_u16(99);
     /// assert!(err.is_err());
     /// ```
-    #[inline]
     pub fn from_u16(src: u16) -> Result<Self, InvalidErrorStatusCode> {
         let status = http::StatusCode::from_u16(src)?;
         Self::from_status(status).map_err(Into::into)
@@ -714,7 +709,6 @@ impl ErrorStatusCode {
     /// If this is a client error (4xx) status code, returns a
     /// [`ClientErrorStatusCode`] with that status. Otherwise, this method
     /// returns a [`NotAClientError`] error.
-    #[inline]
     pub fn as_client_error(
         &self,
     ) -> Result<ClientErrorStatusCode, NotAClientError> {
@@ -726,13 +720,11 @@ impl ErrorStatusCode {
     }
 
     /// Check if status is within 400-499.
-    #[inline]
     pub fn is_client_error(&self) -> bool {
         self.0.is_client_error()
     }
 
     /// Check if status is within 500-599.
-    #[inline]
     pub fn is_server_error(&self) -> bool {
         self.0.is_server_error()
     }
