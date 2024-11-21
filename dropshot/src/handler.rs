@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Interface for implementing HTTP endpoint handler functions.
 //!
 //! For information about supported endpoint function signatures, argument types,
@@ -342,8 +342,8 @@ where
 ///    returns an [`ErrorStatusCode`]: a refinement of the [`http::StatusCode`]
 ///    type which is constrained to only 4xx and 5xx status codes.
 ///
-/// [`HttpError`] type implements `HttpResponseError`, so
-/// handlers may return `Result<T, HttpError>` without the need to define a custom error type.
+/// [`HttpError`] type implements `HttpResponseError`, so handlers may return
+/// `Result<T, HttpError>` without the need to define a custom error type.
 pub trait HttpResponseError: HttpResponseContent + std::fmt::Display {
     /// Returns the status code for a response generated from this error.
     fn status_code(&self) -> ErrorStatusCode;

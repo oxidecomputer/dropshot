@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Describes the endpoints and handler functions in your API
 
 use crate::extractor::RequestExtractor;

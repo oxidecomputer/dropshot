@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Routes incoming HTTP requests to handler functions
 
 use super::error::ClientErrorStatusCode;

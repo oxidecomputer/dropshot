@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
