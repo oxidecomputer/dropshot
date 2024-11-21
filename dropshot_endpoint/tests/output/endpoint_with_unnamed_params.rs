@@ -68,6 +68,7 @@ for dropshot::ApiEndpoint<
             dropshot::Method::GET,
             "application/json",
             "/test",
+            dropshot::ApiEndpointVersions::All,
         )
     }
 }

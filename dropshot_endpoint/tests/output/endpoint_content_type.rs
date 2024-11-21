@@ -39,6 +39,7 @@ for dropshot::ApiEndpoint<
             dropshot::Method::POST,
             "application/x-www-form-urlencoded",
             "/a/b/c",
+            dropshot::ApiEndpointVersions::All,
         )
     }
 }

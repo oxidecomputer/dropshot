@@ -1,7 +1,7 @@
 [package]
 name = "dropshot"
 description = "expose REST APIs from a Rust program"
-version = "0.12.1-dev"
+version = "0.13.0"
 authors = ["David Pacheco <dap@oxidecomputer.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -32,7 +32,8 @@ percent-encoding = "2.3.1"
 rustls = "0.22.4"
 rustls-pemfile = "2.1.3"
 scopeguard = "1.2.0"
-serde_json = "1.0.132"
+semver = "1.0.23"
+serde_json = "1.0.133"
 serde_path_to_error = "0.1.16"
 serde_urlencoded = "0.7.1"
 sha1 = "0.10.6"
@@ -53,7 +54,7 @@ features = [ "serde", "std", "clock" ]
 default-features = false
 
 [dependencies.dropshot_endpoint]
-version = "^0.12.1-dev"
+version = "^0.13.0"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
@@ -69,7 +70,7 @@ version = "2.0.0"
 features = [ "skip_serializing_defaults" ]
 
 [dependencies.serde]
-version = "1.0.214"
+version = "1.0.215"
 features = [ "derive" ]
 
 [dependencies.tokio]
@@ -97,7 +98,7 @@ expectorate = "1.1.0"
 hyper-rustls = "0.26.0"
 hyper-staticfile = "0.10"
 lazy_static = "1.5.0"
-libc = "0.2.162"
+libc = "0.2.164"
 mime_guess = "2.0.5"
 subprocess = "0.2.9"
 tempfile = "3.14"
@@ -105,11 +106,14 @@ trybuild = "1.0.101"
 # Used by the https examples and tests
 pem = "3.0"
 rcgen = "0.13.1"
-# Using rustls-tls because it appears the rcgen-generated certificates are not
-# supported by the native Windows APIs.
-reqwest = { version = "0.12.9", features = ["json", "rustls-tls"] }
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.24.0"
+
+[dev-dependencies.reqwest]
+version = "0.12.9"
+# Using rustls-tls because it appears the rcgen-generated certificates are not
+# supported by the native Windows APIs.
+features = [ "json", "rustls-tls" ]
 
 [dev-dependencies.rustls-pki-types]
 version = "1.10.0"

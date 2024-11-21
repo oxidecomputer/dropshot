@@ -306,6 +306,7 @@
 //!     // Optional fields
 //!     operation_id = "my_operation" // (default: name of the function)
 //!     tags = [ "all", "your", "OpenAPI", "tags" ],
+//!     versions = ..
 //! }]
 //! ```
 //!
@@ -315,6 +316,9 @@
 //!
 //! The tags field is used to categorize API endpoints and only impacts the
 //! OpenAPI spec output.
+//!
+//! The versions field controls which versions of the API this endpoint appears
+//! in.  See "API Versioning" for more on this.
 //!
 //!
 //! ### Function parameters
@@ -500,7 +504,8 @@
 //! # // defining fn main puts the doctest in a module context
 //! # fn main() {
 //! let description = project_api_mod::stub_api_description().unwrap();
-//! let mut openapi = description.openapi("Project Server", "1.0.0");
+//! let mut openapi = description
+//!     .openapi("Project Server", semver::Version::new(1, 0, 0));
 //! openapi.write(&mut std::io::stdout().lock()).unwrap();
 //! # }
 //! ```
@@ -694,6 +699,102 @@
 //! parameters that are mandatory if `page_token` is not specified (when
 //! fetching the first page of data).
 //!
+//! ## API Versioning
+//!
+//! Dropshot servers can host multiple versions of an API.  See
+//! dropshot/examples/versioning.rs for a complete, working, commented example
+//! that uses a client-provided header to determine which API version to use for
+//! each incoming request.
+//!
+//! API versioning basically works like this:
+//!
+//! 1. When using the `endpoint` macro to define an endpoint, you specify a
+//!    `versions` field as a range of [semver](https://semver.org/) version
+//!    strings.  This identifies what versions of the API this endpoint
+//!    implementation appears in.  Examples:
+//!
+//! ```text
+//! // introduced in 1.0.0, present in all subsequent versions
+//! versions = "1.0.0"..    
+//!
+//! // removed in 2.0.0, present in all previous versions
+//! // (not present in 2.0.0 itself)
+//! versions = .."2.0.0"
+//!
+//! // introduced in 1.0.0, removed in 2.0.0
+//! // (present only in all 1.x versions, NOT 2.0.0 or later)
+//! versions = "1.0.0".."2.0.0"
+//!
+//! // present in all versions (the default)
+//! versions = ..
+//! ```
+//!
+//! 2. When constructing the server, you provide [`VersionPolicy::Dynamic`] with
+//!    your own impl of [`DynamicVersionPolicy`] that tells Dropshot how to
+//!    determine which API version to use for each request.
+//!
+//! 3. When a request arrives for a server using `VersionPolicy::Dynamic`,
+//!    Dropshot uses the provided impl to determine the appropriate API version.
+//!    Then it routes requests by HTTP method and path (like usual) but only
+//!    considers endpoints whose version range matches the requested API
+//!    version.
+//!
+//! 4. When generating an OpenAPI document for your `ApiDescription`, you must
+//!    provide a specific version to generate it _for_.  It will only include
+//!    endpoints present in that version and types referenced by those
+//!    endpoints.
+//!
+//! It is illegal to register multiple endpoints for the same HTTP method and
+//! path with overlapping version ranges.
+//!
+//! All versioning-related configuration is optional.  You can ignore it
+//! altogether by simply not specifying `versions` for each endpoint and not
+//! providing a `VersionPolicy` for the server (or, equivalently, providing
+//! `VersionPolicy::Unversioned`).  In this case, the server does not try to
+//! determine a version for incoming requests.  It routes requests to handlers
+//! without considering API versions.
+//!
+//! It's maybe surprising that this mechanism only talks about versioning
+//! endpoints, but usually when we think about API versioning we think about
+//! types, especially the input and output types.  This works because the
+//! endpoint implementation itself specifies the input and output types.  Let's
+//! look at an example.
+//!
+//! Suppose you have version 1.0.0 of an API with an endpoint `my_endpoint` with
+//! a body parameter `TypedBody<MyArg>`.  You want to make a breaking change to
+//! the API, creating version 2.0.0 where `MyArg` has a new required field.  You
+//! still want to support API version 1.0.0.  Here's one clean way to do this:
+//!
+//! 1. Mark the existing `my_endpoint` as removed after 1.0.0:
+//!     1. Move the `my_endpoint` function _and_ its input type `MyArg` to a
+//!        new module called `v1`.  (You'd also move its output type here if
+//!        that's changing.)
+//!     2. Change the `endpoint` macro invocation on `my_endpoint` to say
+//!        `versions = ..1.0.0`.  This says that it was removed after 1.0.0.
+//! 2. Create a new endpoint that appears in 2.0.0.
+//!     1. Create a new module called `v2`.
+//!     2. In `v2`, create a new type `MyArg` that looks the way you want it to
+//!        appear in 2.0.0.  (You'd also create new versions of the output
+//!        types, if those are changing, too).
+//!     3. Also in `v2`, create a new `my_endpoint` function that accepts and
+//!        returns the `v2` new versions of the types.  Its `endpoint` macro
+//!        will say `versions = 2.0.0`.
+//!
+//! As mentioned above, you will also need to create your server with
+//! `VersionPolicy::Dynamic` and specify how Dropshot should determine which
+//! version to use for each request.  But that's it!  Having done this:
+//!
+//! * If you generate an OpenAPI doc for version 1.0.0, Dropshot will include
+//!   `v1::my_endpoint` and its types.
+//! * If you generate an OpenAPI doc for version 2.0.0, Dropshot will include
+//!   `v2::my_endpoint` and its types.
+//! * If a request comes in for version 1.0.0, Dropshot will route it to
+//!   `v1::my_endpoint` and so parse the body as `v1::MyArg`.
+//! * If a request comes in for version 2.0.0, Dropshot will route it to
+//!   `v2::my_endpoint` and so parse the body as `v2::MyArg`.
+//!
+//! To see a completed example of this, see dropshot/examples/versioning.rs.
+//!
 //! ## DTrace probes
 //!
 //! Dropshot optionally exposes two DTrace probes, `request_start` and
@@ -762,6 +863,7 @@ mod schema_util;
 mod server;
 mod to_map;
 mod type_util;
+mod versioning;
 mod websocket;
 
 pub mod test_util;
@@ -777,6 +879,7 @@ pub use api_description::ApiEndpointBodyContentType;
 pub use api_description::ApiEndpointParameter;
 pub use api_description::ApiEndpointParameterLocation;
 pub use api_description::ApiEndpointResponse;
+pub use api_description::ApiEndpointVersions;
 pub use api_description::EndpointTagPolicy;
 pub use api_description::ExtensionMode;
 pub use api_description::OpenApiDefinition;
@@ -826,6 +929,7 @@ pub use handler::HttpResponseTemporaryRedirect;
 pub use handler::HttpResponseUpdatedNoContent;
 pub use handler::NoHeaders;
 pub use handler::RequestContext;
+pub use handler::RequestEndpointMetadata;
 pub use handler::RequestInfo;
 pub use http_util::CONTENT_TYPE_JSON;
 pub use http_util::CONTENT_TYPE_MULTIPART_FORM_DATA;
@@ -846,6 +950,9 @@ pub use server::ServerBuilder;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};
+pub use versioning::ClientSpecifiesVersionInHeader;
+pub use versioning::DynamicVersionPolicy;
+pub use versioning::VersionPolicy;
 pub use websocket::WebsocketChannelResult;
 pub use websocket::WebsocketConnection;
 pub use websocket::WebsocketConnectionRaw;
