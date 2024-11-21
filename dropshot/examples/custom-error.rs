@@ -117,7 +117,7 @@ async fn main() -> Result<(), String> {
     api.register(get_nothing).unwrap();
     api.register(get_something).unwrap();
 
-    api.openapi("Custom Error Example", "0.0.0")
+    api.openapi("Custom Error Example", semver::Version::new(0, 0, 0))
         .write(&mut std::io::stdout())
         .map_err(|e| e.to_string())?;
 
