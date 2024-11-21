@@ -661,6 +661,13 @@ impl StubRouteHandler {
 /// HttpResponse must produce a `Result<Response<Body>, HttpError>` and generate
 /// the response metadata.  Typically one should use `Response<Body>` or an
 /// implementation of `HttpTypedResponse`.
+#[diagnostic::on_unimplemented(
+    message = "endpoint handler functions must return a value that implements \
+     `dropshot::HttpResponse`",
+    note = "`HttpResponse` is implemented for `Result<T, E>` where \
+     `T: HttpResponse` and `E: HttpResponseError`",
+    note = "`HttpResponse` is implemented for `http::Response<dropshot::Body>`"
+)]
 pub trait HttpResponse {
     /// Generate the response to the HTTP call.
     fn to_result(self) -> HttpHandlerResult;

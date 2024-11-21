@@ -1,9 +1,11 @@
-error[E0277]: the trait bound `Result<String, HttpError>: HttpResponse` is not satisfied
+error[E0277]: endpoint handler functions must return a value that implements `dropshot::HttpResponse`
   --> tests/fail/bad_endpoint12.rs:15:6
    |
 15 | ) -> Result<String, HttpError> {
    |      ^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `HttpResponse` is not implemented for `Result<String, HttpError>`
    |
+   = note: `HttpResponse` is implemented for `Result<T, E>` where `T: HttpResponse` and `E: HttpResponseError`
+   = note: `HttpResponse` is implemented for `http::Response<dropshot::Body>`
    = help: the trait `HttpResponse` is implemented for `Result<T, E>`
 note: required by a bound in `validate_response_type`
   --> tests/fail/bad_endpoint12.rs:9:1
