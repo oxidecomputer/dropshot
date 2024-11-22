@@ -370,6 +370,10 @@ where
 ///
 /// [`HttpError`] type implements `HttpResponseError`, so handlers may return
 /// `Result<T, HttpError>` without the need to define a custom error type.
+#[diagnostic::on_unimplemented(
+    note = "consider using `dropshot::HttpError`, unless custom error \
+     presentation is needed"
+)]
 pub trait HttpResponseError:
     HttpResponseContent + From<HttpError> + std::fmt::Display
 {
