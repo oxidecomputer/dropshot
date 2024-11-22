@@ -18,11 +18,26 @@ const _: fn() = || {
     need_exclusive_extractor::<Path<P>>();
 };
 const _: fn() = || {
+    trait ResultTrait {
+        type T;
+        type E;
+    }
+    impl<TT, EE> ResultTrait for Result<TT, EE> {
+        type T = TT;
+        type E = EE;
+    }
     fn validate_response_type<T>()
     where
         T: topspin::HttpResponse,
     {}
-    validate_response_type::<Result<HttpResponseOk<()>, HttpError>>();
+    fn validate_error_type<T>()
+    where
+        T: topspin::HttpResponseError,
+    {}
+    validate_response_type::<
+        <Result<HttpResponseOk<()>, HttpError> as ResultTrait>::T,
+    >();
+    validate_error_type::<<Result<HttpResponseOk<()>, HttpError> as ResultTrait>::E>();
 };
 #[allow(non_camel_case_types, missing_docs)]
 ///API Endpoint: handler_xyz

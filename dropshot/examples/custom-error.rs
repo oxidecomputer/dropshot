@@ -7,6 +7,8 @@ use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
+use dropshot::ErrorStatusCode;
+use dropshot::HttpError;
 use dropshot::HttpResponseError;
 use dropshot::HttpResponseOk;
 use dropshot::Path;
@@ -16,12 +18,22 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, thiserror::Error, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, thiserror::Error, Serialize, JsonSchema)]
 enum ThingyError {
+    #[allow(dead_code)]
     #[error("no thingies are currently available")]
     NoThingies,
     #[error("invalid thingy: {:?}", .name)]
     InvalidThingy { name: String },
+    #[error("{message}")]
+    Other {
+        message: String,
+        #[serde(skip)]
+        internal_message: String,
+        #[serde(skip)]
+        status: ErrorStatusCode,
+        error_code: Option<String>,
+    },
 }
 
 /// Any type implementing `dropshot::HttpResponseError` and
@@ -50,6 +62,18 @@ impl HttpResponseError for ThingyError {
                 dropshot::ErrorStatusCode::from_u16(442)
                     .expect("442 is a 4xx status code")
             }
+            ThingyError::Other { status, .. } => *status,
+        }
+    }
+}
+
+impl From<HttpError> for ThingyError {
+    fn from(error: HttpError) -> Self {
+        ThingyError::Other {
+            message: error.external_message,
+            internal_message: error.internal_message,
+            status: error.status_code,
+            error_code: error.error_code,
         }
     }
 }
@@ -59,9 +83,6 @@ impl HttpResponseError for ThingyError {
 struct Thingy {
     magic_number: u64,
 }
-
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct NoThingy {}
 
 #[derive(Deserialize, JsonSchema)]
 struct ThingyPathParams {
@@ -81,13 +102,14 @@ async fn get_thingy(
     Err(ThingyError::InvalidThingy { name })
 }
 
-/// An example of an endpoint which does not return a `Result<_, _>`.
 #[endpoint {
     method = GET,
     path = "/nothing",
 }]
-async fn get_nothing(_rqctx: RequestContext<()>) -> HttpResponseOk<NoThingy> {
-    HttpResponseOk(NoThingy {})
+async fn get_nothing(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<Thingy>, ThingyError> {
+    Err(ThingyError::NoThingies)
 }
 
 /// An example of an endpoint which returns a `Result<_, HttpError>`.

@@ -39,7 +39,6 @@ use super::http_util::CONTENT_TYPE_OCTET_STREAM;
 use super::server::DropshotState;
 use super::server::ServerContext;
 use crate::api_description::ApiEndpointBodyContentType;
-use crate::api_description::ApiEndpointErrorResponse;
 use crate::api_description::ApiEndpointHeader;
 use crate::api_description::ApiEndpointResponse;
 use crate::api_description::ApiSchemaGenerator;
@@ -71,8 +70,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 /// Type alias for the result returned by HTTP handler functions.
-pub type HttpHandlerResult = Result<Response<Body>, HandlerError>;
-pub type HttpContentResult = Result<Response<Body>, HttpError>;
+pub type HttpHandlerResult = Result<Response<Body>, HttpError>;
 
 /// Handle for various interfaces useful during request processing.
 #[derive(Debug)]
@@ -261,10 +259,11 @@ where
     FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
+    type Error: HttpResponseError;
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
-        p: FuncParams,
+        params: FuncParams,
     ) -> Result<Response<Body>, HandlerError>;
 }
 
@@ -364,10 +363,16 @@ where
 ///    specifies the status code for the error response.  Note that this method
 ///    returns an [`ErrorStatusCode`]: a refinement of the [`http::StatusCode`]
 ///    type which is constrained to only 4xx and 5xx status codes.
+/// 4. Provide a [`From`]`<`[`HttpError`]`>` conversion.  If an extractor fails
+///    to extract a request parameter, it returns a [`HttpError`]. Providing a
+///    `From` conversion allows extractor failures to also be represented by the
+///    user error type.
 ///
 /// [`HttpError`] type implements `HttpResponseError`, so handlers may return
 /// `Result<T, HttpError>` without the need to define a custom error type.
-pub trait HttpResponseError: HttpResponseContent + std::fmt::Display {
+pub trait HttpResponseError:
+    HttpResponseContent + From<HttpError> + std::fmt::Display
+{
     /// Returns the status code for a response generated from this error.
     fn status_code(&self) -> ErrorStatusCode;
 }
@@ -454,26 +459,37 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     ($(($i:tt, $T:tt)),*) => {
 
     #[async_trait]
-    impl<Context, FuncType, FutureType, ResponseType, $($T,)*>
+    impl<Context, FuncType, FutureType, ResponseType, ErrorType, $($T,)*>
         HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
     where
         Context: ServerContext,
         FuncType: Fn(RequestContext<Context>, $($T,)*)
             -> FutureType + Send + Sync + 'static,
-        FutureType: Future<Output = ResponseType>
+        FutureType: Future<Output = Result<ResponseType, ErrorType>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
+        ErrorType: HttpResponseError + Send + Sync + 'static,
         ($($T,)*): RequestExtractor,
         $($T: Send + Sync + 'static,)*
     {
+        type Error = ErrorType;
         async fn handle_request(
             &self,
             rqctx: RequestContext<Context>,
-            _param_tuple: ($($T,)*)
+            _param_tuple: ($($T,)*),
         ) -> Result<Response<Body>, HandlerError>
         {
-            let response: ResponseType = (self)(rqctx, $(_param_tuple.$i,)*).await;
-            response.to_result().map_err(Into::into)
+            let response: ResponseType = (self)(rqctx, $(_param_tuple.$i,)*).await?;
+            response.to_result().map_err(|error| {
+                // If turning the endpoint's response into a
+                // `http::Response<Body>` failed, try to convert the `HttpError` into
+                // the  endpoint's error type.
+                let error = ErrorType::from(error);
+                // Then, turn the user error type into a `HandlerError`. This
+                // will attempt to serialize the error, but if that doesn't
+                // work, it'll just produce an `HttpError`, which can't fail.
+                HandlerError::from(error)
+            })
         }
     }
 }}
@@ -582,7 +598,7 @@ where
         // resolved statically.
         let funcparams = RequestExtractor::from_request(&rqctx, request)
             .await
-            .map_err(HandlerError::from)?;
+            .map_err(<HandlerType::Error>::from)?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -661,13 +677,6 @@ impl StubRouteHandler {
 /// HttpResponse must produce a `Result<Response<Body>, HttpError>` and generate
 /// the response metadata.  Typically one should use `Response<Body>` or an
 /// implementation of `HttpTypedResponse`.
-#[diagnostic::on_unimplemented(
-    message = "endpoint handler functions must return a value that implements \
-     `dropshot::HttpResponse`",
-    note = "`HttpResponse` is implemented for `Result<T, E>` where \
-     `T: HttpResponse` and `E: HttpResponseError`",
-    note = "`HttpResponse` is implemented for `http::Response<dropshot::Body>`"
-)]
 pub trait HttpResponse {
     /// Generate the response to the HTTP call.
     fn to_result(self) -> HttpHandlerResult;
@@ -698,36 +707,6 @@ impl HttpResponse for Response<Body> {
     }
 }
 
-// Implement `HttpResponse` for any `Result` where the `Ok` type implements
-// `HttpResponse`, and the `Err` type implements `HttpResponseError`.
-//
-// This is probably the most common return type for endpoint handlers, and
-// includes `Result<T, dropshot::HttpError>` as well as any user-defined error
-// type.
-
-impl<T, E> HttpResponse for Result<T, E>
-where
-    T: HttpResponse,
-    E: HttpResponseError,
-{
-    fn to_result(self) -> HttpHandlerResult {
-        self?.to_result()
-    }
-
-    fn response_metadata() -> ApiEndpointResponse {
-        let error = E::content_metadata()
-            .map(|schema| ApiEndpointErrorResponse { schema });
-        ApiEndpointResponse { error, ..T::response_metadata() }
-    }
-
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Ok(t) => t.status_code(),
-            Err(e) => e.status_code().as_status(),
-        }
-    }
-}
-
 /// Wraps a [`Body`] so that it can be used with coded response types such as
 /// [HttpResponseOk].
 pub struct FreeformBody(pub Body);
@@ -755,7 +734,7 @@ pub struct Empty;
 /// object.
 pub trait HttpResponseContent {
     fn to_response(self, builder: http::response::Builder)
-        -> HttpContentResult;
+        -> HttpHandlerResult;
 
     // TODO the return type here could be something more elegant that is able
     // to produce the map of mime type -> openapiv3::MediaType that's needed in
@@ -770,7 +749,7 @@ impl HttpResponseContent for FreeformBody {
     fn to_response(
         self,
         builder: http::response::Builder,
-    ) -> HttpContentResult {
+    ) -> HttpHandlerResult {
         Ok(builder
             .header(http::header::CONTENT_TYPE, CONTENT_TYPE_OCTET_STREAM)
             .body(self.0)?)
@@ -785,7 +764,7 @@ impl HttpResponseContent for Empty {
     fn to_response(
         self,
         builder: http::response::Builder,
-    ) -> HttpContentResult {
+    ) -> HttpHandlerResult {
         Ok(builder.body(Body::empty())?)
     }
 
@@ -804,7 +783,7 @@ where
     fn to_response(
         self,
         builder: http::response::Builder,
-    ) -> HttpContentResult {
+    ) -> HttpHandlerResult {
         let serialized = serde_json::to_string(&self)
             .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
         Ok(builder
@@ -821,7 +800,7 @@ where
 }
 
 impl HttpResponseContent for HttpError {
-    fn to_response(self, _: http::response::Builder) -> HttpContentResult {
+    fn to_response(self, _: http::response::Builder) -> HttpHandlerResult {
         // Okay, here is where we do a devious little bit of sleight-of-hand.
         // When an endpoint's handler function returns an error, we typically
         // call `HttpResponseContent::to_response()` on it and return the error
@@ -863,7 +842,7 @@ impl HttpResponseError for HttpError {
 /// that we provide. We use it in particular to encode the success status code
 /// and the type information of the return value.
 pub trait HttpCodedResponse:
-    Into<HttpContentResult> + Send + Sync + 'static
+    Into<HttpHandlerResult> + Send + Sync + 'static
 {
     type Body: HttpResponseContent;
     const STATUS_CODE: StatusCode;
@@ -873,7 +852,7 @@ pub trait HttpCodedResponse:
     /// `body_object` (whose specific type is defined by the implementing type)
     /// and the STATUS_CODE specified by the implementing type. This is a default
     /// trait method to allow callers to avoid redundant type specification.
-    fn for_object(body: Self::Body) -> HttpContentResult {
+    fn for_object(body: Self::Body) -> HttpHandlerResult {
         body.to_response(Response::builder().status(Self::STATUS_CODE))
     }
 }
@@ -916,9 +895,9 @@ impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     const DESCRIPTION: &'static str = "successful creation";
 }
 impl<T: HttpResponseContent + Send + Sync + 'static>
-    From<HttpResponseCreated<T>> for HttpContentResult
+    From<HttpResponseCreated<T>> for HttpHandlerResult
 {
-    fn from(response: HttpResponseCreated<T>) -> HttpContentResult {
+    fn from(response: HttpResponseCreated<T>) -> HttpHandlerResult {
         // TODO-correctness (or polish?): add Location header
         HttpResponseCreated::for_object(response.0)
     }
@@ -938,9 +917,9 @@ impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     const DESCRIPTION: &'static str = "successfully enqueued operation";
 }
 impl<T: HttpResponseContent + Send + Sync + 'static>
-    From<HttpResponseAccepted<T>> for HttpContentResult
+    From<HttpResponseAccepted<T>> for HttpHandlerResult
 {
-    fn from(response: HttpResponseAccepted<T>) -> HttpContentResult {
+    fn from(response: HttpResponseAccepted<T>) -> HttpHandlerResult {
         HttpResponseAccepted::for_object(response.0)
     }
 }
@@ -959,9 +938,9 @@ impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     const DESCRIPTION: &'static str = "successful operation";
 }
 impl<T: HttpResponseContent + Send + Sync + 'static> From<HttpResponseOk<T>>
-    for HttpContentResult
+    for HttpHandlerResult
 {
-    fn from(response: HttpResponseOk<T>) -> HttpContentResult {
+    fn from(response: HttpResponseOk<T>) -> HttpHandlerResult {
         HttpResponseOk::for_object(response.0)
     }
 }
@@ -975,8 +954,8 @@ impl HttpCodedResponse for HttpResponseDeleted {
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "successful deletion";
 }
-impl From<HttpResponseDeleted> for HttpContentResult {
-    fn from(_: HttpResponseDeleted) -> HttpContentResult {
+impl From<HttpResponseDeleted> for HttpHandlerResult {
+    fn from(_: HttpResponseDeleted) -> HttpHandlerResult {
         HttpResponseDeleted::for_object(Empty)
     }
 }
@@ -991,8 +970,8 @@ impl HttpCodedResponse for HttpResponseUpdatedNoContent {
     const STATUS_CODE: StatusCode = StatusCode::NO_CONTENT;
     const DESCRIPTION: &'static str = "resource updated";
 }
-impl From<HttpResponseUpdatedNoContent> for HttpContentResult {
-    fn from(_: HttpResponseUpdatedNoContent) -> HttpContentResult {
+impl From<HttpResponseUpdatedNoContent> for HttpHandlerResult {
+    fn from(_: HttpResponseUpdatedNoContent) -> HttpHandlerResult {
         HttpResponseUpdatedNoContent::for_object(Empty)
     }
 }
@@ -1063,8 +1042,8 @@ impl HttpCodedResponse for HttpResponseFoundStatus {
     const STATUS_CODE: StatusCode = StatusCode::FOUND;
     const DESCRIPTION: &'static str = "redirect (found)";
 }
-impl From<HttpResponseFoundStatus> for HttpContentResult {
-    fn from(_: HttpResponseFoundStatus) -> HttpContentResult {
+impl From<HttpResponseFoundStatus> for HttpHandlerResult {
+    fn from(_: HttpResponseFoundStatus) -> HttpHandlerResult {
         HttpResponseFoundStatus::for_object(Empty)
     }
 }
@@ -1104,8 +1083,8 @@ impl HttpCodedResponse for HttpResponseSeeOtherStatus {
     const STATUS_CODE: StatusCode = StatusCode::SEE_OTHER;
     const DESCRIPTION: &'static str = "redirect (see other)";
 }
-impl From<HttpResponseSeeOtherStatus> for HttpContentResult {
-    fn from(_: HttpResponseSeeOtherStatus) -> HttpContentResult {
+impl From<HttpResponseSeeOtherStatus> for HttpHandlerResult {
+    fn from(_: HttpResponseSeeOtherStatus) -> HttpHandlerResult {
         HttpResponseSeeOtherStatus::for_object(Empty)
     }
 }
@@ -1143,8 +1122,8 @@ impl HttpCodedResponse for HttpResponseTemporaryRedirectStatus {
     const STATUS_CODE: StatusCode = StatusCode::TEMPORARY_REDIRECT;
     const DESCRIPTION: &'static str = "redirect (temporary redirect)";
 }
-impl From<HttpResponseTemporaryRedirectStatus> for HttpContentResult {
-    fn from(_: HttpResponseTemporaryRedirectStatus) -> HttpContentResult {
+impl From<HttpResponseTemporaryRedirectStatus> for HttpHandlerResult {
+    fn from(_: HttpResponseTemporaryRedirectStatus) -> HttpHandlerResult {
         HttpResponseTemporaryRedirectStatus::for_object(Empty)
     }
 }

@@ -4,6 +4,8 @@
 use crate::extractor::RequestExtractor;
 use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
+use crate::handler::HttpResponseContent;
+use crate::handler::HttpResponseError;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
 use crate::handler::StubRouteHandler;
@@ -51,6 +53,7 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub parameters: Vec<ApiEndpointParameter>,
     pub body_content_type: ApiEndpointBodyContentType,
     pub response: ApiEndpointResponse,
+    pub error: ApiEndpointErrorResponse,
     pub summary: Option<String>,
     pub description: Option<String>,
     pub tags: Vec<String>,
@@ -79,6 +82,9 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
                 .expect("unsupported mime type");
         let func_parameters = FuncParams::metadata(body_content_type.clone());
         let response = ResponseType::response_metadata();
+        let error = ApiEndpointErrorResponse {
+            schema: <HandlerType::Error>::content_metadata(),
+        };
         ApiEndpoint {
             operation_id,
             handler: HttpRouteHandler::new(handler),
@@ -87,6 +93,7 @@ impl<'a, Context: ServerContext> ApiEndpoint<Context> {
             parameters: func_parameters.parameters,
             body_content_type,
             response,
+            error,
             summary: None,
             description: None,
             tags: vec![],
@@ -162,7 +169,7 @@ impl<'a> ApiEndpoint<StubContext> {
     /// );
     /// api.register(endpoint).unwrap();
     /// ```
-    pub fn new_for_types<FuncParams, ReturnType>(
+    pub fn new_for_types<FuncParams, ResultType>(
         operation_id: String,
         method: Method,
         content_type: &'a str,
@@ -171,13 +178,16 @@ impl<'a> ApiEndpoint<StubContext> {
     ) -> Self
     where
         FuncParams: RequestExtractor + 'static,
-        ReturnType: HttpResponse + Send + Sync + 'static,
+        ResultType: HttpResultType,
     {
         let body_content_type =
             ApiEndpointBodyContentType::from_mime_type(content_type)
                 .expect("unsupported mime type");
         let func_parameters = FuncParams::metadata(body_content_type.clone());
-        let response = ReturnType::response_metadata();
+        let response = <ResultType::Response>::response_metadata();
+        let error = ApiEndpointErrorResponse {
+            schema: <ResultType::Error>::content_metadata(),
+        };
         let handler = StubRouteHandler::new_with_name(&operation_id);
         ApiEndpoint {
             operation_id,
@@ -187,6 +197,7 @@ impl<'a> ApiEndpoint<StubContext> {
             parameters: func_parameters.parameters,
             body_content_type,
             response,
+            error,
             summary: None,
             description: None,
             tags: vec![],
@@ -196,6 +207,20 @@ impl<'a> ApiEndpoint<StubContext> {
             versions,
         }
     }
+}
+
+pub trait HttpResultType {
+    type Response: HttpResponse + Send + Sync + 'static;
+    type Error: HttpResponseError + Send + Sync + 'static;
+}
+
+impl<T, E> HttpResultType for Result<T, E>
+where
+    T: HttpResponse + Send + Sync + 'static,
+    E: HttpResponseError + Send + Sync + 'static,
+{
+    type Response = T;
+    type Error = E;
 }
 
 /// ApiEndpointParameter represents the discrete path and query parameters for a
@@ -317,14 +342,13 @@ pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
     pub headers: Vec<ApiEndpointHeader>,
     pub success: Option<StatusCode>,
-    pub error: Option<ApiEndpointErrorResponse>,
     pub description: Option<String>,
 }
 
 /// Metadata for an API endpoint's error response type.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApiEndpointErrorResponse {
-    pub(crate) schema: ApiSchemaGenerator,
+    pub(crate) schema: Option<ApiSchemaGenerator>,
 }
 
 /// Wrapper for both dynamically generated and pre-generated schemas.
@@ -915,8 +939,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
             // If the endpoint defines an error type, emit that for
             // the 4xx and 5xx responses.
-            if let Some(ref error) = endpoint.response.error {
-                let error_schema = match error.schema {
+            if let Some(ref schema) = endpoint.error.schema {
+                let error_schema = match schema {
                     ApiSchemaGenerator::Gen { ref name, ref schema } => {
                         j2oas_schema(Some(&name()), &schema(&mut generator))
                     }

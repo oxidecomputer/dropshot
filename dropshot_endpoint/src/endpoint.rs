@@ -384,11 +384,25 @@ impl<'ast> EndpointParams<'ast> {
         let ret_ty = self.ret_ty;
         let ret_check = quote_spanned! { ret_ty.span()=>
             const _: fn() = || {
+                trait ResultTrait {
+                    type T;
+                    type E;
+                }
+                impl<TT, EE> ResultTrait for Result<TT, EE>
+                {
+                    type T = TT;
+                    type E = EE;
+                }
                 fn validate_response_type<T>()
                 where
                     T: #dropshot::HttpResponse,
                 {}
-                validate_response_type::<#ret_ty>();
+                fn validate_error_type<T>()
+                where
+                    T: #dropshot::HttpResponseError,
+                {}
+                validate_response_type::<<#ret_ty as ResultTrait>::T>();
+                validate_error_type::<<#ret_ty as ResultTrait>::E>();
             };
         };
 
