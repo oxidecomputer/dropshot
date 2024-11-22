@@ -17,7 +17,7 @@ jobs:
   check-style:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - uses: actions/checkout@cbb722410c2e876e24abbe8de2cc27693e501dcb
       - name: Report cargo version
         run: cargo --version
       - name: Report rustfmt version
@@ -28,7 +28,7 @@ jobs:
   clippy-lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - uses: actions/checkout@cbb722410c2e876e24abbe8de2cc27693e501dcb
       - name: Report cargo version
         run: cargo --version
       - name: Report Clippy version
@@ -48,7 +48,7 @@ jobs:
           - features: all
             feature_flags: --all-features
     steps:
-      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - uses: actions/checkout@cbb722410c2e876e24abbe8de2cc27693e501dcb
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
