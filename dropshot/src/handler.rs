@@ -268,18 +268,12 @@ where
 }
 
 /// Errors returned by [`HttpHandlerFunc::handle_request`].
-/// `handle_request` may return an error in the following cases:
 ///
-/// 1. A request extractor fails before calling the user-defined handler
-///    function.
-/// 2. The handler function itself is fallible and returns an error.
-/// 3. The response returned by the handler function fails to be converted into
-///    a `Response<Body>`.
-///
-/// In cases (1) and (3), the error will always be an [`HttpError`], but in case
-/// (2) it may be any type that implements the [`HttpResponseError`] trait.  This
-/// type can therefore be either a [`HttpError`] or the response body produced
-/// by a handler's error type.
+/// User-defined endpoint handler functions, for which we implement
+/// `HttpHandlerFunc`, may return any error type that implements
+/// [`HttpResponseError`].  We type-erase such errors by eagerly converting them
+/// into `Response<Body>` within the `HttpHandlerFunc` implementation, to permit
+/// the API to consist of handlers with any number of different error types.
 pub enum HandlerError {
     /// An error returned by a fallible handler function itself.
     ///
@@ -292,13 +286,12 @@ pub enum HandlerError {
     /// by the user-defined error type so that we can log the error when
     /// returning the HTTP response to the client.
     Handler { message: String, rsp: Response<Body> },
-    /// An error returned by an extractor prior to calling the endpoint handler
-    /// function, or by calling [`HttpResponse::to_result`] on the handler
-    /// function's return value.
-    ///
-    /// These are always [`HttpError`]s, so we can return them to the server
-    /// without eagerly constructing the response; the server will turn this
-    /// into a response for us.
+    /// In the event that serializing a user-defined error type fails, we
+    /// fall back to always returning an `HttpError`, to avoid a potential
+    /// infinitely recursive error loop.  Furthermore, when the endpoint's error
+    /// type is `HttpError`, this variant allows us to pass it to the server as
+    /// a structured value, so that the internal and external messages of the
+    /// error can both be logged.
     Dropshot(HttpError),
 }
 
@@ -368,8 +361,9 @@ where
 ///    `From` conversion allows extractor failures to also be represented by the
 ///    user error type.
 ///
-/// [`HttpError`] type implements `HttpResponseError`, so handlers may return
-/// `Result<T, HttpError>` without the need to define a custom error type.
+/// Dropshot's [`HttpError`] type implements `HttpResponseError`, so handlers
+/// may return `Result<T, HttpError>` without the need to define a custom error
+/// type.
 #[diagnostic::on_unimplemented(
     note = "consider using `dropshot::HttpError`, unless custom error \
      presentation is needed"
@@ -420,21 +414,24 @@ pub trait HttpResponseError:
 // type" in the comments here we're referring to the output type of the returned
 // future.)  Again, as described above, we'd like to allow HTTP endpoint
 // functions to return a variety of different return types that are ultimately
-// converted into `Result<Response<Body>, HttpError>`.  To do that, the trait
+// converted into `Result<Response<Body>, HandlerError>`.  To do that, the trait
 // bounds below say that the function must produce a `Result<ResponseType,
-// HttpError>` where `ResponseType` is a type that implements `HttpResponse`.
-// We provide a few implementations of the trait `HttpTypedResponse` that
-// includes a HTTP status code and structured output. In addition we allow for
-// functions to hand-craft a `Response<Body>`. For both we implement
-// `HttpResponse` (trivially in the latter case).
+// ErrorType>` where `ResponseType` is a type that implements `HttpResponse`
+// and `ErrorType` is a type that implements `HttpResponseError`. We provide a
+// few implementations of the trait `HttpTypedResponse` that includes a HTTP
+// status code and structured output. In addition we allow for functions to
+// hand-craft a `Response<Body>`. For both we implement `HttpResponse`
+// (trivially in the latter case).
 //
 //      1. Handler function
 //            |
 //            | returns:
 //            v
-//      2. Result<ResponseType, HttpError>
+//      2. Result<ResponseType, ErrorType>
 //            |
-//            | This may fail with an HttpError which we return immediately.
+//            | This may fail with an error type implementing the
+//            | `HttpResponseError` trait, which we can convert into a
+//            | `HandlerError`, which we return directly.
 //            | On success, this will be Ok(ResponseType) for some specific
 //            | ResponseType that implements HttpResponse.  We'll end up
 //            | invoking:
@@ -443,8 +440,13 @@ pub trait HttpResponseError:
 //            |
 //            | This is a type-specific conversion from `ResponseType` into
 //            | `Response<Body>` that's allowed to fail with an `HttpError`.
+//            | If this fails, we will convert the `HttpError` into the
+//            | user-defined error `ErrorType`, and then serialize that into a
+//            | `HandlerError`.  This seems a bit weird, but it's how we allow
+//            | user-defined handler error types to customize the presentation
+//            | of erorrs serializing responses.
 //            v
-//      4. Result<Response<Body>, HttpError>
+//      4. Result<Response<Body>, HandlerError>
 //
 // Note that the handler function may fail due to an internal error *or* the
 // conversion to JSON may successively fail in the call to
