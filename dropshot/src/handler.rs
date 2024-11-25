@@ -287,7 +287,7 @@ pub enum HandlerError {
     /// returning the HTTP response to the client.
     Handler { message: String, rsp: Response<Body> },
     /// In the event that serializing a user-defined error type fails, we
-    /// fall back to always returning an `HttpError`, to avoid a potential
+    /// fall back to returning an `HttpError`, to avoid a potential
     /// infinitely recursive error loop.  Furthermore, when the endpoint's error
     /// type is `HttpError`, this variant allows us to pass it to the server as
     /// a structured value, so that the internal and external messages of the
