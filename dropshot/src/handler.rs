@@ -319,7 +319,24 @@ impl HandlerError {
 
     pub(crate) fn into_response(self, request_id: &str) -> Response<Body> {
         match self {
-            Self::Handler { rsp, .. } => rsp,
+            // When the handler returns an error, we must add the request ID
+            // header to it now.
+            Self::Handler { mut rsp, .. } => {
+                match http::HeaderValue::from_str(request_id) {
+                    Ok(header) => {
+                        rsp.headers_mut()
+                            .insert(crate::HEADER_REQUEST_ID, header);
+                    }
+                    // This should never happen, but let's not panic in release
+                    // mode if it does.
+                    Err(e) if cfg!(debug_assertions) => {
+                        unreachable!("request ID {request_id:?} is not a valid HeaderValue: {e}");
+                    }
+                    Err(_) => {}
+                }
+
+                rsp
+            }
             Self::Dropshot(e) => e.into_response(request_id),
         }
     }
