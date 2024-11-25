@@ -582,3 +582,19 @@ fn test_openapi_fuller() -> anyhow::Result<()> {
     expectorate::assert_contents("tests/test_openapi_fuller.json", actual);
     Ok(())
 }
+
+#[test]
+fn test_openapi_custom_error_types() -> anyhow::Result<()> {
+    let api = super::custom_errors::api();
+    let mut output = Cursor::new(Vec::new());
+
+    let _ =
+        api.openapi("test", semver::Version::new(3, 5, 0)).write(&mut output);
+    let actual = from_utf8(output.get_ref()).unwrap();
+
+    expectorate::assert_contents(
+        "tests/test_openapi_custom_error_types.json",
+        actual,
+    );
+    Ok(())
+}
