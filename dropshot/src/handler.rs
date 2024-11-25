@@ -327,12 +327,20 @@ impl HandlerError {
                         rsp.headers_mut()
                             .insert(crate::HEADER_REQUEST_ID, header);
                     }
-                    // This should never happen, but let's not panic in release
-                    // mode if it does.
-                    Err(e) if cfg!(debug_assertions) => {
-                        unreachable!("request ID {request_id:?} is not a valid HeaderValue: {e}");
+                    // We should never generate a request ID that contains
+                    // invalid characters, but sadly, we can't promise that
+                    // here...
+                    //
+                    // Note that this is morally equivalent to an `expect`, but
+                    // the match is a bit nicer as it lets us include the
+                    // request ID that `HeaderValue::from_str` didn't like in
+                    // the panic message.
+                    Err(e) => {
+                        unreachable!(
+                            "request ID {request_id:?} is not a valid \
+                            HeaderValue: {e}",
+                        );
                     }
-                    Err(_) => {}
                 }
 
                 rsp
