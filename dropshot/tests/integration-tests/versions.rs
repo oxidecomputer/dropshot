@@ -467,10 +467,7 @@ fn test_versions_openapi_same_names() {
     );
 
     assert_eq!(func_mods_v1, func_overrides_v1);
-    assert_eq!(
-        func_mods_v1, traits_v1,
-        "\n --- left ---\n{func_mods_v1}\n\n--- right ---\n\n{traits_v1}\n"
-    );
+    assert_eq!(func_mods_v1, traits_v1,);
     assert_eq!(func_mods_v2, func_overrides_v2);
     assert_eq!(func_mods_v2, traits_v2);
 }
