@@ -18,27 +18,58 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, thiserror::Error, Serialize, JsonSchema)]
+// This is the custom error type returned by our API. A common use case for
+// custom error types is to return an `enum` type that represents
+// application-specific errors in a way that generated clients can interact with
+// programmatically, so the error in this example will be an enum type.
+//
+// In order to be returned from an endpoint handler, it must implement the
+// `HttpResponseError` trait, which requires implementations of:
+//
+// - `HttpResponseContent`, which determines how to produce a response body
+//   from the error type,
+// - `std::fmt::Display`, which determines how to produce a human-readable
+//    message for Dropshot to log when returning the error,
+// - `From<dropshot::HttpError>`, so that errors returned by request extractors
+//   and resposne body serialization can be converted to the user-defined error
+//   type.
+#[derive(Debug)]
+// Deriving `Serialize` and `JsonSchema` for our error type provides an
+// implementation of the `HttpResponseContent` trait, which is required to
+// implement `HttpResponseError`:
+#[derive(serde::Serialize, schemars::JsonSchema)]
+// `HttpResponseError` also requires a `std::fmt::Display` implementation,
+// which we'll generate using `thiserror`'s `Error` derive:
+#[derive(thiserror::Error)]
 enum ThingyError {
-    #[allow(dead_code)]
+    // First, define some application-specific error variants that represent
+    // structured error responses from our API:
+    /// No thingies are currently available to satisfy this request.
     #[error("no thingies are currently available")]
     NoThingies,
+
+    /// The requested thingy is invalid.
     #[error("invalid thingy: {:?}", .name)]
     InvalidThingy { name: String },
-    #[error("{message}")]
+
+    // Then, we'll define a variant that can be constructed from a
+    // `dropshot::HttpError`, so that errors returned by Dropshot can also be
+    // represented in the error schema for our API:
+    #[error("{internal_message}")]
     Other {
         message: String,
+        error_code: Option<String>,
+
+        // Skip serializing these fields, as they are used for the
+        // `fmt::Display` implementation and for determining the status
+        // code, respectively, rather than included in the response body:
         #[serde(skip)]
         internal_message: String,
         #[serde(skip)]
         status: ErrorStatusCode,
-        error_code: Option<String>,
     },
 }
 
-/// Any type implementing `dropshot::HttpResponseError` and
-/// `HttpResponseContent` may be used as an error type for a
-/// return value from an endpoint handler.
 impl HttpResponseError for ThingyError {
     // Note that this method returns a `dropshot::ErrorStatusCode`, rather than
     // an `http::StatusCode`. This type is a refinement of `http::StatusCode`
@@ -86,7 +117,17 @@ struct Thingy {
 
 #[derive(Deserialize, JsonSchema)]
 struct ThingyPathParams {
-    name: String,
+    name: ThingyName,
+}
+
+// Using an enum as a path parameter allows the API to also return extractor
+// errors. Try sending a `GET` request for `/thingy/baz` or similar to see how
+// the extractor error is converted into our custom error representation.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum ThingyName {
+    Foo,
+    Bar,
 }
 
 /// Fetch the thingy with the provided name.
@@ -99,7 +140,7 @@ async fn get_thingy(
     path_params: Path<ThingyPathParams>,
 ) -> Result<HttpResponseOk<Thingy>, ThingyError> {
     let ThingyPathParams { name } = path_params.into_inner();
-    Err(ThingyError::InvalidThingy { name })
+    Err(ThingyError::InvalidThingy { name: format!("{name:?}") })
 }
 
 #[endpoint {
@@ -112,7 +153,8 @@ async fn get_nothing(
     Err(ThingyError::NoThingies)
 }
 
-/// An example of an endpoint which returns a `Result<_, HttpError>`.
+/// Endpoints which return `Result<_, HttpError>` may be part of the same
+/// API as endpoints which return user-defined error types.
 #[endpoint {
     method = GET,
     path = "/something",

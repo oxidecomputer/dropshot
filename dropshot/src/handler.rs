@@ -364,6 +364,143 @@ where
 /// Dropshot's [`HttpError`] type implements `HttpResponseError`, so handlers
 /// may return `Result<T, HttpError>` without the need to define a custom error
 /// type.
+///
+/// # Examples
+///
+/// First, let's consider an implementation of `HttpResponseError` for a simple
+/// struct. In practice, the case of an error struct that just contains a string
+/// message is generally better served by returning Dropshot's [`HttpError`]
+/// type.
+///
+/// ```rust
+/// use dropshot::HttpError;
+/// use dropshot::HttpResponseError;
+/// use dropshot::ErrorStatusCode;
+/// use std::fmt;
+///
+/// #[derive(Debug)]
+/// // Deriving `Serialize` and `JsonSchema` for our error type provides an
+/// // implementation of the `HttpResponseContent` trait.
+/// #[derive(serde::Serialize, schemars::JsonSchema)]
+/// struct MyError {
+///     /// An arbitrary string error message.
+///     message: String,
+///     /// The status code for the response.
+///     //
+///     // We skip serializing this, as it need not be part of the response
+///     // body.
+///     #[serde(skip)]
+///     status_code: ErrorStatusCode,
+/// }
+///
+/// // Types implementing `HttpResponseError` must provide a `From<HttpError>`
+/// // conversion, to allow them to represent errors returned by request
+/// // extractors and response body serialization.
+/// impl From<HttpError> for MyError {
+///     fn from(error: HttpError) -> Self {
+///         MyError {
+///             message: error.external_message,
+///             status_code: error.status_code,
+///         }
+///     }
+/// }
+///
+/// // Types implementing `HttpResponseError` must provide a `fmt::Display`
+/// // implementation, so that the error can be logged.
+/// impl fmt::Display for MyError {
+///     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+///         f.write_str(&self.message)
+///     }
+/// }
+///
+/// // Finally, we can implement the `HttpResponseError` trait itself,
+/// // defining the method through which the error provides dropshot with
+/// // the response's status code.
+/// impl HttpResponseError for MyError {
+///     // Note that this method returns a `ErrorStatusCode`, rather
+///     // than an `http::StatusCode`. This type is a refinement of
+///     // `http::StatusCode` that can only be constructed from status codes
+///     // in the 4xx (client error) or 5xx (server error) ranges.
+///     fn status_code(&self) -> ErrorStatusCode {
+///         self.status_code
+///     }
+/// }
+/// ```
+///
+/// A common use case for custom error types is to provide a structured enum
+/// error in the OpenAPI description that clients can consume programmatically.
+/// For example:
+///
+/// ```rust
+/// use dropshot::HttpError;
+/// use dropshot::HttpResponseError;
+/// use dropshot::ErrorStatusCode;
+///
+/// // Here, we'll use `thiserror`'s derive macro for `std::error::Error` to
+/// // generate the `fmt::Display` implementation for our error enum.
+/// #[derive(Debug, thiserror::Error, serde::Serialize, schemars::JsonSchema)]
+/// enum ThingyError {
+///     // Define some structured error variants that represent error
+///     // conditions specific to our API:
+///     #[error("no thingies are currently available")]
+///     NoThingies,
+///     #[error("invalid thingy: {:?}", .name)]
+///     InvalidThingy { name: String },
+///
+///     // This variant is used when constructing a `ThingyError` from a
+///     // dropshot `HttpError`:
+///     #[error("{internal_message}")]
+///     Other {
+///         message: String,
+///         error_code: Option<String>,
+///         // Skip serializing these fields, as they are used for the
+///         // `fmt::Display` implementation and for determining the status
+///         // code, respectively, rather than included in the response body:
+///         #[serde(skip)]
+///         internal_message: String,
+///         #[serde(skip)]
+///         status: ErrorStatusCode,
+///     },
+/// }
+///
+/// // Provide a conversion from `HttpError` for our error type:
+/// impl From<HttpError> for ThingyError {
+///     fn from(error: HttpError) -> Self {
+///         ThingyError::Other {
+///             message: error.external_message,
+///             internal_message: error.internal_message,
+///             status: error.status_code,
+///             error_code: error.error_code,
+///         }
+///     }
+/// }
+///
+/// // Implement `HttpResponseError` for our error type:
+/// impl HttpResponseError for ThingyError {
+///    fn status_code(&self) -> ErrorStatusCode {
+///        match self {
+///            ThingyError::NoThingies => {
+///                // The `ErrorStatusCode` type provides constants for all
+///                // well-known 4xx and 5xx status codes, such as 503 Service
+///                // Unavailable.
+///                ErrorStatusCode::SERVICE_UNAVAILABLE
+///            }
+///            ThingyError::InvalidThingy { .. } => {
+///                // Alternatively, an `ErrorStatusCode` can be constructed
+///                // from a `u16`, but the `ErrorStatusCode::from_u16`
+///                // constructor validates that the status code is a 4xx
+//                 // or 5xx.
+///                //
+///                // This allows using extended status codes, while still
+///                // ensuring that they are errors.
+///                ErrorStatusCode::from_u16(442)
+///                    .expect("442 is a 4xx status code")
+///            }
+///            ThingyError::Other { status, .. } => *status,
+///        }
+///    }
+///}
+/// ```
 #[diagnostic::on_unimplemented(
     note = "consider using `dropshot::HttpError`, unless custom error \
      presentation is needed"
@@ -430,8 +567,9 @@ pub trait HttpResponseError:
 //      2. Result<ResponseType, ErrorType>
 //            |
 //            | This may fail with an error type implementing the
-//            | `HttpResponseError` trait, which we can convert into a
-//            | `HandlerError`, which we return directly.
+//            | `HttpResponseError` trait, which we will convert into a
+//            | `HandlerError` and return.
+//            |
 //            | On success, this will be Ok(ResponseType) for some specific
 //            | ResponseType that implements HttpResponse.  We'll end up
 //            | invoking:
@@ -444,7 +582,7 @@ pub trait HttpResponseError:
 //            | user-defined error `ErrorType`, and then serialize that into a
 //            | `HandlerError`.  This seems a bit weird, but it's how we allow
 //            | user-defined handler error types to customize the presentation
-//            | of erorrs serializing responses.
+//            | of errors serializing responses.
 //            v
 //      4. Result<Response<Body>, HandlerError>
 //
