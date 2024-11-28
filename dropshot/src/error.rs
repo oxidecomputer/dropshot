@@ -66,7 +66,7 @@
 //! we recommend a separate enum to represent their errors in an HTTP-agnostic
 //! way.  Consumers can provide a `From` implementation that converts these
 //! errors into `HttpError`s, or implement the [`HttpResponseError`] trait to
-//! provide their own mechanism
+//! provide their own mechanism.
 
 use hyper::Error as HyperError;
 use schemars::JsonSchema;
