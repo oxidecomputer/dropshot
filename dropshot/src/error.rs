@@ -42,7 +42,7 @@
 //! error code, external message (for sending in the response), optional
 //! metadata, and an internal message (for the log file or other
 //! instrumentation).  This type is used for errors produced within Dropshot,
-//! such by extractors, and implements `HttpResponseError`, so that the HTTP
+//! such as by extractors, and implements `HttpResponseError`, so that the HTTP
 //! layers of the request-handling stack may use this struct directly when
 //! specific error presentation is not needed.  By the time an error bubbles up
 //! to the top of the request handling stack, it must be a type that implements
