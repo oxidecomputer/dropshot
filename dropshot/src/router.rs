@@ -1,7 +1,7 @@
 // Copyright 2024 Oxide Computer Company
 //! Routes incoming HTTP requests to handler functions
 
-use super::error::ClientErrorStatusCode;
+use super::error_status_code::ClientErrorStatusCode;
 use super::error::HttpError;
 use super::handler::RouteHandler;
 

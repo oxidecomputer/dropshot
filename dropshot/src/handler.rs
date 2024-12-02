@@ -31,7 +31,7 @@
 //! facilities don't seem that valuable right now since they largely don't affect
 //! OpenAPI document generation.
 
-use super::error::ErrorStatusCode;
+use super::error_status_code::ErrorStatusCode;
 use super::error::HttpError;
 use super::extractor::RequestExtractor;
 use super::http_util::CONTENT_TYPE_JSON;
