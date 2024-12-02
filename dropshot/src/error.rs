@@ -962,8 +962,8 @@ pub enum InvalidErrorStatusCode {
     /// The input was not an error (4xx or 5xx) status code.
     #[error(transparent)]
     NotAnError(#[from] NotAnError),
-    /// The nput was not a valid number, was less than 100, or was greater than
-    /// 999.
+    /// The input was not a valid number, was less than 100, or was greater
+    /// than 999.
     #[error(transparent)]
     InvalidStatus(#[from] http::status::InvalidStatusCode),
 }
@@ -975,8 +975,8 @@ pub enum InvalidClientErrorStatusCode {
     /// The input was not a client error (4xx) status code.
     #[error(transparent)]
     NotAClientError(#[from] NotAClientError),
-    /// The nput was not a valid number, was less than 100, or was greater than
-    /// 999.
+    /// The input was not a valid number, was less than 100, or was greater
+    /// than 999.
     #[error(transparent)]
     InvalidStatus(#[from] http::status::InvalidStatusCode),
 }
