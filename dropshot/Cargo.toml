@@ -74,7 +74,7 @@ version = "1.0.215"
 features = [ "derive" ]
 
 [dependencies.tokio]
-version = "1.38"
+version = "1.41"
 features = [ "full" ]
 
 [dependencies.usdt]
