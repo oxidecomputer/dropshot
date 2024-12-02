@@ -209,7 +209,6 @@ macro_rules! impl_status_code_wrapper {
 }
 
 impl ErrorStatusCode {
-
     // These constants are copied from the `http` crate's `StatusCode` type.
     // Should new status codes be standardized and added upstream, we should add
     // them to this list.
@@ -436,7 +435,6 @@ impl_status_code_wrapper! {
 pub struct ClientErrorStatusCode(http::StatusCode);
 
 impl ClientErrorStatusCode {
-
     // These constants are copied from the `http` crate's `StatusCode` type.
     // Should new status codes be standardized and added upstream, we should add
     // them to this list.

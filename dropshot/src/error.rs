@@ -68,14 +68,14 @@
 //! errors into `HttpError`s, or implement the [`HttpResponseError`] trait to
 //! provide their own mechanism.
 
+use crate::ClientErrorStatusCode;
+use crate::ErrorStatusCode;
 use hyper::Error as HyperError;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::error::Error;
 use std::fmt;
-use crate::ErrorStatusCode;
-use crate::ClientErrorStatusCode;
 
 /// `HttpError` represents an error generated as part of handling an API
 /// request.  When these bubble up to the top of the request handling stack

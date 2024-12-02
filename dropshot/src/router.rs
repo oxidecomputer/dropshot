@@ -1,8 +1,8 @@
 // Copyright 2024 Oxide Computer Company
 //! Routes incoming HTTP requests to handler functions
 
-use super::error_status_code::ClientErrorStatusCode;
 use super::error::HttpError;
+use super::error_status_code::ClientErrorStatusCode;
 use super::handler::RouteHandler;
 
 use crate::api_description::ApiEndpointVersions;
