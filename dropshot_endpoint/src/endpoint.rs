@@ -35,7 +35,7 @@ pub(crate) fn usage_str(context: &str) -> String {
         [body_param: UntypedBody,]
         [body_param: StreamingBody,]
         [raw_request: RawRequest,]
-    ) -> Result<HttpResponse*, HttpError>"
+    ) -> Result<HttpResponse*, impl HttpResponseError>"
     )
 }
 

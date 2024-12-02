@@ -7,7 +7,7 @@ error: endpoint handlers must have the following signature:
                [body_param: UntypedBody,]
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
-           ) -> Result<HttpResponse*, HttpError>
+           ) -> Result<HttpResponse*, impl HttpResponseError>
   --> tests/fail/bad_endpoint11.rs:12:1
    |
 12 | async fn bad_no_result(_: RequestContext<()>) {}
