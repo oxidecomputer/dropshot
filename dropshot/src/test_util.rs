@@ -399,6 +399,11 @@ pub struct TypedErrorClientTestContext<'client, E> {
     _error: PhantomData<fn(E)>,
 }
 
+// A manual implementation of `Clone` is required to avoid requiring that `E:
+// Clone`, as this type does not actually contain an `E`. Unfortunately,
+// `#[derive(Clone)]` is not aware of `PhantomData`, and will always require
+// that all of a generic type's type parameters are `Clone`, even if the type
+// does not actually contain them.
 impl<E> Clone for TypedErrorClientTestContext<'_, E> {
     fn clone(&self) -> Self {
         Self { client: self.client, _error: PhantomData }

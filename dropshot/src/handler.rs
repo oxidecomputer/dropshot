@@ -366,9 +366,9 @@ where
 
 /// An error type which can be converted into an HTTP response.
 ///
-/// If a handler function's return value is a [`Result`], the error type must
-/// implement this trait, so that a response can be generated when the handler
-/// returns an error.  In order to implement this trait, a type must:
+/// The error types returned by handlers must implement this trait, so that a
+/// response can be generated when the handler returns an error.  In order to
+/// implement this trait, a type must:
 ///
 /// 1. Implement the [`HttpResponseContent`] trait, defining the content of the
 ///    error's response body.  This is most simply done by implementing the

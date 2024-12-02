@@ -344,12 +344,13 @@ impl Error for HttpError {
 /// [`http::StatusCode`] using the `TryFrom` implementation, which fails if the
 /// status is not a 4xx or 5xx status code.
 ///
-/// Alternatively, constants are provided for known error status codes,
-/// such as [`ErrorStatusCode::BAD_REQUEST`], [`ErrorStatusCode::NOT_FOUND`],
+/// Alternatively, constants are provided for known error status codes, such as
+/// [`ErrorStatusCode::BAD_REQUEST`], [`ErrorStatusCode::NOT_FOUND`],
 /// [`ErrorStatusCode::INTERNAL_SERVER_ERROR`], and so on, including those in
 /// the IANA HTTP Status Code Registry](
 /// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml).
-/// Using these constants avoids the fallible conversion from an [`http::StatusCode`].
+/// Using these constants avoids the fallible conversion from an
+/// [`http::StatusCode`].
 ///
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ErrorStatusCode(http::StatusCode);
