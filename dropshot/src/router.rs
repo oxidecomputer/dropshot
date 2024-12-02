@@ -531,7 +531,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
         if node.methods.values().any(|handlers| {
             find_handler_matching_version(handlers, version).is_some()
         }) {
-            Err(HttpError::for_status(
+            Err(HttpError::for_client_error_with_status(
                 None,
                 ClientErrorStatusCode::METHOD_NOT_ALLOWED,
             ))

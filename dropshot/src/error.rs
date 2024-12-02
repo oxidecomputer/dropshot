@@ -264,7 +264,7 @@ impl HttpError {
     /// internal and external messages for the error come from the standard label
     /// for this status code (e.g., the message for status code 404 is "Not
     /// Found").
-    pub fn for_status(
+    pub fn for_client_error_with_status(
         error_code: Option<String>,
         status_code: ClientErrorStatusCode,
     ) -> Self {
