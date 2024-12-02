@@ -82,7 +82,6 @@ pub struct ClientTestContext {
     pub client_log: Logger,
 }
 
-
 // Macro to generate methods on `ClientTestContext` and
 // `TypedErrorClientTestContext` that have identical implementations but
 // differing error types. The type for which this macro is invoked must have a

@@ -3,6 +3,7 @@
 //! Test cases for user-defined error types.
 
 use dropshot::endpoint;
+use dropshot::test_util::TestContext;
 use dropshot::ApiDescription;
 use dropshot::ErrorStatusCode;
 use dropshot::HttpError;
@@ -10,7 +11,6 @@ use dropshot::HttpResponseError;
 use dropshot::HttpResponseOk;
 use dropshot::Path;
 use dropshot::RequestContext;
-use dropshot::test_util::TestContext;
 use http::Method;
 use http::StatusCode;
 use schemars::JsonSchema;
@@ -140,7 +140,6 @@ async fn struct_error_handler(
     path: Path<HandlerPathParam>,
 ) -> Result<HttpResponseOk<()>, StructError> {
     struct_error_inner(path)
-
 }
 
 // A handler that returns a `dropshot::HttpError`. This is used by the OpenAPI
@@ -156,7 +155,9 @@ async fn dropshot_error_handler(
     Err(HttpError::for_internal_error("something bad happened".to_string()))
 }
 
-fn enum_error_inner(path: Path<HandlerPathParam>) -> Result<HttpResponseOk<()>, EnumError> {
+fn enum_error_inner(
+    path: Path<HandlerPathParam>,
+) -> Result<HttpResponseOk<()>, EnumError> {
     let HandlerPathParam { should_error } = path.into_inner();
     if should_error {
         Err(EnumError::OverfullHbox { badness: 10000, line: 42 })
@@ -165,7 +166,9 @@ fn enum_error_inner(path: Path<HandlerPathParam>) -> Result<HttpResponseOk<()>, 
     }
 }
 
-fn struct_error_inner(path: Path<HandlerPathParam>) -> Result<HttpResponseOk<()>, StructError> {
+fn struct_error_inner(
+    path: Path<HandlerPathParam>,
+) -> Result<HttpResponseOk<()>, StructError> {
     let HandlerPathParam { should_error } = path.into_inner();
     if should_error {
         Err(StructError {
@@ -222,7 +225,6 @@ enum ApiImpl {}
 impl CustomErrorApi for ApiImpl {
     type Context = ();
 
-
     async fn enum_error(
         _rqctx: RequestContext<()>,
         path: Path<HandlerPathParam>,
@@ -256,7 +258,6 @@ async fn test_enum_user_error() {
     );
     do_enum_user_error_test(testctx).await;
 }
-
 
 async fn do_enum_user_error_test(testctx: TestContext<()>) {
     let json = testctx

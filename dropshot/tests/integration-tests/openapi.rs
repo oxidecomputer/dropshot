@@ -599,10 +599,11 @@ fn test_openapi_custom_error_types() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[test]
 fn test_openapi_custom_error_types_trait_based() -> anyhow::Result<()> {
-    let api = super::custom_errors::custom_error_api_mod::stub_api_description().unwrap();
+    let api =
+        super::custom_errors::custom_error_api_mod::stub_api_description()
+            .unwrap();
     let mut output = Cursor::new(Vec::new());
 
     let _ =
