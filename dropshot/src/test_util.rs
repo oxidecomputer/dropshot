@@ -82,6 +82,143 @@ pub struct ClientTestContext {
     pub client_log: Logger,
 }
 
+
+// Macro to generate methods on `ClientTestContext` and
+// `TypedErrorClientTestContext` that have identical implementations but
+// differing error types. The type for which this macro is invoked must have a
+// `async fn make_request_with_request` method, as the generated methods call
+// that.
+macro_rules! impl_client_test_context {
+    { type Error = $Error:ty; } => {
+        /// Execute an HTTP request against the test server and perform basic
+        /// validation of the result, including:
+        ///
+        /// - the expected status code
+        /// - the expected Date header (within reason)
+        /// - for error responses: the expected body content
+        /// - header names are in allowed list
+        /// - any other semantics that can be verified in general
+        ///
+        /// The body will be JSON encoded.
+        pub async fn make_request<RequestBodyType: Serialize + Debug>(
+            &self,
+            method: Method,
+            path: &str,
+            request_body: Option<RequestBodyType>,
+            expected_status: StatusCode,
+        ) -> Result<Response<Body>, $Error> {
+            let body = match request_body {
+                None => Body::empty(),
+                Some(input) => serde_json::to_string(&input).unwrap().into(),
+            };
+
+            self.make_request_with_body(method, path, body, expected_status).await
+        }
+
+        /// Execute an HTTP request against the test server and perform basic
+        /// validation of the result like [`ClientTestContext::make_request`],
+        /// but with a content type of "application/x-www-form-urlencoded".
+        pub async fn make_request_url_encoded<
+            RequestBodyType: Serialize + Debug,
+        >(
+            &self,
+            method: Method,
+            path: &str,
+            request_body: Option<RequestBodyType>,
+            expected_status: StatusCode,
+        ) -> Result<Response<Body>, $Error> {
+            let body: Body = match request_body {
+                None => Body::empty(),
+                Some(input) => serde_urlencoded::to_string(&input).unwrap().into(),
+            };
+
+            self.make_request_with_body_url_encoded(
+                method,
+                path,
+                body,
+                expected_status,
+            )
+            .await
+        }
+
+        pub async fn make_request_no_body(
+            &self,
+            method: Method,
+            path: &str,
+            expected_status: StatusCode,
+        ) -> Result<Response<Body>, $Error> {
+            self.make_request_with_body(
+                method,
+                path,
+                Body::empty(),
+                expected_status,
+            )
+            .await
+        }
+
+        /// Fetches a resource for which we expect to get an error response.
+        pub async fn make_request_error(
+            &self,
+            method: Method,
+            path: &str,
+            expected_status: StatusCode,
+        ) -> $Error {
+            self.make_request_with_body(method, path, "".into(), expected_status)
+                .await
+                .unwrap_err()
+        }
+
+        /// Fetches a resource for which we expect to get an error response.
+        /// TODO-cleanup the make_request_error* interfaces are slightly
+        /// different than the non-error ones (and probably a bit more
+        /// ergonomic).
+        pub async fn make_request_error_body<T: Serialize + Debug>(
+            &self,
+            method: Method,
+            path: &str,
+            body: T,
+            expected_status: StatusCode,
+        ) -> $Error {
+            self.make_request(method, path, Some(body), expected_status)
+                .await
+                .unwrap_err()
+        }
+
+        pub async fn make_request_with_body(
+            &self,
+            method: Method,
+            path: &str,
+            body: Body,
+            expected_status: StatusCode,
+        ) -> Result<Response<Body>, $Error> {
+            let uri = self.url(path);
+            let request = Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(body)
+                .expect("attempted to construct invalid request");
+            self.make_request_with_request(request, expected_status).await
+        }
+
+        pub async fn make_request_with_body_url_encoded(
+            &self,
+            method: Method,
+            path: &str,
+            body: Body,
+            expected_status: StatusCode,
+        ) -> Result<Response<Body>, $Error> {
+            let uri = self.url(path);
+            let request = Request::builder()
+                .method(method)
+                .header(http::header::CONTENT_TYPE, CONTENT_TYPE_URL_ENCODED)
+                .uri(uri)
+                .body(body)
+                .expect("attempted to construct invalid request");
+            self.make_request_with_request(request, expected_status).await
+        }
+    }
+}
+
 impl ClientTestContext {
     /// Set up a `ClientTestContext` for running tests against an API server.
     pub fn new(server_addr: SocketAddr, log: Logger) -> ClientTestContext {
@@ -125,130 +262,8 @@ impl ClientTestContext {
         TypedErrorClientTestContext { client: self, _error: PhantomData }
     }
 
-    /// Execute an HTTP request against the test server and perform basic
-    /// validation of the result, including:
-    ///
-    /// - the expected status code
-    /// - the expected Date header (within reason)
-    /// - for error responses: the expected body content
-    /// - header names are in allowed list
-    /// - any other semantics that can be verified in general
-    ///
-    /// The body will be JSON encoded.
-    pub async fn make_request<RequestBodyType: Serialize + Debug>(
-        &self,
-        method: Method,
-        path: &str,
-        request_body: Option<RequestBodyType>,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, HttpErrorResponseBody> {
-        let body = match request_body {
-            None => Body::empty(),
-            Some(input) => serde_json::to_string(&input).unwrap().into(),
-        };
-
-        self.make_request_with_body(method, path, body, expected_status).await
-    }
-
-    /// Execute an HTTP request against the test server and perform basic
-    /// validation of the result like [`ClientTestContext::make_request`], but
-    /// with a content type of "application/x-www-form-urlencoded".
-    pub async fn make_request_url_encoded<
-        RequestBodyType: Serialize + Debug,
-    >(
-        &self,
-        method: Method,
-        path: &str,
-        request_body: Option<RequestBodyType>,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, HttpErrorResponseBody> {
-        let body: Body = match request_body {
-            None => Body::empty(),
-            Some(input) => serde_urlencoded::to_string(&input).unwrap().into(),
-        };
-
-        self.make_request_with_body_url_encoded(
-            method,
-            path,
-            body,
-            expected_status,
-        )
-        .await
-    }
-
-    pub async fn make_request_no_body(
-        &self,
-        method: Method,
-        path: &str,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, HttpErrorResponseBody> {
-        self.make_request_with_body(
-            method,
-            path,
-            Body::empty(),
-            expected_status,
-        )
-        .await
-    }
-
-    /// Fetches a resource for which we expect to get an error response.
-    pub async fn make_request_error(
-        &self,
-        method: Method,
-        path: &str,
-        expected_status: StatusCode,
-    ) -> HttpErrorResponseBody {
-        self.make_request_with_body(method, path, "".into(), expected_status)
-            .await
-            .unwrap_err()
-    }
-
-    /// Fetches a resource for which we expect to get an error response.
-    /// TODO-cleanup the make_request_error* interfaces are slightly different
-    /// than the non-error ones (and probably a bit more ergonomic).
-    pub async fn make_request_error_body<T: Serialize + Debug>(
-        &self,
-        method: Method,
-        path: &str,
-        body: T,
-        expected_status: StatusCode,
-    ) -> HttpErrorResponseBody {
-        self.make_request(method, path, Some(body), expected_status)
-            .await
-            .unwrap_err()
-    }
-
-    pub async fn make_request_with_body(
-        &self,
-        method: Method,
-        path: &str,
-        body: Body,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, HttpErrorResponseBody> {
-        let uri = self.url(path);
-        let request = Request::builder()
-            .method(method)
-            .uri(uri)
-            .body(body)
-            .expect("attempted to construct invalid request");
-        self.make_request_with_request(request, expected_status).await
-    }
-
-    pub async fn make_request_with_body_url_encoded(
-        &self,
-        method: Method,
-        path: &str,
-        body: Body,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, HttpErrorResponseBody> {
-        let uri = self.url(path);
-        let request = Request::builder()
-            .method(method)
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_URL_ENCODED)
-            .uri(uri)
-            .body(body)
-            .expect("attempted to construct invalid request");
-        self.make_request_with_request(request, expected_status).await
+    impl_client_test_context! {
+        type Error = HttpErrorResponseBody;
     }
 
     pub async fn make_request_with_request(
@@ -422,130 +437,10 @@ where
         self.client.url(path)
     }
 
-    /// Execute an HTTP request against the test server and perform basic
-    /// validation of the result, including:
-    ///
-    /// - the expected status code
-    /// - the expected Date header (within reason)
-    /// - for error responses: the expected body content
-    /// - header names are in allowed list
-    /// - any other semantics that can be verified in general
-    ///
-    /// The body will be JSON encoded.
-    pub async fn make_request<RequestBodyType: Serialize + Debug>(
-        &self,
-        method: Method,
-        path: &str,
-        request_body: Option<RequestBodyType>,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, E> {
-        let body = match request_body {
-            None => Body::empty(),
-            Some(input) => serde_json::to_string(&input).unwrap().into(),
-        };
-
-        self.make_request_with_body(method, path, body, expected_status).await
-    }
-
-    /// Execute an HTTP request against the test server and perform basic
-    /// validation of the result like [`ClientTestContext::make_request`], but
-    /// with a content type of "application/x-www-form-urlencoded".
-    pub async fn make_request_url_encoded<
-        RequestBodyType: Serialize + Debug,
-    >(
-        &self,
-        method: Method,
-        path: &str,
-        request_body: Option<RequestBodyType>,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, E> {
-        let body: Body = match request_body {
-            None => Body::empty(),
-            Some(input) => serde_urlencoded::to_string(&input).unwrap().into(),
-        };
-
-        self.make_request_with_body_url_encoded(
-            method,
-            path,
-            body,
-            expected_status,
-        )
-        .await
-    }
-
-    pub async fn make_request_no_body(
-        &self,
-        method: Method,
-        path: &str,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, E> {
-        self.make_request_with_body(
-            method,
-            path,
-            Body::empty(),
-            expected_status,
-        )
-        .await
-    }
-
-    /// Fetches a resource for which we expect to get an error response.
-    pub async fn make_request_error(
-        &self,
-        method: Method,
-        path: &str,
-        expected_status: StatusCode,
-    ) -> E {
-        self.make_request_with_body(method, path, "".into(), expected_status)
-            .await
-            .unwrap_err()
-    }
-
-    /// Fetches a resource for which we expect to get an error response.
-    /// TODO-cleanup the make_request_error* interfaces are slightly different
-    /// than the non-error ones (and probably a bit more ergonomic).
-    pub async fn make_request_error_body<T: Serialize + Debug>(
-        &self,
-        method: Method,
-        path: &str,
-        body: T,
-        expected_status: StatusCode,
-    ) -> E {
-        self.make_request(method, path, Some(body), expected_status)
-            .await
-            .unwrap_err()
-    }
-
-    pub async fn make_request_with_body(
-        &self,
-        method: Method,
-        path: &str,
-        body: Body,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, E> {
-        let uri = self.url(path);
-        let request = Request::builder()
-            .method(method)
-            .uri(uri)
-            .body(body)
-            .expect("attempted to construct invalid request");
-        self.make_request_with_request(request, expected_status).await
-    }
-
-    pub async fn make_request_with_body_url_encoded(
-        &self,
-        method: Method,
-        path: &str,
-        body: Body,
-        expected_status: StatusCode,
-    ) -> Result<Response<Body>, E> {
-        let uri = self.url(path);
-        let request = Request::builder()
-            .method(method)
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_URL_ENCODED)
-            .uri(uri)
-            .body(body)
-            .expect("attempted to construct invalid request");
-        self.make_request_with_request(request, expected_status).await
+    // Generate all the methods with identical implementations to
+    // `ClientTestContext`.
+    impl_client_test_context! {
+        type Error = E;
     }
 
     pub async fn make_request_with_request(
