@@ -1,4 +1,5 @@
 // Copyright 2024 Oxide Computer Company
+// Copyright 2017 http-rs authors
 
 //! Newtypes around [`http::StatusCode`] that are limited to status ranges
 //! representing errors.
@@ -23,6 +24,8 @@ use std::fmt;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ErrorStatusCode(http::StatusCode);
 
+// Generate constants for a `http::StatusCode` wrapper type that re-export the
+// provided constants defined by `http::StatusCode.`
 macro_rules! error_status_code_constants {
     ( $($(#[$docs:meta])* $name:ident;)+ ) => {
         $(
@@ -32,6 +35,10 @@ macro_rules! error_status_code_constants {
     }
 }
 
+// Implement conversions and traits for `http::StatusCode` wrapper types. This
+// generates conversions between the wrapper type and `http::StatusCode`,
+// conversions between the wrapper and types that `StatusCode` has conversions
+// between, and equality and fmt implementations.
 macro_rules! impl_status_code_wrapper {
     (impl StatusCode for $T:ident {
         type NotAnError = $NotAnError:ident;
@@ -202,6 +209,10 @@ macro_rules! impl_status_code_wrapper {
 }
 
 impl ErrorStatusCode {
+
+    // These constants are copied from the `http` crate's `StatusCode` type.
+    // Should new status codes be standardized and added upstream, we should add
+    // them to this list.
     error_status_code_constants! {
         /// 400 Bad Request [[RFC7231, Section
         /// 6.5.1](https://tools.ietf.org/html/rfc7231#section-6.5.1)]
@@ -425,6 +436,10 @@ impl_status_code_wrapper! {
 pub struct ClientErrorStatusCode(http::StatusCode);
 
 impl ClientErrorStatusCode {
+
+    // These constants are copied from the `http` crate's `StatusCode` type.
+    // Should new status codes be standardized and added upstream, we should add
+    // them to this list.
     error_status_code_constants! {
         /// 400 Bad Request [[RFC7231, Section
         /// 6.5.1](https://tools.ietf.org/html/rfc7231#section-6.5.1)]
