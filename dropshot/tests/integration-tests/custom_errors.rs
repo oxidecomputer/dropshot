@@ -10,6 +10,7 @@ use dropshot::HttpResponseError;
 use dropshot::HttpResponseOk;
 use dropshot::Path;
 use dropshot::RequestContext;
+use dropshot::test_util::TestContext;
 use http::Method;
 use http::StatusCode;
 use schemars::JsonSchema;
@@ -17,9 +18,10 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::common;
+
 // Define an enum error type.
 #[derive(Debug, thiserror::Error, Serialize, JsonSchema)]
-enum EnumError {
+pub(crate) enum EnumError {
     // A user-defined custom error variant. This one is one of the classic
     // confusing TeX error messages.
     #[error("overfull \\hbox (badness {badness}) at line {line}")]
@@ -69,7 +71,7 @@ enum DeserializedEnumError {
 // Also, define a struct error type wrapping an enum.
 #[derive(Debug, thiserror::Error, Serialize, JsonSchema)]
 #[error("{message}")]
-struct StructError {
+pub(crate) struct StructError {
     message: String,
     kind: ErrorKind,
     #[serde(skip)]
@@ -114,7 +116,7 @@ impl HttpResponseError for StructError {
 // extractor error and exercise the conversion of dropshot `HttpError`s into the
 // user error type.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-struct HandlerPathParam {
+pub(crate) struct HandlerPathParam {
     should_error: bool,
 }
 
@@ -126,12 +128,7 @@ async fn enum_error_handler(
     _rqctx: RequestContext<()>,
     path: Path<HandlerPathParam>,
 ) -> Result<HttpResponseOk<()>, EnumError> {
-    let HandlerPathParam { should_error } = path.into_inner();
-    if should_error {
-        Err(EnumError::OverfullHbox { badness: 10000, line: 42 })
-    } else {
-        Ok(HttpResponseOk(()))
-    }
+    enum_error_inner(path)
 }
 
 #[endpoint {
@@ -142,16 +139,8 @@ async fn struct_error_handler(
     _rqctx: RequestContext<()>,
     path: Path<HandlerPathParam>,
 ) -> Result<HttpResponseOk<()>, StructError> {
-    let HandlerPathParam { should_error } = path.into_inner();
-    if should_error {
-        Err(StructError {
-            kind: ErrorKind::CantGetYeFlask,
-            message: "can't get ye flask".to_string(),
-            status: ErrorStatusCode::NOT_FOUND,
-        })
-    } else {
-        Ok(HttpResponseOk(()))
-    }
+    struct_error_inner(path)
+
 }
 
 // A handler that returns a `dropshot::HttpError`. This is used by the OpenAPI
@@ -167,13 +156,92 @@ async fn dropshot_error_handler(
     Err(HttpError::for_internal_error("something bad happened".to_string()))
 }
 
+fn enum_error_inner(path: Path<HandlerPathParam>) -> Result<HttpResponseOk<()>, EnumError> {
+    let HandlerPathParam { should_error } = path.into_inner();
+    if should_error {
+        Err(EnumError::OverfullHbox { badness: 10000, line: 42 })
+    } else {
+        Ok(HttpResponseOk(()))
+    }
+}
+
+fn struct_error_inner(path: Path<HandlerPathParam>) -> Result<HttpResponseOk<()>, StructError> {
+    let HandlerPathParam { should_error } = path.into_inner();
+    if should_error {
+        Err(StructError {
+            kind: ErrorKind::CantGetYeFlask,
+            message: "can't get ye flask".to_string(),
+            status: ErrorStatusCode::NOT_FOUND,
+        })
+    } else {
+        Ok(HttpResponseOk(()))
+    }
+}
+
 pub(crate) fn api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(enum_error_handler).unwrap();
     api.register(struct_error_handler).unwrap();
-
     api.register(dropshot_error_handler).unwrap();
     api
+}
+
+#[dropshot::api_description]
+pub(crate) trait CustomErrorApi {
+    type Context;
+
+    #[endpoint {
+        method = GET,
+        path = "/test/enum-error/{should_error}",
+    }]
+    async fn enum_error(
+        rqctx: RequestContext<Self::Context>,
+        path: Path<HandlerPathParam>,
+    ) -> Result<HttpResponseOk<()>, EnumError>;
+
+    #[endpoint {
+        method = GET,
+        path = "/test/struct-error/{should_error}",
+    }]
+    async fn struct_error(
+        rqctx: RequestContext<Self::Context>,
+        path: Path<HandlerPathParam>,
+    ) -> Result<HttpResponseOk<()>, StructError>;
+
+    #[endpoint {
+        method = GET,
+        path = "/test/dropshot-error/",
+    }]
+    async fn dropshot_error(
+        rqctx: RequestContext<Self::Context>,
+    ) -> Result<HttpResponseOk<()>, HttpError>;
+}
+
+enum ApiImpl {}
+
+impl CustomErrorApi for ApiImpl {
+    type Context = ();
+
+
+    async fn enum_error(
+        _rqctx: RequestContext<()>,
+        path: Path<HandlerPathParam>,
+    ) -> Result<HttpResponseOk<()>, EnumError> {
+        enum_error_inner(path)
+    }
+
+    async fn struct_error(
+        _rqctx: RequestContext<()>,
+        path: Path<HandlerPathParam>,
+    ) -> Result<HttpResponseOk<()>, StructError> {
+        struct_error_inner(path)
+    }
+
+    async fn dropshot_error(
+        _rqctx: RequestContext<()>,
+    ) -> Result<HttpResponseOk<()>, HttpError> {
+        Err(HttpError::for_internal_error("something bad happened".to_string()))
+    }
 }
 
 // Test case: the enum error handler returns the user-defiend error variant.
@@ -186,6 +254,11 @@ async fn test_enum_user_error() {
         (),
         dropshot::HandlerTaskMode::Detached,
     );
+    do_enum_user_error_test(testctx).await;
+}
+
+
+async fn do_enum_user_error_test(testctx: TestContext<()>) {
     let json = testctx
         .client_testctx
         .with_error_type::<DeserializedEnumError>()
@@ -248,6 +321,10 @@ async fn test_struct_user_error() {
         (),
         dropshot::HandlerTaskMode::Detached,
     );
+    do_struct_user_error_test(testctx).await;
+}
+
+async fn do_struct_user_error_test(testctx: TestContext<()>) {
     let json = testctx
         .client_testctx
         .with_error_type::<DeserializedStructError>()
@@ -301,4 +378,36 @@ async fn test_struct_extractor_error() {
     );
 
     testctx.teardown().await;
+}
+
+// Test cases for trait-based APIs.
+
+#[test]
+fn test_trait_based_api() {
+    custom_error_api_mod::stub_api_description().unwrap();
+    custom_error_api_mod::api_description::<ApiImpl>().unwrap();
+}
+
+#[tokio::test]
+async fn test_trait_enum_user_error() {
+    let api = custom_error_api_mod::api_description::<ApiImpl>().unwrap();
+    let testctx = common::test_setup_with_context(
+        "test_trait_enum_user_error",
+        api,
+        (),
+        dropshot::HandlerTaskMode::Detached,
+    );
+    do_struct_user_error_test(testctx).await;
+}
+
+#[tokio::test]
+async fn test_trait_struct_user_error() {
+    let api = custom_error_api_mod::api_description::<ApiImpl>().unwrap();
+    let testctx = common::test_setup_with_context(
+        "test_trait_struct_user_error",
+        api,
+        (),
+        dropshot::HandlerTaskMode::Detached,
+    );
+    do_struct_user_error_test(testctx).await;
 }
