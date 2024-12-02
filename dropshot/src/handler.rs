@@ -274,6 +274,10 @@ where
 /// [`HttpResponseError`].  We type-erase such errors by eagerly converting them
 /// into `Response<Body>` within the `HttpHandlerFunc` implementation, to permit
 /// the API to consist of handlers with any number of different error types.
+///
+/// This type is not exported to Dropshot consumers; it is purely an internal
+/// implementation detail of the interface between `HttpHandlerFunc` and the
+/// server.
 pub enum HandlerError {
     /// An error returned by a fallible handler function itself.
     ///
