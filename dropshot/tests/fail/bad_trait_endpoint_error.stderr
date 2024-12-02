@@ -1,0 +1,20 @@
+error: endpoint handlers must have the following signature:
+           async fn(
+               rqctx: dropshot::RequestContext<Self::Context>,
+               [query_params: Query<Q>,]
+               [path_params: Path<P>,]
+               [body_param: TypedBody<J>,]
+               [body_param: UntypedBody,]
+               [body_param: StreamingBody,]
+               [raw_request: RawRequest,]
+           ) -> Result<HttpResponse*, HttpError>
+ --> tests/fail/bad_trait_endpoint_error.rs:9:7
+  |
+9 | trait MyApi {
+  |       ^^^^^
+
+error: endpoint `bad_error_type` must not have a `self` argument
+  --> tests/fail/bad_trait_endpoint_error.rs:14:9
+   |
+14 |         &self,
+   |         ^^^^^
