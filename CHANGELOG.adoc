@@ -26,6 +26,84 @@ Defining the old config option will produce an error, guiding you to perform the
 ** `rqctx.path_variables` is now `rqctx.endpoint.variables`.
 ** `rqctx.body_content_type` is now `rqctx.endpoint.body_content_type`.
 
+* The `HttpError` type now contains a `dropshot::ErrorStatusCode` rather than an
+`http::StatusCode`. An `ErrorStatusCode` is a newtype around `http::StatusCode`
+that may only be constructed from 4xx or 5xx status codes.
++
+Code which uses `http::StatusCode`'s constants for well-known status codes can
+be updated to the new API by replacing `http::StatusCode::...` with
+`dropshot::ErrorStatusCode`. For example:
++
+```rust
+dropshot::HttpError {
+    status: http::StatusCode::NOT_FOUND,
+    // ...
+}
+```
++
+becomes:
++
+```rust
+dropshot::HttpError {
+    status: dropshot::ErrorStatusCode::NOT_FOUND,
+    // ...
+}
+```
++
+To represent extension status codes that lack well-known constants, use
+`ErrorStatusCode::from_u16` (or the corresponding `TryFrom` implementation).
+This is analogous to the similarly-named method on `http::StatusCode`, so this:
++
+```rust
+http::StatusCode::from_u16(420).expect("420 is a valid status code")
+```
++
+becomes this:
++
+```rust
+dropshot::ErrorStatusCode::from_u16(420).expect("420 is a valid 4xx status code")
+```
++
+Finally, note that `ErrorStatusCode` implements `TryFrom<http::StatusCode>`, so
+`StatusCode`s from external sources may be converted into `ErrorStatusCode`s as
+necessary.
+
+* The `HttpError::for_status` constructor, which required that the provided
+status code be a 4xx client error and panicked if it was not, has been removed.
+It has been replaced with a new `HttpError::for_client_error_with_status`
+constructor, which takes a `dropshot::ClientErrorStatusCode` type rather than a
+`http::StatusCode`. Ensuring that only client errors are passed to this
+constructor at the type level removes the often-surprising panic on non-4xx errors.
++
+`ClientErrorStatusCode` provides constants for each well known 4xx status code,
+similarly to `ErrorStatusCode`. Uses of `HttpError::for_status`
+that use a constant status code, like this:
++
+```rust
+HttpError::for_status(None, http::StatusCode::GONE)
+```
++
+becomes this:
++
+```rust
+HttpError::for_client_error_with_status(None, dropshot::ClientErrorStatusCode::GONE)
+```
++
+Additionally, `ErrorStatusCode` provides an `as_client_error` method that
+returns a `ClientErrorStatusCode` if the status code is a client error, or an
+error.
+
+=== Other notable changes
+
+* Endpoint handler functions may now return any error type that implements the
+new `dropshot::HttpResponseError` trait. Previously, they could only return
+`dropshot::HttpError`. This change permits endpoints to return user-defined
+error types, and generate OpenAPI response schemas for those types.
++
+For details on how to implement `HttpResponseError` for user-defined types, see
+the trait documentation, or
+https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/custom-error.rs[`examples/custom-error.rs`].
+
 == 0.13.0 (released 2024-11-13)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.12.0\...v0.13.0[Full list of commits]
