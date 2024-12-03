@@ -969,19 +969,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     openapiv3::StatusCode::Code(code.as_u16()),
                     openapiv3::ReferenceOr::Item(response),
                 );
-            } else {
-                // The `Ok` response could be any status code, so emit it as
-                // the default response.
-                operation.responses.default =
-                    Some(openapiv3::ReferenceOr::Item(response));
-            }
 
-            // If the endpoint defines an error type, emit that for
-            // the 4xx and 5xx responses.
-            if let Some(ApiEndpointErrorResponse { ref schema, type_name }) =
-                endpoint.error
-            {
-                let ErrorResponse { reference, .. } =
+                // If the endpoint defines an error type, emit that for the 4xx
+                // and 5xx responses.
+                if let Some(ApiEndpointErrorResponse {
+                    ref schema,
+                    type_name,
+                }) = endpoint.error
+                {
+                    let ErrorResponse { reference, .. } =
                     // If a response object for this error type has already been
                     // generated, use that; otherwise, we'll generate it now.
                     error_responses.entry(type_name).or_insert_with(|| {
@@ -1052,14 +1048,20 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
                         ErrorResponse { name, reference, response }
                     });
-                operation
-                    .responses
-                    .responses
-                    .insert(openapiv3::StatusCode::Range(4), reference.clone());
-                operation
-                    .responses
-                    .responses
-                    .insert(openapiv3::StatusCode::Range(5), reference.clone());
+                    operation.responses.responses.insert(
+                        openapiv3::StatusCode::Range(4),
+                        reference.clone(),
+                    );
+                    operation.responses.responses.insert(
+                        openapiv3::StatusCode::Range(5),
+                        reference.clone(),
+                    );
+                }
+            } else {
+                // The `Ok` response could be any status code, so emit it as
+                // the default response.
+                operation.responses.default =
+                    Some(openapiv3::ReferenceOr::Item(response));
             }
             // Drop in the operation.
             method_ref.replace(operation);
