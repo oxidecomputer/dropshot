@@ -9,12 +9,6 @@
       "get": {
         "operationId": "handler1",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -24,18 +18,18 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       },
       "put": {
         "operationId": "handler4",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -46,6 +40,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -85,8 +85,8 @@
       }
     },
     "responses": {
-      "HttpError": {
-        "description": "HttpError",
+      "Error": {
+        "description": "dropshot::error::HttpError",
         "content": {
           "application/json": {
             "schema": {

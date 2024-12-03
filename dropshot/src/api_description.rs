@@ -708,7 +708,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // name: the body's schema may be a static, non-referenceable schema, so
         // there isn't guaranteed to be a schema name we can reuse for the
         // response object.
-        let mut error_response_names = HashMap::<&str, usize>::new();
+        let mut error_response_names = HashMap::<String, usize>::new();
 
         for (path, method, endpoint) in self.router.endpoints(Some(version)) {
             if !endpoint.visible {
@@ -962,6 +962,20 @@ impl<Context: ServerContext> ApiDescription<Context> {
                 }
             };
 
+            if let Some(code) = &endpoint.response.success {
+                // `Ok` response has a known status code. In this case,
+                // emit it as the response for that status code only.
+                operation.responses.responses.insert(
+                    openapiv3::StatusCode::Code(code.as_u16()),
+                    openapiv3::ReferenceOr::Item(response),
+                );
+            } else {
+                // The `Ok` response could be any status code, so emit it as
+                // the default response.
+                operation.responses.default =
+                    Some(openapiv3::ReferenceOr::Item(response));
+            }
+
             // If the endpoint defines an error type, emit that for
             // the 4xx and 5xx responses.
             if let Some(ApiEndpointErrorResponse { ref schema, type_name }) =
@@ -971,20 +985,31 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     // If a response object for this error type has already been
                     // generated, use that; otherwise, we'll generate it now.
                     error_responses.entry(type_name).or_insert_with(|| {
-                        let error_schema = match schema {
+                        let (error_schema, name) = match schema {
                             ApiSchemaGenerator::Gen {
                                 ref name,
                                 ref schema,
-                            } => j2oas_schema(
+                            } => {
+                                let schema = j2oas_schema(
                                 Some(&name()),
                                 &schema(&mut generator),
-                            ),
+                            );
+                            // If there's a schema name, reuse that rather than
+                            // the Rust type name.
+                            (schema, name())
+                        }
                             ApiSchemaGenerator::Static {
                                 ref schema,
                                 ref dependencies,
                             } => {
                                 definitions.extend(dependencies.clone());
-                                j2oas_schema(None, &schema)
+                                let schema = j2oas_schema(None, &schema);
+                                let name = type_name
+                                    .split("::")
+                                    .last()
+                                    .expect("type name must not be an empty string")
+                                    .to_string();
+                                (schema, name)
                             }
                         };
 
@@ -996,17 +1021,13 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         // This is a bit ugly, but fortunately, it won't happen
                         // *too* often, and at least it's consistent with
                         // schemars' name disambiguation.
-                        let type_name = type_name
-                            .split("::")
-                            .last()
-                            .expect("type name must not be an empty string");
                         let name = {
                             let num = error_response_names
-                                .entry(type_name)
+                                .entry(name.clone())
                                 .and_modify(|num| *num += 1)
                                 .or_insert(1);
                             if *num <= 1 {
-                                type_name.to_string()
+                                name
                             } else {
                                 format!("{type_name}{num}")
                             }
@@ -1040,21 +1061,6 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     .responses
                     .insert(openapiv3::StatusCode::Range(5), reference.clone());
             }
-
-            if let Some(code) = &endpoint.response.success {
-                // `Ok` response has a known status code. In this case,
-                // emit it as the response for that status code only.
-                operation.responses.responses.insert(
-                    openapiv3::StatusCode::Code(code.as_u16()),
-                    openapiv3::ReferenceOr::Item(response),
-                );
-            } else {
-                // The `Ok` response could be any status code, so emit it as
-                // the default response.
-                operation.responses.default =
-                    Some(openapiv3::ReferenceOr::Item(response));
-            }
-
             // Drop in the operation.
             method_ref.replace(operation);
         }

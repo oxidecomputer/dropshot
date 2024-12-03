@@ -31,14 +31,14 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -50,12 +50,6 @@
         ],
         "operationId": "handler8",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -65,6 +59,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -76,12 +76,6 @@
         ],
         "operationId": "handler9",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -91,6 +85,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -112,14 +112,14 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -141,14 +141,14 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -170,14 +170,14 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -189,12 +189,6 @@
         ],
         "operationId": "handler13",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -204,6 +198,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -215,12 +215,6 @@
         ],
         "operationId": "vzeroupper",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "201": {
             "description": "successful creation",
             "content": {
@@ -230,6 +224,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -279,12 +279,6 @@
           }
         ],
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -294,6 +288,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "x-dropshot-pagination": {
@@ -319,10 +319,10 @@
             }
           },
           "4XX": {
-            "$ref": "#/components/responses/HttpError"
+            "$ref": "#/components/responses/Error"
           },
           "5XX": {
-            "$ref": "#/components/responses/HttpError"
+            "$ref": "#/components/responses/Error"
           }
         },
         "x-dropshot-websocket": {}
@@ -335,12 +335,6 @@
         ],
         "operationId": "handler18",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "",
             "content": {
@@ -348,6 +342,12 @@
                 "schema": {}
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -359,12 +359,6 @@
         ],
         "operationId": "handler21",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "302": {
             "description": "redirect (found)",
             "headers": {
@@ -377,6 +371,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -388,12 +388,6 @@
         ],
         "operationId": "handler22",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "303": {
             "description": "redirect (see other)",
             "headers": {
@@ -406,6 +400,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -417,12 +417,6 @@
         ],
         "operationId": "handler23",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "307": {
             "description": "redirect (temporary redirect)",
             "headers": {
@@ -435,6 +429,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -456,12 +456,6 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "201": {
             "description": "successful creation",
             "content": {
@@ -471,6 +465,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -482,12 +482,6 @@
         ],
         "operationId": "handler24",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "307": {
             "description": "redirect (temporary redirect)",
             "headers": {
@@ -500,6 +494,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "deprecated": true
@@ -522,14 +522,14 @@
           }
         ],
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "successful deletion"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -552,12 +552,6 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "201": {
             "description": "successful creation",
             "content": {
@@ -567,6 +561,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -580,12 +580,6 @@
         "description": "This is a multi-line comment.",
         "operationId": "handler1",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -599,6 +593,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -652,12 +652,6 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "202": {
             "description": "successfully enqueued operation",
             "content": {
@@ -671,6 +665,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -692,12 +692,6 @@
           "required": true
         },
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "201": {
             "description": "successful creation",
             "content": {
@@ -707,6 +701,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -740,14 +740,14 @@
           }
         ],
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -768,10 +768,10 @@
             }
           },
           "4XX": {
-            "$ref": "#/components/responses/HttpError"
+            "$ref": "#/components/responses/Error"
           },
           "5XX": {
-            "$ref": "#/components/responses/HttpError"
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -783,12 +783,6 @@
         ],
         "operationId": "handler15",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -802,6 +796,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -813,12 +813,6 @@
         ],
         "operationId": "handler19",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -828,6 +822,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -839,12 +839,6 @@
         ],
         "operationId": "handler17",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "204": {
             "description": "resource updated",
             "headers": {
@@ -865,6 +859,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -1097,8 +1097,8 @@
       }
     },
     "responses": {
-      "HttpError": {
-        "description": "HttpError",
+      "Error": {
+        "description": "dropshot::error::HttpError",
         "content": {
           "application/json": {
             "schema": {

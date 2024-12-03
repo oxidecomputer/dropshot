@@ -9,12 +9,6 @@
       "get": {
         "operationId": "dropshot_error_handler",
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/HttpError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -28,6 +22,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -46,12 +46,6 @@
           }
         ],
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/EnumError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/EnumError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -65,6 +59,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/EnumError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/EnumError"
           }
         }
       }
@@ -83,12 +83,6 @@
           }
         ],
         "responses": {
-          "4XX": {
-            "$ref": "#/components/responses/StructError"
-          },
-          "5XX": {
-            "$ref": "#/components/responses/StructError"
-          },
           "200": {
             "description": "successful operation",
             "content": {
@@ -102,6 +96,12 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/StructError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/StructError"
           }
         }
       }
@@ -218,8 +218,8 @@
       }
     },
     "responses": {
-      "HttpError": {
-        "description": "HttpError",
+      "Error": {
+        "description": "dropshot::error::HttpError",
         "content": {
           "application/json": {
             "schema": {
@@ -229,7 +229,7 @@
         }
       },
       "EnumError": {
-        "description": "EnumError",
+        "description": "integration_tests::custom_errors::EnumError",
         "content": {
           "application/json": {
             "schema": {
@@ -239,7 +239,7 @@
         }
       },
       "StructError": {
-        "description": "StructError",
+        "description": "integration_tests::custom_errors::StructError",
         "content": {
           "application/json": {
             "schema": {
