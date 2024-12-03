@@ -1078,7 +1078,7 @@
     },
     "responses": {
       "Error": {
-        "description": "dropshot::error::HttpError",
+        "description": "Error",
         "content": {
           "application/json": {
             "schema": {

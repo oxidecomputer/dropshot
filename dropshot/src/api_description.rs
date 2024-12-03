@@ -1025,7 +1025,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             if *num <= 1 {
                                 name
                             } else {
-                                format!("{type_name}{num}")
+                                format!("{name}{num}")
                             }
                         };
 
@@ -1038,7 +1038,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             },
                         );
                         let response = openapiv3::Response {
-                            description: type_name.to_string(),
+                            description: name.clone(),
                             content: content.clone(),
                             ..Default::default()
                         };

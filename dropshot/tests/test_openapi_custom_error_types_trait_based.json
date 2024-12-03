@@ -219,7 +219,7 @@
     },
     "responses": {
       "Error": {
-        "description": "dropshot::error::HttpError",
+        "description": "Error",
         "content": {
           "application/json": {
             "schema": {
@@ -229,7 +229,7 @@
         }
       },
       "EnumError": {
-        "description": "integration_tests::custom_errors::EnumError",
+        "description": "EnumError",
         "content": {
           "application/json": {
             "schema": {
@@ -239,7 +239,7 @@
         }
       },
       "StructError": {
-        "description": "integration_tests::custom_errors::StructError",
+        "description": "StructError",
         "content": {
           "application/json": {
             "schema": {
