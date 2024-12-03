@@ -520,6 +520,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                     operation_id: handler.operation_id.clone(),
                     variables,
                     body_content_type: handler.body_content_type.clone(),
+                    request_body_max_bytes: handler.request_body_max_bytes,
                 },
             });
         }
@@ -877,6 +878,7 @@ mod test {
             path: path.to_string(),
             parameters: vec![],
             body_content_type: ApiEndpointBodyContentType::default(),
+            request_body_max_bytes: None,
             response: ApiEndpointResponse::default(),
             error: None,
             summary: None,

@@ -403,6 +403,7 @@ mod tests {
                 operation_id: "".to_string(),
                 variables: Default::default(),
                 body_content_type: Default::default(),
+                request_body_max_bytes: None,
             },
             request_id: "".to_string(),
             log: log.clone(),

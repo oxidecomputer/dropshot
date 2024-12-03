@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.13.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.14.0\...HEAD[Full list of commits]
+
+== 0.14.0 (released 2024-12-02)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.13.0\...v0.14.0[Full list of commits]
 
 === Breaking changes
 
@@ -103,6 +107,24 @@ error types, and generate OpenAPI response schemas for those types.
 For details on how to implement `HttpResponseError` for user-defined types, see
 the trait documentation, or
 https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/custom-error.rs[`examples/custom-error.rs`].
+
+* Dropshot now supports per-endpoint size limits, via the `request_body_max_bytes` parameter to `#[endpoint]`. For example, to set a limit of 1 MiB on an endpoint:
++
+```rust
+#[endpoint {
+    method = POST,
+    path = "/upload-bundle",
+    request_body_max_bytes = 1 * 1024 * 1024,
+}]
+async fn upload_bundle(
+    rqctx: RequestContext<MyContext>,  // or RequestContext<Self::Context> with API traits
+    body: UntypedBody,
+) -> /* ... */ {
+    // ...
+}
+```
++
+If not specified, the limit defaults to the server configuration's `default_request_body_max_bytes`.
 
 == 0.13.0 (released 2024-11-13)
 

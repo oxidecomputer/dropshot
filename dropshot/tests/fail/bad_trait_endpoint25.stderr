@@ -74,7 +74,7 @@ error[E0107]: struct takes 1 generic argument but 2 generic arguments were suppl
   --> tests/fail/bad_trait_endpoint25.rs:47:17
    |
 47 |         _rqctx: RequestContext<T, Self::Context>,
-   |                 ^^^^^^^^^^^^^^    ------------- help: remove this generic argument
+   |                 ^^^^^^^^^^^^^^  --------------- help: remove the unnecessary generic argument
    |                 |
    |                 expected 1 generic argument
    |

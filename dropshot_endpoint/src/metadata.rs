@@ -3,8 +3,9 @@
 //! Code to handle metadata associated with an endpoint.
 
 use proc_macro2::{TokenStream, TokenTree};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote_spanned, ToTokens};
 use serde::Deserialize;
+use serde_tokenstream::ParseWrapper;
 use syn::{spanned::Spanned, Error};
 
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     error_store::ErrorSink,
     util::{get_crate, is_wildcard_path, MacroKind, ValidContentType},
 };
-use serde_tokenstream::ParseWrapper;
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
@@ -52,6 +52,9 @@ pub(crate) struct EndpointMetadata {
     pub(crate) unpublished: bool,
     #[serde(default)]
     pub(crate) deprecated: bool,
+    // Optional expression of type `usize`.
+    #[serde(default)]
+    pub(crate) request_body_max_bytes: Option<ParseWrapper<syn::Expr>>,
     pub(crate) content_type: Option<String>,
     pub(crate) _dropshot_crate: Option<String>,
     pub(crate) versions: Option<ParseWrapper<VersionRange>>,
@@ -84,6 +87,7 @@ impl EndpointMetadata {
             tags,
             unpublished,
             deprecated,
+            request_body_max_bytes,
             content_type,
             _dropshot_crate,
             versions,
@@ -142,6 +146,8 @@ impl EndpointMetadata {
                 tags,
                 unpublished,
                 deprecated,
+                request_body_max_bytes: request_body_max_bytes
+                    .map(|x| x.into_inner()),
                 content_type,
                 versions: versions
                     .map(|h| h.into_inner())
@@ -161,6 +167,7 @@ pub(crate) struct ValidatedEndpointMetadata {
     tags: Vec<String>,
     unpublished: bool,
     deprecated: bool,
+    request_body_max_bytes: Option<syn::Expr>,
     content_type: ValidContentType,
     versions: VersionRange,
 }
@@ -186,34 +193,61 @@ impl ValidatedEndpointMetadata {
             self.operation_id.as_deref().unwrap_or(endpoint_name);
         let method_ident = format_ident!("{}", self.method.as_str());
 
+        // Apply a span to all generated code to avoid call-site attribution.
+        let span = match kind {
+            ApiEndpointKind::Regular(endpoint_fn) => endpoint_fn.span(),
+            ApiEndpointKind::Stub { attr, .. } => {
+                // We need to point at the closest possible span to the actual
+                // error, but we can't point at something nice like the
+                // function name. That's because if we do, rust-analyzer will
+                // produce a lot of irrelevant results when ctrl-clicking on
+                // the function name.
+                //
+                // So we point at the `#`, which seems out-of-the-way enough
+                // for successful generation while being close by for errors.
+                // Seems pretty unobjectionable.
+                attr.pound_token.span()
+            }
+        };
+
+        // Set the span for all of the bits and pieces. Most of these fields are
+        // unlikely to produce compile errors or warnings, but some of them
+        // (like request_body_max_bytes) can do so.
         let summary = doc.summary.as_ref().map(|summary| {
-            quote! { .summary(#summary) }
+            quote_spanned! {span=> .summary(#summary) }
         });
         let description = doc.description.as_ref().map(|description| {
-            quote! { .description(#description) }
+            quote_spanned! {span=> .description(#description) }
         });
 
         let tags = self
             .tags
             .iter()
             .map(|tag| {
-                quote! { .tag(#tag) }
+                quote_spanned! {span=> .tag(#tag) }
             })
             .collect::<Vec<_>>();
 
         let visible = self.unpublished.then(|| {
-            quote! { .visible(false) }
+            quote_spanned! {span=> .visible(false) }
         });
 
         let deprecated = self.deprecated.then(|| {
-            quote! { .deprecated(true) }
+            quote_spanned! {span=> .deprecated(true) }
         });
 
+        let request_body_max_bytes =
+            self.request_body_max_bytes.as_ref().map(|max_bytes| {
+                quote_spanned! {span=> .request_body_max_bytes(#max_bytes) }
+            });
+
         let versions = match &self.versions {
-            VersionRange::All => quote! { #dropshot::ApiEndpointVersions::All },
+            VersionRange::All => {
+                quote_spanned! {span=> #dropshot::ApiEndpointVersions::All }
+            }
             VersionRange::From(x) => {
                 let (major, minor, patch) = semver_parts(&x);
-                quote! {
+                quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::From(
                         semver::Version::new(#major, #minor, #patch)
                     )
@@ -221,7 +255,7 @@ impl ValidatedEndpointMetadata {
             }
             VersionRange::Until(y) => {
                 let (major, minor, patch) = semver_parts(&y);
-                quote! {
+                quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::Until(
                         semver::Version::new(#major, #minor, #patch)
                     )
@@ -230,7 +264,7 @@ impl ValidatedEndpointMetadata {
             VersionRange::FromUntil(x, y) => {
                 let (xmajor, xminor, xpatch) = semver_parts(&x);
                 let (ymajor, yminor, ypatch) = semver_parts(&y);
-                quote! {
+                quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::from_until(
                         semver::Version::new(#xmajor, #xminor, #xpatch),
                         semver::Version::new(#ymajor, #yminor, #ypatch),
@@ -241,7 +275,7 @@ impl ValidatedEndpointMetadata {
 
         let fn_call = match kind {
             ApiEndpointKind::Regular(endpoint_fn) => {
-                quote_spanned! {endpoint_fn.span()=>
+                quote_spanned! {span=>
                     #dropshot::ApiEndpoint::new(
                         #operation_id.to_string(),
                         #endpoint_fn,
@@ -252,17 +286,8 @@ impl ValidatedEndpointMetadata {
                     )
                 }
             }
-            ApiEndpointKind::Stub { attr, extractor_types, ret_ty } => {
-                // We need to point at the closest possible span to the actual
-                // error, but we can't point at something nice like the
-                // function name. That's because if we do, rust-analyzer will
-                // produce a lot of irrelevant results when ctrl-clicking on
-                // the function name.
-                //
-                // So we point at the `#`, which seems out-of-the-way enough
-                // for successful generation while being close by for errors.
-                // Seems pretty unobjectionable.
-                quote_spanned! {attr.pound_token.span()=>
+            ApiEndpointKind::Stub { attr: _, extractor_types, ret_ty } => {
+                quote_spanned! {span=>
                     #dropshot::ApiEndpoint::new_for_types::<(#(#extractor_types,)*), #ret_ty>(
                         #operation_id.to_string(),
                         #dropshot::Method::#method_ident,
@@ -274,13 +299,14 @@ impl ValidatedEndpointMetadata {
             }
         };
 
-        quote! {
+        quote_spanned! {span=>
             #fn_call
             #summary
             #description
             #(#tags)*
             #visible
             #deprecated
+            #request_body_max_bytes
         }
     }
 }
@@ -457,6 +483,9 @@ impl ChannelMetadata {
                 versions: versions
                     .map(|h| h.into_inner())
                     .unwrap_or(VersionRange::All),
+                // Channels are arbitrary-length and don't have a limit on
+                // request body size.
+                request_body_max_bytes: None,
             };
 
             Some(ValidatedChannelMetadata { inner })

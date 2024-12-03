@@ -1,8 +1,23 @@
 // Copyright 2024 Oxide Computer Company
 
 use dropshot::{
-    EndpointTagPolicy, HttpError, HttpResponseUpdatedNoContent, RequestContext,
+    test_util::read_json, EndpointTagPolicy, HandlerTaskMode, HttpError,
+    HttpResponseOk, HttpResponseUpdatedNoContent, RequestContext, UntypedBody,
 };
+use http::{Method, StatusCode};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use crate::common;
+
+// Max request body sizes are often specified as literals, but ensure that
+// constants also work.
+const LARGE_REQUEST_SIZE: usize = 2048;
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct DemoUntyped {
+    pub nbytes: usize,
+}
 
 #[dropshot::api_description]
 trait BasicApi {
@@ -12,6 +27,18 @@ trait BasicApi {
     async fn get_test(
         _rqctx: RequestContext<Self::Context>,
     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+
+    // Test one of the custom request_body_max_bytes cases. The other cases are
+    // covered in `test_demo`.
+    #[endpoint {
+        method = PUT,
+        path = "/test/large_untyped_body",
+        request_body_max_bytes = LARGE_REQUEST_SIZE,
+    }]
+    async fn large_untyped_body(
+        _rqctx: RequestContext<Self::Context>,
+        body: UntypedBody,
+    ) -> Result<HttpResponseOk<DemoUntyped>, HttpError>;
 }
 
 enum BasicImpl {}
@@ -24,12 +51,60 @@ impl BasicApi for BasicImpl {
     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
         Ok(HttpResponseUpdatedNoContent())
     }
+
+    async fn large_untyped_body(
+        _rqctx: RequestContext<Self::Context>,
+        body: UntypedBody,
+    ) -> Result<HttpResponseOk<DemoUntyped>, HttpError> {
+        Ok(HttpResponseOk(DemoUntyped { nbytes: body.as_bytes().len() }))
+    }
 }
 
-#[test]
-fn test_api_trait_basic() {
-    basic_api_mod::api_description::<BasicImpl>().unwrap();
+#[tokio::test]
+async fn test_api_trait_basic() {
     basic_api_mod::stub_api_description().unwrap();
+
+    let api = basic_api_mod::api_description::<BasicImpl>().unwrap();
+    let testctx = common::test_setup_with_context(
+        "api_trait_basic",
+        api,
+        (),
+        HandlerTaskMode::Detached,
+    );
+
+    // Success case: large body endpoint.
+    let large_body = vec![0u8; 2048];
+    let mut response = testctx
+        .client_testctx
+        .make_request_with_body(
+            Method::PUT,
+            "/test/large_untyped_body",
+            large_body.into(),
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: DemoUntyped = read_json(&mut response).await;
+    assert_eq!(json.nbytes, 2048);
+
+    // Error case: large body endpoint failure.
+    let large_body = vec![0u8; 2049];
+    let error = testctx
+        .client_testctx
+        .make_request_with_body(
+            Method::PUT,
+            "/test/large_untyped_body",
+            large_body.into(),
+            StatusCode::BAD_REQUEST,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.message,
+        "request body exceeded maximum size of 2048 bytes"
+    );
+
+    testctx.teardown().await;
 }
 
 #[dropshot::api_description {

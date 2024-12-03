@@ -295,31 +295,7 @@
 //!
 //! The `endpoint` attribute accepts parameters the affect the operation of
 //! the endpoint as well as metadata that appears in the OpenAPI description
-//! of it.
-//!
-//! ```ignore
-//! #[endpoint {
-//!     // Required fields
-//!     method = { DELETE | HEAD | GET | OPTIONS | PATCH | POST | PUT },
-//!     path = "/path/name/with/{named}/{variables}",
-//!
-//!     // Optional fields
-//!     operation_id = "my_operation" // (default: name of the function)
-//!     tags = [ "all", "your", "OpenAPI", "tags" ],
-//!     versions = ..
-//! }]
-//! ```
-//!
-//! This is where you specify the HTTP method and path (including path variables)
-//! for the API endpoint. These are used as part of endpoint registration and
-//! appear in the OpenAPI spec output.
-//!
-//! The tags field is used to categorize API endpoints and only impacts the
-//! OpenAPI spec output.
-//!
-//! The versions field controls which versions of the API this endpoint appears
-//! in.  See "API Versioning" for more on this.
-//!
+//! of it. For more, see the documentation on [`endpoint`].
 //!
 //! ### Function parameters
 //!
@@ -715,7 +691,7 @@
 //!
 //! ```text
 //! // introduced in 1.0.0, present in all subsequent versions
-//! versions = "1.0.0"..    
+//! versions = "1.0.0"..
 //!
 //! // removed in 2.0.0, present in all previous versions
 //! // (not present in 2.0.0 itself)
@@ -965,6 +941,272 @@ pub use handler::RequestContextArgument;
 pub use http::Method;
 
 extern crate dropshot_endpoint;
+
+/// Generates a Dropshot API description from a trait.
+///
+/// An API trait consists of:
+///
+/// 1. A context type, typically `Self::Context`, values of which are shared
+///    across all the endpoints.
+/// 2. A set of endpoint methods, each of which is an `async fn` defined with
+///    the same constraints, and via the same syntax, as [`macro@endpoint`] or
+///    [`macro@channel`].
+///
+/// API traits can also have arbitrary non-endpoint items, such as helper
+/// functions.
+///
+/// The macro performs a number of checks on endpoint methods, and produces the
+/// following items:
+///
+/// * The trait itself, with the following modifications to enable use as a
+///   Dropshot API:
+///
+///     1. The trait itself has a `'static` bound added to it.
+///     2. The context type has a `dropshot::ServerContext + 'static` bound
+///        added to it, making it `Send + Sync + 'static`.
+///     3. Each endpoint `async fn` is modified to become a function that
+///        returns a `Send + 'static` future. (Implementations can continue to
+///        define endpoints via the `async fn` syntax.)
+///
+///   Non-endpoint items are left unchanged.
+///
+/// * A support module, typically with the same name as the trait but in
+///   `snake_case`, with two functions:
+///
+///     1. `api_description()`, which accepts an implementation of the trait as
+///        a type argument and generates an `ApiDescription`.
+///     2. `stub_api_description()`, which generates a _stub_ `ApiDescription`
+///        that can be used to generate an OpenAPI spec without having an
+///        implementation of the trait available.
+///
+/// For more information about API traits, see the Dropshot crate-level
+/// documentation.
+///
+/// ## Arguments
+///
+/// The `#[dropshot::api_description]` macro accepts these arguments:
+///
+/// * `context`: The type of the context on the trait. Optional, defaults to
+///   `Self::Context`.
+/// * `module`: The name of the support module. Optional, defaults to the
+///   `{T}_mod`, where `T` is the snake_case version of the trait name.
+///
+///    For example, for a trait called `MyApi` the corresponding module name
+///    would be `my_api_mod`.
+///
+///    (The suffix `_mod` is added to module names so that a crate called
+///    `my-api` can define a trait `MyApi`, avoiding name conflicts.)
+/// * `tag_config`: Trait-wide tag configuration. _Optional._ For more
+///   information, see [_Tag configuration_](#tag-configuration) below.
+///
+/// ### Example: specify a custom context type
+///
+/// ```
+/// use dropshot::{RequestContext, HttpResponseUpdatedNoContent, HttpError};
+///
+/// #[dropshot::api_description { context = MyContext }]
+/// trait MyTrait {
+///     type MyContext;
+///
+///     #[endpoint {
+///         method = PUT,
+///         path = "/test",
+///     }]
+///     async fn put_test(
+///         rqctx: RequestContext<Self::MyContext>,
+///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+/// }
+/// # // defining fn main puts the doctest in a module context
+/// # fn main() {}
+/// ```
+///
+/// ### Tag configuration
+///
+/// Endpoints can have tags associated with them that appear in the OpenAPI
+/// document. These provide a means of organizing an API. Use the `tag_config`
+/// argument to specify tag information for the trait.
+///
+/// `tag_config` is optional. If not specified, the default is to allow any tag
+/// value and any number of tags associated with the endpoint.
+///
+/// If `tag_config` is specified, compliance with it is evaluated at runtime
+/// while registering endpoints. A failure to comply--for example, if `policy =
+/// at_least_one` is specified and some endpoint has no associated tags--results
+/// in the `api_description` and `stub_api_description` functions returning an
+/// error.
+///
+/// The shape of `tag_config` is broadly similar to that of [`TagConfig`]. It
+/// has the following fields:
+///
+/// * `tags`: A map of tag names with information about them. _Required, but can
+///   be empty._
+///
+///   The keys are tag names, which are strings. The values are objects that
+///   consist of:
+///
+///   * `description`: A string description of the tag. _Optional._
+///   * `external_docs`: External documentation for the tag. _Optional._ This
+///     has the following fields:
+///     * `description`: A string description of the external documentation.
+///       _Optional._
+///     * `url`: The URL for the external documentation. _Required._
+///
+/// * `allow_other_tags`: Whether to allow tags not explicitly defined in
+///   `tags`. _Optional, defaults to false. But if `tag_config` as a whole is
+///   not specified, all tags are allowed._
+///
+/// * `policy`: Must be an expression of type `EndpointTagPolicy`; typically just
+///   the enum variant.
+///
+///   _Optional, defaults to `EndpointTagPolicy::Any`._
+///
+/// ### Example: tag configuration
+///
+/// ```
+/// use dropshot::{
+///     EndpointTagPolicy, RequestContext, HttpResponseUpdatedNoContent,
+///     HttpError,
+/// };
+///
+/// #[dropshot::api_description {
+///     tag_config = {
+///         // If tag_config is specified, tags is required (but can be empty).
+///         tags = {
+///             "tag1" = {
+///                 // The description is optional.
+///                 description = "Tag 1",
+///                 // external_docs is optional.
+///                 external_docs = {
+///                     // The description is optional.
+///                     description = "External docs for tag1",
+///                     // If external_docs is present, url is required.
+///                     url = "https://example.com/tag1",
+///                 },
+///             },
+///         },
+///         policy = EndpointTagPolicy::ExactlyOne,
+///         allow_other_tags = false,
+///     },
+/// }]
+/// trait MyTrait {
+///     type Context;
+///
+///     #[endpoint {
+///         method = PUT,
+///         path = "/test",
+///         tags = ["tag1"],
+///     }]
+///     async fn put_test(
+///         rqctx: RequestContext<Self::Context>,
+///     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+/// }
+/// # // defining fn main puts the doctest in a module context
+/// # fn main() {}
+/// ```
+///
+/// ## Limitations
+///
+/// Currently, the `#[dropshot::api_description]` macro is only supported in
+/// module contexts, not function definitions. This is a Rust limitation -- see
+/// [Rust issue #79260](https://github.com/rust-lang/rust/issues/79260) for more
+/// details.
+///
+/// ## More information
+///
+/// For more information about the design decisions behind API traits, see
+/// [Oxide RFD 479](https://rfd.shared.oxide.computer/rfd/0479).
 pub use dropshot_endpoint::api_description;
+
+/// Transforms a WebSocket handler function into a Dropshot endpoint.
+///
+/// The transformed function is suitable to be used as a parameter to
+/// [`ApiDescription::register()`].
+///
+/// As with [`macro@endpoint`], this attribute turns a handler function into a
+/// Dropshot endpoint, but first wraps the handler function in such a way
+/// that is spawned asynchronously and given the upgraded connection of
+/// the given `protocol` (i.e. `WEBSOCKETS`).
+///
+/// The first argument still must be a `RequestContext<_>`.
+///
+/// The last argument passed to the handler function must be a
+/// [`WebsocketConnection`].
+///
+/// The function must return a [`WebsocketChannelResult`] (which is a
+/// general-purpose `Result<(), Box<dyn Error + Send + Sync + 'static>>`).
+/// Returned error values will be written to the RequestContext's log.
+///
+/// ```ignore
+/// #[dropshot::channel { protocol = WEBSOCKETS, path = "/my/ws/channel/{id}" }]
+/// ```
 pub use dropshot_endpoint::channel;
+
+/// Transforms an HTTP handler function into a Dropshot endpoint.
+///
+/// The transformed function is suitable to be used as a parameter to
+/// [`ApiDescription::register()`].
+///
+/// The arguments to this macro encode information relevant to the operation of
+/// an API endpoint beyond what is expressed by the parameter and return types
+/// of a handler function.
+///
+/// ## Arguments
+///
+/// The `#[dropshot::endpoint]` macro accepts the following arguments:
+///
+/// * `method`: The [HTTP request method] (HTTP verb) for the endpoint. Can be
+///   one of `DELETE`, `HEAD`, `GET`, `OPTIONS`, `PATCH`, `POST`, or `PUT`.
+///   Required.
+/// * `path`: The path to the endpoint, along with path variables. Path
+///   variables are enclosed in curly braces. For example, `path =
+///   "/widget/{id}"`. Required.
+/// * `tags`: An array of [OpenAPI tags] for the operation. Optional, defaults
+///   to an empty list.
+/// * `versions`: API versions for which the endpoint is valid. Optional. For more, see
+///   [API Versioning].
+/// * `content_type`: The media type used to encode the request body. Can be one
+///   of `application/json`, `application/x-www-form-urlencoded`, or
+///   `multipart/form-data`. Optional, defaults to `application/json`.
+/// * `deprecated`: A boolean indicating whether the operation is marked
+///   deprecated in the OpenAPI document. Optional, defaults to false.
+/// * `unpublished`: A boolean indicating whether the operation is omitted from
+///   the OpenAPI document. Optional, defaults to false.
+/// * `request_body_max_bytes`: The maximum size of the request body in bytes.
+///   Accepts literals as well as constants of type `usize`. Optional, defaults
+///   to the server configuration's `default_request_body_max_bytes`.
+///
+/// [HTTP request method]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
+/// [OpenAPI tags]: https://swagger.io/docs/specification/v3_0/grouping-operations-with-tags/
+/// [API Versioning]: crate#api-versioning
+///
+/// ### Example: configuring an endpoint
+///
+/// ```ignore
+/// const LARGE_REQUEST_BODY_MAX_BYTES: usize = 1 * 1024 * 1024;
+///
+/// #[endpoint {
+///     // --- Required fields ---
+///     // The HTTP method for the endpoint
+///     method = { DELETE | HEAD | GET | OPTIONS | PATCH | POST | PUT },
+///     // The path to the endpoint, along with path variables
+///     path = "/path/name/with/{named}/{variables}",
+///
+///     // --- Optional fields ---
+///     // Tags for the operation's description
+///     tags = [ "all", "your", "OpenAPI", "tags" ],
+///     // API versions for which the endpoint is valid
+///     versions = "1.0.0".."2.0.0",
+///     // The media type used to encode the request body
+///     content_type = { "application/json" | "application/x-www-form-urlencoded" | "multipart/form-data" }
+///     // True if the operation is deprecated
+///     deprecated = { true | false },
+///     // True causes the operation to be omitted from the API description
+///     unpublished = { true | false },
+///     // Maximum request body size in bytes
+///     request_body_max_bytes = LARGE_REQUEST_BODY_MAX_BYTES,
+/// }]
+/// async fn my_endpoint(/* ... */) -> Result<HttpResponseOk, HttpError> {
+///     // ...
+/// }
+/// ```
 pub use dropshot_endpoint::endpoint;

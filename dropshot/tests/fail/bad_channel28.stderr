@@ -1,0 +1,5 @@
+error: extraneous member `request_body_max_bytes`
+  --> tests/fail/bad_channel28.rs:15:5
+   |
+15 |     request_body_max_bytes = 1024,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
