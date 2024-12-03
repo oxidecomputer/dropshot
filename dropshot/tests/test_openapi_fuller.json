@@ -32,24 +32,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "resource updated"
@@ -65,24 +51,10 @@
         "operationId": "handler8",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -105,24 +77,10 @@
         "operationId": "handler9",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -155,24 +113,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "resource updated"
@@ -198,24 +142,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "resource updated"
@@ -241,24 +171,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "resource updated"
@@ -274,24 +190,10 @@
         "operationId": "handler13",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -314,24 +216,10 @@
         "operationId": "vzeroupper",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "201": {
             "description": "successful creation",
@@ -392,24 +280,10 @@
         ],
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -445,24 +319,10 @@
             }
           },
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           }
         },
         "x-dropshot-websocket": {}
@@ -476,24 +336,10 @@
         "operationId": "handler18",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "",
@@ -514,24 +360,10 @@
         "operationId": "handler21",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "302": {
             "description": "redirect (found)",
@@ -557,24 +389,10 @@
         "operationId": "handler22",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "303": {
             "description": "redirect (see other)",
@@ -600,24 +418,10 @@
         "operationId": "handler23",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "307": {
             "description": "redirect (temporary redirect)",
@@ -653,24 +457,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "201": {
             "description": "successful creation",
@@ -693,24 +483,10 @@
         "operationId": "handler24",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "307": {
             "description": "redirect (temporary redirect)",
@@ -747,24 +523,10 @@
         ],
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "successful deletion"
@@ -791,24 +553,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "201": {
             "description": "successful creation",
@@ -833,24 +581,10 @@
         "operationId": "handler1",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -919,24 +653,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "202": {
             "description": "successfully enqueued operation",
@@ -973,24 +693,10 @@
         },
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "201": {
             "description": "successful creation",
@@ -1035,24 +741,10 @@
         ],
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "resource updated"
@@ -1076,24 +768,10 @@
             }
           },
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           }
         }
       }
@@ -1106,24 +784,10 @@
         "operationId": "handler15",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -1150,24 +814,10 @@
         "operationId": "handler19",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -1190,24 +840,10 @@
         "operationId": "handler17",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "204": {
             "description": "resource updated",
@@ -1458,6 +1094,18 @@
       },
       "Foo": {
         "type": "string"
+      }
+    },
+    "responses": {
+      "HttpError": {
+        "description": "HttpError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     }
   },

@@ -828,7 +828,6 @@ mod test {
     use super::HttpRouter;
     use super::PathSegment;
     use crate::api_description::ApiEndpointBodyContentType;
-    use crate::api_description::ApiEndpointErrorResponse;
     use crate::api_description::ApiEndpointVersions;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
@@ -879,7 +878,7 @@ mod test {
             parameters: vec![],
             body_content_type: ApiEndpointBodyContentType::default(),
             response: ApiEndpointResponse::default(),
-            error: ApiEndpointErrorResponse::default(),
+            error: None,
             summary: None,
             description: None,
             tags: vec![],

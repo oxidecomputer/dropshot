@@ -10,24 +10,10 @@
         "operationId": "dropshot_error_handler",
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/HttpError"
           },
           "200": {
             "description": "successful operation",
@@ -61,24 +47,10 @@
         ],
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnumError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/EnumError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnumError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/EnumError"
           },
           "200": {
             "description": "successful operation",
@@ -112,24 +84,10 @@
         ],
         "responses": {
           "4XX": {
-            "description": "client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StructError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/StructError"
           },
           "5XX": {
-            "description": "server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StructError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/StructError"
           },
           "200": {
             "description": "successful operation",
@@ -257,6 +215,38 @@
           "kind",
           "message"
         ]
+      }
+    },
+    "responses": {
+      "HttpError": {
+        "description": "HttpError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "EnumError": {
+        "description": "EnumError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EnumError"
+            }
+          }
+        }
+      },
+      "StructError": {
+        "description": "StructError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StructError"
+            }
+          }
+        }
       }
     }
   }
