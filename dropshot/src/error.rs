@@ -118,6 +118,14 @@ pub struct HttpError {
     pub external_message: String,
     /// Error message recorded in the log for this error
     pub internal_message: String,
+    /// Headers that will be added to responses generated from this
+    /// error.
+    // This is boxed in obeisance to Clippy's `result_large_err` lint
+    // (https://rust-lang.github.io/rust-clippy/master/index.html#result_large_err).
+    // While we could allow that lint for Dropshot, `HttpError` will also be a
+    // common return type for consumers of Dropshot, so let's not force users to
+    // also allow the lint.
+    pub headers: Option<Box<http::HeaderMap>>,
 }
 
 /// Body of an HTTP response for an `HttpError`.  This type can be used to
@@ -212,6 +220,7 @@ impl HttpError {
             error_code,
             internal_message: message.clone(),
             external_message: message,
+            headers: None,
         }
     }
 
@@ -227,6 +236,7 @@ impl HttpError {
                 .unwrap()
                 .to_string(),
             internal_message,
+            headers: None,
         }
     }
 
@@ -245,6 +255,7 @@ impl HttpError {
                 .unwrap()
                 .to_string(),
             internal_message,
+            headers: None,
         }
     }
 
@@ -290,7 +301,81 @@ impl HttpError {
             error_code,
             internal_message,
             external_message,
+            headers: None,
         }
+    }
+
+    /// Mutably borrow the `http::HeaderMap` associated with this error. If
+    /// there is no header map for this error, this method creates one.
+    pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
+        self.headers.get_or_insert_with(|| Box::new(http::HeaderMap::new()))
+    }
+
+    /// Adds a header to the [`http::HeaderMap`] of headers to add to responses
+    /// generated from this error.
+    ///
+    /// If this error does not already have a header map (`self.header_map` is
+    /// `None`), this method creates one.
+    ///
+    /// # Returns
+    /// - [`Ok`]`(&mut Self)` if the provided `name` and `value` are a valid
+    ///   header name and value, respectively.
+    /// - [`Err`]`(`[`http::Error`]`)` if the header name or value is invalid,
+    ///   or the `HeaderMap` is full.
+    pub fn add_header<K, V>(
+        &mut self,
+        name: K,
+        value: V,
+    ) -> Result<&mut Self, http::Error>
+    where
+        http::HeaderName: TryFrom<K>,
+        <http::HeaderName as TryFrom<K>>::Error: Into<http::Error>,
+        http::HeaderValue: TryFrom<V>,
+        <http::HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+    {
+        let name = <http::HeaderName as TryFrom<K>>::try_from(name)
+            .map_err(Into::into)?;
+        let value = <http::HeaderValue as TryFrom<V>>::try_from(value)
+            .map_err(Into::into)?;
+        self.headers_mut().try_append(name, value)?;
+        Ok(self)
+    }
+
+    /// Adds a header to the [`http::HeaderMap`] of headers to add to responses
+    /// generated from this error, taking the error by value.
+    ///
+    /// If this error does not already have a header map (`self.header_map` is
+    /// `None`), this method creates one.
+    ///
+    /// Unlike [`HttpError::set_header`], this method takes `self` by value,
+    /// allowing it to be chained to form an expression that returns an
+    /// `HttpError`. However, because this takes `self` by value, returning an
+    /// error for an invalid header name or value will discard the `HttpError`.
+    /// To avoid this, use [`HttpError::set_header`] instead.
+    ///
+    /// # Returns
+    ///
+    /// - [`Ok`]`(`Self`)` if the provided `name` and `value` are a valid
+    ///   header name and value, respectively.
+    /// - [`Err`]`(`[`http::Error`]`)` if the header name or value is invalid,
+    ///   or the `HeaderMap` is full.
+    pub fn with_header<K, V>(
+        mut self,
+        name: K,
+        value: V,
+    ) -> Result<Self, http::Error>
+    where
+        http::HeaderName: TryFrom<K>,
+        <http::HeaderName as TryFrom<K>>::Error: Into<http::Error>,
+        http::HeaderValue: TryFrom<V>,
+        <http::HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+    {
+        let name = <http::HeaderName as TryFrom<K>>::try_from(name)
+            .map_err(Into::into)?;
+        let value = <http::HeaderValue as TryFrom<V>>::try_from(value)
+            .map_err(Into::into)?;
+        self.headers_mut().try_append(name, value)?;
+        Ok(self)
     }
 
     /// Generates an HTTP response for the given `HttpError`, using `request_id`
@@ -299,6 +384,25 @@ impl HttpError {
         self,
         request_id: &str,
     ) -> hyper::Response<crate::Body> {
+        let mut builder = hyper::Response::builder();
+
+        // Set the builder's initial `HeaderMap` to the headers specified by
+        // the error, if any exist.  Replacing the initial `HeaderMap` is more
+        // efficient than inserting each header from `self.headers` into the
+        // builder one-by-one, as we can just reuse the existing header map.
+        // It's fine to clobber the builder's header map, as we just created the
+        // builder and the header map is empty.
+        if let Some(headers) = self.headers {
+            let builder_headers = builder
+                .headers_mut()
+                // `headers_mut()` returns `None` in the case that the builder is in
+                // a failed state due to setting an invalid header or status code.
+                // However, we *just* constructed this builder, so it cannot be in
+                // an error state, as we haven't called any methods on it yet.
+                .expect("a newly created response builder cannot have failed");
+            *builder_headers = *headers;
+        }
+
         // TODO-hardening: consider handling the operational errors that the
         // Serde serialization fails or the response construction fails.  In
         // those cases, we should probably try to report this as a serious
@@ -307,7 +411,7 @@ impl HttpError {
         // there's only one possible set of input and we can test it.  We'll
         // probably have to use unwrap() there and make sure we've tested that
         // code at least once!)
-        hyper::Response::builder()
+        builder
             .status(self.status_code.as_status())
             .header(
                 http::header::CONTENT_TYPE,

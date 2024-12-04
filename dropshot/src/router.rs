@@ -532,10 +532,27 @@ impl<Context: ServerContext> HttpRouter<Context> {
         if node.methods.values().any(|handlers| {
             find_handler_matching_version(handlers, version).is_some()
         }) {
-            Err(HttpError::for_client_error_with_status(
+            let mut err = HttpError::for_client_error_with_status(
                 None,
                 ClientErrorStatusCode::METHOD_NOT_ALLOWED,
-            ))
+            );
+
+            // Add `Allow` headers for the methods that *are* acceptable for
+            // this path, as specified in § 15.5.0 RFC9110, which states:
+            //
+            // > The origin server MUST generate an Allow header field in a
+            // > 405 response containing a list of the target resource's
+            // > currently supported methods.
+            //
+            // See: https://httpwg.org/specs/rfc9110.html#status.405
+            if let Some(hdrs) = err.headers.as_deref_mut() {
+                hdrs.reserve(node.methods.len());
+            }
+            for allowed in node.methods.keys() {
+                err.add_header(http::header::ALLOW, allowed)
+                    .expect("method should be a valid allow header");
+            }
+            Err(err)
         } else {
             Err(HttpError::for_not_found(
                 None,
