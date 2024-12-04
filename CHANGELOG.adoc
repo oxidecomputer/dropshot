@@ -88,33 +88,7 @@ error.
 * `HttpError` now contains an `Option<Box<http::HeaderMap>>` of headers to add
 to error responses constructed for the error.
 +
-Code which constructs `HttpError` literals must now initialize this field. For
-example, this will no longer compile:
-+
-```rust
-let err = dropshot::HttpError {
-    status_code: ErrorStatusCode::INTERNAL_SERVER_ERROR,
-    error_code: None
-    internal_message: "something bad happened".to_string(),
-    external_message: "Internal Error".to_string(),
-};
-```
-+
-Instead, write:
-+
-```rust
-let err = dropshot::HttpError {
-    status_code: ErrorStatusCode::INTERNAL_SERVER_ERROR,
-    error_code: None
-    internal_message: "something bad happened".to_string(),
-    external_message: "Internal Error".to_string(),
-    headers: None, // <-- Add this
-};
-```
-+
-Similarly, code which destructures `HttpError`s, such as in a `match` or `let`
-expression, must now either destructure the `headers` field or add `..` to
-ignore it.
+Code which constructs `HttpError` literals must now initialize this field.
 
 === Other notable changes
 

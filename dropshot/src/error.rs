@@ -120,14 +120,11 @@ pub struct HttpError {
     pub internal_message: String,
     /// Headers that will be added to responses generated from this
     /// error.
-    ///
-    /// The [`http::HeaderMap`] is boxed to reduce the size of `HttpError`s
-    /// which don't contain a `HeaderMap` (the common case).  Unlike containers
-    /// such as `Vec` and `HashMap`, an empty [`http::HeaderMap`] contains a
-    /// fairly large number of fields, rather than being a pointer to a heap
-    /// allocation containing the actual data.  Thus, we store an
-    /// `Option<Box<HeaderMap>>` here, so that the empty case is just a null
-    /// pointer.
+    // This is boxed in obeisance to Clippy's `result_large_err` lint
+    // (https://rust-lang.github.io/rust-clippy/master/index.html#result_large_err).
+    // While we could allow that lint for Dropshot, `HttpError` will also be a
+    // common return type for consumers of Dropshot, so let's not force users to
+    // also allow the lint.
     pub headers: Option<Box<http::HeaderMap>>,
 }
 
