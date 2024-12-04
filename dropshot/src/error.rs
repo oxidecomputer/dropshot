@@ -118,7 +118,7 @@ pub struct HttpError {
     pub external_message: String,
     /// Error message recorded in the log for this error
     pub internal_message: String,
-    /// Headers which should be added to error responses generated from this
+    /// Headers that will be added to responses generated from this
     /// error.
     ///
     /// The [`http::HeaderMap`] is boxed to reduce the size of `HttpError`s
@@ -399,7 +399,7 @@ impl HttpError {
     ) -> hyper::Response<crate::Body> {
         let mut builder = hyper::Response::builder();
 
-        // Set the builder's initial `HeaderMap` to the headers recommended by
+        // Set the builder's initial `HeaderMap` to the headers specified by
         // the error, if any exist.  Replacing the initial `HeaderMap` is more
         // efficient than inserting each header from `self.headers` into the
         // builder one-by-one, as we can just reuse the existing header map.
