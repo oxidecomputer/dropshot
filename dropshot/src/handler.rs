@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Interface for implementing HTTP endpoint handler functions.
 //!
 //! For information about supported endpoint function signatures, argument types,
@@ -32,6 +32,7 @@
 //! OpenAPI document generation.
 
 use super::error::HttpError;
+use super::error_status_code::ErrorStatusCode;
 use super::extractor::RequestExtractor;
 use super::http_util::CONTENT_TYPE_JSON;
 use super::http_util::CONTENT_TYPE_OCTET_STREAM;
@@ -245,8 +246,8 @@ impl<T: 'static + ServerContext> RequestContextArgument for RequestContext<T> {
 }
 
 /// `HttpHandlerFunc` is a trait providing a single function, `handle_request()`,
-/// which takes an HTTP request and produces an HTTP response (or
-/// `HttpError`).
+/// which takes an HTTP request and produces an HTTP response (or a
+/// [`HandlerError`]).
 ///
 /// As described above, handler functions can have a number of different
 /// signatures.  They all consume a reference to the current request context.
@@ -267,11 +268,286 @@ where
     FuncParams: RequestExtractor,
     ResponseType: HttpResponse + Send + Sync + 'static,
 {
+    type Error: HttpResponseError;
     async fn handle_request(
         &self,
         rqctx: RequestContext<Context>,
-        p: FuncParams,
-    ) -> HttpHandlerResult;
+        params: FuncParams,
+    ) -> Result<Response<Body>, HandlerError>;
+}
+
+/// Errors returned by [`HttpHandlerFunc::handle_request`].
+///
+/// User-defined endpoint handler functions, for which we implement
+/// `HttpHandlerFunc`, may return any error type that implements
+/// [`HttpResponseError`].  We type-erase such errors by eagerly converting them
+/// into `Response<Body>` within the `HttpHandlerFunc` implementation, to permit
+/// the API to consist of handlers with any number of different error types.
+///
+/// This type is not exported to Dropshot consumers; it is purely an internal
+/// implementation detail of the interface between `HttpHandlerFunc` and the
+/// server.
+pub enum HandlerError {
+    /// An error returned by a fallible handler function itself.
+    ///
+    /// The user-defined endpoint handler function may return a `Result` where
+    /// the `Err` type is any type that implements the [`HttpResponseError`]
+    /// trait.  In order to allow an API to consist of handlers with any number
+    /// of different error types, we erase the individual handler's error type
+    /// before returning the error to the server by eagerly converting it into
+    /// an HTTP response.  However, we hang onto the internal message produced
+    /// by the user-defined error type so that we can log the error when
+    /// returning the HTTP response to the client.
+    Handler { message: String, rsp: Response<Body> },
+    /// In the event that serializing a user-defined error type fails, we
+    /// fall back to returning an `HttpError`, to avoid a potential
+    /// infinitely recursive error loop.  Furthermore, when the endpoint's error
+    /// type is `HttpError`, this variant allows us to pass it to the server as
+    /// a structured value, so that the internal and external messages of the
+    /// error can both be logged.
+    Dropshot(HttpError),
+}
+
+impl HandlerError {
+    pub(crate) fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Handler { ref rsp, .. } => rsp.status(),
+            Self::Dropshot(ref e) => e.status_code.as_status(),
+        }
+    }
+
+    pub(crate) fn internal_message(&self) -> &String {
+        match self {
+            Self::Handler { ref message, .. } => message,
+            Self::Dropshot(ref e) => &e.internal_message,
+        }
+    }
+
+    pub(crate) fn external_message(&self) -> Option<&String> {
+        match self {
+            Self::Handler { .. } => None,
+            Self::Dropshot(ref e) => Some(&e.internal_message),
+        }
+    }
+
+    pub(crate) fn into_response(self, request_id: &str) -> Response<Body> {
+        match self {
+            // When the handler returns an error, we must add the request ID
+            // header to it now.
+            Self::Handler { mut rsp, .. } => {
+                match http::HeaderValue::from_str(request_id) {
+                    Ok(header) => {
+                        rsp.headers_mut()
+                            .insert(crate::HEADER_REQUEST_ID, header);
+                    }
+                    // We should never generate a request ID that contains
+                    // invalid characters, but sadly, we can't promise that
+                    // here...
+                    //
+                    // Note that this is morally equivalent to an `expect`, but
+                    // the match is a bit nicer as it lets us include the
+                    // request ID that `HeaderValue::from_str` didn't like in
+                    // the panic message.
+                    Err(e) => {
+                        unreachable!(
+                            "request ID {request_id:?} is not a valid \
+                            HeaderValue: {e}",
+                        );
+                    }
+                }
+
+                rsp
+            }
+            Self::Dropshot(e) => e.into_response(request_id),
+        }
+    }
+}
+
+impl<E> From<E> for HandlerError
+where
+    E: HttpResponseError,
+{
+    fn from(e: E) -> Self {
+        let message = e.to_string();
+        let status = e.status_code();
+        match e.to_response(Response::builder().status(status.as_status())) {
+            Ok(rsp) => Self::Handler { message, rsp },
+            Err(e) => Self::Dropshot(e),
+        }
+    }
+}
+
+/// An error type which can be converted into an HTTP response.
+///
+/// The error types returned by handlers must implement this trait, so that a
+/// response can be generated when the handler returns an error.  In order to
+/// implement this trait, a type must:
+///
+/// 1. Implement the [`HttpResponseContent`] trait, defining the content of the
+///    error's response body.  This is most simply done by implementing the
+///    [`Serialize`] and [`JsonSchema`] traits, for which there's a blanket
+///    implementation of [`HttpResponseContent`] for `T: Serialize +
+///    JsonSchema`.
+/// 2. Implement [`std::fmt::Display`].  This is used in order to log an internal
+///    error message when returning an error response to the client.
+/// 3. Implement this trait's [`HttpResponseError::status_code`] method, which
+///    specifies the status code for the error response.  Note that this method
+///    returns an [`ErrorStatusCode`]: a refinement of the [`http::StatusCode`]
+///    type which is constrained to only 4xx and 5xx status codes.
+/// 4. Provide a [`From`]`<`[`HttpError`]`>` conversion.  If an extractor fails
+///    to extract a request parameter, it returns a [`HttpError`]. Providing a
+///    `From` conversion allows extractor failures to also be represented by the
+///    user error type.
+///
+/// Dropshot's [`HttpError`] type implements `HttpResponseError`, so handlers
+/// may return `Result<T, HttpError>` without the need to define a custom error
+/// type.
+///
+/// # Examples
+///
+/// First, let's consider an implementation of `HttpResponseError` for a simple
+/// struct. In practice, the case of an error struct that just contains a string
+/// message is generally better served by returning Dropshot's [`HttpError`]
+/// type.
+///
+/// ```rust
+/// use dropshot::HttpError;
+/// use dropshot::HttpResponseError;
+/// use dropshot::ErrorStatusCode;
+/// use std::fmt;
+///
+/// #[derive(Debug)]
+/// // Deriving `Serialize` and `JsonSchema` for our error type provides an
+/// // implementation of the `HttpResponseContent` trait.
+/// #[derive(serde::Serialize, schemars::JsonSchema)]
+/// struct MyError {
+///     /// An arbitrary string error message.
+///     message: String,
+///     /// The status code for the response.
+///     //
+///     // We skip serializing this, as it need not be part of the response
+///     // body.
+///     #[serde(skip)]
+///     status_code: ErrorStatusCode,
+/// }
+///
+/// // Types implementing `HttpResponseError` must provide a `From<HttpError>`
+/// // conversion, to allow them to represent errors returned by request
+/// // extractors and response body serialization.
+/// impl From<HttpError> for MyError {
+///     fn from(error: HttpError) -> Self {
+///         MyError {
+///             message: error.external_message,
+///             status_code: error.status_code,
+///         }
+///     }
+/// }
+///
+/// // Types implementing `HttpResponseError` must provide a `fmt::Display`
+/// // implementation, so that the error can be logged.
+/// impl fmt::Display for MyError {
+///     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+///         f.write_str(&self.message)
+///     }
+/// }
+///
+/// // Finally, we can implement the `HttpResponseError` trait itself,
+/// // defining the method through which the error provides dropshot with
+/// // the response's status code.
+/// impl HttpResponseError for MyError {
+///     // Note that this method returns a `ErrorStatusCode`, rather
+///     // than an `http::StatusCode`. This type is a refinement of
+///     // `http::StatusCode` that can only be constructed from status codes
+///     // in the 4xx (client error) or 5xx (server error) ranges.
+///     fn status_code(&self) -> ErrorStatusCode {
+///         self.status_code
+///     }
+/// }
+/// ```
+///
+/// A common use case for custom error types is to provide a structured enum
+/// error in the OpenAPI description that clients can consume programmatically.
+/// For example:
+///
+/// ```rust
+/// use dropshot::HttpError;
+/// use dropshot::HttpResponseError;
+/// use dropshot::ErrorStatusCode;
+///
+/// // Here, we'll use `thiserror`'s derive macro for `std::error::Error` to
+/// // generate the `fmt::Display` implementation for our error enum.
+/// #[derive(Debug, thiserror::Error, serde::Serialize, schemars::JsonSchema)]
+/// enum ThingyError {
+///     // Define some structured error variants that represent error
+///     // conditions specific to our API:
+///     #[error("no thingies are currently available")]
+///     NoThingies,
+///     #[error("invalid thingy: {:?}", .name)]
+///     InvalidThingy { name: String },
+///
+///     // This variant is used when constructing a `ThingyError` from a
+///     // dropshot `HttpError`:
+///     #[error("{internal_message}")]
+///     Other {
+///         message: String,
+///         error_code: Option<String>,
+///         // Skip serializing these fields, as they are used for the
+///         // `fmt::Display` implementation and for determining the status
+///         // code, respectively, rather than included in the response body:
+///         #[serde(skip)]
+///         internal_message: String,
+///         #[serde(skip)]
+///         status: ErrorStatusCode,
+///     },
+/// }
+///
+/// // Provide a conversion from `HttpError` for our error type:
+/// impl From<HttpError> for ThingyError {
+///     fn from(error: HttpError) -> Self {
+///         ThingyError::Other {
+///             message: error.external_message,
+///             internal_message: error.internal_message,
+///             status: error.status_code,
+///             error_code: error.error_code,
+///         }
+///     }
+/// }
+///
+/// // Implement `HttpResponseError` for our error type:
+/// impl HttpResponseError for ThingyError {
+///    fn status_code(&self) -> ErrorStatusCode {
+///        match self {
+///            ThingyError::NoThingies => {
+///                // The `ErrorStatusCode` type provides constants for all
+///                // well-known 4xx and 5xx status codes, such as 503 Service
+///                // Unavailable.
+///                ErrorStatusCode::SERVICE_UNAVAILABLE
+///            }
+///            ThingyError::InvalidThingy { .. } => {
+///                // Alternatively, an `ErrorStatusCode` can be constructed
+///                // from a `u16`, but the `ErrorStatusCode::from_u16`
+///                // constructor validates that the status code is a 4xx
+//                 // or 5xx.
+///                //
+///                // This allows using extended status codes, while still
+///                // ensuring that they are errors.
+///                ErrorStatusCode::from_u16(442)
+///                    .expect("442 is a 4xx status code")
+///            }
+///            ThingyError::Other { status, .. } => *status,
+///        }
+///    }
+///}
+/// ```
+#[diagnostic::on_unimplemented(
+    note = "consider using `dropshot::HttpError`, unless custom error \
+     presentation is needed"
+)]
+pub trait HttpResponseError:
+    HttpResponseContent + From<HttpError> + std::fmt::Display
+{
+    /// Returns the status code for a response generated from this error.
+    fn status_code(&self) -> ErrorStatusCode;
 }
 
 /// Defines an implementation of the `HttpHandlerFunc` trait for functions
@@ -313,21 +589,25 @@ where
 // type" in the comments here we're referring to the output type of the returned
 // future.)  Again, as described above, we'd like to allow HTTP endpoint
 // functions to return a variety of different return types that are ultimately
-// converted into `Result<Response<Body>, HttpError>`.  To do that, the trait
+// converted into `Result<Response<Body>, HandlerError>`.  To do that, the trait
 // bounds below say that the function must produce a `Result<ResponseType,
-// HttpError>` where `ResponseType` is a type that implements `HttpResponse`.
-// We provide a few implementations of the trait `HttpTypedResponse` that
-// includes a HTTP status code and structured output. In addition we allow for
-// functions to hand-craft a `Response<Body>`. For both we implement
-// `HttpResponse` (trivially in the latter case).
+// ErrorType>` where `ResponseType` is a type that implements `HttpResponse`
+// and `ErrorType` is a type that implements `HttpResponseError`. We provide a
+// few implementations of the trait `HttpTypedResponse` that includes a HTTP
+// status code and structured output. In addition we allow for functions to
+// hand-craft a `Response<Body>`. For both we implement `HttpResponse`
+// (trivially in the latter case).
 //
 //      1. Handler function
 //            |
 //            | returns:
 //            v
-//      2. Result<ResponseType, HttpError>
+//      2. Result<ResponseType, ErrorType>
 //            |
-//            | This may fail with an HttpError which we return immediately.
+//            | This may fail with an error type implementing the
+//            | `HttpResponseError` trait, which we will convert into a
+//            | `HandlerError` and return.
+//            |
 //            | On success, this will be Ok(ResponseType) for some specific
 //            | ResponseType that implements HttpResponse.  We'll end up
 //            | invoking:
@@ -336,8 +616,13 @@ where
 //            |
 //            | This is a type-specific conversion from `ResponseType` into
 //            | `Response<Body>` that's allowed to fail with an `HttpError`.
+//            | If this fails, we will convert the `HttpError` into the
+//            | user-defined error `ErrorType`, and then serialize that into a
+//            | `HandlerError`.  This seems a bit weird, but it's how we allow
+//            | user-defined handler error types to customize the presentation
+//            | of errors serializing responses.
 //            v
-//      4. Result<Response<Body>, HttpError>
+//      4. Result<Response<Body>, HandlerError>
 //
 // Note that the handler function may fail due to an internal error *or* the
 // conversion to JSON may successively fail in the call to
@@ -356,27 +641,37 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
     ($(($i:tt, $T:tt)),*) => {
 
     #[async_trait]
-    impl<Context, FuncType, FutureType, ResponseType, $($T,)*>
+    impl<Context, FuncType, FutureType, ResponseType, ErrorType, $($T,)*>
         HttpHandlerFunc<Context, ($($T,)*), ResponseType> for FuncType
     where
         Context: ServerContext,
         FuncType: Fn(RequestContext<Context>, $($T,)*)
             -> FutureType + Send + Sync + 'static,
-        FutureType: Future<Output = Result<ResponseType, HttpError>>
+        FutureType: Future<Output = Result<ResponseType, ErrorType>>
             + Send + 'static,
         ResponseType: HttpResponse + Send + Sync + 'static,
+        ErrorType: HttpResponseError + Send + Sync + 'static,
         ($($T,)*): RequestExtractor,
         $($T: Send + Sync + 'static,)*
     {
+        type Error = ErrorType;
         async fn handle_request(
             &self,
             rqctx: RequestContext<Context>,
-            _param_tuple: ($($T,)*)
-        ) -> HttpHandlerResult
+            _param_tuple: ($($T,)*),
+        ) -> Result<Response<Body>, HandlerError>
         {
-            let response: ResponseType =
-                (self)(rqctx, $(_param_tuple.$i,)*).await?;
-            response.to_result()
+            let response: ResponseType = (self)(rqctx, $(_param_tuple.$i,)*).await?;
+            response.to_result().map_err(|error| {
+                // If turning the endpoint's response into a
+                // `http::Response<Body>` failed, try to convert the `HttpError` into
+                // the  endpoint's error type.
+                let error = ErrorType::from(error);
+                // Then, turn the user error type into a `HandlerError`. This
+                // will attempt to serialize the error, but if that doesn't
+                // work, it'll just produce an `HttpError`, which can't fail.
+                HandlerError::from(error)
+            })
         }
     }
 }}
@@ -403,7 +698,7 @@ pub trait RouteHandler<Context: ServerContext>: Debug + Send + Sync {
         &self,
         rqctx: RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> HttpHandlerResult;
+    ) -> Result<Response<Body>, HandlerError>;
 }
 
 /// `HttpRouteHandler` is the only type that implements `RouteHandler`.  The
@@ -466,7 +761,7 @@ where
         &self,
         rqctx: RequestContext<Context>,
         request: hyper::Request<crate::Body>,
-    ) -> HttpHandlerResult {
+    ) -> Result<Response<Body>, HandlerError> {
         // This is where the magic happens: in the code below, `funcparams` has
         // type `FuncParams`, which is a tuple type describing the extractor
         // arguments to the handler function.  This could be `()`, `(Query<Q>)`,
@@ -483,8 +778,9 @@ where
         // is resolved statically.makes them actual function arguments for the
         // actual handler function.  From this point down, all of this is
         // resolved statically.
-        let funcparams =
-            RequestExtractor::from_request(&rqctx, request).await?;
+        let funcparams = RequestExtractor::from_request(&rqctx, request)
+            .await
+            .map_err(<HandlerType::Error>::from)?;
         let future = self.handler.handle_request(rqctx, funcparams);
         future.await
     }
@@ -541,7 +837,7 @@ impl RouteHandler<StubContext> for StubRouteHandler {
         &self,
         _: RequestContext<StubContext>,
         _: hyper::Request<crate::Body>,
-    ) -> HttpHandlerResult {
+    ) -> Result<Response<Body>, HandlerError> {
         unimplemented!("stub handler called, not implemented: {}", self.label)
     }
 }
@@ -685,6 +981,45 @@ where
     }
 }
 
+impl HttpResponseContent for HttpError {
+    fn to_response(self, _: http::response::Builder) -> HttpHandlerResult {
+        // Okay, here is where we do a devious little bit of sleight-of-hand.
+        // When an endpoint's handler function returns an error, we typically
+        // call `HttpResponseContent::to_response()` on it and return the error
+        // response to the server, so that the error response is then sent to
+        // the client. However, when the error type of the handler is
+        // `dropshot::HttpError`, we'd like to be able to handle this a little
+        // differently: unlike arbitrary user-defined types that implement
+        // `HttpResponseError`, `HttpError` carries both internal message and
+        // external message fields, and has its own `HttpError::into_response`,
+        // method which takes a request ID as an argument. We'd like to be able
+        // to log both messages and construct a response body including the
+        // request ID.
+        //
+        // To special-case `dropshot::HttpError`s, we do something a little bit
+        // sneaky. Converting a type implementing `HttpResponseContent` into a
+        // response body is fallible; normally intended for stuff like
+        // serialization errors. Rather than serializing the error, we can just
+        // return it here, so that it's handled as a `HttpError` instead of an
+        // opaque response body.
+        Err(self)
+    }
+
+    fn content_metadata() -> Option<ApiSchemaGenerator> {
+        use crate::error::HttpErrorResponseBody;
+        Some(ApiSchemaGenerator::Gen {
+            name: HttpErrorResponseBody::schema_name,
+            schema: make_subschema_for::<HttpErrorResponseBody>,
+        })
+    }
+}
+
+impl HttpResponseError for HttpError {
+    fn status_code(&self) -> ErrorStatusCode {
+        self.status_code
+    }
+}
+
 /// The `HttpCodedResponse` trait is used for all of the specific response types
 /// that we provide. We use it in particular to encode the success status code
 /// and the type information of the return value.
@@ -710,7 +1045,7 @@ where
     T: HttpCodedResponse,
 {
     fn to_result(self) -> HttpHandlerResult {
-        self.into()
+        self.into().map_err(Into::into)
     }
     fn response_metadata() -> ApiEndpointResponse {
         ApiEndpointResponse {

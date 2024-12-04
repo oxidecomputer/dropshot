@@ -13,6 +13,7 @@ extern crate lazy_static;
 mod api_trait;
 mod common;
 mod config;
+mod custom_errors;
 mod demo;
 mod detached_shutdown;
 mod multipart;

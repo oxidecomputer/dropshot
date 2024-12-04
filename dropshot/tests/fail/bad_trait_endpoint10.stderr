@@ -1,10 +1,12 @@
-error[E0277]: the trait bound `Result<dropshot::HttpResponseUpdatedNoContent, String>: dropshot::api_description::HttpResultType` is not satisfied
+error[E0277]: the trait bound `String: HttpResponseError` is not satisfied
   --> tests/fail/bad_trait_endpoint10.rs:19:10
    |
 19 |     ) -> Result<HttpResponseUpdatedNoContent, String>;
-   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `dropshot::api_description::HttpResultType` is not implemented for `Result<dropshot::HttpResponseUpdatedNoContent, String>`
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `HttpResponseError` is not implemented for `String`, which is required by `Result<dropshot::HttpResponseUpdatedNoContent, String>: dropshot::api_description::HttpResultType`
    |
-   = help: the trait `dropshot::api_description::HttpResultType` is implemented for `Result<T, HttpError>`
+   = note: consider using `dropshot::HttpError`, unless custom error presentation is needed
+   = help: the trait `HttpResponseError` is implemented for `HttpError`
+   = note: required for `Result<dropshot::HttpResponseUpdatedNoContent, String>` to implement `dropshot::api_description::HttpResultType`
 note: required by a bound in `ApiEndpoint::<StubContext>::new_for_types`
   --> src/api_description.rs
    |

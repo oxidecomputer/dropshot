@@ -7,7 +7,7 @@ error: endpoint handlers must have the following signature:
                [body_param: UntypedBody,]
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
-           ) -> Result<HttpResponse*, HttpError>
+           ) -> Result<HttpResponse*, impl HttpResponseError>
   --> tests/fail/bad_trait_endpoint13.rs:16:7
    |
 16 | trait MyApi {

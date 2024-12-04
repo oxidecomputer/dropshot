@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
@@ -392,9 +392,17 @@
 //! we say "return type" below, we use that as shorthand for the output of the
 //! future.
 //!
-//! An endpoint function must return a type that implements `HttpResponse`.
-//! Typically this should be a type that implements `HttpTypedResponse` (either
-//! one of the Dropshot-provided ones or one of your own creation).
+//! An endpoint function must return a [`Result`]`<T, E>` where the `Ok` type
+//! implements [`HttpResponse`].  Typically this should be a type that
+//! implements `HttpTypedResponse` (either one of the Dropshot-provided ones or
+//! one of your own creation).
+//!
+//! Endpoint functions may return the [`HttpError`] type in the error case, or a
+//! user-defined error type that implements the [`HttpResponseError`] trait.
+//! [`HttpError`] may be simpler, while a custom error type permits greater
+//! expressivity and control over the representation of errors in the API. See
+//! the documentation for the [`HttpResponseError`] trait for details on how to
+//! implement it for your own error types.
 //!
 //! The more specific a type returned by the handler function, the more can be
 //! validated at build-time, and the more specific an OpenAPI schema can be
@@ -820,6 +828,7 @@ mod api_description;
 mod body;
 mod config;
 mod error;
+mod error_status_code;
 mod extractor;
 mod from_map;
 mod handler;
@@ -863,6 +872,12 @@ pub use config::RawTlsConfig;
 pub use dtrace::ProbeRegistration;
 pub use error::HttpError;
 pub use error::HttpErrorResponseBody;
+pub use error_status_code::ClientErrorStatusCode;
+pub use error_status_code::ErrorStatusCode;
+pub use error_status_code::InvalidClientErrorStatusCode;
+pub use error_status_code::InvalidErrorStatusCode;
+pub use error_status_code::NotAClientError;
+pub use error_status_code::NotAnError;
 pub use extractor::ExclusiveExtractor;
 pub use extractor::ExtractorMetadata;
 pub use extractor::MultipartBody;
@@ -882,6 +897,7 @@ pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
+pub use handler::HttpResponseError;
 pub use handler::HttpResponseFound;
 pub use handler::HttpResponseHeaders;
 pub use handler::HttpResponseOk;

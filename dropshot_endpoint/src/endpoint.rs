@@ -35,7 +35,7 @@ pub(crate) fn usage_str(context: &str) -> String {
         [body_param: UntypedBody,]
         [body_param: StreamingBody,]
         [raw_request: RawRequest,]
-    ) -> Result<HttpResponse*, HttpError>"
+    ) -> Result<HttpResponse*, impl HttpResponseError>"
     )
 }
 
@@ -389,29 +389,20 @@ impl<'ast> EndpointParams<'ast> {
                     type E;
                 }
                 impl<TT, EE> ResultTrait for Result<TT, EE>
-                where
-                    TT: #dropshot::HttpResponse,
                 {
                     type T = TT;
                     type E = EE;
                 }
-                struct NeedHttpResponse(
-                    <#ret_ty as ResultTrait>::T,
-                );
-                trait TypeEq {
-                    type This: ?Sized;
-                }
-                impl<T: ?Sized> TypeEq for T {
-                    type This = Self;
-                }
-                fn validate_result_error_type<T>()
+                fn validate_response_type<T>()
                 where
-                    T: ?Sized + TypeEq<This = #dropshot::HttpError>,
-                {
-                }
-                validate_result_error_type::<
-                    <#ret_ty as ResultTrait>::E,
-                >();
+                    T: #dropshot::HttpResponse,
+                {}
+                fn validate_error_type<T>()
+                where
+                    T: #dropshot::HttpResponseError,
+                {}
+                validate_response_type::<<#ret_ty as ResultTrait>::T>();
+                validate_error_type::<<#ret_ty as ResultTrait>::E>();
             };
         };
 

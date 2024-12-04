@@ -1,0 +1,253 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "test",
+    "version": "3.5.0"
+  },
+  "paths": {
+    "/test/dropshot-error": {
+      "get": {
+        "operationId": "dropshot_error",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test/enum-error/{should_error}": {
+      "get": {
+        "operationId": "enum_error",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "should_error",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/EnumError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/EnumError"
+          }
+        }
+      }
+    },
+    "/test/struct-error/{should_error}": {
+      "get": {
+        "operationId": "struct_error",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "should_error",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Null",
+                  "type": "string",
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/StructError"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/StructError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EnumError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "OverfullHbox": {
+                "type": "object",
+                "properties": {
+                  "badness": {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  "line": {
+                    "type": "integer",
+                    "format": "uint32",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "badness",
+                  "line"
+                ]
+              }
+            },
+            "required": [
+              "OverfullHbox"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "HttpError": {
+                "type": "object",
+                "properties": {
+                  "error_code": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              }
+            },
+            "required": [
+              "HttpError"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Error": {
+        "description": "Error information from a response.",
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "request_id"
+        ]
+      },
+      "ErrorKind": {
+        "oneOf": [
+          {
+            "description": "Can't get ye flask.",
+            "type": "string",
+            "enum": [
+              "CantGetYeFlask"
+            ]
+          },
+          {
+            "description": "Flagrant error,",
+            "type": "string",
+            "enum": [
+              "Other"
+            ]
+          }
+        ]
+      },
+      "StructError": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ErrorKind"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ]
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "EnumError": {
+        "description": "EnumError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EnumError"
+            }
+          }
+        }
+      },
+      "StructError": {
+        "description": "StructError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StructError"
+            }
+          }
+        }
+      }
+    }
+  }
+}

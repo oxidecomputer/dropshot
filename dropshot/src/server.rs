@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
@@ -6,7 +6,7 @@ use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
-use super::error::HttpError;
+use super::handler::HandlerError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
@@ -833,30 +833,33 @@ async fn http_request_handle_wrap<C: ServerContext>(
     let latency_us = start_time.elapsed().as_micros();
     let response = match maybe_response {
         Err(error) => {
-            let message_external = error.external_message.clone();
-            let message_internal = error.internal_message.clone();
-            let r = error.into_response(&request_id);
+            {
+                let status = error.status_code();
+                let message_external = error.external_message();
+                let message_internal = error.internal_message();
 
-            #[cfg(feature = "usdt-probes")]
-            probes::request__done!(|| {
-                crate::dtrace::ResponseInfo {
-                    id: request_id.clone(),
-                    local_addr,
-                    remote_addr,
-                    status_code: r.status().as_u16(),
-                    message: message_external.clone(),
-                }
-            });
+                #[cfg(feature = "usdt-probes")]
+                probes::request__done!(|| {
+                    crate::dtrace::ResponseInfo {
+                        id: request_id.clone(),
+                        local_addr,
+                        remote_addr,
+                        status_code: status.as_u16(),
+                        message: message_external
+                            .cloned()
+                            .unwrap_or_else(|| message_internal.clone()),
+                    }
+                });
 
-            // TODO-debug: add request and response headers here
-            info!(request_log, "request completed";
-                "response_code" => r.status().as_str(),
-                "latency_us" => latency_us,
-                "error_message_internal" => message_internal,
-                "error_message_external" => message_external,
-            );
-
-            r
+                // TODO-debug: add request and response headers here
+                info!(request_log, "request completed";
+                    "response_code" => status.as_str(),
+                    "latency_us" => latency_us,
+                    "error_message_internal" => message_internal,
+                    "error_message_external" => message_external,
+                );
+            };
+            error.into_response(&request_id)
         }
 
         Ok(response) => {
@@ -890,7 +893,7 @@ async fn http_request_handle<C: ServerContext>(
     request_id: &str,
     request_log: Logger,
     remote_addr: std::net::SocketAddr,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<Response<Body>, HandlerError> {
     // TODO-hardening: is it correct to (and do we correctly) read the entire
     // request body even if we decide it's too large and are going to send a 400
     // response?
@@ -943,9 +946,9 @@ async fn http_request_handle<C: ServerContext>(
                         ),
                         Err(error) => {
                             warn!(request_log, "request completed after handler was already cancelled";
-                                "response_code" => error.status_code.as_str(),
-                                "error_message_internal" => error.external_message,
-                                "error_message_external" => error.internal_message,
+                                "response_code" => %error.status_code(),
+                                "error_message_internal" => error.internal_message(),
+                                "error_message_external" => error.external_message(),,
                             );
                         }
                     }

@@ -29,20 +29,47 @@
 //! * We'd like to take advantage of Rust's built-in error handling control flow
 //!   tools, like Results and the '?' operator.
 //!
-//! Dropshot itself is concerned only with HTTP errors.  We define `HttpError`,
-//! which provides a status code, error code (via an Enum), external message (for
-//! sending in the response), optional metadata, and an internal message (for the
-//! log file or other instrumentation).  The HTTP layers of the request-handling
-//! stack may use this struct directly.  **The set of possible error codes here
-//! is part of a service's OpenAPI contract, as is the schema for any metadata.**
-//! By the time an error bubbles up to the top of the request handling stack, it
-//! must be an HttpError.
+//! Dropshot itself is concerned only with HTTP errors.  We define an
+//! [`HttpResponseError`] trait (in `handler.rs`), that provides an interface
+//! for error types to indicate how they may be converted into an HTTP response.
+//! In particular, such types must be capable of providing a 4xx or 5xx status
+//! code for the response; an implementation of the `HttpResponseContent` trait,
+//! for producing the response body; response metadata for the OpenAPI document;
+//! and an implementation of `std::fmt::Display`, so that dropshot can log the
+//! error.  **The set of possible error codes here is part of a service's
+//! OpenAPI contract, as is the schema for any metadata.**  In addition, we
+//! define an `HttpError` struct in this module, which provides a status code,
+//! error code, external message (for sending in the response), optional
+//! metadata, and an internal message (for the log file or other
+//! instrumentation).  This type is used for errors produced within Dropshot,
+//! such as by extractors, and implements `HttpResponseError`, so that the HTTP
+//! layers of the request-handling stack may use this struct directly when
+//! specific error presentation is not needed.  By the time an error bubbles up
+//! to the top of the request handling stack, it must be a type that implements
+//! `HttpResponseError`, either via an implementation for a user-defined type,
+//! or by converting it into a Dropshot `HttpError`.
+//!
+//! We require that status codes provided by the [`HttpResponseError`] trait are
+//! either client errors (4xx) or server errors (5xx), so that error responses
+//! can be differentiated from successful responses in the generated OpenAPI
+//! document.  As the `http` crate's `StatusCode` type can represent any status
+//! code, the `error_status_code` module defines `ErrorStatusCode` and
+//! `ClientErrorStatusCode` newtypes around [`http::StatusCode`] that are
+//! validated upon construction to contain only errors.  An `ErrorStatusCode`
+//! may be constructed from any 4xx or 5xx status code, while
+//! `ClientErrorStatusCode` may only be constructed from a 4xx.  In addition to
+//! fallible conversions from any `StatusCode`, associated constants are
+//! provided for well-known error status codes, so user code may reference them
+//! by name without requiring fallible runtime valdiation.
 //!
 //! For the HTTP-agnostic layers of an API server (i.e., consumers of Dropshot),
 //! we recommend a separate enum to represent their errors in an HTTP-agnostic
 //! way.  Consumers can provide a `From` implementation that converts these
-//! errors into HttpErrors.
+//! errors into `HttpError`s, or implement the [`HttpResponseError`] trait to
+//! provide their own mechanism.
 
+use crate::ClientErrorStatusCode;
+use crate::ErrorStatusCode;
 use hyper::Error as HyperError;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -81,12 +108,9 @@ use std::fmt;
 #[derive(Debug)]
 pub struct HttpError {
     // TODO-coverage add coverage in the test suite for error_code
-    // TODO-robustness should error_code just be required?  It'll be confusing
-    // to clients if it's missing sometimes.  Should this class be parametrized
-    // by some enum type?
     // TODO-polish add cause chain for a complete log message?
     /// HTTP status code for this error
-    pub status_code: http::StatusCode,
+    pub status_code: ErrorStatusCode,
     /// Optional string error code for this error.  Callers are advised to
     /// use an enum to populate this field.
     pub error_code: Option<String>,
@@ -180,12 +204,11 @@ impl HttpError {
     /// separate internal message.
     pub fn for_client_error(
         error_code: Option<String>,
-        status_code: http::StatusCode,
+        status_code: ClientErrorStatusCode,
         message: String,
     ) -> Self {
-        assert!(status_code.is_client_error());
         HttpError {
-            status_code,
+            status_code: status_code.into(),
             error_code,
             internal_message: message.clone(),
             external_message: message,
@@ -195,7 +218,7 @@ impl HttpError {
     /// Generates an `HttpError` for a 500 "Internal Server Error" error with the
     /// given `internal_message` for the internal message.
     pub fn for_internal_error(internal_message: String) -> Self {
-        let status_code = http::StatusCode::INTERNAL_SERVER_ERROR;
+        let status_code = ErrorStatusCode::INTERNAL_SERVER_ERROR;
         HttpError {
             status_code,
             error_code: Some(String::from("Internal")),
@@ -213,7 +236,7 @@ impl HttpError {
         error_code: Option<String>,
         internal_message: String,
     ) -> Self {
-        let status_code = http::StatusCode::SERVICE_UNAVAILABLE;
+        let status_code = ErrorStatusCode::SERVICE_UNAVAILABLE;
         HttpError {
             status_code,
             error_code,
@@ -234,7 +257,7 @@ impl HttpError {
     ) -> Self {
         HttpError::for_client_error(
             error_code,
-            http::StatusCode::BAD_REQUEST,
+            ClientErrorStatusCode::BAD_REQUEST,
             message,
         )
     }
@@ -243,9 +266,9 @@ impl HttpError {
     /// internal and external messages for the error come from the standard label
     /// for this status code (e.g., the message for status code 404 is "Not
     /// Found").
-    pub fn for_status(
+    pub fn for_client_error_with_status(
         error_code: Option<String>,
-        status_code: http::StatusCode,
+        status_code: ClientErrorStatusCode,
     ) -> Self {
         // TODO-polish This should probably be our own message.
         let message = status_code.canonical_reason().unwrap().to_string();
@@ -259,7 +282,7 @@ impl HttpError {
         error_code: Option<String>,
         internal_message: String,
     ) -> Self {
-        let status_code = http::StatusCode::NOT_FOUND;
+        let status_code = ErrorStatusCode::NOT_FOUND;
         let external_message =
             status_code.canonical_reason().unwrap().to_string();
         HttpError {
@@ -285,7 +308,7 @@ impl HttpError {
         // probably have to use unwrap() there and make sure we've tested that
         // code at least once!)
         hyper::Response::builder()
-            .status(self.status_code)
+            .status(self.status_code.as_status())
             .header(
                 http::header::CONTENT_TYPE,
                 super::http_util::CONTENT_TYPE_JSON,

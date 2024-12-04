@@ -2,7 +2,7 @@ error[E0277]: the trait bound `String: HttpResponse` is not satisfied
   --> tests/fail/bad_endpoint12.rs:15:6
    |
 15 | ) -> Result<String, HttpError> {
-   |      ^^^^^^ the trait `HttpCodedResponse` is not implemented for `String`, which is required by `Result<String, HttpError>: ResultTrait`
+   |      ^^^^^^ the trait `HttpCodedResponse` is not implemented for `String`, which is required by `String: HttpResponse`
    |
    = help: the following other types implement trait `HttpCodedResponse`:
              HttpResponseAccepted<T>
@@ -14,17 +14,18 @@ error[E0277]: the trait bound `String: HttpResponse` is not satisfied
              dropshot::handler::HttpResponseSeeOtherStatus
              dropshot::handler::HttpResponseTemporaryRedirectStatus
    = note: required for `String` to implement `HttpResponse`
-note: required for `Result<String, HttpError>` to implement `ResultTrait`
-  --> tests/fail/bad_endpoint12.rs:15:6
+note: required by a bound in `validate_response_type`
+  --> tests/fail/bad_endpoint12.rs:9:1
    |
 9  | / #[endpoint {
 10 | |     method = GET,
 11 | |     path = "/test",
 12 | | }]
-   | |__- unsatisfied trait bound introduced here
+   | |__^ required by this bound in `validate_response_type`
 ...
 15 |   ) -> Result<String, HttpError> {
-   |        ^^^^^^
+   |        ------ required by a bound in this function
+   = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(RequestContext<()>) -> impl Future<Output = Result<String, HttpError>> {<impl std::convert::From<bad_response_type> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::bad_response_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_endpoint12.rs:13:10

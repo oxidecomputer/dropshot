@@ -1,6 +1,6 @@
 error: endpoint handlers must have the following signature:
            async fn(
-               rqctx: dropshot::RequestContext<MyContext>,
+               rqctx: dropshot::RequestContext<Self::Context>,
                [query_params: Query<Q>,]
                [path_params: Path<P>,]
                [body_param: TypedBody<J>,]
@@ -8,15 +8,13 @@ error: endpoint handlers must have the following signature:
                [body_param: StreamingBody,]
                [raw_request: RawRequest,]
            ) -> Result<HttpResponse*, impl HttpResponseError>
-  --> tests/fail/bad_endpoint8.rs:19:1
-   |
-19 | / fn bad_endpoint(
-20 | |     _rqctx: RequestContext<()>,
-21 | | ) -> Result<HttpResponseOk<Ret>, HttpError> {
-   | |___________________________________________^
+ --> tests/fail/bad_trait_endpoint_error.rs:9:7
+  |
+9 | trait MyApi {
+  |       ^^^^^
 
-error: endpoint `bad_endpoint` must be async
-  --> tests/fail/bad_endpoint8.rs:19:1
+error: endpoint `bad_error_type` must not have a `self` argument
+  --> tests/fail/bad_trait_endpoint_error.rs:14:9
    |
-19 | fn bad_endpoint(
-   | ^^
+14 |         &self,
+   |         ^^^^^

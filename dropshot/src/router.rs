@@ -1,7 +1,8 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //! Routes incoming HTTP requests to handler functions
 
 use super::error::HttpError;
+use super::error_status_code::ClientErrorStatusCode;
 use super::handler::RouteHandler;
 
 use crate::api_description::ApiEndpointVersions;
@@ -11,7 +12,6 @@ use crate::server::ServerContext;
 use crate::ApiEndpoint;
 use crate::RequestEndpointMetadata;
 use http::Method;
-use http::StatusCode;
 use percent_encoding::percent_decode_str;
 use semver::Version;
 use std::collections::BTreeMap;
@@ -532,7 +532,10 @@ impl<Context: ServerContext> HttpRouter<Context> {
         if node.methods.values().any(|handlers| {
             find_handler_matching_version(handlers, version).is_some()
         }) {
-            Err(HttpError::for_status(None, StatusCode::METHOD_NOT_ALLOWED))
+            Err(HttpError::for_client_error_with_status(
+                None,
+                ClientErrorStatusCode::METHOD_NOT_ALLOWED,
+            ))
         } else {
             Err(HttpError::for_not_found(
                 None,
@@ -877,6 +880,7 @@ mod test {
             body_content_type: ApiEndpointBodyContentType::default(),
             request_body_max_bytes: None,
             response: ApiEndpointResponse::default(),
+            error: None,
             summary: None,
             description: None,
             tags: vec![],
