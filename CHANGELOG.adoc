@@ -88,7 +88,7 @@ error.
 * `HttpError` now contains an `Option<Box<http::HeaderMap>>` of headers to add
 to error responses constructed for the error.
 +
-Code which constructs `HttpError` literals must now initialize this field.
+Code that constructs `HttpError` literals must now initialize this field.
 
 === Other notable changes
 
