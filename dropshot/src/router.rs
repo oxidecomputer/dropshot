@@ -538,7 +538,13 @@ impl<Context: ServerContext> HttpRouter<Context> {
             );
 
             // Add `Allow` headers for the methods that *are* acceptable for
-            // this path.
+            // this path, as specified in § 15.5.0 RFC9110, which states:
+            //
+            // > The origin server MUST generate an Allow header field in a
+            // > 405 response containing a list of the target resource's
+            // > currently supported methods.
+            //
+            // See: https://httpwg.org/specs/rfc9110.html#status.405
             if let Some(hdrs) = err.headers_mut() {
                 hdrs.reserve(node.methods.len());
             }
