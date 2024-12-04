@@ -120,6 +120,14 @@ pub struct HttpError {
     pub internal_message: String,
     /// Headers which should be added to error responses generated from this
     /// error.
+    ///
+    /// The [`http::HeaderMap`] is boxed to reduce the size of `HttpError`s
+    /// which don't contain a `HeaderMap` (the common case).  Unlike containers
+    /// such as `Vec` and `HashMap`, an empty [`http::HeaderMap`] contains a
+    /// fairly large number of fields, rather than being a pointer to a heap
+    /// allocation containing the actual data.  Thus, we store an
+    /// `Option<Box<HeaderMap>>` here, so that the empty case is just a null
+    /// pointer.
     pub headers: Option<Box<http::HeaderMap>>,
 }
 

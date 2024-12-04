@@ -532,10 +532,21 @@ impl<Context: ServerContext> HttpRouter<Context> {
         if node.methods.values().any(|handlers| {
             find_handler_matching_version(handlers, version).is_some()
         }) {
-            Err(HttpError::for_client_error_with_status(
+            let mut err = HttpError::for_client_error_with_status(
                 None,
                 ClientErrorStatusCode::METHOD_NOT_ALLOWED,
-            ))
+            );
+
+            // Add `Allow` headers for the methods that *are* acceptable for
+            // this path.
+            if let Some(hdrs) = err.headers_mut() {
+                hdrs.reserve(node.methods.len());
+            }
+            for allowed in node.methods.keys() {
+                err.set_header(http::header::ALLOW, allowed)
+                    .expect("method should be a valid allow header");
+            }
+            Err(err)
         } else {
             Err(HttpError::for_not_found(
                 None,
