@@ -13,8 +13,7 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.14.0\...HEAD[Full list of
-commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.14.0\...HEAD[Full list of commits]
 
 === Breaking changes
 
@@ -23,7 +22,7 @@ commits]
 `http::StatusCode`. An `ErrorStatusCode` is a newtype around `http::StatusCode`
 that may only be constructed from 4xx or 5xx status codes.
 +
-Code which uses `http::StatusCode`'s constants for well-known status codes can
+Code which uses `http::StatusCode` constants for well-known status codes can
 be updated to the new API by replacing `http::StatusCode::...` with
 `dropshot::ErrorStatusCode`. For example:
 +
