@@ -543,7 +543,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 hdrs.reserve(node.methods.len());
             }
             for allowed in node.methods.keys() {
-                err.set_header(http::header::ALLOW, allowed)
+                err.add_header(http::header::ALLOW, allowed)
                     .expect("method should be a valid allow header");
             }
             Err(err)

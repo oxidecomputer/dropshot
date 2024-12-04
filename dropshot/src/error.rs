@@ -308,9 +308,16 @@ impl HttpError {
         }
     }
 
-    /// Mutably borrow the `http::HeaderMap`
+    /// Mutably borrow the `http::HeaderMap` associated with this error, if one
+    /// exists.
     pub fn headers_mut(&mut self) -> Option<&mut http::HeaderMap> {
         self.headers.as_deref_mut()
+    }
+
+    /// Borrow the `http::HeaderMap` associated with this error, if one
+    /// exists.
+    pub fn headers_ref(&self) -> Option<&http::HeaderMap> {
+        self.headers.as_deref()
     }
 
     /// Adds a header to the [`http::HeaderMap`] of headers to add to responses
@@ -324,7 +331,7 @@ impl HttpError {
     ///   header name and value, respectively.
     /// - [`Err`]`(`[`http::Error`]`)` if the header name or value is invalid,
     ///   or the `HeaderMap` is full.
-    pub fn set_header<K, V>(
+    pub fn add_header<K, V>(
         &mut self,
         name: K,
         value: V,
