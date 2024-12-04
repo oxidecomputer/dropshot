@@ -545,7 +545,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
             // > currently supported methods.
             //
             // See: https://httpwg.org/specs/rfc9110.html#status.405
-            if let Some(hdrs) = err.headers_mut() {
+            if let Some(hdrs) = err.headers.as_deref_mut() {
                 hdrs.reserve(node.methods.len());
             }
             for allowed in node.methods.keys() {

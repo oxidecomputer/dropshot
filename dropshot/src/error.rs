@@ -305,16 +305,10 @@ impl HttpError {
         }
     }
 
-    /// Mutably borrow the `http::HeaderMap` associated with this error, if one
-    /// exists.
-    pub fn headers_mut(&mut self) -> Option<&mut http::HeaderMap> {
-        self.headers.as_deref_mut()
-    }
-
-    /// Borrow the `http::HeaderMap` associated with this error, if one
-    /// exists.
-    pub fn headers_ref(&self) -> Option<&http::HeaderMap> {
-        self.headers.as_deref()
+    /// Mutably borrow the `http::HeaderMap` associated with this error. If
+    /// there is no header map for this error, this method creates one.
+    pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
+        self.headers.get_or_insert_with(|| Box::new(http::HeaderMap::new()))
     }
 
     /// Adds a header to the [`http::HeaderMap`] of headers to add to responses
@@ -343,9 +337,7 @@ impl HttpError {
             .map_err(Into::into)?;
         let value = <http::HeaderValue as TryFrom<V>>::try_from(value)
             .map_err(Into::into)?;
-        self.headers
-            .get_or_insert_with(|| Box::new(http::HeaderMap::default()))
-            .try_append(name, value)?;
+        self.headers_mut().try_append(name, value)?;
         Ok(self)
     }
 
@@ -382,9 +374,7 @@ impl HttpError {
             .map_err(Into::into)?;
         let value = <http::HeaderValue as TryFrom<V>>::try_from(value)
             .map_err(Into::into)?;
-        self.headers
-            .get_or_insert_with(|| Box::new(http::HeaderMap::default()))
-            .try_append(name, value)?;
+        self.headers_mut().try_append(name, value)?;
         Ok(self)
     }
 
