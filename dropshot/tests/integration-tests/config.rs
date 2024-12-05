@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 //! Tests for configuration file.
 
@@ -310,12 +310,12 @@ async fn test_config_bind_address_https() {
         key_file: NamedTempFile,
     }
 
-    impl<'a>
+    impl
         TestConfigBindServer<
             hyper_rustls::HttpsConnector<
                 hyper_util::client::legacy::connect::HttpConnector,
             >,
-        > for ConfigBindServerHttps<'a>
+        > for ConfigBindServerHttps<'_>
     {
         type Context = i32;
 
@@ -390,12 +390,12 @@ async fn test_config_bind_address_https_buffer() {
         serialized_key: Vec<u8>,
     }
 
-    impl<'a>
+    impl
         TestConfigBindServer<
             hyper_rustls::HttpsConnector<
                 hyper_util::client::legacy::connect::HttpConnector,
             >,
-        > for ConfigBindServerHttps<'a>
+        > for ConfigBindServerHttps<'_>
     {
         type Context = i32;
 
