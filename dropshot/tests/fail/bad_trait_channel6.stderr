@@ -31,13 +31,13 @@ error: expected identifier, found `0x1de`
    |                 while parsing this struct
 
 error[E0063]: missing fields `x` and `y` in initializer of `Ret`
-  --> tests/fail/bad_trait_channel6.rs:31:17
-   |
-31 |         let _ = Ret { "Oxide".to_string(), 0x1de };
-   |                 ^^^ missing `x` and `y`
-
-error[E0063]: missing fields `x` and `y` in initializer of `Ret`
   --> tests/fail/bad_trait_channel6.rs:48:17
    |
 48 |         let _ = Ret { "Oxide".to_string(), 0x1de };
+   |                 ^^^ missing `x` and `y`
+
+error[E0063]: missing fields `x` and `y` in initializer of `Ret`
+  --> tests/fail/bad_trait_channel6.rs:31:17
+   |
+31 |         let _ = Ret { "Oxide".to_string(), 0x1de };
    |                 ^^^ missing `x` and `y`

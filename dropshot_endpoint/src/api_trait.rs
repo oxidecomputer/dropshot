@@ -669,7 +669,7 @@ struct SupportModuleGenerator<'ast> {
     tag_config: Option<&'ast ApiTagConfig>,
 }
 
-impl<'ast> SupportModuleGenerator<'ast> {
+impl SupportModuleGenerator<'_> {
     fn make_api_description(&self, doc: TokenStream) -> TokenStream {
         let dropshot = &self.dropshot;
         let trait_ident = &self.item_trait.ident;
@@ -849,7 +849,7 @@ impl<'ast> SupportModuleGenerator<'ast> {
     }
 }
 
-impl<'ast> ToTokens for SupportModuleGenerator<'ast> {
+impl ToTokens for SupportModuleGenerator<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let vis = &self.item_trait.vis;
         let module_ident = self.module_ident;

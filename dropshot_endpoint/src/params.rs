@@ -267,7 +267,7 @@ fn validate_param_ty<'ast>(
         errors: &'ast ErrorSink<'store, Error>,
     }
 
-    impl<'store, 'ast> Visit<'ast> for Visitor<'store, 'ast> {
+    impl<'ast> Visit<'ast> for Visitor<'_, 'ast> {
         fn visit_bound_lifetimes(&mut self, i: &'ast syn::BoundLifetimes) {
             let name_str = self.name_str;
             let kind = self.kind;
@@ -488,7 +488,7 @@ impl<'ast> RqctxTy<'ast> {
     }
 }
 
-impl<'ast> fmt::Debug for RqctxTy<'ast> {
+impl fmt::Debug for RqctxTy<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RqctxTy::Function(ty) => {

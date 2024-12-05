@@ -137,7 +137,7 @@ macro_rules! de_value {
     };
 }
 
-impl<'de, 'a, Z> Deserializer<'de> for &'a mut MapDeserializer<'de, Z>
+impl<'de, Z> Deserializer<'de> for &mut MapDeserializer<'de, Z>
 where
     Z: MapValue + Debug + Clone + 'static,
 {

@@ -1,4 +1,4 @@
-// Copyright 2022 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 use std::{collections::BTreeMap, fmt::Display};
 
@@ -68,7 +68,7 @@ macro_rules! ser_t_err {
 
 }
 
-impl<'a, Input> Serializer for &'a mut MapSerializer<Input> {
+impl<Input> Serializer for &mut MapSerializer<Input> {
     type Ok = BTreeMap<String, String>;
     type Error = MapError;
 
@@ -204,7 +204,7 @@ impl SerializeStruct for MapSerializeStruct {
 /// extending this to convert other scalars into strings, but for now we'll just
 /// work with strings.
 struct StringSerializer;
-impl<'a> Serializer for &'a mut StringSerializer {
+impl Serializer for &mut StringSerializer {
     type Ok = String;
     type Error = MapError;
 

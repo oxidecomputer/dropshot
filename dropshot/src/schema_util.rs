@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 //! schemars helper functions
 
@@ -273,7 +273,7 @@ impl<'a> ReferenceVisitor<'a> {
     }
 }
 
-impl<'a> schemars::visit::Visitor for ReferenceVisitor<'a> {
+impl schemars::visit::Visitor for ReferenceVisitor<'_> {
     fn visit_schema_object(&mut self, schema: &mut SchemaObject) {
         if let Some(refstr) = &schema.reference {
             let definitions_path = &self.generator.settings().definitions_path;
