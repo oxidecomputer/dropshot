@@ -1,4 +1,4 @@
-// Copyright 2021 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 //
 // Portions of this file are adapted from syn (https://github.com/dtolnay/syn),
 // and are used under the terms of the Apache 2.0 license.
@@ -376,7 +376,7 @@ impl<'a> FilterAttrs<'a> for &'a [Attribute] {
 }
 struct TokensOrDefault<'a, T: 'a>(&'a Option<T>);
 
-impl<'a, T> ToTokens for TokensOrDefault<'a, T>
+impl<T> ToTokens for TokensOrDefault<'_, T>
 where
     T: ToTokens + Default,
 {

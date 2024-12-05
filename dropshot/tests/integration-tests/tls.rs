@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2024 Oxide Computer Company
 
 //! Test cases for TLS support. This validates various behaviors of our TLS
 //! mode, including certificate loading and supported modes.
@@ -33,15 +33,13 @@ type VerifyCertFn<'a> = Box<
 
 struct CertificateVerifier<'a>(VerifyCertFn<'a>);
 
-impl<'a> std::fmt::Debug for CertificateVerifier<'a> {
+impl std::fmt::Debug for CertificateVerifier<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("CertificateVerifier... with some function?")
     }
 }
 
-impl<'a> rustls::client::danger::ServerCertVerifier
-    for CertificateVerifier<'a>
-{
+impl rustls::client::danger::ServerCertVerifier for CertificateVerifier<'_> {
     fn verify_server_cert(
         &self,
         end_entity: &rustls::pki_types::CertificateDer<'_>,
