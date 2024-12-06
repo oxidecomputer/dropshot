@@ -326,7 +326,7 @@ impl HandlerError {
     pub(crate) fn external_message(&self) -> Option<&String> {
         match self {
             Self::Handler { .. } => None,
-            Self::Dropshot(ref e) => Some(&e.internal_message),
+            Self::Dropshot(ref e) => Some(&e.external_message),
         }
     }
 
