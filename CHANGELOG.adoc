@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.15.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.15.1\...HEAD[Full list of commits]
+
+== 0.15.1 (released 2024-12-06)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.15.0\...v0.15.1[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1194[#1194] Fixes a bug introduced in 0.15.0 where the internal message for an error was being sent as the external message.
 
