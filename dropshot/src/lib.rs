@@ -834,6 +834,8 @@ mod from_map;
 mod handler;
 mod http_util;
 mod logging;
+#[cfg(feature = "otel-tracing")]
+mod otel;
 mod pagination;
 mod router;
 mod schema_util;

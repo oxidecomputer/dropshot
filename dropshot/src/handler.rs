@@ -86,6 +86,8 @@ pub struct RequestContext<Context: ServerContext> {
     pub log: Logger,
     /// basic request information (method, URI, etc.)
     pub request: RequestInfo,
+    #[cfg(feature = "otel-tracing")]
+    pub span_context: opentelemetry::trace::SpanContext,
 }
 
 // This is deliberately as close to compatible with `hyper::Request` as
@@ -374,6 +376,19 @@ where
             Ok(rsp) => Self::Handler { message, rsp },
             Err(e) => Self::Dropshot(e),
         }
+    }
+}
+
+impl std::fmt::Display for HandlerError {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Handler { ref message, .. } => message,
+                Self::Dropshot(ref e) => &e.external_message,
+            }
+        )
     }
 }
 

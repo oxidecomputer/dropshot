@@ -407,6 +407,8 @@ mod tests {
             },
             request_id: "".to_string(),
             log: log.clone(),
+            #[cfg(feature = "otel-tracing")]
+            span_context: opentelemetry::trace::SpanContext::empty_context(),
         };
         let fut = WebsocketUpgrade::from_request(&rqctx, request);
         tokio::time::timeout(Duration::from_secs(1), fut)

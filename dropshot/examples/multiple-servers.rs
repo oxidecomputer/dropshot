@@ -100,6 +100,10 @@ use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+    // XXX Is there interest in adding the optional integration into some of the existing examples?
+    #[cfg(feature = "otel-tracing")]
+    let _otel_guard = equinix_otel_tools::init(env!("CARGO_CRATE_NAME"));
+
     // Initial set of servers to start. Once they're running, we may add or
     // remove servers based on client requests.
     let initial_servers = [("A", "127.0.0.1:12345"), ("B", "127.0.0.1:12346")];
