@@ -17,7 +17,7 @@ workspace = true
 heck = "0.5.0"
 proc-macro2 = "1"
 quote = "1"
-semver = "1.0.23"
+semver = "1.0.24"
 serde_tokenstream = "0.2.2"
 
 [dependencies.serde]
