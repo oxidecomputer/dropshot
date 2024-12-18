@@ -116,7 +116,7 @@ version = "0.12.9"
 features = [ "json", "rustls-tls" ]
 
 [dev-dependencies.rustls-pki-types]
-version = "1.10.0"
+version = "1.10.1"
 # Needed for CertificateDer::into_owned
 features = ["alloc"]
 
