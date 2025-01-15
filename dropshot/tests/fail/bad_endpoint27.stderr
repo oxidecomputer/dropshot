@@ -13,7 +13,7 @@ error[E0277]: `<Self as MyTrait>::Context` cannot be sent between threads safely
 21 |         _rqctx: RequestContext<Self::Context>,
    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyTrait>::Context` cannot be sent between threads safely
    |
-   = help: the trait `Send` is not implemented for `<Self as MyTrait>::Context`, which is required by `<Self as MyTrait>::Context: ServerContext`
+   = help: the trait `Send` is not implemented for `<Self as MyTrait>::Context`
    = note: required for `<Self as MyTrait>::Context` to implement `ServerContext`
 note: required by a bound in `RequestContext`
   --> src/handler.rs
@@ -31,7 +31,7 @@ error[E0277]: `<Self as MyTrait>::Context` cannot be shared between threads safe
 21 |         _rqctx: RequestContext<Self::Context>,
    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `<Self as MyTrait>::Context` cannot be shared between threads safely
    |
-   = help: the trait `Sync` is not implemented for `<Self as MyTrait>::Context`, which is required by `<Self as MyTrait>::Context: ServerContext`
+   = help: the trait `Sync` is not implemented for `<Self as MyTrait>::Context`
    = note: required for `<Self as MyTrait>::Context` to implement `ServerContext`
 note: required by a bound in `RequestContext`
   --> src/handler.rs

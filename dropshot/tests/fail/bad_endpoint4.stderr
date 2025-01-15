@@ -24,7 +24,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
   --> tests/fail/bad_endpoint4.rs:23:14
    |
 23 |     _params: Query<QueryParams>,
-   |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -77,7 +77,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 22 | |     _rqctx: RequestContext<()>,
 23 | |     _params: Query<QueryParams>,
 24 | | ) -> Result<HttpResponseOk<()>, HttpError> {
-   | |__________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   | |__________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -107,8 +107,9 @@ error[E0277]: the trait bound `fn(RequestContext<()>, dropshot::Query<QueryParam
 20 | | }]
    | |__- required by a bound introduced by this call
 21 |   async fn bad_endpoint(
-   |            ^^^^^^^^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, dropshot::Query<QueryParams>) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl std::convert::From<bad_endpoint> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}`
+   |            ^^^^^^^^^^^^ unsatisfied trait bound
    |
+   = help: the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, dropshot::Query<QueryParams>) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl std::convert::From<bad_endpoint> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::bad_endpoint}`
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
    |
@@ -151,7 +152,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 18 | |     method = GET,
 19 | |     path = "/test",
 20 | | }]
-   | |__^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   | |__^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag

@@ -32,7 +32,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 41 | |         _params: Query<QueryParams>,
 42 | |         _upgraded: WebsocketConnection,
 43 | |     ) -> dropshot::WebsocketChannelResult {
-   | |_________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   | |_________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -79,7 +79,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
   --> tests/fail/bad_trait_channel4.rs:41:18
    |
 41 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -126,7 +126,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
   --> tests/fail/bad_trait_channel4.rs:26:18
    |
 26 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -174,7 +174,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
   --> tests/fail/bad_trait_channel4.rs:16:1
    |
 16 | #[dropshot::api_description]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -222,7 +222,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
   --> tests/fail/bad_trait_channel4.rs:20:5
    |
 20 |     #[channel {
-   |     ^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   |     ^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -254,8 +254,9 @@ error[E0277]: the trait bound `fn(dropshot::RequestContext<<ServerImpl as MyServ
 22 | |         path = "/test",
 23 | |     }]
 24 | |     async fn bad_channel(
-   | |_________^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(dropshot::RequestContext<<ServerImpl as MyServer>::Context>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter::<ServerImpl>}`
+   | |_________^ unsatisfied trait bound
    |
+   = help: the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(dropshot::RequestContext<<ServerImpl as MyServer>::Context>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter::<ServerImpl>}`
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
    |
