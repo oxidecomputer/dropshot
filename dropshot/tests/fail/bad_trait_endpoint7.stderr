@@ -2,7 +2,7 @@ error[E0277]: the trait bound `Ret: dropshot::handler::HttpResponseContent` is n
   --> tests/fail/bad_trait_endpoint7.rs:41:27
    |
 41 |         Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
-   |            -------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`, which is required by `Ret: dropshot::handler::HttpResponseContent`
+   |            -------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |            |
    |            required by a bound introduced by this call
    |
@@ -27,7 +27,7 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
   --> tests/fail/bad_trait_endpoint7.rs:41:9
    |
 41 |         Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
-   |         ^^ the trait `serde::ser::Serialize` is not implemented for `Ret`, which is required by `Ret: dropshot::handler::HttpResponseContent`
+   |         ^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -52,7 +52,7 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
   --> tests/fail/bad_trait_endpoint7.rs:41:9
    |
 41 |         Ok(HttpResponseOk(Ret { x: "Oxide".to_string(), y: 0x1de }))
-   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`, which is required by `Ret: dropshot::handler::HttpResponseContent`
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -79,7 +79,7 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
 38 | /     async fn bad_endpoint(
 39 | |         _rqctx: RequestContext<()>,
 40 | |     ) -> Result<HttpResponseOk<Ret>, HttpError> {
-   | |_______________________________________________^ the trait `serde::ser::Serialize` is not implemented for `Ret`, which is required by `Ret: dropshot::handler::HttpResponseContent`
+   | |_______________________________________________^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -104,7 +104,7 @@ error[E0277]: the trait bound `Ret: dropshot::handler::HttpResponseContent` is n
   --> tests/fail/bad_trait_endpoint7.rs:28:10
    |
 28 |     ) -> Result<HttpResponseOk<Ret>, HttpError>;
-   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`, which is required by `Ret: dropshot::handler::HttpResponseContent`
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = help: the following other types implement trait `serde::ser::Serialize`:
              &'a T
@@ -127,7 +127,7 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
   --> tests/fail/bad_trait_endpoint7.rs:28:10
    |
 28 |     ) -> Result<HttpResponseOk<Ret>, HttpError>;
-   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`, which is required by `Ret: dropshot::handler::HttpResponseContent`
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -159,8 +159,9 @@ error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyApi>::Context>
 24 | |         path = "/test",
 25 | |     }]
 26 | |     async fn bad_endpoint(
-   | |_________________________^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<<ServerImpl as MyApi>::Context>) -> impl Future<Output = Result<dropshot::HttpResponseOk<Ret>, dropshot::HttpError>> + Send + 'static {<ServerImpl as MyApi>::bad_endpoint}`
+   | |_________________________^ unsatisfied trait bound
    |
+   = help: the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<<ServerImpl as MyApi>::Context>) -> impl Future<Output = Result<dropshot::HttpResponseOk<Ret>, dropshot::HttpError>> + Send + 'static {<ServerImpl as MyApi>::bad_endpoint}`
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
    |

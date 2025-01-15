@@ -7,7 +7,7 @@ error: future cannot be sent between threads safely
 14 | | }]
    | |__^ future returned by `bad_channel` is not `Send`
    |
-   = help: within `impl Future<Output = Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>>`, the trait `Send` is not implemented for `Rc<i32>`, which is required by `impl Future<Output = Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>>: Send`
+   = help: within `impl Future<Output = Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>>`, the trait `Send` is not implemented for `Rc<i32>`
 note: future is not `Send` as this value is used across an await
   --> tests/fail/bad_channel15.rs:20:50
    |
@@ -31,7 +31,7 @@ error: future cannot be sent between threads safely
 15 | async fn bad_channel(
    | ^^^^^ future created by async block is not `Send`
    |
-   = help: within `{async block@$DIR/tests/fail/bad_channel15.rs:15:1: 15:6}`, the trait `Send` is not implemented for `Rc<i32>`, which is required by `{async block@$DIR/tests/fail/bad_channel15.rs:15:1: 15:6}: Send`
+   = help: within `{async block@$DIR/tests/fail/bad_channel15.rs:15:1: 15:6}`, the trait `Send` is not implemented for `Rc<i32>`
 note: future is not `Send` as this value is used across an await
   --> tests/fail/bad_channel15.rs:20:50
    |

@@ -24,7 +24,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
   --> tests/fail/bad_channel4.rs:22:14
    |
 22 |     _params: Query<QueryParams>,
-   |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -79,7 +79,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 22 | |     _params: Query<QueryParams>,
 23 | |     _upgraded: WebsocketConnection,
 24 | | ) -> dropshot::WebsocketChannelResult {
-   | |_____________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   | |_____________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -133,7 +133,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 17 | |     protocol = WEBSOCKETS,
 18 | |     path = "/test",
 19 | | }]
-   | |__^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`, which is required by `QueryParams: serde::de::DeserializeOwned`
+   | |__^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -164,8 +164,9 @@ error[E0277]: the trait bound `fn(RequestContext<()>, dropshot::Query<QueryParam
 19 | | }]
    | |__- required by a bound introduced by this call
 20 |   async fn bad_channel(
-   |   ^^^^^ the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter}`
+   |   ^^^^^ unsatisfied trait bound
    |
+   = help: the trait `dropshot::handler::HttpHandlerFunc<_, _, _>` is not implemented for fn item `fn(RequestContext<()>, dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter}`
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
    |
