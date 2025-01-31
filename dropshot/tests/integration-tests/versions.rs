@@ -27,6 +27,13 @@ const HANDLER2_MSG: &str = "handler2";
 const HANDLER3_MSG: &str = "handler3";
 const HANDLER4_MSG: &str = "handler3";
 
+// For coverage, we'll use constants for some of the version numbers.
+// We'll also put one of these constants into a submodule.
+const ONE_TWO_ZERO: semver::Version = semver::Version::new(1, 2, 0);
+mod subversion {
+    pub const TWO_ZERO_ZERO: semver::Version = semver::Version::new(2, 0, 0);
+}
+
 fn api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(handler1).unwrap();
@@ -67,7 +74,7 @@ async fn handler1(
 #[endpoint {
     method = GET,
     path = "/demo",
-    versions = "1.1.0".."1.2.0",
+    versions = "1.1.0"..ONE_TWO_ZERO,
 }]
 async fn handler2(
     _rqctx: RequestContext<()>,
@@ -405,7 +412,7 @@ fn test_versions_openapi_same_names() {
         #[endpoint {
             method = GET,
             path = "/demo",
-            versions = .."2.0.0",
+            versions = ..subversion::TWO_ZERO_ZERO,
             operation_id = "the_operation",
         }]
         async fn the_operation_v1(
@@ -424,7 +431,7 @@ fn test_versions_openapi_same_names() {
         #[endpoint {
             method = GET,
             path = "/demo",
-            versions = "2.0.0"..,
+            versions = subversion::TWO_ZERO_ZERO..,
             operation_id = "the_operation"
         }]
         async fn the_operation_v2(

@@ -2,7 +2,7 @@
 
 //! Code to handle metadata associated with an endpoint.
 
-use proc_macro2::{TokenStream, TokenTree};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote_spanned, ToTokens};
 use serde::Deserialize;
 use serde_tokenstream::ParseWrapper;
@@ -179,6 +179,20 @@ fn semver_parts(x: &semver::Version) -> (u64, u64, u64) {
     (x.major, x.minor, x.patch)
 }
 
+fn semver_expr(span: proc_macro2::Span, x: &VersionSpecifier) -> TokenStream {
+    match x {
+        VersionSpecifier::Literal(v) => {
+            let (major, minor, patch) = semver_parts(v);
+            quote_spanned! { span=>
+                semver::Version::new(#major, #minor, #patch)
+            }
+        }
+        VersionSpecifier::Identifier(ident) => {
+            quote_spanned! { span=> #ident }
+        }
+    }
+}
+
 impl ValidatedEndpointMetadata {
     pub(crate) fn to_api_endpoint_fn(
         &self,
@@ -246,28 +260,28 @@ impl ValidatedEndpointMetadata {
                 quote_spanned! {span=> #dropshot::ApiEndpointVersions::All }
             }
             VersionRange::From(x) => {
-                let (major, minor, patch) = semver_parts(&x);
+                let v = semver_expr(span, &x);
                 quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::From(
-                        semver::Version::new(#major, #minor, #patch)
+                        #v
                     )
                 }
             }
             VersionRange::Until(y) => {
-                let (major, minor, patch) = semver_parts(&y);
+                let v = semver_expr(span, &y);
                 quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::Until(
-                        semver::Version::new(#major, #minor, #patch)
+                        #v
                     )
                 }
             }
             VersionRange::FromUntil(x, y) => {
-                let (xmajor, xminor, xpatch) = semver_parts(&x);
-                let (ymajor, yminor, ypatch) = semver_parts(&y);
+                let x = semver_expr(span, &x);
+                let y = semver_expr(span, &y);
                 quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::from_until(
-                        semver::Version::new(#xmajor, #xminor, #xpatch),
-                        semver::Version::new(#ymajor, #yminor, #ypatch),
+                        #x,
+                        #y,
                     ).unwrap()
                 }
             }
@@ -314,9 +328,72 @@ impl ValidatedEndpointMetadata {
 #[derive(Debug)]
 pub(crate) enum VersionRange {
     All,
-    From(semver::Version),
-    Until(semver::Version),
-    FromUntil(semver::Version, semver::Version),
+    From(VersionSpecifier),
+    Until(VersionSpecifier),
+    FromUntil(VersionSpecifier, VersionSpecifier),
+}
+
+impl syn::parse::Parse for VersionRange {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::Token![..]) {
+            let _ = input.parse::<syn::Token![..]>()?;
+            if input.is_empty() {
+                Ok(VersionRange::All)
+            } else {
+                let latest = input.parse::<VersionSpecifier>()?;
+                Ok(VersionRange::Until(latest))
+            }
+        } else {
+            let earliest = input.parse::<VersionSpecifier>()?;
+            let dotdot = input.parse::<syn::Token![..]>()?;
+            let lookahead = input.lookahead1();
+            if lookahead.peek(syn::LitStr) || lookahead.peek(syn::Ident) {
+                let latest = input.parse::<VersionSpecifier>()?;
+                // If both endpoints are literals, we can check if they're
+                // in the right order.
+                if let (
+                    VersionSpecifier::Literal(earliest_semver),
+                    VersionSpecifier::Literal(latest_semver),
+                ) = (&earliest, &latest)
+                {
+                    let span = dotdot.to_token_stream();
+                    if latest_semver < earliest_semver {
+                        return Err(syn::Error::new_spanned(
+                            span,
+                            format!(
+                                "\"from\" version ({}) must be earlier than \
+                                 \"until\" version ({})",
+                                earliest_semver, latest_semver,
+                            ),
+                        ));
+                    }
+                }
+                Ok(VersionRange::FromUntil(earliest, latest))
+            } else {
+                Ok(VersionRange::From(earliest))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum VersionSpecifier {
+    Literal(semver::Version),
+    Identifier(syn::Path),
+}
+
+impl syn::parse::Parse for VersionSpecifier {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::LitStr) {
+            let s = input.parse::<syn::LitStr>()?;
+            let v = parse_semver(&s)?;
+            Ok(VersionSpecifier::Literal(v))
+        } else {
+            Ok(VersionSpecifier::Identifier(input.parse::<syn::Path>()?))
+        }
+    }
 }
 
 fn parse_semver(v: &syn::LitStr) -> syn::Result<semver::Version> {
@@ -347,50 +424,6 @@ fn parse_semver(v: &syn::LitStr) -> syn::Result<semver::Version> {
                 ))
             }
         })
-}
-
-impl syn::parse::Parse for VersionRange {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Token![..]) {
-            let _ = input.parse::<syn::Token![..]>()?;
-            if input.is_empty() {
-                Ok(VersionRange::All)
-            } else {
-                let latest = input.parse::<syn::LitStr>()?;
-                let latest_semver = parse_semver(&latest)?;
-                Ok(VersionRange::Until(latest_semver))
-            }
-        } else {
-            let earliest = input.parse::<syn::LitStr>()?;
-            let earliest_semver = parse_semver(&earliest)?;
-            let _ = input.parse::<syn::Token![..]>()?;
-            let lookahead = input.lookahead1();
-            if lookahead.peek(syn::LitStr) {
-                let latest = input.parse::<syn::LitStr>()?;
-                let latest_semver = parse_semver(&latest)?;
-                if latest_semver < earliest_semver {
-                    let span: TokenStream = [
-                        TokenTree::from(earliest.token()),
-                        TokenTree::from(latest.token()),
-                    ]
-                    .into_iter()
-                    .collect();
-                    return Err(syn::Error::new_spanned(
-                        span,
-                        format!(
-                            "\"from\" version ({}) must be earlier than \
-                            \"until\" version ({})",
-                            earliest_semver, latest_semver,
-                        ),
-                    ));
-                }
-                Ok(VersionRange::FromUntil(earliest_semver, latest_semver))
-            } else {
-                Ok(VersionRange::From(earliest_semver))
-            }
-        }
-    }
 }
 
 #[allow(non_snake_case)]
