@@ -819,6 +819,7 @@ mod tests {
 
     #[test]
     fn test_endpoint_with_versions_from() {
+        // First, try with a literal (string "1.2.3").
         let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
@@ -836,13 +837,56 @@ mod tests {
 
         assert!(errors.is_empty());
         assert_contents(
-            "tests/output/endpoint_with_versions_from.rs",
+            "tests/output/endpoint_with_versions_from_literal.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+
+        // Now, try with a symbolic name.
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = ONE_TWO_THREE..
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from_identifier.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+
+        // Now, try with a symbolic name with a module part.
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = versions::ONE_TWO_THREE..
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from_module.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
 
     #[test]
     fn test_endpoint_with_versions_until() {
+        // First, try with a literal.
         let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
@@ -860,13 +904,36 @@ mod tests {
 
         assert!(errors.is_empty());
         assert_contents(
-            "tests/output/endpoint_with_versions_until.rs",
+            "tests/output/endpoint_with_versions_until_literal.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+
+        // Next, try with an identifier.
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = ..ONE_TWO_THREE
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_until_identifier.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
 
     #[test]
     fn test_endpoint_with_versions_from_until() {
+        // First, try with a literal.
         let (item, errors) = do_endpoint(
             quote! {
                 method = GET,
@@ -884,7 +951,72 @@ mod tests {
 
         assert!(errors.is_empty());
         assert_contents(
-            "tests/output/endpoint_with_versions_from_until.rs",
+            "tests/output/endpoint_with_versions_from_until_literals.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+
+        // Next, try with two symbol names.
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = ONE..TWO,
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from_until_identifiers.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+
+        // Next, try both other combinations.
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = "1.2.3"..TWO,
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from_until_mixed1.rs",
+            &prettyplease::unparse(&parse_quote! { #item }),
+        );
+
+        let (item, errors) = do_endpoint(
+            quote! {
+                method = GET,
+                path = "/test",
+                versions = ONE.."4.5.6",
+            },
+            quote! {
+                async fn handler_xyz(
+                    _: RequestContext<()>,
+                ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+                    Ok(())
+                }
+            },
+        );
+
+        assert!(errors.is_empty());
+        assert_contents(
+            "tests/output/endpoint_with_versions_from_until_mixed2.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
         );
     }
@@ -1051,7 +1183,7 @@ mod tests {
         assert!(!errors.is_empty());
         assert_eq!(
             errors.get(0).map(ToString::to_string),
-            Some("expected string literal".to_string()),
+            Some("expected identifier".to_string()),
         );
 
         let (_, errors) = do_endpoint(

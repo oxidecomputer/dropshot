@@ -193,6 +193,9 @@ async fn main() -> Result<(), String> {
 //
 // `get_thing2` appears in all versions.
 
+// You can use a constant here, too.
+const TWO_DOT_OH: semver::Version = semver::Version::new(2, 0, 0);
+
 mod v1 {
     // The contents of this module define endpoints and types used in all v1.x
     // versions.
@@ -208,7 +211,7 @@ mod v1 {
     #[endpoint {
         method = GET,
         path = "/thing1",
-        versions = "1.0.0".."2.0.0"
+        versions = "1.0.0"..TWO_DOT_OH
     }]
     pub async fn get_thing1(
         _rqctx: RequestContext<()>,
