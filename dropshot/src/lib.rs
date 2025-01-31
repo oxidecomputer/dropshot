@@ -705,6 +705,20 @@
 //! versions = ..
 //! ```
 //!
+//! You can also use identifiers, as in:
+//!
+//! ```text
+//! const V_MY_FEATURE_ADDED: semver::Version = semver::Version::new(1, 2, 3);
+//! // They can even be inside a module
+//! mod my_mod {
+//!     const V_MY_FEATURE_REMOVED: semver::Version =
+//!         semver::Version::new(4, 5, 6);
+//! }
+//!
+//! // introduced in 1.2.3 and removed in 4.5.6.
+//! versions = V_MY_FEATURE_ADDED..my_mod::V_MY_FEATURE_REMOVED
+//! ```
+//!
 //! 2. When constructing the server, you provide [`VersionPolicy::Dynamic`] with
 //!    your own impl of [`DynamicVersionPolicy`] that tells Dropshot how to
 //!    determine which API version to use for each request.
