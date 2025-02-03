@@ -58,7 +58,7 @@ version = "^0.15.1"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
-version = "1.5.2"
+version = "1.6.0"
 features = [ "full" ]
 
 [dependencies.hyper-util]
