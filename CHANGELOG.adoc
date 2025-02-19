@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.15.1\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.16.0\...HEAD[Full list of commits]
+
+== 0.16.0 (released 2025-02-19)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.15.1\...v0.16.0[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1246[#1246] extends the experimental `versions` argument to support identifiers.  See #1246 for details.
 
