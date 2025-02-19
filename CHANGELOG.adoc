@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.15.1\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/1246[#1246] extends the experimental `versions` argument to support identifiers.  See #1246 for details.
+
 == 0.15.1 (released 2024-12-06)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.15.0\...v0.15.1[Full list of commits]
