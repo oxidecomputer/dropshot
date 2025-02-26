@@ -1045,7 +1045,7 @@ where
     T: HttpCodedResponse,
 {
     fn to_result(self) -> HttpHandlerResult {
-        self.into().map_err(Into::into)
+        self.into()
     }
     fn response_metadata() -> ApiEndpointResponse {
         ApiEndpointResponse {
