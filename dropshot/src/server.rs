@@ -853,7 +853,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
 
                 // TODO-debug: add request and response headers here
                 info!(request_log, "request completed";
-                    "response_code" => status.as_str(),
+                    "response_code" => status.as_u16(),
                     "latency_us" => latency_us,
                     "error_message_internal" => message_internal,
                     "error_message_external" => message_external,
@@ -865,7 +865,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         Ok(response) => {
             // TODO-debug: add request and response headers here
             info!(request_log, "request completed";
-                "response_code" => response.status().as_str(),
+                "response_code" => response.status().as_u16(),
                 "latency_us" => latency_us,
             );
 
@@ -942,11 +942,11 @@ async fn http_request_handle<C: ServerContext>(
                     match result {
                         Ok(r) => warn!(
                             request_log, "request completed after handler was already cancelled";
-                            "response_code" => r.status().as_str(),
+                            "response_code" => r.status().as_u16(),
                         ),
                         Err(error) => {
                             warn!(request_log, "request completed after handler was already cancelled";
-                                "response_code" => %error.status_code(),
+                                "response_code" => error.status_code().as_u16(),
                                 "error_message_internal" => error.internal_message(),
                                 "error_message_external" => error.external_message(),,
                             );
