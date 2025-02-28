@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.16.0\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/1269[#1269] HTTP response codes are now logged as numeric values, rather than strings.
+
 == 0.16.0 (released 2025-02-19)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.15.1\...v0.16.0[Full list of commits]
