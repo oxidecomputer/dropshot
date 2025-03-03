@@ -87,7 +87,7 @@ version = "1.14.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-version = "0.8.21"
+version = "0.8.22"
 features = [ "uuid1" ]
 
 [dev-dependencies]
@@ -121,7 +121,7 @@ version = "1.10.0"
 features = ["alloc"]
 
 [dev-dependencies.schemars]
-version = "0.8.21"
+version = "0.8.22"
 features = [ "chrono", "uuid1" ]
 
 [dev-dependencies.slog]
