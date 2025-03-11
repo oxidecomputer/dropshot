@@ -70,7 +70,7 @@ version = "2.0.0"
 features = [ "skip_serializing_defaults" ]
 
 [dependencies.serde]
-version = "1.0.218"
+version = "1.0.219"
 features = [ "derive" ]
 
 [dependencies.tokio]
