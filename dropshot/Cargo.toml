@@ -110,7 +110,7 @@ rcgen = "0.13.2"
 tokio-tungstenite = "0.24.0"
 
 [dev-dependencies.reqwest]
-version = "0.12.14"
+version = "0.12.15"
 # Using rustls-tls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
 features = [ "json", "rustls-tls" ]
