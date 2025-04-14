@@ -2,7 +2,7 @@ error[E0271]: expected `{async block@$DIR/tests/fail/bad_channel10.rs:13:1: 13:6
   --> tests/fail/bad_channel10.rs:13:1
    |
 13 | async fn bad_channel(
-   | ^^^^^ expected `Result<(), Box<...>>`, found `Result<(), String>`
+   | ^^^^^ expected `Result<(), Box<dyn Error + Send + Sync>>`, found `Result<(), String>`
    |
    = note: expected enum `Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>`
               found enum `Result<(), String>`

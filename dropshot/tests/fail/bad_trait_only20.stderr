@@ -4,14 +4,18 @@ error: missing field `tags`
 12 |     tag_config = {}
    |                  ^^
 
-error[E0433]: failed to resolve: use of undeclared crate or module `my_api`
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `my_api`
   --> tests/fail/bad_trait_only20.rs:28:5
    |
 28 |     my_api::api_description::<MyImpl>();
-   |     ^^^^^^ use of undeclared crate or module `my_api`
+   |     ^^^^^^ use of unresolved module or unlinked crate `my_api`
+   |
+   = help: if you wanted to use a crate named `my_api`, use `cargo add my_api` to add it to your `Cargo.toml`
 
-error[E0433]: failed to resolve: use of undeclared crate or module `my_api`
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `my_api`
   --> tests/fail/bad_trait_only20.rs:29:5
    |
 29 |     my_api::stub_api_description();
-   |     ^^^^^^ use of undeclared crate or module `my_api`
+   |     ^^^^^^ use of unresolved module or unlinked crate `my_api`
+   |
+   = help: if you wanted to use a crate named `my_api`, use `cargo add my_api` to add it to your `Cargo.toml`

@@ -4,8 +4,10 @@ error: expected a string, but found `123`
 10 | #[dropshot::api_description { context = 123 }]
    |                                         ^^^
 
-error[E0433]: failed to resolve: use of undeclared crate or module `my_api`
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `my_api`
   --> tests/fail/bad_trait_only12.rs:38:5
    |
 38 |     my_api::foo();
-   |     ^^^^^^ use of undeclared crate or module `my_api`
+   |     ^^^^^^ use of unresolved module or unlinked crate `my_api`
+   |
+   = help: if you wanted to use a crate named `my_api`, use `cargo add my_api` to add it to your `Cargo.toml`
