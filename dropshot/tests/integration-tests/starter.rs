@@ -60,7 +60,7 @@ async fn test_with_tls() {
     let certs =
         reqwest::Certificate::from_pem_bundle(&serialized_certs).unwrap();
     let my_ca_root =
-        certs.into_iter().last().expect("at least one certificate");
+        certs.into_iter().next_back().expect("at least one certificate");
     let client = reqwest::Client::builder()
         .use_rustls_tls()
         .add_root_certificate(my_ca_root)
