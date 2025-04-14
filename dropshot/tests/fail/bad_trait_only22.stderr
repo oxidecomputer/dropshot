@@ -4,14 +4,18 @@ error: missing field `url`
 17 |                 external_docs = {}
    |                                 ^^
 
-error[E0433]: failed to resolve: use of undeclared crate or module `my_api_mod`
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `my_api_mod`
   --> tests/fail/bad_trait_only22.rs:37:5
    |
 37 |     my_api_mod::api_description::<MyImpl>();
-   |     ^^^^^^^^^^ use of undeclared crate or module `my_api_mod`
+   |     ^^^^^^^^^^ use of unresolved module or unlinked crate `my_api_mod`
+   |
+   = help: if you wanted to use a crate named `my_api_mod`, use `cargo add my_api_mod` to add it to your `Cargo.toml`
 
-error[E0433]: failed to resolve: use of undeclared crate or module `my_api_mod`
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `my_api_mod`
   --> tests/fail/bad_trait_only22.rs:38:5
    |
 38 |     my_api_mod::stub_api_description();
-   |     ^^^^^^^^^^ use of undeclared crate or module `my_api_mod`
+   |     ^^^^^^^^^^ use of unresolved module or unlinked crate `my_api_mod`
+   |
+   = help: if you wanted to use a crate named `my_api_mod`, use `cargo add my_api_mod` to add it to your `Cargo.toml`
