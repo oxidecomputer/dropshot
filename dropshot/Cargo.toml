@@ -45,7 +45,7 @@ slog-json = "2.6.1"
 slog-term = "2.9.1"
 thiserror = "2.0.12"
 tokio-rustls = "0.25.0"
-toml = "0.8.21"
+toml = "0.8.22"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
