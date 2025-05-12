@@ -29,6 +29,6 @@ version = "2.0.101"
 features = [ "full", "visit", "extra-traits" ]
 
 [dev-dependencies]
-expectorate = "1.1.0"
+expectorate = "1.2.0"
 prettyplease = "0.2.32"
 schema = "0.1.0"
