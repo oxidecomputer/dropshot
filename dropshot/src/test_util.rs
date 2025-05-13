@@ -243,7 +243,7 @@ impl ClientTestContext {
     }
 
     /// Temporarily configures the client to expect `E`-typed error responses,
-    /// rather than [`dropshot::HttpError`] error responses.
+    /// rather than [`dropshot::HttpError`][`crate::HttpError`] error responses.
     ///
     /// `ClientTestContext` expects that all error responses are
     /// `dropshot::HttpError`. For testing APIs that return other error types, this
