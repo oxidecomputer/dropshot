@@ -25,6 +25,17 @@ jobs:
       - name: Check style
         run: cargo fmt -- --check
 
+  check-docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - name: Report cargo version
+        run: cargo --version
+      - name: Check docs
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
   clippy-lint:
     runs-on: ubuntu-24.04
     steps:

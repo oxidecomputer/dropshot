@@ -909,6 +909,7 @@ pub use handler::FreeformBody;
 pub use handler::HttpCodedResponse;
 pub use handler::HttpResponse;
 pub use handler::HttpResponseAccepted;
+pub use handler::HttpResponseContent;
 pub use handler::HttpResponseCreated;
 pub use handler::HttpResponseDeleted;
 pub use handler::HttpResponseError;
