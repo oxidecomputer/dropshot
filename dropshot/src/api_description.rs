@@ -1,4 +1,5 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
+
 //! Describes the endpoints and handler functions in your API
 
 use crate::extractor::RequestExtractor;
@@ -258,6 +259,9 @@ impl ApiEndpointParameter {
                 ApiEndpointParameterLocation::Query => {
                     ApiEndpointParameterMetadata::Query(name)
                 }
+                ApiEndpointParameterLocation::Header => {
+                    ApiEndpointParameterMetadata::Header(name)
+                }
             },
             description,
             required,
@@ -286,12 +290,14 @@ impl ApiEndpointParameter {
 pub enum ApiEndpointParameterLocation {
     Path,
     Query,
+    Header,
 }
 
 #[derive(Debug, Clone)]
 pub enum ApiEndpointParameterMetadata {
     Path(String),
     Query(String),
+    Header(String),
     Body(ApiEndpointBodyContentType),
 }
 
@@ -764,6 +770,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         ApiEndpointParameterMetadata::Query(name) => {
                             (name, ApiEndpointParameterLocation::Query)
                         }
+                        ApiEndpointParameterMetadata::Header(name) => {
+                            (name, ApiEndpointParameterLocation::Header)
+                        }
                     };
 
                     let schema = match &param.schema {
@@ -805,6 +814,14 @@ impl<Context: ServerContext> ApiDescription<Context> {
                                 openapiv3::Parameter::Path {
                                     parameter_data,
                                     style: openapiv3::PathStyle::Simple,
+                                },
+                            ))
+                        }
+                        ApiEndpointParameterLocation::Header => {
+                            Some(openapiv3::ReferenceOr::Item(
+                                openapiv3::Parameter::Header {
+                                    parameter_data,
+                                    style: Default::default(),
                                 },
                             ))
                         }

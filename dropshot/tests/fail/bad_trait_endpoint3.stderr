@@ -5,6 +5,7 @@ error[E0277]: the trait bound `String: SharedExtractor` is not satisfied
    |     ^ the trait `SharedExtractor` is not implemented for `String`
    |
    = help: the following other types implement trait `SharedExtractor`:
+             dropshot::Header<HeaderType>
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
    = note: required for `String` to implement `ExclusiveExtractor`

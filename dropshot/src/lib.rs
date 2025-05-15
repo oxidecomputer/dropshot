@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
@@ -894,6 +894,7 @@ pub use error_status_code::NotAClientError;
 pub use error_status_code::NotAnError;
 pub use extractor::ExclusiveExtractor;
 pub use extractor::ExtractorMetadata;
+pub use extractor::Header;
 pub use extractor::MultipartBody;
 pub use extractor::Path;
 pub use extractor::Query;

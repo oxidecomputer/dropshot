@@ -3,12 +3,12 @@
 use dropshot::{
     channel, endpoint, http_response_found, http_response_see_other,
     http_response_temporary_redirect, ApiDescription,
-    ApiDescriptionRegisterError, FreeformBody, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseFound,
-    HttpResponseHeaders, HttpResponseOk, HttpResponseSeeOther,
-    HttpResponseTemporaryRedirect, HttpResponseUpdatedNoContent, MultipartBody,
-    PaginationParams, Path, Query, RequestContext, ResultsPage, TagConfig,
-    TagDetails, TypedBody, UntypedBody,
+    ApiDescriptionRegisterError, FreeformBody, Header, HttpError,
+    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
+    HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
+    HttpResponseSeeOther, HttpResponseTemporaryRedirect,
+    HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
+    RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
 };
 use dropshot::{Body, WebsocketConnection};
 use schemars::JsonSchema;
@@ -486,7 +486,7 @@ async fn handler26(
     Ok(HttpResponseCreated(Response {}))
 }
 
-// test: websocket using overriden operation id
+// test: websocket using overridden operation id
 #[channel {
     protocol = WEBSOCKETS,
     operation_id = "vzerolower",
@@ -498,6 +498,27 @@ async fn handler27(
     _: WebsocketConnection,
 ) -> dropshot::WebsocketChannelResult {
     Ok(())
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct MyHeaders {
+    a: String,
+    b: Option<String>,
+}
+
+// test: header params
+#[endpoint {
+    operation_id = "hparam",
+    method = GET,
+    path = "/thing_with_headers",
+    tags = ["it"]
+}]
+async fn handler28(
+    _rqctx: RequestContext<()>,
+    _headers: Header<MyHeaders>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    Ok(HttpResponseUpdatedNoContent())
 }
 
 fn make_api(
@@ -536,6 +557,7 @@ fn make_api(
     api.register(handler25)?;
     api.register(handler26)?;
     api.register(handler27)?;
+    api.register(handler28)?;
     Ok(api)
 }
 

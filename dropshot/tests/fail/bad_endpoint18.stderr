@@ -5,6 +5,7 @@ error[E0277]: the trait bound `TypedBody<Stuff>: SharedExtractor` is not satisfi
    |              ^^^^^^^^^^^^^^^^ the trait `SharedExtractor` is not implemented for `TypedBody<Stuff>`
    |
    = help: the following other types implement trait `SharedExtractor`:
+             dropshot::Header<HeaderType>
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
 note: required by a bound in `need_shared_extractor`
