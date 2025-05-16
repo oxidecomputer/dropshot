@@ -347,11 +347,11 @@ impl HttpError {
     /// If this error does not already have a header map (`self.header_map` is
     /// `None`), this method creates one.
     ///
-    /// Unlike [`HttpError::set_header`], this method takes `self` by value,
+    /// Unlike [`HttpError::add_header`], this method takes `self` by value,
     /// allowing it to be chained to form an expression that returns an
     /// `HttpError`. However, because this takes `self` by value, returning an
     /// error for an invalid header name or value will discard the `HttpError`.
-    /// To avoid this, use [`HttpError::set_header`] instead.
+    /// To avoid this, use [`HttpError::add_header`] instead.
     ///
     /// # Returns
     ///

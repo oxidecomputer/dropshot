@@ -16,11 +16,10 @@ use std::fmt;
 /// Alternatively, constants are provided for known error status codes, such as
 /// [`ErrorStatusCode::BAD_REQUEST`], [`ErrorStatusCode::NOT_FOUND`],
 /// [`ErrorStatusCode::INTERNAL_SERVER_ERROR`], and so on, including those in
-/// the IANA HTTP Status Code Registry](
-/// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml).
-/// Using these constants avoids the fallible conversion from an
-/// [`http::StatusCode`].
+/// the IANA HTTP Status Code Registry][iana]. Using these constants avoids the
+/// fallible conversion from an [`http::StatusCode`].
 ///
+/// [iana]: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ErrorStatusCode(http::StatusCode);
 
@@ -426,11 +425,10 @@ impl_status_code_wrapper! {
 /// Alternatively, constants are provided for known error status codes, such as
 /// [`ClientErrorStatusCode::BAD_REQUEST`],
 /// [`ClientErrorStatusCode::NOT_FOUND`], including those in the IANA HTTP
-/// Status Code Registry](
-/// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml).
-/// Using these constants avoids the fallible conversion from an
-/// [`http::StatusCode`].
+/// Status Code Registry][iana]. Using these constants avoids the fallible
+/// conversion from an [`http::StatusCode`].
 ///
+/// [iana]: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClientErrorStatusCode(http::StatusCode);
 
