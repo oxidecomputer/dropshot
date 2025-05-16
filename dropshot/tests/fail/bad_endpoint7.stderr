@@ -1,28 +1,3 @@
-error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
-  --> tests/fail/bad_endpoint7.rs:24:6
-   |
-24 | ) -> Result<HttpResponseOk<Ret>, HttpError> {
-   |      ^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
-   |
-   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
-   = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::ser::Serialize`:
-             &'a T
-             &'a mut T
-             ()
-             (T,)
-             (T0, T1)
-             (T0, T1, T2)
-             (T0, T1, T2, T3)
-             (T0, T1, T2, T3, T4)
-           and $N others
-   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
-note: required by a bound in `HttpResponseOk`
-  --> src/handler.rs
-   |
-   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
-   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
-
 error[E0277]: the trait bound `Ret: dropshot::handler::HttpResponseContent` is not satisfied
   --> tests/fail/bad_endpoint7.rs:25:23
    |
@@ -112,6 +87,31 @@ error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
 23 | |     _rqctx: RequestContext<()>,
 24 | | ) -> Result<HttpResponseOk<Ret>, HttpError> {
    | |___________________________________________^ the trait `serde::ser::Serialize` is not implemented for `Ret`
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `serde::ser::Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+   = note: required for `Ret` to implement `dropshot::handler::HttpResponseContent`
+note: required by a bound in `HttpResponseOk`
+  --> src/handler.rs
+   |
+   | pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
+   |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
+
+error[E0277]: the trait bound `Ret: serde::ser::Serialize` is not satisfied
+  --> tests/fail/bad_endpoint7.rs:24:6
+   |
+24 | ) -> Result<HttpResponseOk<Ret>, HttpError> {
+   |      ^^^^^^ the trait `serde::ser::Serialize` is not implemented for `Ret`
    |
    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `Ret` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
