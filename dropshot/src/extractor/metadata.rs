@@ -20,11 +20,16 @@ pub(crate) fn get_metadata<ParamType>(
 where
     ParamType: JsonSchema,
 {
+    let mut settings = schemars::gen::SchemaSettings::openapi3();
+
+    // Headers can't be null.
+    if let ApiEndpointParameterLocation::Header = loc {
+        settings.option_nullable = false;
+    }
+
     // Generate the type for `ParamType` then pluck out each member of
     // the structure to encode as an individual parameter.
-    let mut generator = schemars::gen::SchemaGenerator::new(
-        schemars::gen::SchemaSettings::openapi3(),
-    );
+    let mut generator = schemars::gen::SchemaGenerator::new(settings);
     let schema = generator.root_schema_for::<ParamType>().schema.into();
 
     let extension_mode = match schema_extensions(&schema) {
