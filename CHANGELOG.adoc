@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.16.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.16.1\...HEAD[Full list of commits]
+
+== 0.16.1 (released 2025-05-16)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.16.0\...v0.16.1[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1269[#1269] HTTP response codes are now logged as numeric values, rather than strings.
 * https://github.com/oxidecomputer/dropshot/pull/1327[#1327] The `Header` extractor allows input headers to be documented via OpenAPI
