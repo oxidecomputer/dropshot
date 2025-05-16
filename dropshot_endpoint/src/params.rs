@@ -328,6 +328,7 @@ fn validate_param_ty<'ast>(
 
 /// A representation of the RequestContext type.
 #[derive(Clone, Eq, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum RqctxTy<'ast> {
     /// This is a function-based macro, with the payload being the full type.
     Function(&'ast syn::Type),
