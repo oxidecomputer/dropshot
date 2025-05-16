@@ -1090,6 +1090,7 @@ fn check_endpoint_or_channel_on_non_fn(
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ApiItem<'ast> {
     Fn(ApiFnItem<'ast>),
     Other(&'ast TraitItemPartParsed),
@@ -1111,6 +1112,7 @@ impl ApiItem<'_> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ApiFnItem<'ast> {
     Endpoint(ApiEndpoint<'ast>),
     Channel(ApiChannel<'ast>),
