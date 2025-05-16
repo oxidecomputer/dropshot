@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! Querystring-related extractor(s)
 
@@ -18,8 +18,8 @@ use std::fmt::Debug;
 
 /// `Query<QueryType>` is an extractor used to deserialize an instance of
 /// `QueryType` from an HTTP request's query string.  `QueryType` is any
-/// structure of yours that implements `serde::Deserialize`.  See this module's
-/// documentation for more information.
+/// structure of yours that implements [serde::Deserialize] and
+/// [schemars::JsonSchema].  See the crate documentation for more information.
 #[derive(Debug)]
 pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
     inner: QueryType,

@@ -16,6 +16,12 @@ use crate::{
 
 use super::{metadata::get_metadata, ExtractorMetadata, SharedExtractor};
 
+/// `Header<HeaderType>` is an extractor used to deserialize an instance of
+/// `HeaderType` from an HTTP request's header values. `PathType` may be any
+/// structure that implements [serde::Deserialize] and [schemars::JsonSchema].
+/// While headers are accessible through [RequestInfo::headers], using this
+/// extractor in an entrypoint causes header inputs to be documented in
+/// OpenAPI output. See the crate documentation for more information.
 pub struct Header<HeaderType: DeserializeOwned + JsonSchema + Send + Sync> {
     inner: HeaderType,
 }
