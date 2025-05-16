@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! Extractors: traits and impls
 //!
@@ -23,6 +23,9 @@ pub use path::Path;
 
 mod query;
 pub use query::Query;
+
+mod header;
+pub use header::Header;
 
 mod raw_request;
 pub use raw_request::RawRequest;

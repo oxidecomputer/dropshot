@@ -44,6 +44,7 @@ error[E0277]: the trait bound `dropshot::WebsocketConnection: SharedExtractor` i
    |     ^ the trait `SharedExtractor` is not implemented for `dropshot::WebsocketConnection`
    |
    = help: the following other types implement trait `SharedExtractor`:
+             dropshot::Header<HeaderType>
              dropshot::Path<PathType>
              dropshot::Query<QueryType>
    = note: required for `(dropshot::WebsocketConnection, WebsocketUpgrade)` to implement `dropshot::extractor::common::RequestExtractor`

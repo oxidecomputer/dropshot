@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! Dropshot is a general-purpose crate for exposing REST APIs from a Rust
 //! program.  Planned highlights include:
@@ -306,6 +306,7 @@
 //!      rqctx: RequestContext<Context>,
 //!      [query_params: Query<Q>,]
 //!      [path_params: Path<P>,]
+//!      [header_params: Header<H>,]
 //!      [body_param: TypedBody<J>,]
 //!      [body_param: UntypedBody,]
 //!      [body_param: StreamingBody,]
@@ -316,9 +317,9 @@
 //! The `RequestContext` must appear first.  The `Context` type is
 //! caller-provided context which is provided when the server is created.
 //!
-//! The types `Query`, `Path`, `TypedBody`, `UntypedBody`, and `RawRequest` are
-//! called **Extractors** because they cause information to be pulled out of the
-//! request and made available to the handler function.
+//! The types `Query`, `Path`, `Header`, `TypedBody`, `UntypedBody`, and
+//! `RawRequest` are called **Extractors** because they cause information to be
+//! pulled out of the request and made available to the handler function.
 //!
 //! * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
 //!   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
@@ -326,6 +327,9 @@
 //! * [`Path`]`<P>` extracts parameters from HTTP path, deserializing them into
 //!   an instance of type `P`. `P` must implement `serde::Deserialize` and
 //!   `schemars::JsonSchema`.
+//! * [`Header`]`<H>` extracts parameters from HTTP headers, deserializing
+//!   them into an instance of type `H`. `H` must implement
+//!   `serde::Deserialize` and `schemars::JsonSchema`.
 //! * [`TypedBody`]`<J>` extracts content from the request body by parsing the
 //!   body as JSON (or form/url-encoded) and deserializing it into an instance
 //!   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
@@ -894,6 +898,7 @@ pub use error_status_code::NotAClientError;
 pub use error_status_code::NotAnError;
 pub use extractor::ExclusiveExtractor;
 pub use extractor::ExtractorMetadata;
+pub use extractor::Header;
 pub use extractor::MultipartBody;
 pub use extractor::Path;
 pub use extractor::Query;

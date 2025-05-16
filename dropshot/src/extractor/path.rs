@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! URL-related extractor(s)
 
@@ -18,8 +18,8 @@ use std::fmt::Debug;
 
 /// `Path<PathType>` is an extractor used to deserialize an instance of
 /// `PathType` from an HTTP request's path parameters.  `PathType` is any
-/// structure of yours that implements `serde::Deserialize`.  See this module's
-/// documentation for more information.
+/// structure of yours that implements [serde::Deserialize] and
+/// [schemars::JsonSchema]. See the crate documentation for more information.
 #[derive(Debug)]
 pub struct Path<PathType: JsonSchema + Send + Sync> {
     inner: PathType,

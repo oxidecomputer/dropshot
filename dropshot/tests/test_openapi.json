@@ -738,6 +738,43 @@
         }
       }
     },
+    "/thing_with_headers": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "hparam",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "a",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "b",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/too/smart/for/my/own/good": {
       "get": {
         "tags": [
