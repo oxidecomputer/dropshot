@@ -757,7 +757,6 @@
             "in": "header",
             "name": "b",
             "schema": {
-              "nullable": true,
               "type": "string"
             }
           }
