@@ -521,6 +521,34 @@ async fn handler28(
     Ok(HttpResponseUpdatedNoContent())
 }
 
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct CoolStruct {
+    #[serde(flatten)]
+    cool_enum: CoolEnum,
+
+    another_thing: u16,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type")]
+enum CoolEnum {
+    Foo { thing_one: String },
+    Bar { thing_one: String, thing_two: String },
+}
+
+// test: XXX
+#[endpoint {
+    operation_id = "big_flat",
+    method = GET,
+    path = "/flattened",
+    tags = ["it"]
+}]
+async fn handler29(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<CoolStruct>, HttpError> {
+    todo!()
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
@@ -558,6 +586,7 @@ fn make_api(
     api.register(handler26)?;
     api.register(handler27)?;
     api.register(handler28)?;
+    api.register(handler29)?;
     Ok(api)
 }
 
