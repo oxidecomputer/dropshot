@@ -875,9 +875,8 @@
                 }
               },
               "x-foo-mobile": {
-                "description": "this is a foo",
+                "description": "this is a foo that is non-required",
                 "style": "simple",
-                "required": true,
                 "schema": {
                   "$ref": "#/components/schemas/Foo"
                 }
