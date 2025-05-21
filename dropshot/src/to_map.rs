@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 use std::{collections::BTreeMap, fmt::Display};
 
@@ -387,5 +387,20 @@ mod test {
             to_map(&bad),
             Err(MapError("cannot serialize a sequence".to_string()))
         );
+    }
+
+    #[test]
+    fn test_struct_with_options() {
+        #[derive(Serialize)]
+        struct X {
+            a: String,
+            b: Option<String>,
+        }
+
+        let x = X { a: "A".to_string(), b: Some("B".to_string()) };
+
+        let xxx = to_map(&x);
+        println!("{:#?}", xxx);
+        panic!()
     }
 }

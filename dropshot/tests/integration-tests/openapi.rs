@@ -332,9 +332,9 @@ struct SomeHeaders {
     /// eee! a tag
     #[serde(rename = "Etag")]
     etag: String,
-    /// this is a foo
+    /// this is a foo that is non-required
     #[serde(rename = "x-foo-mobile")]
-    foo: Foo,
+    foo: Option<Foo>,
 }
 
 #[derive(Serialize, JsonSchema)]
