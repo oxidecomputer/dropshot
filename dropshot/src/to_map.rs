@@ -189,10 +189,8 @@ impl SerializeStruct for MapSerializeStruct {
     where
         T: Serialize + ?Sized,
     {
-        let mut serializer = StringSerializer;
-        let value = value.serialize(&mut serializer)?;
-        self.output.insert(key.to_string(), value);
-        Ok(())
+        let mut serializer = ValueSerializer { key, output: &mut self.output };
+        value.serialize(&mut serializer)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -203,9 +201,12 @@ impl SerializeStruct for MapSerializeStruct {
 /// A trivial `Serializer` used to extract a `String`. One could imagine
 /// extending this to convert other scalars into strings, but for now we'll just
 /// work with strings.
-struct StringSerializer;
-impl Serializer for &mut StringSerializer {
-    type Ok = String;
+struct ValueSerializer<'a> {
+    key: &'a str,
+    output: &'a mut BTreeMap<String, String>,
+}
+impl Serializer for &mut ValueSerializer<'_> {
+    type Ok = ();
     type Error = MapError;
 
     type SerializeSeq = Impossible<Self::Ok, Self::Error>;
@@ -216,8 +217,20 @@ impl Serializer for &mut StringSerializer {
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
+    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + Serialize,
+    {
+        value.serialize(self)
+    }
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        Ok(v.to_string())
+        self.output.insert(self.key.to_string(), v.to_string());
+        Ok(())
     }
 
     ser_err!(serialize_bool, _v: bool);
@@ -233,9 +246,7 @@ impl Serializer for &mut StringSerializer {
     ser_err!(serialize_f64, _v: f64);
     ser_err!(serialize_char, _v: char);
     ser_err!(serialize_bytes, _v: &[u8]);
-    ser_err!(serialize_none);
     ser_err!(serialize_unit);
-    ser_t_err!(serialize_some, _value: &T);
     ser_err!(serialize_unit_struct, _name: &'static str);
     ser_err!(
         serialize_unit_variant,
@@ -395,12 +406,14 @@ mod test {
         struct X {
             a: String,
             b: Option<String>,
+            c: Option<String>,
         }
 
-        let x = X { a: "A".to_string(), b: Some("B".to_string()) };
+        let x = X { a: "A".to_string(), b: Some("B".to_string()), c: None };
 
-        let xxx = to_map(&x);
-        println!("{:#?}", xxx);
-        panic!()
+        let map = to_map(&x).expect("should be a valid map");
+        assert_eq!(map.get("a"), Some(&"A".to_string()));
+        assert_eq!(map.get("b"), Some(&"B".to_string()));
+        assert_eq!(map.get("c"), None);
     }
 }
