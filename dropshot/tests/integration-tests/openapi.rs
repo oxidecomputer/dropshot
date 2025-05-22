@@ -536,7 +536,6 @@ enum CoolEnum {
     Bar { thing_one: String, thing_two: String },
 }
 
-// test: XXX
 #[endpoint {
     operation_id = "big_flat",
     method = GET,

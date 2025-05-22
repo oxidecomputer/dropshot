@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! schemars helper functions
 
@@ -392,6 +392,15 @@ pub(crate) fn j2oas_schema(
     }
 }
 
+fn j2oas_schema_vec(
+    schemas: &Option<Vec<schemars::schema::Schema>>,
+) -> Vec<openapiv3::ReferenceOr<openapiv3::Schema>> {
+    schemas
+        .as_ref()
+        .map(|v| v.iter().map(|schema| j2oas_schema(None, schema)).collect())
+        .unwrap_or_default()
+}
+
 fn j2oas_schema_object(
     name: Option<&String>,
     obj: &schemars::schema::SchemaObject,
@@ -445,16 +454,28 @@ fn j2oas_schema_object(
             ))
         }
         (Some(schemars::schema::InstanceType::Object), None) => {
-            j2oas_object(&obj.object)
+            openapiv3::SchemaKind::Type(openapiv3::Type::Object(j2oas_object(
+                &obj.object,
+            )))
         }
         (Some(schemars::schema::InstanceType::Array), None) => {
-            j2oas_array(&obj.array)
+            openapiv3::SchemaKind::Type(openapiv3::Type::Array(j2oas_array(
+                &obj.array,
+            )))
         }
         (Some(schemars::schema::InstanceType::Number), None) => {
-            j2oas_number(&obj.format, &obj.number, &obj.enum_values)
+            openapiv3::SchemaKind::Type(openapiv3::Type::Number(j2oas_number(
+                &obj.format,
+                &obj.number,
+                &obj.enum_values,
+            )))
         }
         (Some(schemars::schema::InstanceType::String), None) => {
-            j2oas_string(&obj.format, &obj.string, &obj.enum_values)
+            openapiv3::SchemaKind::Type(openapiv3::Type::String(j2oas_string(
+                &obj.format,
+                &obj.string,
+                &obj.enum_values,
+            )))
         }
         (Some(schemars::schema::InstanceType::Integer), None) => {
             j2oas_integer(&obj.format, &obj.number, &obj.enum_values)
@@ -463,11 +484,7 @@ fn j2oas_schema_object(
         (None, None) => {
             openapiv3::SchemaKind::Any(openapiv3::AnySchema::default())
         }
-        (Some(_), Some(_)) => panic!(
-            "a schema can't have both a type and subschemas:\n{}",
-            serde_json::to_string_pretty(&obj)
-                .unwrap_or_else(|_| "<can't serialize>".to_string())
-        ),
+        (Some(_), Some(_)) => j2oas_any(ty, obj),
     };
 
     let mut data = openapiv3::SchemaData::default();
@@ -509,6 +526,102 @@ fn j2oas_schema_object(
     })
 }
 
+fn j2oas_any(
+    ty: Option<&schemars::schema::InstanceType>,
+    obj: &SchemaObject,
+) -> openapiv3::SchemaKind {
+    let typ = ty.map(|ty| {
+        match ty {
+            schemars::schema::InstanceType::Null => "null",
+            schemars::schema::InstanceType::Boolean => "boolean",
+            schemars::schema::InstanceType::Object => "object",
+            schemars::schema::InstanceType::Array => "array",
+            schemars::schema::InstanceType::Number => "number",
+            schemars::schema::InstanceType::String => "string",
+            schemars::schema::InstanceType::Integer => "integer",
+        }
+        .to_string()
+    });
+    let mut any = openapiv3::AnySchema {
+        typ,
+        format: obj.format.clone(),
+        enumeration: obj.enum_values.clone().unwrap_or_default(),
+        ..Default::default()
+    };
+
+    if obj.object.is_some() {
+        let openapiv3::ObjectType {
+            properties,
+            required,
+            additional_properties,
+            min_properties,
+            max_properties,
+        } = j2oas_object(&obj.object);
+        any.properties = properties;
+        any.required = required;
+        any.additional_properties = additional_properties;
+        any.min_properties = min_properties;
+        any.max_properties = max_properties;
+    }
+
+    if let Some(av) = &obj.array {
+        let openapiv3::ArrayType {
+            items,
+            min_items,
+            max_items,
+            unique_items: _,
+        } = j2oas_array(&obj.array);
+        any.items = items;
+        any.min_items = min_items;
+        any.max_items = max_items;
+        any.unique_items = av.unique_items;
+    }
+
+    if obj.string.is_some() {
+        let openapiv3::StringType {
+            format: _,
+            pattern,
+            enumeration: _,
+            min_length,
+            max_length,
+        } = j2oas_string(&obj.format, &obj.string, &obj.enum_values);
+
+        any.format = obj.format.clone();
+        any.pattern = pattern;
+        any.min_length = min_length;
+        any.max_length = max_length;
+    }
+
+    if obj.number.is_some() {
+        let openapiv3::NumberType {
+            format: _,
+            multiple_of,
+            exclusive_minimum,
+            exclusive_maximum,
+            minimum,
+            maximum,
+            enumeration: _,
+        } = j2oas_number(&obj.format, &obj.number, &obj.enum_values);
+        any.multiple_of = multiple_of;
+        any.exclusive_minimum = exclusive_minimum.then_some(true);
+        any.exclusive_maximum = exclusive_maximum.then_some(true);
+        any.minimum = minimum;
+        any.maximum = maximum;
+    }
+
+    if let Some(subschemas) = &obj.subschemas {
+        any.all_of = j2oas_schema_vec(&subschemas.all_of);
+        any.any_of = j2oas_schema_vec(&subschemas.any_of);
+        any.one_of = j2oas_schema_vec(&subschemas.one_of);
+        any.not = subschemas
+            .not
+            .as_ref()
+            .map(|schema| Box::new(j2oas_schema(None, schema)));
+    }
+
+    openapiv3::SchemaKind::Any(any)
+}
+
 fn j2oas_subschemas(
     subschemas: &schemars::schema::SubschemaValidation,
 ) -> openapiv3::SchemaKind {
@@ -518,24 +631,15 @@ fn j2oas_subschemas(
         &subschemas.one_of,
         &subschemas.not,
     ) {
-        (Some(all_of), None, None, None) => openapiv3::SchemaKind::AllOf {
-            all_of: all_of
-                .iter()
-                .map(|schema| j2oas_schema(None, schema))
-                .collect::<Vec<_>>(),
-        },
-        (None, Some(any_of), None, None) => openapiv3::SchemaKind::AnyOf {
-            any_of: any_of
-                .iter()
-                .map(|schema| j2oas_schema(None, schema))
-                .collect::<Vec<_>>(),
-        },
-        (None, None, Some(one_of), None) => openapiv3::SchemaKind::OneOf {
-            one_of: one_of
-                .iter()
-                .map(|schema| j2oas_schema(None, schema))
-                .collect::<Vec<_>>(),
-        },
+        (all_of @ Some(_), None, None, None) => {
+            openapiv3::SchemaKind::AllOf { all_of: j2oas_schema_vec(all_of) }
+        }
+        (None, any_of @ Some(_), None, None) => {
+            openapiv3::SchemaKind::AnyOf { any_of: j2oas_schema_vec(any_of) }
+        }
+        (None, None, one_of @ Some(_), None) => {
+            openapiv3::SchemaKind::OneOf { one_of: j2oas_schema_vec(one_of) }
+        }
         (None, None, None, Some(not)) => openapiv3::SchemaKind::Not {
             not: Box::new(j2oas_schema(None, not)),
         },
@@ -621,7 +725,7 @@ fn j2oas_number(
     format: &Option<String>,
     number: &Option<Box<schemars::schema::NumberValidation>>,
     enum_values: &Option<Vec<serde_json::value::Value>>,
-) -> openapiv3::SchemaKind {
+) -> openapiv3::NumberType {
     let format = match format.as_ref().map(|s| s.as_str()) {
         None => openapiv3::VariantOrUnknownOrEmpty::Empty,
         Some("float") => openapiv3::VariantOrUnknownOrEmpty::Item(
@@ -678,24 +782,22 @@ fn j2oas_number(
         })
         .collect::<Vec<_>>();
 
-    openapiv3::SchemaKind::Type(openapiv3::Type::Number(
-        openapiv3::NumberType {
-            format,
-            multiple_of,
-            exclusive_minimum,
-            exclusive_maximum,
-            minimum,
-            maximum,
-            enumeration,
-        },
-    ))
+    openapiv3::NumberType {
+        format,
+        multiple_of,
+        exclusive_minimum,
+        exclusive_maximum,
+        minimum,
+        maximum,
+        enumeration,
+    }
 }
 
 fn j2oas_string(
     format: &Option<String>,
     string: &Option<Box<schemars::schema::StringValidation>>,
     enum_values: &Option<Vec<serde_json::value::Value>>,
-) -> openapiv3::SchemaKind {
+) -> openapiv3::StringType {
     let format = match format.as_ref().map(|s| s.as_str()) {
         None => openapiv3::VariantOrUnknownOrEmpty::Empty,
         Some("date") => openapiv3::VariantOrUnknownOrEmpty::Item(
@@ -738,23 +840,21 @@ fn j2oas_string(
         })
         .collect::<Vec<_>>();
 
-    openapiv3::SchemaKind::Type(openapiv3::Type::String(
-        openapiv3::StringType {
-            format,
-            pattern,
-            enumeration,
-            min_length,
-            max_length,
-        },
-    ))
+    openapiv3::StringType {
+        format,
+        pattern,
+        enumeration,
+        min_length,
+        max_length,
+    }
 }
 
 fn j2oas_array(
     array: &Option<Box<schemars::schema::ArrayValidation>>,
-) -> openapiv3::SchemaKind {
+) -> openapiv3::ArrayType {
     let arr = array.as_ref().unwrap();
 
-    openapiv3::SchemaKind::Type(openapiv3::Type::Array(openapiv3::ArrayType {
+    openapiv3::ArrayType {
         items: match &arr.items {
             Some(schemars::schema::SingleOrVec::Single(schema)) => {
                 Some(box_reference_or(j2oas_schema(None, &schema)))
@@ -767,7 +867,7 @@ fn j2oas_array(
         min_items: arr.min_items.map(|n| n as usize),
         max_items: arr.max_items.map(|n| n as usize),
         unique_items: arr.unique_items.unwrap_or(false),
-    }))
+    }
 }
 
 fn box_reference_or<T>(
@@ -785,40 +885,33 @@ fn box_reference_or<T>(
 
 fn j2oas_object(
     object: &Option<Box<schemars::schema::ObjectValidation>>,
-) -> openapiv3::SchemaKind {
+) -> openapiv3::ObjectType {
     match object {
-        None => openapiv3::SchemaKind::Type(openapiv3::Type::Object(
-            openapiv3::ObjectType::default(),
-        )),
-        Some(obj) => openapiv3::SchemaKind::Type(openapiv3::Type::Object(
-            openapiv3::ObjectType {
-                properties: obj
-                    .properties
-                    .iter()
-                    .map(|(prop, schema)| {
-                        (
-                            prop.clone(),
-                            box_reference_or(j2oas_schema(None, schema)),
-                        )
-                    })
-                    .collect::<_>(),
-                required: obj.required.iter().cloned().collect::<_>(),
-                additional_properties: obj.additional_properties.as_ref().map(
-                    |schema| match schema.as_ref() {
-                        schemars::schema::Schema::Bool(b) => {
-                            openapiv3::AdditionalProperties::Any(*b)
-                        }
-                        schemars::schema::Schema::Object(obj) => {
-                            openapiv3::AdditionalProperties::Schema(Box::new(
-                                j2oas_schema_object(None, obj),
-                            ))
-                        }
-                    },
-                ),
-                min_properties: obj.min_properties.map(|n| n as usize),
-                max_properties: obj.max_properties.map(|n| n as usize),
-            },
-        )),
+        None => Default::default(),
+        Some(obj) => openapiv3::ObjectType {
+            properties: obj
+                .properties
+                .iter()
+                .map(|(prop, schema)| {
+                    (prop.clone(), box_reference_or(j2oas_schema(None, schema)))
+                })
+                .collect::<_>(),
+            required: obj.required.iter().cloned().collect::<_>(),
+            additional_properties: obj.additional_properties.as_ref().map(
+                |schema| match schema.as_ref() {
+                    schemars::schema::Schema::Bool(b) => {
+                        openapiv3::AdditionalProperties::Any(*b)
+                    }
+                    schemars::schema::Schema::Object(obj) => {
+                        openapiv3::AdditionalProperties::Schema(Box::new(
+                            j2oas_schema_object(None, obj),
+                        ))
+                    }
+                },
+            ),
+            min_properties: obj.min_properties.map(|n| n as usize),
+            max_properties: obj.max_properties.map(|n| n as usize),
+        },
     }
 }
 
@@ -1035,8 +1128,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
-    fn test_bad_schema() {
+    fn test_embedded_schema() {
         #![allow(unused)]
 
         #[derive(JsonSchema)]
@@ -1050,11 +1142,68 @@ mod test {
         struct BlackSheep {
             #[schemars(flatten)]
             you_can_get_with: Which,
+
+            back: String,
+            front: Option<String>,
         }
 
-        let schema = schemars::schema_for!(BlackSheep).schema;
+        let schema = schemars::gen::SchemaGenerator::new(
+            schemars::gen::SchemaSettings::openapi3(),
+        )
+        .into_root_schema_for::<BlackSheep>()
+        .schema;
 
-        let _ = j2oas_schema_object(None, &schema);
+        let out = j2oas_schema_object(None, &schema);
+        let value = serde_json::to_value(&out).unwrap();
+
+        let expected = serde_json::json!({
+            "title": "BlackSheep",
+            "type": "object",
+            "properties": {
+                "back": {
+                    "type": "string"
+                },
+                "front": {
+                    "nullable": true,
+                    "type": "string"
+                }
+            },
+            "required": [
+                "back"
+            ],
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "which": {
+                            "type": "string",
+                            "enum": [
+                                "This"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "which"
+                    ]
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "which": {
+                            "type": "string",
+                            "enum": [
+                                "That"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "which"
+                    ]
+                }
+            ]
+        });
+
+        assert_eq!(value, expected);
     }
 
     #[test]
