@@ -234,6 +234,32 @@
         }
       }
     },
+    "/flattened": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "big_flat",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoolStruct"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/impairment": {
       "get": {
         "tags": [
@@ -944,6 +970,61 @@
             "type": "boolean"
           }
         }
+      },
+      "CoolStruct": {
+        "type": "object",
+        "properties": {
+          "another_thing": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "another_thing"
+        ],
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "thing_one": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Foo"
+                ]
+              }
+            },
+            "required": [
+              "thing_one",
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "thing_one": {
+                "type": "string"
+              },
+              "thing_two": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Bar"
+                ]
+              }
+            },
+            "required": [
+              "thing_one",
+              "thing_two",
+              "type"
+            ]
+          }
+        ]
       },
       "Error": {
         "description": "Error information from a response.",
