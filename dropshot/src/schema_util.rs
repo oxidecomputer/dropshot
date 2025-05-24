@@ -542,10 +542,22 @@ fn j2oas_any(
         }
         .to_string()
     });
+
+    let enumeration = match (&obj.enum_values, &obj.const_value) {
+        (None, None) => Default::default(),
+        (Some(values), Some(one_value)) if !values.contains(one_value) => {
+            // It would be weird to have enum and const... and it would be
+            // really really weird for them to conflict.
+            panic!("both enum and const are present and also conflict")
+        }
+        (None, Some(value)) => vec![value.clone()],
+        (Some(values), _) => values.clone(),
+    };
+
     let mut any = openapiv3::AnySchema {
         typ,
+        enumeration,
         format: obj.format.clone(),
-        enumeration: obj.enum_values.clone().unwrap_or_default(),
         ..Default::default()
     };
 
@@ -584,9 +596,7 @@ fn j2oas_any(
             enumeration: _,
             min_length,
             max_length,
-        } = j2oas_string(&obj.format, &obj.string, &obj.enum_values);
-
-        any.format = obj.format.clone();
+        } = j2oas_string(&None, &obj.string, &None);
         any.pattern = pattern;
         any.min_length = min_length;
         any.max_length = max_length;
@@ -601,7 +611,7 @@ fn j2oas_any(
             minimum,
             maximum,
             enumeration: _,
-        } = j2oas_number(&obj.format, &obj.number, &obj.enum_values);
+        } = j2oas_number(&None, &obj.number, &None);
         any.multiple_of = multiple_of;
         any.exclusive_minimum = exclusive_minimum.then_some(true);
         any.exclusive_maximum = exclusive_maximum.then_some(true);
