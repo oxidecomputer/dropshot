@@ -550,8 +550,8 @@ fn j2oas_any(
             // really really weird for them to conflict.
             panic!("both enum and const are present and also conflict")
         }
-        (None, Some(value)) => vec![value.clone()],
-        (Some(values), _) => values.clone(),
+        (_, Some(value)) => vec![value.clone()],
+        (Some(values), None) => values.clone(),
     };
 
     let mut any = openapiv3::AnySchema {
