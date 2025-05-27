@@ -9,3 +9,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 20
+    ignore:
+      - dependency-name: "schemars"
+        versions: [">=0.9.0"]
