@@ -66,7 +66,7 @@ version = "0.1.13"
 features = [ "full" ]
 
 [dependencies.openapiv3]
-version = "2.1.0"
+version = "2.2.0"
 features = [ "skip_serializing_defaults" ]
 
 [dependencies.serde]
