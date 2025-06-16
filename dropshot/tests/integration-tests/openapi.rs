@@ -548,6 +548,68 @@ async fn handler29(
     todo!()
 }
 
+#[derive(Deserialize, JsonSchema)]
+struct PathArgs30 {
+    #[expect(unused)]
+    thing: WithXRustType<XRustTypeParam>,
+}
+
+#[derive(Deserialize, Debug)]
+struct WithXRustType<T> {
+    _data: T,
+}
+
+impl<T: JsonSchema> JsonSchema for WithXRustType<T> {
+    fn schema_name() -> String {
+        format!("WithXRustTypeFor{}", T::schema_name())
+    }
+
+    fn json_schema(
+        gen: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        use schemars::schema::*;
+
+        let mut schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            ..Default::default()
+        };
+
+        // Add the x-rust-type extension.
+        let mut extensions = schemars::Map::new();
+        let rust_type = serde_json::json!({
+            "crate": "foo",
+            "version": "*",
+            "path": "foo",
+            "parameters": [
+                gen.subschema_for::<T>(),
+            ],
+        });
+        extensions.insert("x-rust-type".to_string(), rust_type);
+        schema.extensions = extensions;
+
+        Schema::Object(schema)
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+struct XRustTypeParam {
+    #[expect(unused)]
+    data: String,
+}
+
+#[endpoint {
+    method = PUT,
+    path = "/testing/{thing}"
+}]
+async fn handler30(
+    _: RequestContext<()>,
+    _: Path<PathArgs30>,
+) -> Result<HttpResponseOk<CoolStruct>, HttpError> {
+    todo!();
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
@@ -586,6 +648,7 @@ fn make_api(
     api.register(handler27)?;
     api.register(handler28)?;
     api.register(handler29)?;
+    api.register(handler30)?;
     Ok(api)
 }
 
