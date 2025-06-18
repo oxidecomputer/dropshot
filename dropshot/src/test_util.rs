@@ -56,7 +56,8 @@ pub const TEST_HEADER_2: &str = "x-dropshot-test-header-2";
 
 // List of allowed HTTP headers in responses.
 // Used to make sure we don't leak headers unexpectedly.
-const ALLOWED_HEADERS: [AllowedHeader<'static>; 8] = [
+const ALLOWED_HEADERS: [AllowedHeader<'static>; 9] = [
+    AllowedHeader::new("content-encoding"),
     AllowedHeader::new("content-length"),
     AllowedHeader::new("content-type"),
     AllowedHeader::new("date"),
