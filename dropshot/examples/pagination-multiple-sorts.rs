@@ -70,7 +70,7 @@
 //! versioned JSON structure describing the scan and the client's position in the
 //! scan:
 //!
-//! ```ignore
+//! ```text,ignore
 //! $ echo -n 'eyJ2IjoidjEiLCJwYWdlX3N0YXJ0Ijp7Im5hbWUiOlsiYXNjZW5kaW5nIiwicHJvamVjdDAwNiJdfX0=' | base64 -d | json
 //! {
 //!   "v": "v1",

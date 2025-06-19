@@ -28,10 +28,10 @@
 //!          value: u64,
 //!      ) -> impl Future<Output = Result<(), String>> + Send;
 //!
-//!      #[endpoint { method = GET, path = "/counter" }
+//!      #[endpoint { method = GET, path = "/counter" }]
 //!      async fn get_counter() {} // as below
 //!
-//!      #[endpoint { method = PUT, path = "/counter" }
+//!      #[endpoint { method = PUT, path = "/counter" }]
 //!      async fn put_counter() {} // as below
 //! }
 //! ```
@@ -56,10 +56,10 @@
 //!
 //! #[dropshot::api_description]
 //! trait CounterApi: CounterBase {
-//!     #[endpoint { method = GET, path = "/counter" }
+//!     #[endpoint { method = GET, path = "/counter" }]
 //!     async fn get_counter() {} // as below
 //!
-//!     #[endpoint { method = PUT, path = "/counter" }
+//!     #[endpoint { method = PUT, path = "/counter" }]
 //!     async fn put_counter() {} // as below
 //! }
 //!
