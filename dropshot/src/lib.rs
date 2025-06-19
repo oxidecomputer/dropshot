@@ -866,6 +866,7 @@ mod dtrace;
 
 mod api_description;
 mod body;
+mod compression;
 mod config;
 mod error;
 mod error_status_code;

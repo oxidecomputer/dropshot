@@ -903,6 +903,10 @@ async fn http_request_handle<C: ServerContext>(
     let request = request.map(crate::Body::wrap);
     let method = request.method();
     let uri = request.uri();
+
+    // Store request headers for compression check before moving the request
+    let request_headers = request.headers().clone();
+
     let found_version =
         server.version_policy.request_version(&request, &request_log)?;
     let lookup_result = server.router.lookup_route(
@@ -910,12 +914,13 @@ async fn http_request_handle<C: ServerContext>(
         uri.path().into(),
         found_version.as_ref(),
     )?;
+    let request_info = RequestInfo::new(&request, remote_addr);
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request: RequestInfo::new(&request, remote_addr),
+        request: request_info,
         endpoint: lookup_result.endpoint,
         request_id: request_id.to_string(),
-        log: request_log,
+        log: request_log.clone(),
     };
     let handler = lookup_result.handler;
 
@@ -930,7 +935,7 @@ async fn http_request_handle<C: ServerContext>(
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();
-            let request_log = rqctx.log.clone();
+            let request_log = request_log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
@@ -981,6 +986,21 @@ async fn http_request_handle<C: ServerContext>(
             }
         }
     };
+
+    // Apply gzip compression if appropriate
+    if crate::compression::accepts_gzip_encoding(&request_headers)
+        && !response.headers().contains_key(http::header::CONTENT_ENCODING)
+        && !response.headers().contains_key("x-dropshot-disable-compression")
+    {
+        response = crate::compression::apply_gzip_compression(response)
+            .await
+            .map_err(|e| {
+            HandlerError::Dropshot(crate::HttpError::for_internal_error(
+                format!("compression error: {}", e),
+            ))
+        })?;
+    }
+
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),
