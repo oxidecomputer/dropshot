@@ -988,10 +988,7 @@ async fn http_request_handle<C: ServerContext>(
     };
 
     // Apply gzip compression if appropriate
-    if crate::compression::accepts_gzip_encoding(&request_headers)
-        && !response.headers().contains_key(http::header::CONTENT_ENCODING)
-        && !response.headers().contains_key("x-dropshot-disable-compression")
-    {
+    if crate::compression::should_compress_response(&request_headers, response.headers()) {
         response = crate::compression::apply_gzip_compression(response)
             .await
             .map_err(|e| {

@@ -8,6 +8,7 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use http::{header, Method, StatusCode};
+use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
 
@@ -195,6 +196,60 @@ async fn test_no_gzip_without_accept_encoding() {
         None,
         "Response without Accept-Encoding should not be compressed"
     );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_no_compression_for_streaming_responses() {
+    // Test that streaming responses are not compressed even when client accepts gzip
+    let api = crate::streaming::api();
+    let testctx = common::test_setup("no_compression_streaming", api);
+    let client = &testctx.client_testctx;
+
+    // Use custom request with Accept-Encoding header
+    let uri = client.url("/streaming");
+    let request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri(&uri)
+        .header(http::header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let mut response = client
+        .make_request_with_request(request, http::StatusCode::OK)
+        .await
+        .expect("Streaming request with gzip accept should succeed");
+
+    // Debug: print all headers
+    println!("Response headers:");
+    for (name, value) in response.headers().iter() {
+        println!("  {}: {:?}", name, value);
+    }
+
+    // Should have chunked transfer encoding (check the way streaming tests do)
+    let transfer_encoding_header = response.headers().get("transfer-encoding");
+    assert!(
+        transfer_encoding_header.is_some(),
+        "Streaming response should have transfer-encoding header. Available headers: {:?}",
+        response.headers().keys().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        "chunked",
+        transfer_encoding_header.expect("expected transfer-encoding")
+    );
+
+    // Should NOT have gzip content encoding even though client accepts it  
+    assert_eq!(
+        response.headers().get(http::header::CONTENT_ENCODING),
+        None,
+        "Streaming response should not be compressed even with Accept-Encoding: gzip"
+    );
+
+    // Verify it's actually streaming by consuming a chunk
+    if let Some(chunk) = response.body_mut().frame().await {
+        chunk.expect("Should have received chunk without error");
+    }
 
     testctx.teardown().await;
 }

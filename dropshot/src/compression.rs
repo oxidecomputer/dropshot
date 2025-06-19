@@ -22,6 +22,35 @@ pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
     false
 }
 
+/// Determines if a response should be compressed with gzip.
+pub fn should_compress_response(
+    request_headers: &HeaderMap<HeaderValue>,
+    response_headers: &HeaderMap<HeaderValue>,
+) -> bool {
+    // Don't compress if client doesn't accept gzip
+    if !accepts_gzip_encoding(request_headers) {
+        return false;
+    }
+
+    // Don't compress if already encoded
+    if response_headers.contains_key(http::header::CONTENT_ENCODING) {
+        return false;
+    }
+
+    // Don't compress if explicitly disabled
+    if response_headers.contains_key("x-dropshot-disable-compression") {
+        return false;
+    }
+
+    // Don't compress streaming responses (no content-length suggests streaming)
+    // This is a heuristic - responses without content-length are likely streaming
+    if !response_headers.contains_key(http::header::CONTENT_LENGTH) {
+        return false;
+    }
+
+    true
+}
+
 /// Applies gzip compression to a response.
 /// This is an async function that consumes the entire body, compresses it, and returns a new response.
 pub async fn apply_gzip_compression(
