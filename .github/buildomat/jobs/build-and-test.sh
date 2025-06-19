@@ -18,3 +18,6 @@ ptime -m cargo build --all-features --locked --all-targets --verbose
 
 banner test
 ptime -m cargo test --all-features --locked --verbose
+
+banner docs
+ptime -m cargo doc --no-deps --lib --bins --examples
