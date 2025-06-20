@@ -67,7 +67,7 @@
 //!     // Register API functions -- see detailed example or ApiDescription docs.
 //!
 //!     // Start the server.
-//!     let server = ServerBuilder::new(api, Arc::new(()), log)
+//!     let server = ServerBuilder::new(api, (), log)
 //!         .start()
 //!         .map_err(|error| format!("failed to start server: {}", error))?;
 //!
