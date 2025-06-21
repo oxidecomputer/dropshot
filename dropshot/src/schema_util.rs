@@ -255,50 +255,6 @@ pub(crate) fn schema_extensions(
     }
 }
 
-/// Used to visit all schemas and collect all dependencies.
-pub(crate) struct ReferenceVisitor<'a> {
-    generator: &'a schemars::gen::SchemaGenerator,
-    dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
-}
-
-impl<'a> ReferenceVisitor<'a> {
-    pub fn new(generator: &'a schemars::gen::SchemaGenerator) -> Self {
-        Self { generator, dependencies: indexmap::IndexMap::new() }
-    }
-
-    pub fn dependencies(
-        self,
-    ) -> indexmap::IndexMap<String, schemars::schema::Schema> {
-        self.dependencies
-    }
-}
-
-impl schemars::visit::Visitor for ReferenceVisitor<'_> {
-    fn visit_schema_object(&mut self, schema: &mut SchemaObject) {
-        if let Some(refstr) = &schema.reference {
-            let definitions_path = &self.generator.settings().definitions_path;
-            let name = &refstr[definitions_path.len()..];
-
-            if !self.dependencies.contains_key(name) {
-                let mut refschema = self
-                    .generator
-                    .definitions()
-                    .get(name)
-                    .expect("invalid reference")
-                    .clone();
-                self.dependencies.insert(
-                    name.to_string(),
-                    schemars::schema::Schema::Bool(false),
-                );
-                schemars::visit::visit_schema(self, &mut refschema);
-                self.dependencies.insert(name.to_string(), refschema);
-            }
-        }
-
-        schemars::visit::visit_schema_object(self, schema);
-    }
-}
-
 pub(crate) fn schema_extract_description(
     schema: &schemars::schema::Schema,
 ) -> (Option<String>, schemars::schema::Schema) {
@@ -379,14 +335,26 @@ pub(crate) fn j2oas_schema(
         // when consumers use a type such as serde_json::Value.
         schemars::schema::Schema::Bool(true) => {
             openapiv3::ReferenceOr::Item(openapiv3::Schema {
-                schema_data: openapiv3::SchemaData::default(),
-                schema_kind: openapiv3::SchemaKind::Any(
-                    openapiv3::AnySchema::default(),
-                ),
+                schema_data: Default::default(),
+                schema_kind: openapiv3::SchemaKind::Any(Default::default()),
             })
         }
+        // The unsatisfiable, "match nothing" schema. We represent this as
+        // the `not` of the permissive schema.
         schemars::schema::Schema::Bool(false) => {
-            panic!("We don't expect to see a schema that matches the null set")
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: Default::default(),
+                schema_kind: openapiv3::SchemaKind::Not {
+                    not: Box::new(openapiv3::ReferenceOr::Item(
+                        openapiv3::Schema {
+                            schema_data: Default::default(),
+                            schema_kind: openapiv3::SchemaKind::Any(
+                                Default::default(),
+                            ),
+                        },
+                    )),
+                },
+            })
         }
         schemars::schema::Schema::Object(obj) => j2oas_schema_object(name, obj),
     }
@@ -411,6 +379,73 @@ fn j2oas_schema_object(
         };
     }
 
+    let kind = j2oas_schema_object_kind(obj);
+
+    let mut data = openapiv3::SchemaData::default();
+
+    if matches!(
+        &obj.extensions.get("nullable"),
+        Some(serde_json::Value::Bool(true))
+    ) {
+        data.nullable = true;
+    }
+
+    if let Some(metadata) = &obj.metadata {
+        data.title.clone_from(&metadata.title);
+        data.description.clone_from(&metadata.description);
+        data.default.clone_from(&metadata.default);
+        data.deprecated = metadata.deprecated;
+        data.read_only = metadata.read_only;
+        data.write_only = metadata.write_only;
+    }
+
+    // Preserve extensions
+    data.extensions = obj
+        .extensions
+        .iter()
+        .filter(|(key, _)| key.starts_with("x-"))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+
+    if let Some(name) = name {
+        data.title = Some(name.clone());
+    }
+    if let Some(example) = obj.extensions.get("example") {
+        data.example = Some(example.clone());
+    }
+
+    openapiv3::ReferenceOr::Item(openapiv3::Schema {
+        schema_data: data,
+        schema_kind: kind,
+    })
+}
+
+fn j2oas_schema_object_kind(
+    obj: &schemars::schema::SchemaObject,
+) -> openapiv3::SchemaKind {
+    // If the JSON schema is attempting to express an unsatisfiable schema
+    // using an empty enumerated values array, that presents a problem
+    // translating to the openapiv3 crate's representation. While we might
+    // like to simply use the schema `false` that is *also* challenging to
+    // represent via the openapiv3 crate *and* it precludes us from preserving
+    // extensions, if they happen to be present. Instead we'll represent this
+    // construction using `{ not: {} }` i.e. the opposite of the permissive
+    // schema.
+    if let Some(enum_values) = &obj.enum_values {
+        if enum_values.is_empty() {
+            return openapiv3::SchemaKind::Not {
+                not: Box::new(openapiv3::ReferenceOr::Item(
+                    openapiv3::Schema {
+                        schema_data: Default::default(),
+                        schema_kind: openapiv3::SchemaKind::Any(
+                            Default::default(),
+                        ),
+                    },
+                )),
+            };
+        }
+    }
+
     let ty = match &obj.instance_type {
         Some(schemars::schema::SingleOrVec::Single(ty)) => Some(ty.as_ref()),
         Some(schemars::schema::SingleOrVec::Vec(_)) => {
@@ -423,7 +458,7 @@ fn j2oas_schema_object(
         None => None,
     };
 
-    let kind = match (ty, &obj.subschemas) {
+    match (ty, &obj.subschemas) {
         (Some(schemars::schema::InstanceType::Null), None) => {
             openapiv3::SchemaKind::Type(openapiv3::Type::String(
                 openapiv3::StringType {
@@ -485,45 +520,7 @@ fn j2oas_schema_object(
             openapiv3::SchemaKind::Any(openapiv3::AnySchema::default())
         }
         (Some(_), Some(_)) => j2oas_any(ty, obj),
-    };
-
-    let mut data = openapiv3::SchemaData::default();
-
-    if matches!(
-        &obj.extensions.get("nullable"),
-        Some(serde_json::Value::Bool(true))
-    ) {
-        data.nullable = true;
     }
-
-    if let Some(metadata) = &obj.metadata {
-        data.title.clone_from(&metadata.title);
-        data.description.clone_from(&metadata.description);
-        data.default.clone_from(&metadata.default);
-        data.deprecated = metadata.deprecated;
-        data.read_only = metadata.read_only;
-        data.write_only = metadata.write_only;
-    }
-
-    // Preserve extensions
-    data.extensions = obj
-        .extensions
-        .iter()
-        .filter(|(key, _)| key.starts_with("x-"))
-        .map(|(key, value)| (key.clone(), value.clone()))
-        .collect();
-
-    if let Some(name) = name {
-        data.title = Some(name.clone());
-    }
-    if let Some(example) = obj.extensions.get("example") {
-        data.example = Some(example.clone());
-    }
-
-    openapiv3::ReferenceOr::Item(openapiv3::Schema {
-        schema_data: data,
-        schema_kind: kind,
-    })
 }
 
 fn j2oas_any(
@@ -842,6 +839,7 @@ fn j2oas_string(
     let enumeration = enum_values
         .iter()
         .flat_map(|v| {
+            assert!(!v.is_empty());
             v.iter().map(|vv| match vv {
                 serde_json::Value::Null => None,
                 serde_json::Value::String(s) => Some(s.clone()),

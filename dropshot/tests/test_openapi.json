@@ -764,6 +764,50 @@
         }
       }
     },
+    "/testing/{aa}/{bb}": {
+      "put": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler30",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "aa",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WithXRustTypeForXRustAParam"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bb",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WithXRustTypeForXRustBParam"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoolStruct"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/thing_with_headers": {
       "get": {
         "tags": [
@@ -1187,6 +1231,46 @@
         "required": [
           "items"
         ]
+      },
+      "WithXRustTypeForXRustAParam": {
+        "x-rust-type": {
+          "crate": "foo",
+          "parameters": [
+            {
+              "$ref": "#/components/schemas/XRustAParam"
+            }
+          ],
+          "path": "foo",
+          "version": "*"
+        },
+        "type": "string"
+      },
+      "WithXRustTypeForXRustBParam": {
+        "x-rust-type": {
+          "crate": "foo",
+          "parameters": [
+            {
+              "$ref": "#/components/schemas/XRustBParam"
+            }
+          ],
+          "path": "foo",
+          "version": "*"
+        },
+        "type": "string"
+      },
+      "XRustAParam": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "XRustBParam": {
+        "not": {}
       },
       "Foo": {
         "type": "string"

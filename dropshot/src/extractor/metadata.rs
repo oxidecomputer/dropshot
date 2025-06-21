@@ -4,7 +4,7 @@ use crate::api_description::ApiSchemaGenerator;
 use crate::pagination::PAGINATION_PARAM_SENTINEL;
 use crate::schema_util::schema2struct;
 use crate::schema_util::schema_extensions;
-use crate::schema_util::ReferenceVisitor;
+use crate::schema_util::StructMember;
 use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 use crate::ApiEndpointParameter;
 use crate::ApiEndpointParameterLocation;
@@ -61,19 +61,19 @@ where
         true,
     )
     .into_iter()
-    .map(|struct_member| {
-        let mut s = struct_member.schema;
-        let mut visitor = ReferenceVisitor::new(&generator);
-        schemars::visit::visit_schema(&mut visitor, &mut s);
-
+    .map(|StructMember { name, description, schema, required }| {
         ApiEndpointParameter::new_named(
             loc,
-            struct_member.name,
-            struct_member.description,
-            struct_member.required,
+            name,
+            description,
+            required,
             ApiSchemaGenerator::Static {
-                schema: Box::new(s),
-                dependencies: visitor.dependencies(),
+                schema: Box::new(schema),
+                dependencies: generator
+                    .definitions()
+                    .clone()
+                    .into_iter()
+                    .collect(),
             },
             Vec::new(),
         )
