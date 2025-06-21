@@ -335,14 +335,26 @@ pub(crate) fn j2oas_schema(
         // when consumers use a type such as serde_json::Value.
         schemars::schema::Schema::Bool(true) => {
             openapiv3::ReferenceOr::Item(openapiv3::Schema {
-                schema_data: openapiv3::SchemaData::default(),
-                schema_kind: openapiv3::SchemaKind::Any(
-                    openapiv3::AnySchema::default(),
-                ),
+                schema_data: Default::default(),
+                schema_kind: openapiv3::SchemaKind::Any(Default::default()),
             })
         }
+        // The unsatisfiable, "match nothing" schema. We represent this as
+        // the `not` of the permissive schema.
         schemars::schema::Schema::Bool(false) => {
-            panic!("We don't expect to see a schema that matches the null set")
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: Default::default(),
+                schema_kind: openapiv3::SchemaKind::Not {
+                    not: Box::new(openapiv3::ReferenceOr::Item(
+                        openapiv3::Schema {
+                            schema_data: Default::default(),
+                            schema_kind: openapiv3::SchemaKind::Any(
+                                Default::default(),
+                            ),
+                        },
+                    )),
+                },
+            })
         }
         schemars::schema::Schema::Object(obj) => j2oas_schema_object(name, obj),
     }
