@@ -772,6 +772,42 @@
         }
       }
     },
+    "/testing/{thing}": {
+      "put": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler30",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thing",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WithXRustTypeForXRustTypeParam"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoolStruct"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/thing_with_headers": {
       "get": {
         "tags": [
@@ -1194,6 +1230,30 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "WithXRustTypeForXRustTypeParam": {
+        "x-rust-type": {
+          "crate": "foo",
+          "parameters": [
+            {
+              "$ref": "#/components/schemas/XRustTypeParam"
+            }
+          ],
+          "path": "foo",
+          "version": "*"
+        },
+        "type": "string"
+      },
+      "XRustTypeParam": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
         ]
       },
       "Foo": {

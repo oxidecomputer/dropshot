@@ -15,7 +15,7 @@ pub struct ExtractorMetadata {
     pub parameters: Vec<ApiEndpointParameter>,
 }
 
-/// Extractors that require exclusive access to the underyling `hyper::Request`
+/// Extractors that require exclusive access to the underlying `hyper::Request`
 ///
 /// These extractors usually need to read the body of the request or else modify
 /// how the server treats the rest of it (e.g., websocket upgrade).  There may

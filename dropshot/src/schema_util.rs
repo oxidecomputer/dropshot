@@ -255,50 +255,6 @@ pub(crate) fn schema_extensions(
     }
 }
 
-/// Used to visit all schemas and collect all dependencies.
-pub(crate) struct ReferenceVisitor<'a> {
-    generator: &'a schemars::gen::SchemaGenerator,
-    dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
-}
-
-impl<'a> ReferenceVisitor<'a> {
-    pub fn new(generator: &'a schemars::gen::SchemaGenerator) -> Self {
-        Self { generator, dependencies: indexmap::IndexMap::new() }
-    }
-
-    pub fn dependencies(
-        self,
-    ) -> indexmap::IndexMap<String, schemars::schema::Schema> {
-        self.dependencies
-    }
-}
-
-impl schemars::visit::Visitor for ReferenceVisitor<'_> {
-    fn visit_schema_object(&mut self, schema: &mut SchemaObject) {
-        if let Some(refstr) = &schema.reference {
-            let definitions_path = &self.generator.settings().definitions_path;
-            let name = &refstr[definitions_path.len()..];
-
-            if !self.dependencies.contains_key(name) {
-                let mut refschema = self
-                    .generator
-                    .definitions()
-                    .get(name)
-                    .expect("invalid reference")
-                    .clone();
-                self.dependencies.insert(
-                    name.to_string(),
-                    schemars::schema::Schema::Bool(false),
-                );
-                schemars::visit::visit_schema(self, &mut refschema);
-                self.dependencies.insert(name.to_string(), refschema);
-            }
-        }
-
-        schemars::visit::visit_schema_object(self, schema);
-    }
-}
-
 pub(crate) fn schema_extract_description(
     schema: &schemars::schema::Schema,
 ) -> (Option<String>, schemars::schema::Schema) {
@@ -842,6 +798,7 @@ fn j2oas_string(
     let enumeration = enum_values
         .iter()
         .flat_map(|v| {
+            assert!(!v.is_empty());
             v.iter().map(|vv| match vv {
                 serde_json::Value::Null => None,
                 serde_json::Value::String(s) => Some(s.clone()),

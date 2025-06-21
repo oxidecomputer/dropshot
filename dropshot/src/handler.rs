@@ -48,7 +48,7 @@ use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
 use crate::schema_util::make_subschema_for;
 use crate::schema_util::schema2struct;
-use crate::schema_util::ReferenceVisitor;
+use crate::schema_util::StructMember;
 use crate::to_map::to_map;
 
 use async_trait::async_trait;
@@ -1403,18 +1403,19 @@ impl<
             true,
         )
         .into_iter()
-        .map(|struct_member| {
-            let mut s = struct_member.schema;
-            let mut visitor = ReferenceVisitor::new(&generator);
-            schemars::visit::visit_schema(&mut visitor, &mut s);
+        .map(|StructMember { name, description, schema, required }| {
             ApiEndpointHeader {
-                name: struct_member.name,
-                description: struct_member.description,
+                name,
+                description,
                 schema: ApiSchemaGenerator::Static {
-                    schema: Box::new(s),
-                    dependencies: visitor.dependencies(),
+                    schema: Box::new(schema),
+                    dependencies: generator
+                        .definitions()
+                        .clone()
+                        .into_iter()
+                        .collect(),
                 },
-                required: struct_member.required,
+                required,
             }
         })
         .collect::<Vec<_>>();

@@ -601,7 +601,8 @@ struct XRustTypeParam {
 
 #[endpoint {
     method = PUT,
-    path = "/testing/{thing}"
+    path = "/testing/{thing}",
+    tags = ["it"]
 }]
 async fn handler30(
     _: RequestContext<()>,
