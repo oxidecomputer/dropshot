@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 use dropshot::{
     channel, endpoint, http_response_found, http_response_see_other,
