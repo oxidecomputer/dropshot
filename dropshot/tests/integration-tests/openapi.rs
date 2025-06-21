@@ -551,7 +551,9 @@ async fn handler29(
 #[derive(Deserialize, JsonSchema)]
 struct PathArgs30 {
     #[expect(unused)]
-    thing: WithXRustType<XRustTypeParam>,
+    aa: WithXRustType<XRustAParam>,
+    #[expect(unused)]
+    bb: WithXRustType<XRustBParam>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -594,14 +596,17 @@ impl<T: JsonSchema> JsonSchema for WithXRustType<T> {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
-struct XRustTypeParam {
+struct XRustAParam {
     #[expect(unused)]
     data: String,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+enum XRustBParam {}
+
 #[endpoint {
     method = PUT,
-    path = "/testing/{thing}",
+    path = "/testing/{aa}/{bb}",
     tags = ["it"]
 }]
 async fn handler30(

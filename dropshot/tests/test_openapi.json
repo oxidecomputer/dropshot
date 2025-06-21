@@ -764,7 +764,7 @@
         }
       }
     },
-    "/testing/{thing}": {
+    "/testing/{aa}/{bb}": {
       "put": {
         "tags": [
           "it"
@@ -773,10 +773,18 @@
         "parameters": [
           {
             "in": "path",
-            "name": "thing",
+            "name": "aa",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/WithXRustTypeForXRustTypeParam"
+              "$ref": "#/components/schemas/WithXRustTypeForXRustAParam"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bb",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WithXRustTypeForXRustBParam"
             }
           }
         ],
@@ -1224,12 +1232,12 @@
           "items"
         ]
       },
-      "WithXRustTypeForXRustTypeParam": {
+      "WithXRustTypeForXRustAParam": {
         "x-rust-type": {
           "crate": "foo",
           "parameters": [
             {
-              "$ref": "#/components/schemas/XRustTypeParam"
+              "$ref": "#/components/schemas/XRustAParam"
             }
           ],
           "path": "foo",
@@ -1237,7 +1245,20 @@
         },
         "type": "string"
       },
-      "XRustTypeParam": {
+      "WithXRustTypeForXRustBParam": {
+        "x-rust-type": {
+          "crate": "foo",
+          "parameters": [
+            {
+              "$ref": "#/components/schemas/XRustBParam"
+            }
+          ],
+          "path": "foo",
+          "version": "*"
+        },
+        "type": "string"
+      },
+      "XRustAParam": {
         "type": "object",
         "properties": {
           "data": {
@@ -1247,6 +1268,9 @@
         "required": [
           "data"
         ]
+      },
+      "XRustBParam": {
+        "not": {}
       },
       "Foo": {
         "type": "string"
