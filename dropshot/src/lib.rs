@@ -946,6 +946,8 @@ pub use server::ServerBuilder;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};
+#[cfg(feature = "tracing")]
+pub use tracing::{debug, error, info, trace, warn}; // Re-export tracing macros for convenience
 pub use versioning::ClientSpecifiesVersionInHeader;
 pub use versioning::DynamicVersionPolicy;
 pub use versioning::VersionPolicy;
