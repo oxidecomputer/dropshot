@@ -806,6 +806,9 @@ async fn http_request_handle_wrap<C: ServerContext>(
     #[cfg(feature = "otel-tracing")]
     let disconnect_span_clone = request_span.clone();
 
+    #[cfg(feature = "usdt-probes")]
+    let request_id_for_usdt = request_id.clone();
+
     // In the case the client disconnects early, the scopeguard allows us
     // to perform extra housekeeping before this task is dropped.
     let on_disconnect = guard((), move |_| {
@@ -821,7 +824,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
         #[cfg(feature = "usdt-probes")]
         probes::request__done!(|| {
             crate::dtrace::ResponseInfo {
-                id: request_id.clone(),
+                id: request_id_for_usdt,
                 local_addr,
                 remote_addr,
                 // 499 is a non-standard code popularized by nginx to mean "client disconnected".
