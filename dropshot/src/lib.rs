@@ -852,11 +852,15 @@ mod from_map;
 mod handler;
 mod http_util;
 mod logging;
+#[cfg(feature = "otel-tracing")]
+pub mod otel;
 mod pagination;
 mod router;
 mod schema_util;
 mod server;
 mod to_map;
+#[cfg(any(feature = "tracing", feature = "otel-tracing"))]
+pub mod tracing_support;
 mod type_util;
 mod versioning;
 mod websocket;
@@ -946,8 +950,6 @@ pub use server::ServerBuilder;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};
-#[cfg(feature = "tracing")]
-pub use tracing::{debug, error, info, trace, warn}; // Re-export tracing macros for convenience
 pub use versioning::ClientSpecifiesVersionInHeader;
 pub use versioning::DynamicVersionPolicy;
 pub use versioning::VersionPolicy;

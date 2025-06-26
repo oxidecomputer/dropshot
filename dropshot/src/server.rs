@@ -14,6 +14,8 @@ use super::router::HttpRouter;
 use super::versioning::VersionPolicy;
 use super::ProbeRegistration;
 
+#[cfg(feature = "otel-tracing")]
+use crate::otel;
 use async_stream::stream;
 use debug_ignore::DebugIgnore;
 use futures::future::{
@@ -39,6 +41,8 @@ use tokio::io::ReadBuf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
+#[cfg(feature = "otel-tracing")]
+use tracing::Instrument;
 use uuid::Uuid;
 use waitgroup::WaitGroup;
 
@@ -794,14 +798,25 @@ async fn http_request_handle_wrap<C: ServerContext>(
     #[cfg(feature = "usdt-probes")]
     let local_addr = server.local_addr;
 
+    #[cfg(feature = "otel-tracing")]
+    let request_span =
+        otel::create_request_span(&request, &request_id, remote_addr);
+
+    let disconnect_log = request_log.clone();
+    #[cfg(feature = "otel-tracing")]
+    let disconnect_span_clone = request_span.clone();
+
     // In the case the client disconnects early, the scopeguard allows us
     // to perform extra housekeeping before this task is dropped.
-    let on_disconnect = guard((), |_| {
+    let on_disconnect = guard((), move |_| {
         let latency_us = start_time.elapsed().as_micros();
 
-        warn!(request_log, "request handling cancelled (client disconnected)";
+        warn!(disconnect_log, "request handling cancelled (client disconnected)";
             "latency_us" => latency_us,
         );
+
+        #[cfg(feature = "otel-tracing")]
+        otel::record_disconnect_on_span(&disconnect_span_clone);
 
         #[cfg(feature = "usdt-probes")]
         probes::request__done!(|| {
@@ -817,6 +832,9 @@ async fn http_request_handle_wrap<C: ServerContext>(
             }
         });
     });
+
+    #[cfg(feature = "otel-tracing")]
+    let _span_guard = request_span.enter();
 
     let maybe_response = http_request_handle(
         server,
@@ -838,6 +856,13 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 let status = error.status_code();
                 let message_external = error.external_message();
                 let message_internal = error.internal_message();
+
+                #[cfg(feature = "otel-tracing")]
+                otel::record_error_on_span(
+                    &request_span,
+                    status.as_u16(),
+                    message_internal,
+                );
 
                 #[cfg(feature = "usdt-probes")]
                 probes::request__done!(|| {
@@ -868,6 +893,12 @@ async fn http_request_handle_wrap<C: ServerContext>(
             info!(request_log, "request completed";
                 "response_code" => response.status().as_u16(),
                 "latency_us" => latency_us,
+            );
+
+            #[cfg(feature = "otel-tracing")]
+            otel::record_success_on_span(
+                &request_span,
+                response.status().as_u16(),
             );
 
             #[cfg(feature = "usdt-probes")]
@@ -933,7 +964,7 @@ async fn http_request_handle<C: ServerContext>(
             let (tx, rx) = oneshot::channel();
             let request_log = rqctx.log.clone();
             let worker = server.handler_waitgroup_worker.clone();
-            let handler_task = tokio::spawn(async move {
+            let handler_future = async move {
                 let request_log = rqctx.log.clone();
                 let result = handler.handle_request(rqctx, request).await;
 
@@ -958,7 +989,15 @@ async fn http_request_handle<C: ServerContext>(
                 // Drop our waitgroup worker, allowing graceful shutdown to
                 // complete (if it's waiting on us).
                 mem::drop(worker);
-            });
+            };
+
+            #[cfg(feature = "otel-tracing")]
+            let handler_task = tokio::spawn(
+                handler_future.instrument(tracing::Span::current()),
+            );
+
+            #[cfg(not(feature = "otel-tracing"))]
+            let handler_task = tokio::spawn(handler_future);
 
             // The only way we can fail to receive on `rx` is if `tx` is
             // dropped before a result is sent, which can only happen if

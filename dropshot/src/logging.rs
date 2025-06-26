@@ -14,11 +14,6 @@ use std::io::LineWriter;
 use std::io::Write;
 use std::{io, path::Path};
 
-#[cfg(feature = "tracing")]
-use tracing_subscriber::layer::SubscriberExt;
-#[cfg(feature = "tracing")]
-use tracing_subscriber::Layer;
-
 /// Represents the logging configuration for a server.  This is expected to be a
 /// top-level block in a TOML config file, although that's not required.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -77,12 +72,12 @@ impl ConfigLogging {
         &self,
         log_name: S,
     ) -> Result<Logger, io::Error> {
-        let logger = match self {
+        match self {
             ConfigLogging::StderrTerminal { level } => {
                 let decorator = slog_term::TermDecorator::new().build();
                 let drain =
                     slog_term::FullFormat::new(decorator).build().fuse();
-                async_root_logger(level, drain)
+                Ok(async_root_logger(level, drain))
             }
 
             ConfigLogging::File { level, path, if_exists } => {
@@ -138,23 +133,9 @@ impl ConfigLogging {
                     );
                 }
 
-                logger
-            }
-        };
-
-        // Initialize tracing bridge automatically if feature is enabled
-        #[cfg(feature = "tracing")]
-        {
-            if let Err(e) = init_tracing_bridge(&logger) {
-                slog::error!(
-                    logger,
-                    "failed to initialize tracing bridge";
-                    "error" => %e,
-                );
+                Ok(logger)
             }
         }
-
-        Ok(logger)
     }
 }
 
@@ -196,192 +177,8 @@ fn log_drain_for_file(
     Ok(slog_bunyan::with_name(log_name_leaked, file).build().fuse())
 }
 
-#[cfg(feature = "tracing")]
-/// A tracing subscriber layer that bridges tracing events to slog.
-/// This allows users to use tracing macros while maintaining slog compatibility.
-pub struct SlogTracingBridge {
-    logger: slog::Logger,
-}
-
-#[cfg(feature = "tracing")]
-impl SlogTracingBridge {
-    pub fn new(logger: slog::Logger) -> Self {
-        Self { logger }
-    }
-}
-
-#[cfg(feature = "tracing")]
-impl<S> Layer<S> for SlogTracingBridge
-where
-    S: tracing::Subscriber,
-{
-    fn on_event(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let metadata = event.metadata();
-        let level = match *metadata.level() {
-            tracing::Level::TRACE => slog::Level::Trace,
-            tracing::Level::DEBUG => slog::Level::Debug,
-            tracing::Level::INFO => slog::Level::Info,
-            tracing::Level::WARN => slog::Level::Warning,
-            tracing::Level::ERROR => slog::Level::Error,
-        };
-
-        // Extract the message and key-value pairs from the tracing event
-        let mut visitor = SlogEventVisitor::new();
-        event.record(&mut visitor);
-
-        // Log to slog with the extracted data
-        let message = visitor.message.unwrap_or_else(|| "".to_string());
-
-        // Create a dynamic key-value object for slog
-        let kv = SlogKV::new(visitor.fields);
-
-        // Use slog macros based on level with proper key-value pairs
-        match level {
-            slog::Level::Trace => {
-                slog::trace!(self.logger, "{}", message; kv)
-            }
-            slog::Level::Debug => {
-                slog::debug!(self.logger, "{}", message; kv)
-            }
-            slog::Level::Info => {
-                slog::info!(self.logger, "{}", message; kv)
-            }
-            slog::Level::Warning => {
-                slog::warn!(self.logger, "{}", message; kv)
-            }
-            slog::Level::Error => {
-                slog::error!(self.logger, "{}", message; kv)
-            }
-            slog::Level::Critical => {
-                slog::crit!(self.logger, "{}", message; kv)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "tracing")]
-/// Wrapper for different value types that can be logged
-#[derive(Debug, Clone)]
-enum SlogValue {
-    Str(String),
-    I64(i64),
-    U64(u64),
-    Bool(bool),
-    Debug(String),
-}
-
-#[cfg(feature = "tracing")]
-/// Helper struct to pass tracing fields as slog key-value pairs
-struct SlogKV {
-    fields: Vec<(String, SlogValue)>,
-}
-
-#[cfg(feature = "tracing")]
-impl SlogKV {
-    fn new(fields: Vec<(String, SlogValue)>) -> Self {
-        Self { fields }
-    }
-}
-
-#[cfg(feature = "tracing")]
-impl slog::KV for SlogKV {
-    fn serialize(
-        &self,
-        _record: &slog::Record,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        for (key, value) in &self.fields {
-            let key = slog::Key::from(key.clone());
-            match value {
-                SlogValue::Str(s) => serializer.emit_str(key, s)?,
-                SlogValue::I64(i) => serializer.emit_i64(key, *i)?,
-                SlogValue::U64(u) => serializer.emit_u64(key, *u)?,
-                SlogValue::Bool(b) => serializer.emit_bool(key, *b)?,
-                SlogValue::Debug(s) => serializer.emit_str(key, s)?,
-            }
-        }
-        Ok(())
-    }
-}
-
-#[cfg(feature = "tracing")]
-/// Visitor to extract fields from tracing events
-struct SlogEventVisitor {
-    message: Option<String>,
-    fields: Vec<(String, SlogValue)>,
-}
-
-#[cfg(feature = "tracing")]
-impl SlogEventVisitor {
-    fn new() -> Self {
-        Self { message: None, fields: Vec::new() }
-    }
-}
-
-#[cfg(feature = "tracing")]
-impl tracing::field::Visit for SlogEventVisitor {
-    fn record_debug(
-        &mut self,
-        field: &tracing::field::Field,
-        value: &dyn std::fmt::Debug,
-    ) {
-        if field.name() == "message" {
-            self.message = Some(format!("{:?}", value));
-        } else {
-            self.fields.push((
-                field.name().to_string(),
-                SlogValue::Debug(format!("{:?}", value)),
-            ));
-        }
-    }
-
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        if field.name() == "message" {
-            self.message = Some(value.to_string());
-        } else {
-            self.fields.push((
-                field.name().to_string(),
-                SlogValue::Str(value.to_string()),
-            ));
-        }
-    }
-
-    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
-        self.fields.push((field.name().to_string(), SlogValue::I64(value)));
-    }
-
-    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-        self.fields.push((field.name().to_string(), SlogValue::U64(value)));
-    }
-
-    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
-        self.fields.push((field.name().to_string(), SlogValue::Bool(value)));
-    }
-}
-
-#[cfg(feature = "tracing")]
-/// Initialize tracing with slog bridge support
-pub fn init_tracing_bridge(
-    logger: &slog::Logger,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Check if a global subscriber has already been set
-    if tracing::dispatcher::has_been_set() {
-        return Ok(());
-    }
-
-    let bridge = SlogTracingBridge::new(logger.clone());
-    let subscriber = tracing_subscriber::registry().with(bridge);
-
-    tracing::subscriber::set_global_default(subscriber)
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-}
-
 #[cfg(test)]
-mod test {
+pub mod test {
     use crate::test_util::read_bunyan_log;
     use crate::test_util::read_config;
     use crate::test_util::verify_bunyan_records;
@@ -409,7 +206,7 @@ mod test {
     }
 
     /// Load a configuration and create a logger from it.
-    fn read_config_and_create_logger(
+    pub fn read_config_and_create_logger(
         label: &str,
         contents: &str,
     ) -> Result<Logger, io::Error> {
@@ -518,7 +315,7 @@ mod test {
     /// `LogTest` and `LogTestCleanup` are used for the tests that create various
     /// files on the filesystem to commonize code and make sure everything gets
     /// cleaned up as expected.
-    struct LogTest {
+    pub struct LogTest {
         directory: PathBuf,
         cleanup_list: Vec<LogTestCleanup>,
     }
@@ -536,7 +333,7 @@ mod test {
         /// removed.  The temporary directory must be empty by the time the
         /// `LogTest` is torn down except for files and directories created with
         /// `will_create_dir()` and `will_create_file()`.
-        fn setup(label: &str) -> LogTest {
+        pub fn setup(label: &str) -> LogTest {
             let directory_path = temp_path(label);
 
             if let Err(e) = fs::create_dir_all(&directory_path) {
@@ -560,7 +357,7 @@ mod test {
         /// teardown. Directories and files must be recorded in the order they
         /// would be created so that the order can be reversed at teardown
         /// (without needing any kind of recursive removal).
-        fn will_create_dir(&mut self, path: &str) -> PathBuf {
+        pub fn will_create_dir(&mut self, path: &str) -> PathBuf {
             let mut pathbuf = self.directory.clone();
             pathbuf.push(path);
             self.cleanup_list.push(LogTestCleanup::Directory(pathbuf.clone()));
@@ -573,7 +370,7 @@ mod test {
         /// Directories and files must be recorded in the order they would be
         /// created so that the order can be reversed at teardown (without
         /// needing any kind of recursive removal).
-        fn will_create_file(&mut self, path: &str) -> PathBuf {
+        pub fn will_create_file(&mut self, path: &str) -> PathBuf {
             let mut pathbuf = self.directory.clone();
             pathbuf.push(path);
             self.cleanup_list.push(LogTestCleanup::File(pathbuf.clone()));
@@ -777,299 +574,5 @@ mod test {
         assert_eq!(log_records[0].msg, "message3_debug");
         assert_eq!(log_records[1].msg, "message3_warn");
         assert_eq!(log_records[2].msg, "message3_error");
-    }
-
-    /// Test that the tracing-to-slog bridge works with basic logging
-    #[test]
-    fn test_tracing_bridge_basic() {
-        let mut logtest = LogTest::setup("tracing_bridge_basic");
-        let logpath = logtest.will_create_file("bridge.log");
-
-        // Windows paths need to have \ turned into \\
-        let escaped_path =
-            logpath.display().to_string().escape_default().to_string();
-
-        let config = format!(
-            r#"
-            mode = "file"
-            level = "info"
-            if_exists = "truncate"
-            path = "{}"
-            "#,
-            escaped_path
-        );
-
-        {
-            let logger =
-                read_config_and_create_logger("tracing_bridge_basic", &config)
-                    .unwrap();
-
-            // Test slog logging
-            slog::info!(logger, "slog message"; "slog_key" => "slog_value", "slog_num" => 42);
-
-            // Test tracing logging (bridge is automatically initialized when feature is enabled)
-            #[cfg(feature = "tracing")]
-            {
-                tracing::info!(
-                    tracing_key = "tracing_value",
-                    tracing_num = 84,
-                    "tracing message"
-                );
-            }
-
-            // Explicitly drop the logger to ensure async drain flushes
-            drop(logger);
-        }
-
-        // Retry reading the log file to handle async drain flushing
-        let log_records = {
-            let mut records = Vec::new();
-            for _ in 0..10 {
-                records = read_bunyan_log(&logpath);
-                #[cfg(feature = "tracing")]
-                if records.len() >= 2 {
-                    break;
-                }
-                #[cfg(not(feature = "tracing"))]
-                if records.len() >= 1 {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(1));
-            }
-            records
-        };
-
-        assert_eq!(log_records[0].msg, "slog message");
-        #[cfg(not(feature = "tracing"))]
-        {
-            assert_eq!(log_records.len(), 1);
-        }
-        #[cfg(feature = "tracing")]
-        {
-            assert_eq!(log_records.len(), 2);
-            assert_eq!(log_records[1].msg, "tracing message");
-            // Check that the structured fields are preserved
-            let log_json: serde_json::Value = serde_json::from_str(
-                &std::fs::read_to_string(&logpath)
-                    .unwrap()
-                    .lines()
-                    .last()
-                    .unwrap(),
-            )
-            .unwrap();
-            assert_eq!(log_json["tracing_key"], "tracing_value");
-            assert_eq!(log_json["tracing_num"], 84);
-        }
-    }
-
-    /// Test the SlogKV implementation with different value types
-    #[test]
-    #[cfg(feature = "tracing")]
-    fn test_slog_kv_types() {
-        use super::{SlogKV, SlogValue};
-        use slog::KV;
-
-        let fields = vec![
-            (
-                "str_field".to_string(),
-                SlogValue::Str("test_string".to_string()),
-            ),
-            ("i64_field".to_string(), SlogValue::I64(-123)),
-            ("u64_field".to_string(), SlogValue::U64(456)),
-            ("bool_field".to_string(), SlogValue::Bool(true)),
-            (
-                "debug_field".to_string(),
-                SlogValue::Debug("debug_value".to_string()),
-            ),
-        ];
-
-        let kv = SlogKV::new(fields);
-
-        // Create a mock serializer to test the KV implementation
-        struct MockSerializer {
-            pub calls: std::cell::RefCell<Vec<(String, String)>>,
-        }
-
-        impl slog::Serializer for MockSerializer {
-            fn emit_str(&mut self, key: slog::Key, val: &str) -> slog::Result {
-                self.calls
-                    .borrow_mut()
-                    .push((key.as_ref().to_string(), format!("str:{}", val)));
-                Ok(())
-            }
-
-            fn emit_i64(&mut self, key: slog::Key, val: i64) -> slog::Result {
-                self.calls
-                    .borrow_mut()
-                    .push((key.as_ref().to_string(), format!("i64:{}", val)));
-                Ok(())
-            }
-
-            fn emit_u64(&mut self, key: slog::Key, val: u64) -> slog::Result {
-                self.calls
-                    .borrow_mut()
-                    .push((key.as_ref().to_string(), format!("u64:{}", val)));
-                Ok(())
-            }
-
-            fn emit_bool(&mut self, key: slog::Key, val: bool) -> slog::Result {
-                self.calls
-                    .borrow_mut()
-                    .push((key.as_ref().to_string(), format!("bool:{}", val)));
-                Ok(())
-            }
-
-            fn emit_arguments(
-                &mut self,
-                _key: slog::Key,
-                _val: &std::fmt::Arguments,
-            ) -> slog::Result {
-                Ok(())
-            }
-            fn emit_unit(&mut self, _key: slog::Key) -> slog::Result {
-                Ok(())
-            }
-            fn emit_char(
-                &mut self,
-                _key: slog::Key,
-                _val: char,
-            ) -> slog::Result {
-                Ok(())
-            }
-            fn emit_u8(&mut self, _key: slog::Key, _val: u8) -> slog::Result {
-                Ok(())
-            }
-            fn emit_i8(&mut self, _key: slog::Key, _val: i8) -> slog::Result {
-                Ok(())
-            }
-            fn emit_u16(&mut self, _key: slog::Key, _val: u16) -> slog::Result {
-                Ok(())
-            }
-            fn emit_i16(&mut self, _key: slog::Key, _val: i16) -> slog::Result {
-                Ok(())
-            }
-            fn emit_u32(&mut self, _key: slog::Key, _val: u32) -> slog::Result {
-                Ok(())
-            }
-            fn emit_i32(&mut self, _key: slog::Key, _val: i32) -> slog::Result {
-                Ok(())
-            }
-            fn emit_f32(&mut self, _key: slog::Key, _val: f32) -> slog::Result {
-                Ok(())
-            }
-            fn emit_f64(&mut self, _key: slog::Key, _val: f64) -> slog::Result {
-                Ok(())
-            }
-            fn emit_usize(
-                &mut self,
-                _key: slog::Key,
-                _val: usize,
-            ) -> slog::Result {
-                Ok(())
-            }
-            fn emit_isize(
-                &mut self,
-                _key: slog::Key,
-                _val: isize,
-            ) -> slog::Result {
-                Ok(())
-            }
-        }
-
-        let mut serializer =
-            MockSerializer { calls: std::cell::RefCell::new(Vec::new()) };
-
-        // Test serialization
-        let args = format_args!("test message");
-        let record = slog::Record::new(
-            &slog::RecordStatic {
-                location: &slog::RecordLocation {
-                    file: "test",
-                    line: 1,
-                    column: 1,
-                    function: "test",
-                    module: "test",
-                },
-                level: slog::Level::Info,
-                tag: "test",
-            },
-            &args,
-            slog::BorrowedKV(&()),
-        );
-
-        kv.serialize(&record, &mut serializer).unwrap();
-
-        let calls = serializer.calls.borrow();
-        assert_eq!(calls.len(), 5);
-        assert_eq!(
-            calls[0],
-            ("str_field".to_string(), "str:test_string".to_string())
-        );
-        assert_eq!(calls[1], ("i64_field".to_string(), "i64:-123".to_string()));
-        assert_eq!(calls[2], ("u64_field".to_string(), "u64:456".to_string()));
-        assert_eq!(
-            calls[3],
-            ("bool_field".to_string(), "bool:true".to_string())
-        );
-        assert_eq!(
-            calls[4],
-            ("debug_field".to_string(), "str:debug_value".to_string())
-        );
-    }
-
-    /// Test the SlogEventVisitor field extraction (without creating real tracing fields)
-    #[test]
-    #[cfg(feature = "tracing")]
-    fn test_slog_event_visitor() {
-        use super::{SlogEventVisitor, SlogValue};
-
-        let mut visitor = SlogEventVisitor::new();
-
-        // Create mock data - we can't easily create real tracing::field::Field instances
-        // in tests, so we'll test by directly populating the visitor fields
-
-        // Directly populate the visitor with test data
-        visitor.fields.push((
-            "str_key".to_string(),
-            SlogValue::Str("string_value".to_string()),
-        ));
-        visitor.fields.push(("i64_key".to_string(), SlogValue::I64(-789)));
-        visitor.fields.push(("u64_key".to_string(), SlogValue::U64(101112)));
-        visitor.fields.push(("bool_key".to_string(), SlogValue::Bool(false)));
-        visitor.message = Some("test message".to_string());
-
-        // Check message extraction
-        assert_eq!(visitor.message, Some("test message".to_string()));
-
-        // Check field extraction and types
-        assert_eq!(visitor.fields.len(), 4);
-
-        let (key, value) = &visitor.fields[0];
-        assert_eq!(key, "str_key");
-        match value {
-            SlogValue::Str(s) => assert_eq!(s, "string_value"),
-            _ => panic!("Expected Str variant"),
-        }
-
-        let (key, value) = &visitor.fields[1];
-        assert_eq!(key, "i64_key");
-        match value {
-            SlogValue::I64(i) => assert_eq!(*i, -789),
-            _ => panic!("Expected I64 variant"),
-        }
-
-        let (key, value) = &visitor.fields[2];
-        assert_eq!(key, "u64_key");
-        match value {
-            SlogValue::U64(u) => assert_eq!(*u, 101112),
-            _ => panic!("Expected U64 variant"),
-        }
-
-        let (key, value) = &visitor.fields[3];
-        assert_eq!(key, "bool_key");
-        match value {
-            SlogValue::Bool(b) => assert_eq!(*b, false),
-            _ => panic!("Expected Bool variant"),
-        }
     }
 }
