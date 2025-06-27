@@ -127,7 +127,7 @@ async fn create_otel_tracer() -> Result<
 
     // Set service name if not already set, using crate name from compile time
     if std::env::var("OTEL_SERVICE_NAME").is_err() {
-        std::env::set_var("OTEL_SERVICE_NAME", env!("CARGO_PKG_NAME"));
+        std::env::set_var("OTEL_SERVICE_NAME", env!("CARGO_CRATE_NAME"));
     }
 
     let resource = SdkProvidedResourceDetector.detect();

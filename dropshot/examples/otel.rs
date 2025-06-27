@@ -211,9 +211,8 @@ async fn example_api_get_counter(
 async fn example_api_error(
     _rqctx: RequestContext<ExampleContext>,
 ) -> Result<HttpResponseOk<CounterValue>, HttpError> {
-    // XXX this should always show up in the logs
     #[cfg(any(feature = "tracing", feature = "otel-tracing"))]
-    tracing::warn!("About to return an error for demonstration XXX FINDME");
+    tracing::warn!("About to return an error for demonstration");
     let error =
         HttpError::for_internal_error("This endpoint is broken".to_string());
     #[cfg(any(feature = "tracing", feature = "otel-tracing"))]
