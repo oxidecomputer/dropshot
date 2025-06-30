@@ -30,5 +30,5 @@ features = [ "full", "visit", "extra-traits" ]
 
 [dev-dependencies]
 expectorate = "1.2.0"
-prettyplease = "0.2.34"
+prettyplease = "0.2.35"
 schema = "0.1.0"
