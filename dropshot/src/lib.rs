@@ -852,11 +852,15 @@ mod from_map;
 mod handler;
 mod http_util;
 mod logging;
+#[cfg(feature = "otel-tracing")]
+pub mod otel;
 mod pagination;
 mod router;
 mod schema_util;
 mod server;
 mod to_map;
+#[cfg(any(feature = "tracing", feature = "otel-tracing"))]
+pub mod tracing_support;
 mod type_util;
 mod versioning;
 mod websocket;

@@ -287,6 +287,7 @@ where
 /// This type is not exported to Dropshot consumers; it is purely an internal
 /// implementation detail of the interface between `HttpHandlerFunc` and the
 /// server.
+#[derive(Debug)]
 pub enum HandlerError {
     /// An error returned by a fallible handler function itself.
     ///
