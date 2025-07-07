@@ -92,7 +92,7 @@ features = [ "uuid1" ]
 
 [dev-dependencies]
 anyhow = "1.0.98"
-async-channel = "2.3.1"
+async-channel = "2.5.0"
 buf-list = "1.0.3"
 expectorate = "1.2.0"
 hyper-rustls = "0.26.0"
