@@ -1,4 +1,5 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
+
 //! Common facilities for automated testing.
 
 use dropshot::test_util::LogContext;
@@ -78,7 +79,10 @@ impl TestCertificateChain {
         intermediate_params.is_ca =
             rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
         let intermediate_cert = intermediate_params
-            .signed_by(&intermediate_keypair, &root_cert, &root_keypair)
+            .signed_by(
+                &intermediate_keypair,
+                &rcgen::Issuer::new(root_params, root_keypair),
+            )
             .expect("failed to sign intermediate cert");
 
         let end_keypair =
@@ -87,7 +91,10 @@ impl TestCertificateChain {
             rcgen::CertificateParams::new(vec!["localhost".into()])
                 .expect("invalid end params");
         let end_cert = end_params
-            .signed_by(&end_keypair, &intermediate_cert, &intermediate_keypair)
+            .signed_by(
+                &end_keypair,
+                &rcgen::Issuer::new(intermediate_params, intermediate_keypair),
+            )
             .expect("failed to sign end cert");
 
         Self { root_cert, intermediate_cert, end_keypair, end_cert }
