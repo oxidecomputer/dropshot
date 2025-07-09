@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 //! Integration tests for Dropshot.
 //!
@@ -20,6 +20,7 @@ mod multipart;
 mod openapi;
 mod pagination;
 mod pagination_schema;
+mod panic_handling;
 mod path_names;
 mod starter;
 mod streaming;

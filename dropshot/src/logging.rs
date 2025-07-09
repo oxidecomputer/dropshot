@@ -178,7 +178,7 @@ fn log_drain_for_file(
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use crate::test_util::read_bunyan_log;
     use crate::test_util::read_config;
     use crate::test_util::verify_bunyan_records;
@@ -206,7 +206,7 @@ mod test {
     }
 
     /// Load a configuration and create a logger from it.
-    fn read_config_and_create_logger(
+    pub fn read_config_and_create_logger(
         label: &str,
         contents: &str,
     ) -> Result<Logger, io::Error> {
@@ -315,7 +315,7 @@ mod test {
     /// `LogTest` and `LogTestCleanup` are used for the tests that create various
     /// files on the filesystem to commonize code and make sure everything gets
     /// cleaned up as expected.
-    struct LogTest {
+    pub struct LogTest {
         directory: PathBuf,
         cleanup_list: Vec<LogTestCleanup>,
     }
@@ -333,7 +333,7 @@ mod test {
         /// removed.  The temporary directory must be empty by the time the
         /// `LogTest` is torn down except for files and directories created with
         /// `will_create_dir()` and `will_create_file()`.
-        fn setup(label: &str) -> LogTest {
+        pub fn setup(label: &str) -> LogTest {
             let directory_path = temp_path(label);
 
             if let Err(e) = fs::create_dir_all(&directory_path) {
@@ -357,7 +357,7 @@ mod test {
         /// teardown. Directories and files must be recorded in the order they
         /// would be created so that the order can be reversed at teardown
         /// (without needing any kind of recursive removal).
-        fn will_create_dir(&mut self, path: &str) -> PathBuf {
+        pub fn will_create_dir(&mut self, path: &str) -> PathBuf {
             let mut pathbuf = self.directory.clone();
             pathbuf.push(path);
             self.cleanup_list.push(LogTestCleanup::Directory(pathbuf.clone()));
@@ -370,7 +370,7 @@ mod test {
         /// Directories and files must be recorded in the order they would be
         /// created so that the order can be reversed at teardown (without
         /// needing any kind of recursive removal).
-        fn will_create_file(&mut self, path: &str) -> PathBuf {
+        pub fn will_create_file(&mut self, path: &str) -> PathBuf {
             let mut pathbuf = self.directory.clone();
             pathbuf.push(path);
             self.cleanup_list.push(LogTestCleanup::File(pathbuf.clone()));
