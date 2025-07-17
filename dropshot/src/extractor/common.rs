@@ -207,3 +207,4 @@ macro_rules! impl_rqextractor_for_tuple {
 // extractors and exactly one exclusive extractor.
 impl_rqextractor_for_tuple!(S1);
 impl_rqextractor_for_tuple!(S1, S2);
+impl_rqextractor_for_tuple!(S1, S2, S3);
