@@ -62,7 +62,7 @@ version = "1.6.0"
 features = [ "full" ]
 
 [dependencies.hyper-util]
-version = "0.1.15"
+version = "0.1.16"
 features = [ "full" ]
 
 [dependencies.openapiv3]
