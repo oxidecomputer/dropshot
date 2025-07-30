@@ -203,8 +203,9 @@ macro_rules! impl_rqextractor_for_tuple {
     }
 }}
 
-// Implement `RequestExtractor` for any tuple consisting of 0-2 shared
+// Implement `RequestExtractor` for any tuple consisting of 0-4 shared
 // extractors and exactly one exclusive extractor.
 impl_rqextractor_for_tuple!(S1);
 impl_rqextractor_for_tuple!(S1, S2);
 impl_rqextractor_for_tuple!(S1, S2, S3);
+impl_rqextractor_for_tuple!(S1, S2, S3, S4);

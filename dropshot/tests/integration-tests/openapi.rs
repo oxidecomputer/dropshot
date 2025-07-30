@@ -616,6 +616,39 @@ async fn handler30(
     todo!();
 }
 
+#[derive(Deserialize, JsonSchema)]
+struct PathArgs31 {
+    #[expect(unused)]
+    aa: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct Headers31 {
+    #[expect(unused)]
+    header_a: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct Query31 {
+    #[expect(unused)]
+    query_a: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/{aa}",
+    tags = ["it"]
+}]
+async fn handler31(
+    _: RequestContext<()>,
+    _: Path<PathArgs31>,
+    _: Header<Headers31>,
+    _: Query<Query31>,
+    _: UntypedBody,
+) -> Result<HttpResponseOk<CoolStruct>, HttpError> {
+    todo!();
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
@@ -655,6 +688,7 @@ fn make_api(
     api.register(handler28)?;
     api.register(handler29)?;
     api.register(handler30)?;
+    api.register(handler31)?;
     Ok(api)
 }
 

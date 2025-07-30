@@ -342,7 +342,7 @@
 //!
 //! `Query` and `Path` impl `SharedExtractor`.  `TypedBody`, `UntypedBody`,
 //! `StreamingBody`, and `RawRequest` impl `ExclusiveExtractor`.  Your function
-//! may accept 0-3 extractors, but only one can be `ExclusiveExtractor`, and it
+//! may accept 0-5 extractors, but only one can be `ExclusiveExtractor`, and it
 //! must be the last one.  Otherwise, the order of extractor arguments does not
 //! matter.
 //!
