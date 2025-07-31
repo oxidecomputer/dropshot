@@ -680,6 +680,14 @@ impl_HttpHandlerFunc_for_func_with_params!();
 impl_HttpHandlerFunc_for_func_with_params!((0, T0));
 impl_HttpHandlerFunc_for_func_with_params!((0, T1), (1, T2));
 impl_HttpHandlerFunc_for_func_with_params!((0, T1), (1, T2), (2, T3));
+impl_HttpHandlerFunc_for_func_with_params!((0, T1), (1, T2), (2, T3), (3, T4));
+impl_HttpHandlerFunc_for_func_with_params!(
+    (0, T1),
+    (1, T2),
+    (2, T3),
+    (3, T4),
+    (4, T5)
+);
 
 /// `RouteHandler` abstracts an `HttpHandlerFunc<FuncParams, ResponseType>` in a
 /// way that allows callers to invoke the handler without knowing the handler's

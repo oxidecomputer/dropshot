@@ -616,6 +616,78 @@ async fn handler30(
     todo!();
 }
 
+#[derive(Deserialize, JsonSchema)]
+struct PathArgs31 {
+    #[expect(unused)]
+    aa: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct Headers31 {
+    #[expect(unused)]
+    header_a: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct Query31 {
+    #[expect(unused)]
+    query_a: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing/{aa}",
+    tags = ["it"]
+}]
+async fn handler31(
+    _: RequestContext<()>,
+    _: Path<PathArgs31>,
+    _: Header<Headers31>,
+    _: Query<Query31>,
+    _: UntypedBody,
+) -> Result<HttpResponseOk<CoolStruct>, HttpError> {
+    todo!();
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct CustomShared32 {
+    pub a: String,
+}
+
+#[async_trait::async_trait]
+impl dropshot::SharedExtractor for CustomShared32 {
+    async fn from_request<Context: dropshot::ServerContext>(
+        _rqctx: &RequestContext<Context>,
+    ) -> Result<Self, HttpError> {
+        Ok(Self { a: "test".to_string() })
+    }
+
+    fn metadata(
+        _body_content_type: dropshot::ApiEndpointBodyContentType,
+    ) -> dropshot::ExtractorMetadata {
+        dropshot::ExtractorMetadata {
+            extension_mode: dropshot::ExtensionMode::None,
+            parameters: vec![],
+        }
+    }
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing32/{aa}",
+    tags = ["it"]
+}]
+async fn handler32(
+    _: RequestContext<()>,
+    _: Path<PathArgs31>,
+    _: Header<Headers31>,
+    _: Query<Query31>,
+    _: CustomShared32,
+    _: UntypedBody,
+) -> Result<HttpResponseOk<CoolStruct>, HttpError> {
+    todo!();
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
@@ -655,6 +727,8 @@ fn make_api(
     api.register(handler28)?;
     api.register(handler29)?;
     api.register(handler30)?;
+    api.register(handler31)?;
+    api.register(handler32)?;
     Ok(api)
 }
 
