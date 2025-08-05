@@ -30,9 +30,11 @@ use std::fmt::Debug;
 // type.  Only JSON is currently supported.
 
 /// `TypedBody<BodyType>` is an extractor used to deserialize an instance of
-/// `BodyType` from an HTTP request body.  `BodyType` is any structure of yours
-/// that implements `serde::Deserialize`.  See this module's documentation for
-/// more information.
+/// `BodyType` from an HTTP request body.  `BodyType` may be any struct of yours
+/// that implements [serde::Deserialize] and [schemars::JsonSchema], where
+/// primitives and enums have to be wrapped in an outer struct and enums need
+/// to be flattened using the `#[serde(flatten)]` attribute.  See this module's
+/// documentation formore information.
 #[derive(Debug)]
 pub struct TypedBody<BodyType: JsonSchema + DeserializeOwned + Send + Sync> {
     inner: BodyType,
