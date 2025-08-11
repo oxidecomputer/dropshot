@@ -643,7 +643,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
         &self,
         title: S,
         version: semver::Version,
-    ) -> OpenApiDefinition<Context>
+    ) -> OpenApiDefinition<'_, Context>
     where
         S: AsRef<str>,
     {
