@@ -100,7 +100,7 @@ impl TestCertificateChain {
         Self { root_cert, intermediate_cert, end_keypair, end_cert }
     }
 
-    pub fn end_cert_private_key(&self) -> rustls::pki_types::PrivateKeyDer {
+    pub fn end_cert_private_key(&self) -> rustls::pki_types::PrivateKeyDer<'_> {
         rustls::pki_types::PrivateKeyDer::from(
             rustls::pki_types::PrivatePkcs8KeyDer::from(
                 self.end_keypair.serialize_der(),
@@ -108,7 +108,7 @@ impl TestCertificateChain {
         )
     }
 
-    pub fn cert_chain(&self) -> Vec<rustls::pki_types::CertificateDer> {
+    pub fn cert_chain(&self) -> Vec<rustls::pki_types::CertificateDer<'_>> {
         vec![
             self.end_cert.der().clone(),
             self.intermediate_cert.der().clone(),

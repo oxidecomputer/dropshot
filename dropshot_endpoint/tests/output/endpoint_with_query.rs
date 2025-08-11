@@ -1,4 +1,5 @@
 const _: fn() = || {
+    #[allow(dead_code)]
     struct NeedRequestContext(
         <RequestContext<std::i32> as dropshot::RequestContextArgument>::Context,
     );

@@ -351,6 +351,7 @@ impl<'ast> EndpointParams<'ast> {
         let rqctx_context = self.rqctx_context();
         let rqctx_check = quote_spanned! { self.rqctx_ty.orig_span()=>
             const _: fn() = || {
+                #[allow(dead_code)]
                 struct NeedRequestContext(#rqctx_context);
             };
         };
