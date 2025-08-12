@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 //! Generic server-wide state and facilities
 
 use super::api_description::ApiDescription;
@@ -6,6 +6,7 @@ use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
+use super::error::HttpError;
 use super::handler::HandlerError;
 use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
@@ -967,7 +968,10 @@ async fn http_request_handle<C: ServerContext>(
             match rx.await {
                 Ok(result) => result?,
                 Err(_) => {
-                    error!(request_log, "handler panicked; propogating panic");
+                    error!(
+                        request_log,
+                        "handler panicked; returning 500 error"
+                    );
 
                     // To get the panic, we now need to await `handler_task`; we
                     // know it is complete _and_ it failed, because it has
@@ -976,7 +980,27 @@ async fn http_request_handle<C: ServerContext>(
                     let task_err = handler_task.await.expect_err(
                         "task failed to send result but didn't panic",
                     );
-                    panic::resume_unwind(task_err.into_panic());
+
+                    // Extract panic message if possible
+                    let panic_msg = if task_err.is_panic() {
+                        match task_err.into_panic().downcast::<&'static str>() {
+                            Ok(s) => s.to_string(),
+                            Err(panic_any) => {
+                                match panic_any.downcast::<String>() {
+                                    Ok(s) => *s,
+                                    Err(_) => "handler panicked".to_string(),
+                                }
+                            }
+                        }
+                    } else {
+                        task_err.to_string()
+                    };
+
+                    // Instead of propagating the panic, return a 500 error
+                    // This ensures proper status code reporting (500 instead of 499)
+                    return Err(HandlerError::Dropshot(
+                        HttpError::for_internal_error(panic_msg),
+                    ));
                 }
             }
         }
