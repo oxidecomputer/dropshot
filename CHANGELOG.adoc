@@ -15,7 +15,9 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.16.2\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/1389[#1389] Remove lint warnings seen after updating to Rust 1.89
 * https://github.com/oxidecomputer/dropshot/pull/1382[#1382] Allow 2 more `SharedExtractor`s to be used with the `endpoint` macro
+* https://github.com/oxidecomputer/dropshot/pull/1329[#1329] Support optional values in the `HttpResponseHeaders` inner type
 
 == 0.16.2 (released 2025-05-21)
 
