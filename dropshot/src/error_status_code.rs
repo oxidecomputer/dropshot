@@ -4,6 +4,7 @@
 //! Newtypes around [`http::StatusCode`] that are limited to status ranges
 //! representing errors.
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// An HTTP 4xx (client error) or 5xx (server error) status code.
@@ -20,7 +21,10 @@ use std::fmt;
 /// fallible conversion from an [`http::StatusCode`].
 ///
 /// [iana]: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(try_from = "u16", into = "u16")]
 pub struct ErrorStatusCode(http::StatusCode);
 
 // Generate constants for a `http::StatusCode` wrapper type that re-export the
@@ -415,6 +419,44 @@ impl_status_code_wrapper! {
     }
 }
 
+impl schemars::JsonSchema for ErrorStatusCode {
+    fn schema_name() -> String {
+        "ErrorStatusCode".to_string()
+    }
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("dropshot::ErrorStatusCode")
+    }
+
+    fn json_schema(
+        _generator: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        schemars::schema::SchemaObject {
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                title: Some("An HTTP error status code".to_string()),
+                description: Some(
+                    "An HTTP status code in the error range (4xx or 5xx)"
+                        .to_string(),
+                ),
+                examples: vec![
+                    "400".into(),
+                    "404".into(),
+                    "500".into(),
+                    "503".into(),
+                ],
+                ..Default::default()
+            })),
+            instance_type: Some(schemars::schema::InstanceType::Integer.into()),
+            number: Some(Box::new(schemars::schema::NumberValidation {
+                minimum: Some(400.0),
+                maximum: Some(599.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
+    }
+}
+
 /// An HTTP 4xx client error status code
 ///
 /// This is a refinement of the [`http::StatusCode`] type that is limited to the
@@ -429,7 +471,10 @@ impl_status_code_wrapper! {
 /// conversion from an [`http::StatusCode`].
 ///
 /// [iana]: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(try_from = "u16", into = "u16")]
 pub struct ClientErrorStatusCode(http::StatusCode);
 
 impl ClientErrorStatusCode {
@@ -582,6 +627,39 @@ impl_status_code_wrapper! {
     impl StatusCode for ClientErrorStatusCode {
         type NotAnError = NotAClientError;
         type Invalid = InvalidClientErrorStatusCode;
+    }
+}
+
+impl schemars::JsonSchema for ClientErrorStatusCode {
+    fn schema_name() -> String {
+        "ClientErrorStatusCode".to_string()
+    }
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("dropshot::ClientErrorStatusCode")
+    }
+
+    fn json_schema(
+        _generator: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        schemars::schema::SchemaObject {
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                title: Some("An HTTP client error status code".to_string()),
+                description: Some(
+                    "An HTTP status code in the client error range (4xx)"
+                        .to_string(),
+                ),
+                examples: vec!["400".into(), "404".into(), "451".into()],
+                ..Default::default()
+            })),
+            instance_type: Some(schemars::schema::InstanceType::Integer.into()),
+            number: Some(Box::new(schemars::schema::NumberValidation {
+                minimum: Some(400.0),
+                maximum: Some(499.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
     }
 }
 
