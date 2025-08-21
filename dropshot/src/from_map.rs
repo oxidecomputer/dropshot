@@ -1,4 +1,4 @@
-// Copyright 2020 Oxide Computer Company
+// Copyright 2025 Oxide Computer Company
 
 use paste::paste;
 use serde::de::DeserializeSeed;
@@ -13,9 +13,10 @@ use std::any::type_name;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::marker::PhantomData;
 
 /// Deserialize a BTreeMap<String, MapValue> into a type, invoking
-/// String::parse() for all values according to the required type. MapValue may
+/// FromStr::parse() for all values according to the required type. MapValue may
 /// be either a single String or a sequence of Strings.
 pub(crate) fn from_map<'a, T, Z>(
     map: &'a BTreeMap<String, Z>,
@@ -25,6 +26,18 @@ where
     Z: MapValue + Debug + Clone + 'static,
 {
     let mut deserializer = MapDeserializer::from_map(map);
+    T::deserialize(&mut deserializer).map_err(|e| e.0)
+}
+
+/// Similar to [`from_map`], but case-insensitive.
+pub(crate) fn from_map_insensitive<'a, T, Z>(
+    map: &'a BTreeMap<String, Z>,
+) -> Result<T, String>
+where
+    T: Deserialize<'a>,
+    Z: MapValue + Debug + Clone + 'static,
+{
+    let mut deserializer = MapDeserializer::from_map_insensitive(map);
     T::deserialize(&mut deserializer).map_err(|e| e.0)
 }
 
@@ -46,22 +59,68 @@ impl MapValue for String {
     }
 }
 
+// To handle headers, which are case-insensitive, we use a trait to adapt
+// deserialization of structs to be case-insensitive.
+
+trait Casing {
+    fn rename(fields: &'static [&'static str]) -> BTreeMap<String, String>;
+}
+
+enum CaseSensitive {}
+enum CaseInsensitive {}
+
+impl Casing for CaseSensitive {
+    fn rename(_fields: &'static [&'static str]) -> BTreeMap<String, String> {
+        Default::default()
+    }
+}
+impl Casing for CaseInsensitive {
+    fn rename(fields: &'static [&'static str]) -> BTreeMap<String, String> {
+        fields
+            .iter()
+            .map(|field| (field.to_lowercase(), field.to_string()))
+            .collect()
+    }
+}
+
 /// Deserializer for BTreeMap<String, MapValue> that interprets the values. It has
 /// two modes: about to iterate over the map or about to process a single value.
 #[derive(Debug)]
-enum MapDeserializer<'de, Z: MapValue + Debug + Clone + 'static> {
-    Map(&'de BTreeMap<String, Z>),
+enum MapDeserializer<
+    'de,
+    Z: MapValue + Debug + Clone + 'static,
+    CaseSensitivity,
+> {
+    Map(&'de BTreeMap<String, Z>, PhantomData<CaseSensitivity>),
     Value(Z),
 }
 
-impl<'de, Z> MapDeserializer<'de, Z>
+impl<'de, Z> MapDeserializer<'de, Z, CaseSensitive>
 where
     Z: MapValue + Debug + Clone + 'static,
 {
     fn from_map(input: &'de BTreeMap<String, Z>) -> Self {
-        MapDeserializer::Map(input)
+        MapDeserializer::Map(input, PhantomData)
     }
 
+    fn from_value(input: Z) -> Self {
+        MapDeserializer::Value(input)
+    }
+}
+
+impl<'de, Z> MapDeserializer<'de, Z, CaseInsensitive>
+where
+    Z: MapValue + Debug + Clone + 'static,
+{
+    fn from_map_insensitive(input: &'de BTreeMap<String, Z>) -> Self {
+        MapDeserializer::Map(input, PhantomData)
+    }
+}
+
+impl<'de, Z, CaseSensitivity> MapDeserializer<'de, Z, CaseSensitivity>
+where
+    Z: MapValue + Debug + Clone + 'static,
+{
     /// Helper function to extract pattern match for Value. Fail if we're
     /// expecting a Map or return the result of the provided function.
     fn value<VV, F>(&self, deserialize: F) -> Result<VV, MapError>
@@ -70,7 +129,7 @@ where
     {
         match self {
             MapDeserializer::Value(ref raw_value) => deserialize(raw_value),
-            MapDeserializer::Map(_) => Err(MapError(
+            MapDeserializer::Map(..) => Err(MapError(
                 "must be applied to a flattened struct rather than a raw type"
                     .to_string(),
             )),
@@ -137,9 +196,11 @@ macro_rules! de_value {
     };
 }
 
-impl<'de, Z> Deserializer<'de> for &mut MapDeserializer<'de, Z>
+impl<'de, Z, CaseSensitivity> Deserializer<'de>
+    for &mut MapDeserializer<'de, Z, CaseSensitivity>
 where
     Z: MapValue + Debug + Clone + 'static,
+    CaseSensitivity: Casing,
 {
     type Error = MapError;
 
@@ -181,13 +242,19 @@ where
     fn deserialize_struct<V>(
         self,
         _name: &'static str,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_map(visitor)
+        match self {
+            MapDeserializer::Map(map, _) => visitor
+                .visit_map(MapMapAccess::new::<CaseSensitivity>(map, fields)),
+            MapDeserializer::Value(_) => Err(MapError(
+                "deserialization container must be fully flattened".to_string(),
+            )),
+        }
     }
     // This will only be called when deserializing a structure that contains a
     // flattened structure. See `deserialize_any` below for details.
@@ -196,14 +263,10 @@ where
         V: Visitor<'de>,
     {
         match self {
-            MapDeserializer::Map(map) => {
-                let xx = map.clone();
-                let x = Box::new(xx.into_iter());
-                let m = MapMapAccess::<Z> { iter: x, value: None };
-                visitor.visit_map(m)
-            }
+            MapDeserializer::Map(map, _) => visitor
+                .visit_map(MapMapAccess::new::<CaseSensitivity>(map, &[])),
             MapDeserializer::Value(_) => Err(MapError(
-                "destination struct must be fully flattened".to_string(),
+                "deserialization container must be fully flattened".to_string(),
             )),
         }
     }
@@ -294,9 +357,11 @@ where
 }
 
 // Deserializer component for processing enums.
-impl<'de, Z> EnumAccess<'de> for &mut MapDeserializer<'de, Z>
+impl<'de, Z, CaseSensitivity> EnumAccess<'de>
+    for &mut MapDeserializer<'de, Z, CaseSensitivity>
 where
     Z: MapValue + Debug + Clone + 'static,
+    CaseSensitivity: Casing,
 {
     type Error = MapError;
     type Variant = Self;
@@ -313,7 +378,8 @@ where
 }
 
 // Deserializer component for processing enum variants.
-impl<'de, Z> VariantAccess<'de> for &mut MapDeserializer<'de, Z>
+impl<'de, Z, CaseSensitivity> VariantAccess<'de>
+    for &mut MapDeserializer<'de, Z, CaseSensitivity>
 where
     Z: MapValue + Clone + Debug + 'static,
 {
@@ -359,6 +425,25 @@ struct MapMapAccess<Z> {
     iter: Box<dyn Iterator<Item = (String, Z)>>,
     /// Pending value in a key-value pair
     value: Option<Z>,
+    /// Field renaming
+    rename: BTreeMap<String, String>,
+}
+
+impl<Z> MapMapAccess<Z>
+where
+    Z: MapValue + Debug + Clone + 'static,
+{
+    fn new<CaseSensitivity: Casing>(
+        map: &mut &BTreeMap<String, Z>,
+        fields: &'static [&'static str],
+    ) -> Self
+    where
+        Z: MapValue + Debug + Clone + 'static,
+    {
+        let iter = Box::new(map.clone().into_iter());
+        let rename = CaseSensitivity::rename(fields);
+        Self { iter, value: None, rename }
+    }
 }
 
 impl<'de, Z> MapAccess<'de> for MapMapAccess<Z>
@@ -375,11 +460,14 @@ where
         K: DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some((key, value)) => {
+            Some((mut key, value)) => {
+                if let Some(rename) = self.rename.get(&key) {
+                    key = rename.clone();
+                }
                 // Save the value for later.
                 self.value.replace(value);
                 // Create a Deserializer for that single value.
-                let mut deserializer = MapDeserializer::Value(key);
+                let mut deserializer = MapDeserializer::from_value(key);
                 seed.deserialize(&mut deserializer).map(Some)
             }
             None => Ok(None),
@@ -391,7 +479,7 @@ where
     {
         match self.value.take() {
             Some(value) => {
-                let mut deserializer = MapDeserializer::Value(value);
+                let mut deserializer = MapDeserializer::from_value(value);
                 seed.deserialize(&mut deserializer)
             }
             // This means we were called without a corresponding call to
@@ -420,7 +508,7 @@ where
     {
         match self.iter.next() {
             Some(value) => {
-                let mut deserializer = MapDeserializer::Value(value);
+                let mut deserializer = MapDeserializer::from_value(value);
                 seed.deserialize(&mut deserializer).map(Some)
             }
             None => Ok(None),
@@ -430,7 +518,10 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::from_map::from_map_insensitive;
+
     use super::from_map;
+    use core::panic;
     use serde::Deserialize;
     use std::collections::BTreeMap;
 
@@ -462,7 +553,10 @@ mod test {
         map.insert("b".to_string(), "B".to_string());
         match from_map::<A, String>(&map) {
             Err(s) => {
-                assert_eq!(s, "destination struct must be fully flattened")
+                assert_eq!(
+                    s,
+                    "deserialization container must be fully flattened"
+                )
             }
             Ok(_) => panic!("unexpected success"),
         }
@@ -569,6 +663,37 @@ mod test {
                 "a string may not be used in place of a sequence of values"
             ),
             Ok(_) => panic!("unexpected success"),
+        }
+    }
+
+    #[test]
+    fn test_case_insensitive() {
+        #[derive(Deserialize, Debug)]
+        struct A {
+            #[serde(rename = "X-Header-A")]
+            a: String,
+            #[serde(rename = "WhYwOuLdAnYoNeEvErDoThIs")]
+            b: String,
+        }
+
+        let map: BTreeMap<String, String> = [
+            ("x-header-a".to_string(), "x-header-a value".to_string()),
+            ("whywouldanyoneeverdothis".to_string(), "other value".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        match from_map::<A, String>(&map) {
+            Ok(_) => panic!("unexpected success"),
+            Err(_) => (),
+        }
+
+        match from_map_insensitive::<A, String>(&map) {
+            Ok(a) => {
+                assert_eq!(a.a, "x-header-a value");
+                assert_eq!(a.b, "other value");
+            }
+            Err(s) => panic!("error: {}", s),
         }
     }
 }
