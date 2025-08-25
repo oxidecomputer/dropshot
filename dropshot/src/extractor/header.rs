@@ -26,10 +26,11 @@ use super::{metadata::get_metadata, ExtractorMetadata, SharedExtractor};
 /// Note that (unlike the [`Query`] and [`Path`] extractors) headers are case-
 /// insensitive. You may rename fields with mixed casing (e.g. by using
 /// #[serde(rename = "X-Header-Foo")]) and that casing will appear in the
-/// OpenAPI document output. Case-insensitive name conflicts may lead to
-/// unexpected behavior, and should be avoided. For example, only one of the
-/// conflicting fields may be deserialized, and therefore deserialization may
-/// fail if any conflicting field is required (i.e. not an `Option<T>` type)
+/// OpenAPI document output. Name conflicts (including names differentiated by
+/// casing since headers are case-insensitive) may lead to unexpected behavior,
+/// and should be avoided. For example, only one of the conflicting fields may
+/// be deserialized, and therefore deserialization may fail if any conflicting
+/// field is required (i.e. not an `Option<T>` type)
 #[derive(Debug)]
 pub struct Header<HeaderType: DeserializeOwned + JsonSchema + Send + Sync> {
     inner: HeaderType,
@@ -59,7 +60,6 @@ where
         .map_err(|message: http::header::ToStrError| {
             HttpError::for_bad_request(None, message.to_string())
         })?;
-    println!("headers: {headers:?}");
     let inner = from_map_insensitive(&headers).map_err(|message| {
         HttpError::for_bad_request(
             None,
@@ -122,7 +122,26 @@ mod tests {
             .uri("http://localhost")
             .body(())
             .unwrap();
-        println!("request: {request:?}");
+        let info = RequestInfo::new(&request, addr);
+
+        let parsed = http_request_load_header::<TestHeaders>(&info);
+
+        match parsed {
+            Ok(headers) => {
+                assert_eq!(headers.inner.header_a, "header_a value");
+                assert_eq!(headers.inner.header_b, "header_b value");
+            }
+            Err(e) => {
+                panic!("unexpected error: {}", e);
+            }
+        }
+
+        let request = hyper::Request::builder()
+            .header("header_a", "header_a value")
+            .header("X-hEaDEr-b", "header_b value")
+            .uri("http://localhost")
+            .body(())
+            .unwrap();
         let info = RequestInfo::new(&request, addr);
 
         let parsed = http_request_load_header::<TestHeaders>(&info);

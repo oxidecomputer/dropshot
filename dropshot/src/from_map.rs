@@ -63,23 +63,29 @@ impl MapValue for String {
 // deserialization of structs to be case-insensitive.
 
 trait Casing {
-    fn rename(fields: &'static [&'static str]) -> BTreeMap<String, String>;
+    /// Return the remapping of field names (if such a remapping is applicable).
+    /// Keys are the lowercase header names; values are the original struct
+    /// field names.
+    fn rename(
+        fields: &'static [&'static str],
+    ) -> BTreeMap<String, &'static str>;
 }
 
 enum CaseSensitive {}
 enum CaseInsensitive {}
 
 impl Casing for CaseSensitive {
-    fn rename(_fields: &'static [&'static str]) -> BTreeMap<String, String> {
+    fn rename(
+        _fields: &'static [&'static str],
+    ) -> BTreeMap<String, &'static str> {
         Default::default()
     }
 }
 impl Casing for CaseInsensitive {
-    fn rename(fields: &'static [&'static str]) -> BTreeMap<String, String> {
-        fields
-            .iter()
-            .map(|field| (field.to_lowercase(), field.to_string()))
-            .collect()
+    fn rename(
+        fields: &'static [&'static str],
+    ) -> BTreeMap<String, &'static str> {
+        fields.into_iter().map(|field| (field.to_lowercase(), *field)).collect()
     }
 }
 
@@ -426,7 +432,7 @@ struct MapMapAccess<Z> {
     /// Pending value in a key-value pair
     value: Option<Z>,
     /// Field renaming
-    rename: BTreeMap<String, String>,
+    rename: BTreeMap<String, &'static str>,
 }
 
 impl<Z> MapMapAccess<Z>
@@ -460,14 +466,17 @@ where
         K: DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some((mut key, value)) => {
-                if let Some(rename) = self.rename.get(&key) {
-                    key = rename.clone();
-                }
+            Some((key, value)) => {
+                let key = if let Some(rename) = self.rename.get(&key) {
+                    *rename
+                } else {
+                    key.as_str()
+                };
                 // Save the value for later.
                 self.value.replace(value);
                 // Create a Deserializer for that single value.
-                let mut deserializer = MapDeserializer::from_value(key);
+                let mut deserializer =
+                    MapDeserializer::from_value(key.to_string());
                 seed.deserialize(&mut deserializer).map(Some)
             }
             None => Ok(None),
