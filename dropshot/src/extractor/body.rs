@@ -121,15 +121,16 @@ impl ExclusiveExtractor for MultipartBody {
 
 /// Given an HTTP request, attempt to read the body, parse it according
 /// to the content type, and deserialize it to an instance of `BodyType`.
-async fn http_request_load_body<Context: ServerContext, BodyType>(
-    rqctx: &RequestContext<Context>,
+async fn http_request_load_body<BodyType>(
     request: hyper::Request<crate::Body>,
+    request_body_max_bytes: usize,
+    expected_body_content_type: &ApiEndpointBodyContentType,
 ) -> Result<TypedBody<BodyType>, HttpError>
 where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let (parts, body) = request.into_parts();
-    let body = StreamingBody::new(body, rqctx.request_body_max_bytes())
+    let body = StreamingBody::new(body, request_body_max_bytes)
         .into_bytes_mut()
         .await?;
 
@@ -150,14 +151,19 @@ where
         .unwrap_or(Ok(CONTENT_TYPE_JSON))?;
     let end = content_type.find(';').unwrap_or_else(|| content_type.len());
     let mime_type = content_type[..end].trim_end().to_lowercase();
-    let body_content_type =
-        ApiEndpointBodyContentType::from_mime_type(&mime_type)
-            .map_err(|e| HttpError::for_bad_request(None, e))?;
-    let expected_content_type = rqctx.endpoint.body_content_type.clone();
+    let body_content_type = ApiEndpointBodyContentType::from_mime_type(
+        &mime_type,
+    )
+    .map_err(|e| {
+        HttpError::for_bad_request(
+            None,
+            format!("unsupported content-type: {}", e),
+        )
+    })?;
 
     use ApiEndpointBodyContentType::*;
 
-    let content = match (expected_content_type, body_content_type) {
+    let content = match (expected_body_content_type, body_content_type) {
         (Json, Json) => {
             let jd = &mut serde_json::Deserializer::from_slice(&body);
             serde_path_to_error::deserialize(jd).map_err(|e| {
@@ -186,7 +192,7 @@ where
                     expected.mime_type(),
                     requested.mime_type()
                 ),
-            ))
+            ));
         }
     };
     Ok(TypedBody { inner: content })
@@ -207,7 +213,12 @@ where
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
     ) -> Result<TypedBody<BodyType>, HttpError> {
-        http_request_load_body(rqctx, request).await
+        http_request_load_body(
+            request,
+            rqctx.request_body_max_bytes(),
+            &rqctx.endpoint.body_content_type,
+        )
+        .await
     }
 
     fn metadata(content_type: ApiEndpointBodyContentType) -> ExtractorMetadata {
@@ -455,5 +466,34 @@ fn untyped_metadata() -> ExtractorMetadata {
             vec![],
         )],
         extension_mode: ExtensionMode::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use schemars::JsonSchema;
+    use serde::Deserialize;
+
+    use crate::extractor::body::http_request_load_body;
+
+    #[tokio::test]
+    async fn test_content_plus_json() {
+        #[derive(Deserialize, JsonSchema)]
+        struct TheRealScimShady {}
+
+        let body = "{}";
+        let request = hyper::Request::builder()
+            .header(http::header::CONTENT_TYPE, "application/scim+json")
+            .body(crate::Body::with_content(body))
+            .unwrap();
+
+        let r = http_request_load_body::<TheRealScimShady>(
+            request,
+            9000,
+            &crate::ApiEndpointBodyContentType::Json,
+        )
+        .await;
+
+        assert!(r.is_ok())
     }
 }
