@@ -353,9 +353,7 @@ impl ApiEndpointBodyContentType {
 /// Split the mime type in to the type, subtype, and optional suffix
 /// components.
 fn mime_split(mime_type: &str) -> Option<(&str, &str, Option<&str>)> {
-    let mut parts = mime_type.splitn(2, '/');
-    let type_ = parts.next()?;
-    let rest = parts.next()?;
+    let (type_, rest) = mime_type.split_once('/')?;
     let mut sub_parts = rest.splitn(2, '+');
     let subtype = sub_parts.next()?;
     let suffix = sub_parts.next();
