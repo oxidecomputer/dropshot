@@ -335,9 +335,29 @@ impl ApiEndpointBodyContentType {
             CONTENT_TYPE_JSON => Ok(Self::Json),
             CONTENT_TYPE_URL_ENCODED => Ok(Self::UrlEncoded),
             CONTENT_TYPE_MULTIPART_FORM_DATA => Ok(Self::MultipartFormData),
-            _ => Err(mime_type.to_string()),
+            _ => match mime_split(mime_type) {
+                // We may see content-type that is of the form
+                // application/XXX+json which means "XXX protocol serialized as
+                // JSON". A more pedantic implementation might involve a server
+                // (or subset of its API) indicating that it expects (and
+                // produces) bodies in a particular format, but for now it
+                // suffices to treat input bodies of this form as equivalent to
+                // application/json.
+                Some(("application", _, Some("json"))) => Ok(Self::Json),
+                _ => Err(mime_type.to_string()),
+            },
         }
     }
+}
+
+/// Split the mime type in to the type, subtype, and optional suffix
+/// components.
+fn mime_split(mime_type: &str) -> Option<(&str, &str, Option<&str>)> {
+    let (type_, rest) = mime_type.split_once('/')?;
+    let mut sub_parts = rest.splitn(2, '+');
+    let subtype = sub_parts.next()?;
+    let suffix = sub_parts.next();
+    Some((type_, subtype, suffix))
 }
 
 #[derive(Debug)]
