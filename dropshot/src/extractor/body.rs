@@ -46,6 +46,9 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
         self.inner
     }
 
+    /// Convert this `TypedBody` into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints take body parameters that
+    /// are similar and convertible into a common type.
     pub fn map<T, F>(self, f: F) -> TypedBody<T>
     where
         T: JsonSchema + DeserializeOwned + Send + Sync,
@@ -54,6 +57,7 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
         TypedBody { inner: f(self.inner) }
     }
 
+    /// Similar to [`TypedBody::map`] but with support for fallibility.
     pub fn try_map<T, E, F>(self, f: F) -> Result<TypedBody<T>, E>
     where
         T: JsonSchema + DeserializeOwned + Send + Sync,
