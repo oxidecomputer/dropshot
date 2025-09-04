@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.16.3\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.16.4\...HEAD[Full list of commits]
+
+== 0.16.4 (released 2025-09-04)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.16.3\...v0.16.4[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1403[#1403] Improved handling of header parameters
 * https://github.com/oxidecomputer/dropshot/pull/1413[#1413] Content-Type "application/subtype+json" is now treated as "application/json" for body parameters
