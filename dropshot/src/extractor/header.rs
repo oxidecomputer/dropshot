@@ -19,9 +19,10 @@ use super::{metadata::get_metadata, ExtractorMetadata, SharedExtractor};
 /// `Header<HeaderType>` is an extractor used to deserialize an instance of
 /// `HeaderType` from an HTTP request's header values. `HeaderType` may be any
 /// structure that implements [serde::Deserialize] and [schemars::JsonSchema].
-/// While headers are accessible through [RequestInfo::headers], using this
-/// extractor in an entrypoint causes header inputs to be documented in
-/// OpenAPI output. See the crate documentation for more information.
+/// While headers are always accessible through [RequestInfo::headers] even
+/// without this extractor, using this extractor causes header inputs to be
+/// documented in OpenAPI output.
+/// See the top-level crate documentation for more information.
 ///
 /// Note that (unlike the [`Query`] and [`Path`] extractors) headers are case-
 /// insensitive. You may rename fields with mixed casing (e.g. by using
