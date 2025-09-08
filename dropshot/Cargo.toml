@@ -78,7 +78,7 @@ version = "1.47"
 features = [ "full" ]
 
 [dependencies.usdt]
-version = "0.5.0"
+version = "0.6.0"
 optional = true
 default-features = false
 
