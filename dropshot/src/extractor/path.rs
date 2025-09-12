@@ -16,10 +16,11 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
-/// `Path<PathType>` is an extractor used to deserialize an instance of
-/// `PathType` from an HTTP request's path parameters.  `PathType` is any
-/// structure of yours that implements [serde::Deserialize] and
-/// [schemars::JsonSchema]. See the crate documentation for more information.
+/// `Path<PathType>` is an extractor used to deserialize an instance of 
+/// `PathType` from an HTTP request's path parameters.  `PathType` may be any 
+/// struct of yours that implements [serde::Deserialize] and 
+/// [schemars::JsonSchema].
+/// See the top-level crate documentation for more information.
 #[derive(Debug)]
 pub struct Path<PathType: JsonSchema + Send + Sync> {
     inner: PathType,
