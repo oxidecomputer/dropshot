@@ -20,15 +20,15 @@ note: required by a bound in `dropshot::Query`
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
-error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_trait_channel4.rs:26:18
    |
 26 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+   = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
              &'a std::path::Path
@@ -38,7 +38,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
              (T0, T1)
              (T0, T1, T2)
            and $N others
-   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+   = note: required for `QueryParams` to implement `serde_core::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
   --> src/extractor/query.rs
    |
@@ -71,7 +71,7 @@ note: required by a bound in `dropshot::Query`
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
-error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_trait_channel4.rs:39:5
    |
 39 | /     async fn bad_channel(
@@ -79,11 +79,11 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 41 | |         _params: Query<QueryParams>,
 42 | |         _upgraded: WebsocketConnection,
 43 | |     ) -> dropshot::WebsocketChannelResult {
-   | |_________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |_________________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+   = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
              &'a std::path::Path
@@ -93,7 +93,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
              (T0, T1)
              (T0, T1, T2)
            and $N others
-   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+   = note: required for `QueryParams` to implement `serde_core::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
   --> src/extractor/query.rs
    |
@@ -126,7 +126,7 @@ note: required by a bound in `dropshot::Query`
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
-error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_trait_channel4.rs:39:5
    |
 39 | /     async fn bad_channel(
@@ -134,11 +134,11 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
 41 | |         _params: Query<QueryParams>,
 42 | |         _upgraded: WebsocketConnection,
 43 | |     ) -> dropshot::WebsocketChannelResult {
-   | |_________________________________________^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |_________________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+   = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
              &'a std::path::Path
@@ -148,7 +148,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
              (T0, T1)
              (T0, T1, T2)
            and $N others
-   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+   = note: required for `QueryParams` to implement `serde_core::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
   --> src/extractor/query.rs
    |
@@ -177,15 +177,15 @@ note: required by a bound in `dropshot::Query`
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
-error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_trait_channel4.rs:41:18
    |
 41 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+   = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
              &'a std::path::Path
@@ -195,7 +195,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
              (T0, T1)
              (T0, T1, T2)
            and $N others
-   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+   = note: required for `QueryParams` to implement `serde_core::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
   --> src/extractor/query.rs
    |
@@ -225,15 +225,15 @@ note: required by a bound in `dropshot::Query`
    |                                                ^^^^^^^^^^ required by this bound in `Query`
    = note: this error originates in the attribute macro `dropshot::api_description` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_trait_channel4.rs:16:1
    |
 16 | #[dropshot::api_description]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+   = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
              &'a std::path::Path
@@ -243,7 +243,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
              (T0, T1)
              (T0, T1, T2)
            and $N others
-   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+   = note: required for `QueryParams` to implement `serde_core::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
   --> src/extractor/query.rs
    |
@@ -273,15 +273,15 @@ note: required by a bound in `dropshot::Query`
    | pub struct Query<QueryType: DeserializeOwned + JsonSchema + Send + Sync> {
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
-error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
   --> tests/fail/bad_trait_channel4.rs:20:5
    |
 20 |     #[channel {
-   |     ^ the trait `for<'de> serde::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |     ^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
    |
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
-   = help: the following other types implement trait `serde::de::Deserialize<'de>`:
+   = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
              &'a [u8]
              &'a camino::Utf8Path
              &'a std::path::Path
@@ -291,7 +291,7 @@ error[E0277]: the trait bound `for<'de> QueryParams: serde::de::Deserialize<'de>
              (T0, T1)
              (T0, T1, T2)
            and $N others
-   = note: required for `QueryParams` to implement `serde::de::DeserializeOwned`
+   = note: required for `QueryParams` to implement `serde_core::de::DeserializeOwned`
 note: required by a bound in `dropshot::Query`
   --> src/extractor/query.rs
    |
