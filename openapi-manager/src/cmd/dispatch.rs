@@ -165,7 +165,7 @@ impl DebugArgs {
         apis: &ManagedApis,
         output: &OutputOpts,
     ) -> anyhow::Result<ExitCode> {
-        let env = env.resolve(self.local.dir);
+        let env = env.resolve(self.local.dir)?;
         let blessed_source = BlessedSource::try_from(self.blessed)?;
         let generated_source = GeneratedSource::from(self.generated);
         debug_impl(apis, &env, &blessed_source, &generated_source, output)?;
@@ -208,7 +208,7 @@ impl GenerateArgs {
         apis: &ManagedApis,
         output: &OutputOpts,
     ) -> anyhow::Result<ExitCode> {
-        let env = env.resolve(self.local.dir);
+        let env = env.resolve(self.local.dir)?;
         let blessed_source = BlessedSource::try_from(self.blessed)?;
         let generated_source = GeneratedSource::from(self.generated);
         Ok(generate_impl(
@@ -239,7 +239,7 @@ impl CheckArgs {
         apis: &ManagedApis,
         output: &OutputOpts,
     ) -> anyhow::Result<ExitCode> {
-        let env = env.resolve(self.local.dir);
+        let env = env.resolve(self.local.dir)?;
         let blessed_source = BlessedSource::try_from(self.blessed)?;
         let generated_source = GeneratedSource::from(self.generated);
         Ok(check_impl(apis, &env, &blessed_source, &generated_source, output)?
@@ -363,7 +363,7 @@ mod test {
                 Utf8PathBuf::from("foo"),
             )
             .expect("loading environment");
-            let env = env.resolve(None);
+            let env = env.resolve(None).expect("resolving environment");
             assert_eq!(env.openapi_dir(), "/tmp/foo");
         }
 
@@ -373,7 +373,7 @@ mod test {
                 Utf8PathBuf::from("/tmp"),
             )
             .expect("loading environment");
-            let env = env.resolve(None);
+            let env = env.resolve(None).expect("resolving environment");
             assert_eq!(env.openapi_dir(), "/tmp");
         }
 
@@ -383,8 +383,13 @@ mod test {
                 Utf8PathBuf::from("/tmp"),
             )
             .expect("loading environment");
-            let env = env.resolve(Some(Utf8PathBuf::from("bar")));
-            assert_eq!(env.openapi_dir(), "/tmp/bar");
+            let env = env
+                .resolve(Some(Utf8PathBuf::from("bar")))
+                .expect("resolving environment");
+            assert_eq!(
+                env.openapi_dir(),
+                &std::env::current_dir().unwrap().join("bar")
+            );
         }
     }
 

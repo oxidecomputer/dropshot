@@ -12,6 +12,7 @@ use crate::spec_files_blessed::BlessedFiles;
 use crate::spec_files_generated::GeneratedFiles;
 use crate::spec_files_local::walk_local_directory;
 use crate::spec_files_local::LocalFiles;
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use owo_colors::OwoColorize;
 
@@ -46,16 +47,30 @@ impl Environment {
     pub(crate) fn resolve(
         &self,
         openapi_dir: Option<Utf8PathBuf>,
-    ) -> ResolvedEnv {
-        let openapi_dir = openapi_dir.unwrap_or_else(|| {
+    ) -> anyhow::Result<ResolvedEnv> {
+        // Use the provided `openapi_dir` joined to the *current* directory
+        // if it exists, otherwise the default directory joined to the
+        // *workspace root*.
+        let openapi_dir = if let Some(openapi_dir) = openapi_dir {
+            if openapi_dir.is_absolute() {
+                openapi_dir
+            } else {
+                let current_dir = std::env::current_dir()
+                    .context("error obtaining current directory")?;
+                let current_dir = Utf8PathBuf::try_from(current_dir)
+                    .context("current directory is not valid UTF-8")?;
+                current_dir.join(openapi_dir)
+            }
+        } else {
             self.workspace_root.join(&self.default_openapi_dir)
-        });
-        ResolvedEnv {
+        };
+
+        Ok(ResolvedEnv {
             workspace_root: self.workspace_root.clone(),
             local_source: LocalSource::Directory {
                 local_directory: openapi_dir,
             },
-        }
+        })
     }
 }
 
