@@ -17,8 +17,6 @@ hex = "0.4.3"
 indent_write = "2.2.0"
 itertools = "0.14.0"
 newtype_derive = "0.1.6"
-# TODO: publish openapi-lint to crates.io
-openapi-lint = { git = "https://github.com/oxidecomputer/openapi-lint", branch = "main" }
 openapi-manager-types.workspace = true
 openapiv3 = { version = "2.2.0", features = [ "skip_serializing_defaults" ] }
 owo-colors = "4.2.2"
@@ -27,8 +25,6 @@ semver = "1.0.27"
 serde_json = "1.0.145"
 sha2 = "0.10.9"
 similar = { version = "2.7.0", features = ["bytes"] }
-# TODO: publish slog-error-chain to crates.io
-slog-error-chain = { git = "https://github.com/oxidecomputer/slog-error-chain", branch = "main", features = ["derive"] }
 supports-color = "3.0.2"
 textwrap = { version = "0.16.2", features = [ "terminal_size" ] }
 thiserror = "2.0"

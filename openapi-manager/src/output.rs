@@ -11,7 +11,6 @@ use headers::*;
 use indent_write::fmt::IndentWriter;
 use owo_colors::{OwoColorize, Style};
 use similar::{ChangeTag, DiffableStr, TextDiff};
-use slog_error_chain::InlineErrorChain;
 use std::{fmt, fmt::Write, io};
 
 #[derive(Debug, Args)]
@@ -533,6 +532,28 @@ pub fn display_resolution_problems<'a, T>(
             );
             eprintln!("");
         }
+    }
+}
+
+/// Adapter for [`Error`]s that provides a [`std::fmt::Display`] implementation
+/// that print the full chain of error sources, separated by `: `.
+pub struct InlineErrorChain<'a>(&'a dyn std::error::Error);
+
+impl<'a> InlineErrorChain<'a> {
+    pub fn new(error: &'a dyn std::error::Error) -> Self {
+        Self(error)
+    }
+}
+
+impl fmt::Display for InlineErrorChain<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)?;
+        let mut cause = self.0.source();
+        while let Some(source) = cause {
+            write!(f, ": {source}")?;
+            cause = source.source();
+        }
+        Ok(())
     }
 }
 

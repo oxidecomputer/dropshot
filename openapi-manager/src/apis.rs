@@ -185,6 +185,7 @@ impl ManagedApi {
 #[derive(Debug)]
 pub struct ManagedApis {
     apis: BTreeMap<ApiIdent, ManagedApi>,
+    validation: Option<fn(&OpenAPI, ValidationContext<'_>)>,
 }
 
 impl ManagedApis {
@@ -210,7 +211,25 @@ impl ManagedApis {
             }
         }
 
-        Ok(ManagedApis { apis })
+        Ok(ManagedApis { apis, validation: None })
+    }
+
+    /// Sets a validation function to be used for all APIs.
+    ///
+    /// This function will be called for each API document. The
+    /// [`ValidationContext`] can be used to report errors, as well as extra
+    /// files for which the contents need to be compared with those on disk.
+    pub fn with_validation(
+        mut self,
+        validation: fn(&OpenAPI, ValidationContext<'_>),
+    ) -> Self {
+        self.validation = Some(validation);
+        self
+    }
+
+    /// Returns the validation function for all APIs.
+    pub fn validation(&self) -> Option<fn(&OpenAPI, ValidationContext<'_>)> {
+        self.validation
     }
 
     pub fn len(&self) -> usize {

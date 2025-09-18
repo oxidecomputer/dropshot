@@ -1,6 +1,5 @@
 // Copyright 2025 Oxide Computer Company
 
-use crate::apis::ApiBoundary;
 use crate::apis::ManagedApi;
 use crate::environment::ResolvedEnv;
 use crate::spec_files_generated::GeneratedApiSpecFile;
@@ -16,10 +15,12 @@ use std::io::Write;
 pub fn validate(
     env: &ResolvedEnv,
     api: &ManagedApi,
+    validation: Option<fn(&OpenAPI, ValidationContext<'_>)>,
     generated: &GeneratedApiSpecFile,
 ) -> anyhow::Result<Vec<(Utf8PathBuf, CheckStatus)>> {
     let openapi = generated.openapi();
-    let validation_result = validate_generated_openapi_document(api, &openapi)?;
+    let validation_result =
+        validate_generated_openapi_document(api, &openapi, validation)?;
     let extra_files = validation_result
         .extra_files
         .into_iter()
@@ -35,14 +36,16 @@ pub fn validate(
 fn validate_generated_openapi_document(
     api: &ManagedApi,
     openapi_doc: &OpenAPI,
+    validation: Option<fn(&OpenAPI, ValidationContext<'_>)>,
 ) -> anyhow::Result<ValidationResult> {
-    // Check for lint errors.
-    let errors = match api.boundary() {
-        ApiBoundary::Internal => openapi_lint::validate(&openapi_doc),
-        ApiBoundary::External => openapi_lint::validate_external(&openapi_doc),
-    };
-    if !errors.is_empty() {
-        return Err(anyhow::anyhow!("{}", errors.join("\n\n")));
+    let mut validation_context =
+        ValidationContextImpl { errors: Vec::new(), files: Vec::new() };
+
+    if let Some(validation) = validation {
+        validation(
+            openapi_doc,
+            ValidationContext::new(&mut validation_context),
+        );
     }
 
     // Perform any additional API-specific validation.
@@ -55,7 +58,7 @@ fn validate_generated_openapi_document(
 
     if !validation_context.errors.is_empty() {
         return Err(anyhow::anyhow!(
-            "OpenAPI document extended validation failed:\n{}",
+            "OpenAPI document validation failed:\n{}",
             validation_context
                 .errors
                 .iter()
