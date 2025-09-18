@@ -4,10 +4,28 @@
 # used for registering API handler functions.
 #
 [workspace]
-members = ["dropshot", "dropshot_endpoint" ]
-default-members = ["dropshot", "dropshot_endpoint" ]
+members = [
+    "dropshot",
+    "dropshot_endpoint",
+    "openapi-manager",
+    "openapi-manager-types",
+]
+default-members = [
+    "dropshot",
+    "dropshot_endpoint",
+    "openapi-manager",
+    "openapi-manager-types",
+]
 
 resolver = "2"
+
+[workspace.package]
+license = "Apache-2.0"
+repository = "https://github.com/oxidecomputer/dropshot"
+
+[workspace.dependencies]
+dropshot = { path = "dropshot" }
+openapi-manager-types = { path = "openapi-manager-types" }
 
 [workspace.lints.clippy]
 # Clippy's style nits are useful, but not worth keeping in CI.
