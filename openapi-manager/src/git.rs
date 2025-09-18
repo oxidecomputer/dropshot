@@ -2,7 +2,7 @@
 
 //! Helpers for accessing data stored in git
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use camino::{Utf8Path, Utf8PathBuf};
 use std::process::Command;
 

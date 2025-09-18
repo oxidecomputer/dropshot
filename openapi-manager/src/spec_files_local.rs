@@ -10,7 +10,7 @@ use crate::{
         ApiFiles, ApiLoad, ApiSpecFile, ApiSpecFilesBuilder, AsRawFiles,
     },
 };
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use camino::Utf8Path;
 use std::{collections::BTreeMap, ops::Deref};
 
