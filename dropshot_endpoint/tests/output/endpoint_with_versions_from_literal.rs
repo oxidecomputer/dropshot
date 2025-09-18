@@ -57,7 +57,9 @@ for dropshot::ApiEndpoint<
             dropshot::Method::GET,
             "application/json",
             "/test",
-            dropshot::ApiEndpointVersions::From(semver::Version::new(1u64, 2u64, 3u64)),
+            dropshot::ApiEndpointVersions::From(
+                dropshot::semver::Version::new(1u64, 2u64, 3u64),
+            ),
         )
     }
 }

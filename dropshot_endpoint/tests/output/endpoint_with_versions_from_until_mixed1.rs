@@ -58,7 +58,7 @@ for dropshot::ApiEndpoint<
             "application/json",
             "/test",
             dropshot::ApiEndpointVersions::from_until(
-                    semver::Version::new(1u64, 2u64, 3u64),
+                    dropshot::semver::Version::new(1u64, 2u64, 3u64),
                     TWO,
                 )
                 .unwrap(),

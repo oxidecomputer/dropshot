@@ -59,7 +59,9 @@ for dropshot::ApiEndpoint<
             dropshot::Method::GET,
             "application/json",
             "/my/ws/channel",
-            dropshot::ApiEndpointVersions::Until(semver::Version::new(1u64, 2u64, 3u64)),
+            dropshot::ApiEndpointVersions::Until(
+                dropshot::semver::Version::new(1u64, 2u64, 3u64),
+            ),
         )
     }
 }

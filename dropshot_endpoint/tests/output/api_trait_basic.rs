@@ -74,7 +74,7 @@ mod my_trait_mod {
                 "application/json",
                 "/xyz",
                 dropshot::ApiEndpointVersions::From(
-                    semver::Version::new(1u64, 2u64, 3u64),
+                    dropshot::semver::Version::new(1u64, 2u64, 3u64),
                 ),
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
@@ -161,7 +161,7 @@ mod my_trait_mod {
                 "application/json",
                 "/xyz",
                 dropshot::ApiEndpointVersions::From(
-                    semver::Version::new(1u64, 2u64, 3u64),
+                    dropshot::semver::Version::new(1u64, 2u64, 3u64),
                 ),
             );
             if let Err(error) = dropshot_api.register(endpoint_handler_xyz) {
