@@ -13,6 +13,7 @@ use crate::spec_files_generated::GeneratedFiles;
 use crate::spec_files_local::walk_local_directory;
 use crate::spec_files_local::LocalFiles;
 use anyhow::Context;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use owo_colors::OwoColorize;
 
@@ -82,7 +83,7 @@ pub(crate) struct ResolvedEnv {
 }
 
 impl ResolvedEnv {
-    pub(crate) fn openapi_dir(&self) -> &Utf8PathBuf {
+    pub(crate) fn openapi_dir(&self) -> &Utf8Path {
         match &self.local_source {
             LocalSource::Directory { local_directory } => local_directory,
         }

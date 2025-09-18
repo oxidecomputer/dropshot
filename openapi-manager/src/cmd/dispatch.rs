@@ -261,7 +261,7 @@ mod test {
     };
     use crate::environment::{BlessedSource, Environment, GeneratedSource};
     use assert_matches::assert_matches;
-    use camino::Utf8PathBuf;
+    use camino::{Utf8Path, Utf8PathBuf};
     use clap::Parser;
 
     #[test]
@@ -369,7 +369,7 @@ mod test {
             )
             .expect("loading environment");
             let env = env.resolve(None).expect("resolving environment");
-            assert_eq!(env.openapi_dir(), "/tmp/foo");
+            assert_eq!(env.openapi_dir(), Utf8Path::new(ABS_DIR).join("foo"));
         }
 
         {

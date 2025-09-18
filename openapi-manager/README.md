@@ -26,7 +26,7 @@ For OpenAPI documents to be managed by this tool, the corresponding interfaces m
 
 ### Adding new APIs
 
-If you're defining a new service fronted by OpenAPI, first create an API crate (see <<api_crates>> above).
+If you're defining a new service fronted by OpenAPI, first create an API crate (see [_API crates_](#api-crates) above).
 
 1. Add the API crate to the workspace's `Cargo.toml`.
 2. Following the example in [RFD 479's _Trait definition_](https://rfd.shared.oxide.computer/rfd/0479#guide_trait_definition), define the API trait.
@@ -249,7 +249,7 @@ An existing lockstep API can be made versioned.  You would do this when transiti
 1. Initially, its OpenAPI document is stored in `openapi/dns-server.json`.
 2. Run `git rm -f openapi/dns-server.json`.
 3. Run `mkdir openapi/dns-server`.
-4. Update the API crate (`dns-server-api/src/lib.rs`) to use the new `api_versions!` macro.  See the instructions under <<_adding_new_openapi_documents>> above.
+4. Update the API crate (`dns-server-api/src/lib.rs`) to use the new `api_versions!` macro.  See the instructions under [_Adding new OpenAPI documents_](#adding-new-openapi-documents) above.
 5. Within the integration point, update the OpenAPI manager configuration to specify that the API is now versioned.  You'll use the `supported_versions()` function defined by the `api_versions!` macro.
 6. Run `cargo xtask openapi generate`.  This will generate a new file under `openapi/dns-server` for your initial server version, along with a "latest" symlink.
 
