@@ -445,11 +445,21 @@ impl Fix<'_> {
                         return Err(anyhow!(err).context("removing old link"));
                     }
                 };
-                fs_err::os::unix::fs::symlink(&target, &path)?;
+                symlink_file(&target, &path)?;
                 Ok(vec![format!("wrote link {} -> {}", path, target)])
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn symlink_file(target: &str, path: &Utf8Path) -> std::io::Result<()> {
+    fs_err::os::unix::fs::symlink(&target, &path)
+}
+
+#[cfg(windows)]
+fn symlink_file(target: &str, path: &Utf8Path) -> std::io::Result<()> {
+    fs_err::os::windows::fs::symlink_file(&target, &path)
 }
 
 /// Resolve differences between blessed spec(s), the generated spec, and any
