@@ -357,9 +357,14 @@ mod test {
     // Test how we turn `LocalSourceArgs` into `Environment`.
     #[test]
     fn test_local_args() {
+        #[cfg(unix)]
+        const ABS_DIR: &str = "/tmp";
+        #[cfg(windows)]
+        const ABS_DIR: &str = "C:\\tmp";
+
         {
             let env = Environment::new(
-                Utf8PathBuf::from("/tmp"),
+                Utf8PathBuf::from(ABS_DIR),
                 Utf8PathBuf::from("foo"),
             )
             .expect("loading environment");
@@ -369,18 +374,18 @@ mod test {
 
         {
             let env = Environment::new(
-                Utf8PathBuf::from("/tmp"),
-                Utf8PathBuf::from("/tmp"),
+                Utf8PathBuf::from(ABS_DIR),
+                Utf8PathBuf::from(ABS_DIR),
             )
             .expect("loading environment");
             let env = env.resolve(None).expect("resolving environment");
-            assert_eq!(env.openapi_dir(), "/tmp");
+            assert_eq!(env.openapi_dir(), ABS_DIR);
         }
 
         {
             let env = Environment::new(
-                Utf8PathBuf::from("/tmp"),
-                Utf8PathBuf::from("/tmp"),
+                Utf8PathBuf::from(ABS_DIR),
+                Utf8PathBuf::from(ABS_DIR),
             )
             .expect("loading environment");
             let env = env
