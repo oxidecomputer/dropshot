@@ -343,7 +343,7 @@
 //!
 //! Generally, the type parameter for the `Query`, `Header`, and `Path` extractors
 //! should be Rust structs. The struct's field _names_ correspond to the keys in
-//! the thing being extracted (i.e., they correspond to qquery parameter names
+//! the thing being extracted (i.e., they correspond to query parameter names
 //! for `Query`, header names for `Header`, and path component names for `Path`).
 //! The struct's field _values_ should generally be Rust primitives, strings,
 //! or enums containing no data.
