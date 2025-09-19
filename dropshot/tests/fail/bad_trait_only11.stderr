@@ -1,7 +1,7 @@
 error: API trait `MyApi` must not have a where clause
   --> tests/fail/bad_trait_only11.rs:9:1
    |
-9  | / where
+ 9 | / where
 10 | |     usize: std::fmt::Debug,
    | |___________________________^
 

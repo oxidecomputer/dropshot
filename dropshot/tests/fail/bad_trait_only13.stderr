@@ -22,9 +22,9 @@ error: cannot find attribute `endpoint` in this scope
    |
 help: consider importing one of these attribute macros
    |
-5  + use dropshot::endpoint;
+ 5 + use dropshot::endpoint;
    |
-5  + use dropshot_endpoint::endpoint;
+ 5 + use dropshot_endpoint::endpoint;
    |
 
 error: cannot find attribute `channel` in this scope
@@ -35,7 +35,7 @@ error: cannot find attribute `channel` in this scope
    |
 help: consider importing one of these attribute macros
    |
-5  + use dropshot::channel;
+ 5 + use dropshot::channel;
    |
-5  + use dropshot_endpoint::channel;
+ 5 + use dropshot_endpoint::channel;
    |
