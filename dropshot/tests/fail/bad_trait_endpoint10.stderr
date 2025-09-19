@@ -19,7 +19,7 @@ note: required by a bound in `ApiEndpoint::<StubContext>::new_for_types`
 error[E0277]: the trait bound `fn(RequestContext<<ServerImpl as MyApi>::Context>) -> impl Future<Output = Result<dropshot::HttpResponseUpdatedNoContent, String>> + Send + 'static {<ServerImpl as MyApi>::bad_error_type}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
   --> tests/fail/bad_trait_endpoint10.rs:13:5
    |
-9  |   #[dropshot::api_description]
+ 9 |   #[dropshot::api_description]
    |   ---------------------------- required by a bound introduced by this call
 ...
 13 | /     #[endpoint {

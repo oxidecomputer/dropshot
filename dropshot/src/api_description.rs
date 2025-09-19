@@ -1774,9 +1774,6 @@ mod test {
 
     #[test]
     fn test_dup_names() {
-        #[derive(Deserialize, JsonSchema)]
-        struct AStruct {}
-
         #[allow(dead_code)]
         #[derive(Deserialize, JsonSchema)]
         struct TheThing {
