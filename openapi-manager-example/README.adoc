@@ -1,0 +1,33 @@
+= OpenAPI manager example
+
+This directory contains an end-to-end example demonstrating how to use Dropshot's link:../openapi-manager[OpenAPI manager] to manage API traits and the corresponding OpenAPI documents.
+
+For more about the OpenAPI manager, see link:../openapi-manager/README.md[its readme].
+
+== Contents
+
+This example has three subdirectories:
+
+* link:apis[`apis`]: API traits under management. This crate has two API traits:
+** `LockstepApi`: a simple unversioned API
+** `VersionedApi`: an API that supports multiple versions, where each version has a separate OpenAPI document generated for it
+* link:bin[`bin`]: The _integration point_: a top-level OpenAPI manager binary that defines the list of managed APIs, as well as where the corresponding documents should be generated. This crate is a thin wrapper around the `openapi-manager` crate.
+* link:documents[`documents`]: The location where documents are generated. The OpenAPI manager is responsible for managing all the state in this directory.
+
+== Running the example
+
+To see the example in action, run: `cargo example-openapi`. (An alias for this is defined in `.cargo/config.toml` at the root of this repo.)
+
+* `cargo example-openapi list` lists out all APIs under management.
+* `cargo example-openapi check` checks that API documents are up-to-date.
+* `cargo example-openapi generate` regenerates all API documents.
+
+=== Exercises
+
+Try the following:
+
+* Delete the contents of `documents/`, then run:
+** `cargo example-openapi check`: will say what's broken
+** `cargo test -p openapi-manager-example-bin`: will fail the `test_apis_up_to_date` test
+** `cargo example-openapi generate`: will regenerate documents
+* Uncomment the line in `apis/src/lib.rs` that says `(3, THREE_DOT_OH)`, then run `cargo example-openapi generate`.

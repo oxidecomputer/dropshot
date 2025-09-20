@@ -1,0 +1,5 @@
+= OpenAPI manager example: APIs
+
+This crate consists of example API traits under management. This is the base layer, and it depends on link:../../openapi-manager-types[`openapi-manager-types`] but _not_ on the higher-level link:../../openapi-manager[`openapi-manager`] crate.
+
+For more information, see link:../README.adoc[the parent README].
