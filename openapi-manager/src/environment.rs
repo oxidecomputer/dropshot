@@ -19,30 +19,60 @@ use owo_colors::OwoColorize;
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    /// Path to the root of this workspace
-    pub(crate) workspace_root: Utf8PathBuf,
+    /// The command to run the OpenAPI manager.
+    pub(crate) command: String,
+
+    /// Path to the root of this repository
+    pub(crate) repo_root: Utf8PathBuf,
 
     /// The default OpenAPI directory.
     pub(crate) default_openapi_dir: Utf8PathBuf,
+
+    /// The default Git upstream.
+    pub(crate) default_git_branch: String,
 }
 
 impl Environment {
-    /// Creates a new environment with the provided workspace root, and default
-    /// OpenAPI directory as a relative path within the workspace root.
+    /// Creates a new environment with:
     ///
-    /// Returns an error if `workspace_root` is not an absolute path.
+    /// * the command to invoke the OpenAPI manager (e.g. `"cargo openapi"`
+    ///   or `"cargo xtask openapi"`)
+    /// * the provided Git repository root
+    /// * the default OpenAPI directory within the repository root
+    ///
+    /// Returns an error if `repo_root` is not an absolute path.
     pub fn new(
-        workspace_root: Utf8PathBuf,
+        command: String,
+        repo_root: Utf8PathBuf,
         default_openapi_dir: Utf8PathBuf,
     ) -> anyhow::Result<Self> {
-        if !workspace_root.is_absolute() {
+        if !repo_root.is_absolute() {
             return Err(anyhow::anyhow!(
-                "workspace_root must be an absolute path, found: {}",
-                workspace_root
+                "repo_root must be an absolute path, found: {}",
+                repo_root
             ));
         }
 
-        Ok(Self { workspace_root, default_openapi_dir })
+        Ok(Self {
+            repo_root,
+            default_openapi_dir,
+            default_git_branch: "origin/main".to_owned(),
+            command,
+        })
+    }
+
+    /// Sets the default Git upstream and branch name.
+    ///
+    /// By default, this is `origin/main`, but it can be set to any valid Git
+    /// remote and branch name separated by a forward slash, e.g.
+    /// `origin/master` or `upstream/dev`.
+    ///
+    /// For individual commands, this can be overridden through the
+    /// `--blessed-from-git` argument, or the `OPENAPI_MGR_BLESSED_FROM_GIT`
+    /// environment variable.
+    pub fn with_default_git_branch(mut self, branch: String) -> Self {
+        self.default_git_branch = branch;
+        self
     }
 
     pub(crate) fn resolve(
@@ -63,14 +93,16 @@ impl Environment {
                 current_dir.join(openapi_dir)
             }
         } else {
-            self.workspace_root.join(&self.default_openapi_dir)
+            self.repo_root.join(&self.default_openapi_dir)
         };
 
         Ok(ResolvedEnv {
-            workspace_root: self.workspace_root.clone(),
+            command: self.command.clone(),
+            repo_root: self.repo_root.clone(),
             local_source: LocalSource::Directory {
                 local_directory: openapi_dir,
             },
+            default_git_branch: self.default_git_branch.clone(),
         })
     }
 }
@@ -78,8 +110,10 @@ impl Environment {
 /// Internal type for the environment where the OpenAPI directory is known.
 #[derive(Debug)]
 pub(crate) struct ResolvedEnv {
-    pub(crate) workspace_root: Utf8PathBuf,
+    pub(crate) command: String,
+    pub(crate) repo_root: Utf8PathBuf,
     pub(crate) local_source: LocalSource,
+    pub(crate) default_git_branch: String,
 }
 
 impl ResolvedEnv {

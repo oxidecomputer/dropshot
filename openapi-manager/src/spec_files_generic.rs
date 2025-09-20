@@ -3,208 +3,118 @@
 //! Working with OpenAPI documents, whether generated, blessed, or local to this
 //! repository
 
-use crate::apis::{ApiIdent, ManagedApi, ManagedApis};
+use crate::apis::ManagedApis;
 use crate::environment::ErrorAccumulator;
 use anyhow::{anyhow, bail, Context};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use debug_ignore::DebugIgnore;
+use openapi_manager_types::{ApiIdent, ApiSpecFileName, ApiSpecFileNameKind};
 use openapiv3::OpenAPI;
 use sha2::{Digest, Sha256};
 use std::collections::btree_map::Entry;
-use std::fmt::{Debug, Display};
-use std::{collections::BTreeMap, ops::Deref};
+use std::collections::BTreeMap;
+use std::fmt::Debug;
 use thiserror::Error;
 
-/// Describes the path to an OpenAPI document file, relative to some root where
-/// similar documents are found
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
-pub struct ApiSpecFileName {
-    ident: ApiIdent,
-    kind: ApiSpecFileNameKind,
-}
+/// Attempts to parse the given file basename as an ApiSpecFileName of kind
+/// `Versioned`
+///
+/// These look like: `ident-SEMVER-HASH.json`.
+fn parse_versioned_file_name(
+    apis: &ManagedApis,
+    ident: &str,
+    basename: &str,
+) -> Result<ApiSpecFileName, BadVersionedFileName> {
+    let ident = ApiIdent::from(ident.to_string());
+    let Some(api) = apis.api(&ident) else {
+        return Err(BadVersionedFileName::NoSuchApi);
+    };
 
-impl Display for ApiSpecFileName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.path().as_str())
+    if !api.is_versioned() {
+        return Err(BadVersionedFileName::NotVersioned);
     }
-}
 
-impl ApiSpecFileName {
-    /// Attempts to parse the given file basename as an ApiSpecFileName of kind
-    /// `Versioned`
-    ///
-    /// These look like: `ident-SEMVER-HASH.json`.
-    fn parse_versioned(
-        apis: &ManagedApis,
-        ident: &str,
-        basename: &str,
-    ) -> Result<ApiSpecFileName, BadVersionedFileName> {
-        let ident = ApiIdent::from(ident.to_string());
-        let Some(api) = apis.api(&ident) else {
-            return Err(BadVersionedFileName::NoSuchApi);
-        };
-
-        if !api.is_versioned() {
-            return Err(BadVersionedFileName::NotVersioned);
+    let expected_prefix = format!("{}-", &ident);
+    let suffix = basename.strip_prefix(&expected_prefix).ok_or_else(|| {
+        BadVersionedFileName::UnexpectedName {
+            ident: ident.clone(),
+            source: anyhow!("unexpected prefix"),
         }
+    })?;
 
-        let expected_prefix = format!("{}-", &ident);
-        let suffix =
-            basename.strip_prefix(&expected_prefix).ok_or_else(|| {
-                BadVersionedFileName::UnexpectedName {
-                    ident: ident.clone(),
-                    source: anyhow!("unexpected prefix"),
-                }
-            })?;
+    let middle = suffix.strip_suffix(".json").ok_or_else(|| {
+        BadVersionedFileName::UnexpectedName {
+            ident: ident.clone(),
+            source: anyhow!("bad suffix"),
+        }
+    })?;
 
-        let middle = suffix.strip_suffix(".json").ok_or_else(|| {
+    let (version_str, hash) = middle.rsplit_once("-").ok_or_else(|| {
+        BadVersionedFileName::UnexpectedName {
+            ident: ident.clone(),
+            source: anyhow!("cannot extract version and hash"),
+        }
+    })?;
+
+    let version: semver::Version =
+        version_str.parse().map_err(|e: semver::Error| {
             BadVersionedFileName::UnexpectedName {
                 ident: ident.clone(),
-                source: anyhow!("bad suffix"),
+                source: anyhow!(e).context(format!(
+                    "version string is not a semver: {:?}",
+                    version_str
+                )),
             }
         })?;
 
-        let (version_str, hash) = middle.rsplit_once("-").ok_or_else(|| {
-            BadVersionedFileName::UnexpectedName {
-                ident: ident.clone(),
-                source: anyhow!("cannot extract version and hash"),
-            }
-        })?;
-
-        let version: semver::Version =
-            version_str.parse().map_err(|e: semver::Error| {
-                BadVersionedFileName::UnexpectedName {
-                    ident: ident.clone(),
-                    source: anyhow!(e).context(format!(
-                        "version string is not a semver: {:?}",
-                        version_str
-                    )),
-                }
-            })?;
-
-        // Dropshot does not support pre-release strings and we don't either.
-        // This could probably be made to work, but it's easier to constrain
-        // things for now and relax it later.
-        if !version.pre.is_empty() {
-            return Err(BadVersionedFileName::UnexpectedName {
-                ident,
-                source: anyhow!(
-                    "version string has a prerelease field \
-                     (not supported): {:?}",
-                    version_str
-                ),
-            });
-        }
-
-        if !version.build.is_empty() {
-            return Err(BadVersionedFileName::UnexpectedName {
-                ident,
-                source: anyhow!(
-                    "version string has a build field (not supported): {:?}",
-                    version_str
-                ),
-            });
-        }
-
-        Ok(ApiSpecFileName {
+    // Dropshot does not support pre-release strings and we don't either.
+    // This could probably be made to work, but it's easier to constrain
+    // things for now and relax it later.
+    if !version.pre.is_empty() {
+        return Err(BadVersionedFileName::UnexpectedName {
             ident,
-            kind: ApiSpecFileNameKind::Versioned {
-                version,
-                hash: hash.to_string(),
-            },
-        })
+            source: anyhow!(
+                "version string has a prerelease field \
+                     (not supported): {:?}",
+                version_str
+            ),
+        });
     }
 
-    /// Attempts to parse the given file basename as an ApiSpecFileName of kind
-    /// `Lockstep`
-    fn parse_lockstep(
-        apis: &ManagedApis,
-        basename: &str,
-    ) -> Result<ApiSpecFileName, BadLockstepFileName> {
-        let ident = ApiIdent::from(
-            basename
-                .strip_suffix(".json")
-                .ok_or(BadLockstepFileName::MissingJsonSuffix)?
-                .to_owned(),
-        );
-        let api = apis.api(&ident).ok_or(BadLockstepFileName::NoSuchApi)?;
-        if !api.is_lockstep() {
-            return Err(BadLockstepFileName::NotLockstep);
-        }
-
-        Ok(ApiSpecFileName { ident, kind: ApiSpecFileNameKind::Lockstep })
+    if !version.build.is_empty() {
+        return Err(BadVersionedFileName::UnexpectedName {
+            ident,
+            source: anyhow!(
+                "version string has a build field (not supported): {:?}",
+                version_str
+            ),
+        });
     }
 
-    pub fn new_lockstep(api: &ManagedApi) -> ApiSpecFileName {
-        assert!(api.is_lockstep());
-        ApiSpecFileName {
-            ident: api.ident().clone(),
-            kind: ApiSpecFileNameKind::Lockstep,
-        }
-    }
-
-    pub fn new_versioned(
-        api: &ManagedApi,
-        version: semver::Version,
-        contents: &[u8],
-    ) -> ApiSpecFileName {
-        assert!(api.is_versioned());
-        let hash = hash_contents(contents);
-        ApiSpecFileName {
-            ident: api.ident().clone(),
-            kind: ApiSpecFileNameKind::Versioned { version, hash },
-        }
-    }
-
-    pub fn ident(&self) -> &ApiIdent {
-        &self.ident
-    }
-
-    /// Returns the path of this file relative to the root of the OpenAPI
-    /// documents
-    pub fn path(&self) -> Utf8PathBuf {
-        match &self.kind {
-            ApiSpecFileNameKind::Lockstep => {
-                Utf8PathBuf::from_iter([self.basename()])
-            }
-            ApiSpecFileNameKind::Versioned { .. } => Utf8PathBuf::from_iter([
-                self.ident.deref().clone(),
-                self.basename(),
-            ]),
-        }
-    }
-
-    /// Returns the base name of this file path
-    pub fn basename(&self) -> String {
-        match &self.kind {
-            ApiSpecFileNameKind::Lockstep => format!("{}.json", self.ident),
-            ApiSpecFileNameKind::Versioned { version, hash } => {
-                format!("{}-{}-{}.json", self.ident, version, hash)
-            }
-        }
-    }
-
-    /// For versioned APIs, returns the hash part of the filename
-    pub fn hash(&self) -> Option<&str> {
-        match &self.kind {
-            ApiSpecFileNameKind::Lockstep => None,
-            ApiSpecFileNameKind::Versioned { hash, .. } => Some(hash),
-        }
-    }
+    Ok(ApiSpecFileName::new(
+        ident,
+        ApiSpecFileNameKind::Versioned { version, hash: hash.to_string() },
+    ))
 }
 
-/// Describes how this OpenAPI document is named
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
-enum ApiSpecFileNameKind {
-    /// the file's path implies a lockstep API
-    Lockstep,
-    /// the file's path implies a versioned API
-    Versioned {
-        /// the version of the API this document describes
-        version: semver::Version,
-        /// the hash of the file contents
-        hash: String,
-    },
+/// Attempts to parse the given file basename as an ApiSpecFileName of kind
+/// `Lockstep`
+fn parse_lockstep_file_name(
+    apis: &ManagedApis,
+    basename: &str,
+) -> Result<ApiSpecFileName, BadLockstepFileName> {
+    let ident = ApiIdent::from(
+        basename
+            .strip_suffix(".json")
+            .ok_or(BadLockstepFileName::MissingJsonSuffix)?
+            .to_owned(),
+    );
+    let api = apis.api(&ident).ok_or(BadLockstepFileName::NoSuchApi)?;
+    if !api.is_lockstep() {
+        return Err(BadLockstepFileName::NotLockstep);
+    }
+
+    Ok(ApiSpecFileName::new(ident, ApiSpecFileNameKind::Lockstep))
 }
 
 /// Describes a failure to parse a file name for a lockstep API
@@ -260,7 +170,7 @@ impl ApiSpecFile {
             })?;
 
         if let ApiSpecFileNameKind::Versioned { version, hash } =
-            &spec_file_name.kind
+            spec_file_name.kind()
         {
             if *version != parsed_version {
                 bail!(
@@ -397,7 +307,7 @@ impl<'a, T: ApiLoad + AsRawFiles> ApiSpecFilesBuilder<'a, T> {
         &mut self,
         basename: &str,
     ) -> Option<ApiSpecFileName> {
-        match ApiSpecFileName::parse_lockstep(&self.apis, basename) {
+        match parse_lockstep_file_name(&self.apis, basename) {
             // When we're looking at the blessed files, the caller provides
             // `misconfigurations_okay: true` and we treat these as
             // warnings because the configuration for an API may have
@@ -490,7 +400,7 @@ impl<'a, T: ApiLoad + AsRawFiles> ApiSpecFilesBuilder<'a, T> {
         ident: &ApiIdent,
         basename: &str,
     ) -> Option<ApiSpecFileName> {
-        match ApiSpecFileName::parse_versioned(&self.apis, ident, basename) {
+        match parse_versioned_file_name(&self.apis, ident, basename) {
             Ok(file_name) => Some(file_name),
             Err(
                 warning @ (BadVersionedFileName::NoSuchApi
@@ -528,7 +438,7 @@ impl<'a, T: ApiLoad + AsRawFiles> ApiSpecFilesBuilder<'a, T> {
         ident: &ApiIdent,
         basename: &str,
     ) -> Option<ApiSpecFileName> {
-        match ApiSpecFileName::parse_versioned(&self.apis, ident, basename) {
+        match parse_versioned_file_name(&self.apis, ident, basename) {
             Ok(file_name) => Some(file_name),
             Err(
                 warning @ (BadVersionedFileName::NoSuchApi
@@ -744,7 +654,7 @@ pub trait ApiLoad {
 /// The upshot is: this hash is not required for security or even data
 /// integrity.  We use SHA-256 and truncate it to just the first four bytes
 /// to avoid the annoyance of super long filenames.
-fn hash_contents(contents: &[u8]) -> String {
+pub(crate) fn hash_contents(contents: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(contents);
     let computed_hash = hasher.finalize();

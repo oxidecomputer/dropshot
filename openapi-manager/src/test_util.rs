@@ -3,7 +3,7 @@
 use crate::{
     apis::ManagedApis,
     cmd::check::check_impl,
-    environment::{BlessedSource, Environment, GeneratedSource},
+    environment::{Environment, GeneratedSource},
     output::{CheckResult, OutputOpts},
     BlessedSourceArgs, GeneratedSourceArgs,
 };
@@ -20,10 +20,9 @@ pub fn check_apis_up_to_date(
     // directory is desired, it can always be passed in via `env`.)
     let env = env.resolve(None)?;
 
-    let blessed_source = BlessedSource::try_from(BlessedSourceArgs {
-        blessed_from_git: None,
-        blessed_from_dir: None,
-    })?;
+    let blessed_source =
+        BlessedSourceArgs { blessed_from_git: None, blessed_from_dir: None }
+            .to_blessed_source(&env)?;
     let generated_source = GeneratedSource::try_from(GeneratedSourceArgs {
         generated_from_dir: None,
     })?;

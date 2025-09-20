@@ -1,7 +1,9 @@
 // Copyright 2025 Oxide Computer Company
 
+use openapi_manager_types::ApiIdent;
+
 use crate::{
-    apis::{ApiIdent, ManagedApis},
+    apis::ManagedApis,
     environment::{
         BlessedSource, ErrorAccumulator, GeneratedSource, ResolvedEnv,
     },

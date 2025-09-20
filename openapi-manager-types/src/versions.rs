@@ -5,7 +5,77 @@
 
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+/// Describes how an API is versioned
+#[derive(Clone, Debug)]
+pub enum Versions {
+    /// There is only ever one version of this API
+    ///
+    /// Clients and servers are updated at runtime in lockstep.
+    Lockstep { version: semver::Version },
+
+    /// There are multiple supported versions of this API
+    ///
+    /// Clients and servers may be updated independently of each other.  Other
+    /// parts of the system may constrain things so that either clients or
+    /// servers are always updated first, but this tool does not assume that.
+    Versioned { supported_versions: SupportedVersions },
+}
+
+impl Versions {
+    /// Constructor for a lockstep API
+    pub fn new_lockstep(version: semver::Version) -> Versions {
+        Versions::Lockstep { version }
+    }
+
+    /// Constructor for a versioned API
+    pub fn new_versioned(supported_versions: SupportedVersions) -> Versions {
+        Versions::Versioned { supported_versions }
+    }
+
+    /// Returns whether this API is versioned (as opposed to lockstep)
+    pub fn is_versioned(&self) -> bool {
+        match self {
+            Versions::Lockstep { .. } => false,
+            Versions::Versioned { .. } => true,
+        }
+    }
+
+    /// Returns whether this API is lockstep (as opposed to versioned)
+    pub fn is_lockstep(&self) -> bool {
+        match self {
+            Versions::Lockstep { .. } => true,
+            Versions::Versioned { .. } => false,
+        }
+    }
+
+    /// Iterate over the semver versions of an API that are supported
+    pub fn iter_versions_semvers(&self) -> IterVersionsSemvers<'_> {
+        match self {
+            Versions::Lockstep { version } => IterVersionsSemvers {
+                inner: IterVersionsSemversInner::Lockstep(Some(version)),
+            },
+            Versions::Versioned { supported_versions } => IterVersionsSemvers {
+                inner: IterVersionsSemversInner::Versioned(
+                    supported_versions.versions.iter(),
+                ),
+            },
+        }
+    }
+
+    /// For versioned APIs only, iterate over the SupportedVersions
+    pub fn iter_versioned_versions(
+        &self,
+    ) -> Option<impl Iterator<Item = &SupportedVersion> + '_> {
+        match self {
+            Versions::Lockstep { .. } => None,
+            Versions::Versioned { supported_versions } => {
+                Some(supported_versions.iter())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SupportedVersion {
     semver: semver::Version,
     label: &'static str,
@@ -28,7 +98,7 @@ impl SupportedVersion {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SupportedVersions {
     versions: Vec<SupportedVersion>,
 }
@@ -80,6 +150,53 @@ impl SupportedVersions {
 
     pub fn iter(&self) -> impl Iterator<Item = &'_ SupportedVersion> + '_ {
         self.versions.iter()
+    }
+}
+
+#[derive(Debug)]
+pub struct IterVersionsSemvers<'a> {
+    inner: IterVersionsSemversInner<'a>,
+}
+
+impl<'a> Iterator for IterVersionsSemvers<'a> {
+    type Item = &'a semver::Version;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+
+#[derive(Debug)]
+enum IterVersionsSemversInner<'a> {
+    Lockstep(Option<&'a semver::Version>),
+    Versioned(std::slice::Iter<'a, SupportedVersion>),
+}
+
+impl<'a> Iterator for IterVersionsSemversInner<'a> {
+    type Item = &'a semver::Version;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IterVersionsSemversInner::Lockstep(version) => version.take(),
+            IterVersionsSemversInner::Versioned(versions) => {
+                versions.next().map(|v| &v.semver)
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a> ExactSizeIterator for IterVersionsSemversInner<'a> {
+    fn len(&self) -> usize {
+        match self {
+            IterVersionsSemversInner::Lockstep(version) => {
+                usize::from(version.is_some())
+            }
+            IterVersionsSemversInner::Versioned(versions) => versions.len(),
+        }
     }
 }
 
@@ -145,16 +262,16 @@ macro_rules! api_versions {
     ) ),* $(,)? ] ) => {
         openapi_manager_types::paste! {
             $(
-                pub const [<VERSION_ $name>]: semver::Version =
-                    semver::Version::new($major, 0, 0);
+                pub const [<VERSION_ $name>]: $crate::semver::Version =
+                    $crate::semver::Version::new($major, 0, 0);
             )*
 
-            pub fn supported_versions() -> SupportedVersions {
+            pub fn supported_versions() -> $crate::SupportedVersions {
                 let mut literal_versions = vec![
-                    $( SupportedVersion::new([<VERSION_ $name>], stringify!($name)) ),*
+                    $( $crate::SupportedVersion::new([<VERSION_ $name>], stringify!($name)) ),*
                 ];
                 literal_versions.reverse();
-                SupportedVersions::new(literal_versions)
+                $crate::SupportedVersions::new(literal_versions)
             }
         }
     };

@@ -371,14 +371,14 @@ pub fn display_resolution(
         eprintln!(
             "{:>HEADER_WIDTH$} (fix failures, then run {} to update)",
             "",
-            "cargo xtask openapi generate".style(styles.bold)
+            format!("{} generate", env.command).style(styles.bold)
         );
         Ok(CheckResult::Failures)
     } else if num_stale > 0 || num_general_problems > 0 {
         eprintln!(
             "{:>HEADER_WIDTH$} (run {} to update)",
             "",
-            "cargo xtask openapi generate".style(styles.bold)
+            format!("{} generate", env.command).style(styles.bold)
         );
         Ok(CheckResult::NeedsUpdate)
     } else {

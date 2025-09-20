@@ -4,7 +4,7 @@
 //! source
 
 use crate::{
-    apis::{ApiIdent, ManagedApis},
+    apis::ManagedApis,
     environment::ErrorAccumulator,
     git::{git_ls_tree, git_merge_base_head, git_show_file, GitRevision},
     spec_files_generic::{
@@ -13,6 +13,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail};
 use camino::Utf8Path;
+use openapi_manager_types::ApiIdent;
 use std::{collections::BTreeMap, ops::Deref};
 
 /// Newtype wrapper around [`ApiSpecFile`] to describe OpenAPI documents from

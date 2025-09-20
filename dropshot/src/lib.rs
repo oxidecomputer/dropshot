@@ -958,6 +958,7 @@ pub use websocket::WebsocketUpgrade;
 // Users of the `endpoint` macro need the following macros:
 pub use handler::RequestContextArgument;
 pub use http::Method;
+pub use semver;
 
 extern crate dropshot_endpoint;
 

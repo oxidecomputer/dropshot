@@ -2,12 +2,11 @@
 
 use anyhow::{bail, Context};
 use dropshot::{ApiDescription, ApiDescriptionBuildErrors, StubContext};
-use itertools::Either;
 use openapi_manager_types::{
-    SupportedVersion, SupportedVersions, ValidationContext,
+    ApiBoundary, ApiIdent, SupportedVersion, ValidationContext, Versions,
 };
 use openapiv3::OpenAPI;
-use std::{collections::BTreeMap, fmt};
+use std::collections::BTreeMap;
 
 /// Describes an API managed by the openapi-manager crate and CLI tool
 ///
@@ -98,11 +97,15 @@ impl ManagedApi {
         &self.ident
     }
 
-    pub fn title(&self) -> &str {
+    pub fn versions(&self) -> &Versions {
+        &self.versions
+    }
+
+    pub fn title(&self) -> &'static str {
         self.title
     }
 
-    pub fn description(&self) -> &str {
+    pub fn description(&self) -> &'static str {
         self.description
     }
 
@@ -189,9 +192,10 @@ pub struct ManagedApis {
 }
 
 impl ManagedApis {
-    pub fn new(api_list: Vec<ManagedApi>) -> anyhow::Result<ManagedApis> {
+    pub fn new(api_list: Vec<ManagedApiConfig>) -> anyhow::Result<ManagedApis> {
         let mut apis = BTreeMap::new();
         for api in api_list {
+            let api = ManagedApi::from(api);
             if api.extra_validation.is_some() && api.is_versioned() {
                 // Extra validation is not yet supported for versioned APIs.
                 // The reason is that extra validation can instruct this tool to
@@ -242,115 +246,5 @@ impl ManagedApis {
 
     pub fn api(&self, ident: &ApiIdent) -> Option<&ManagedApi> {
         self.apis.get(ident)
-    }
-}
-
-/// Newtype for API identifiers
-
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct ApiIdent(String);
-NewtypeDebug! { () pub struct ApiIdent(String); }
-NewtypeDeref! { () pub struct ApiIdent(String); }
-NewtypeDisplay! { () pub struct ApiIdent(String); }
-NewtypeFrom! { () pub struct ApiIdent(String); }
-
-impl ApiIdent {
-    /// Given an API identifier, return the basename of its "latest" symlink
-    pub fn versioned_api_latest_symlink(&self) -> String {
-        format!("{self}-latest.json")
-    }
-
-    /// Given an API identifier and a file name, determine if we're looking at
-    /// this API's "latest" symlink
-    pub fn versioned_api_is_latest_symlink(&self, base_name: &str) -> bool {
-        base_name == self.versioned_api_latest_symlink()
-    }
-}
-
-/// Whether an API is exposed externally from the Oxide system
-///
-/// This affects the kind of validation that's done.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ApiBoundary {
-    Internal,
-    External,
-}
-
-impl fmt::Display for ApiBoundary {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ApiBoundary::Internal => write!(f, "internal"),
-            ApiBoundary::External => write!(f, "external"),
-        }
-    }
-}
-
-/// Describes how an API is versioned
-#[derive(Debug)]
-pub enum Versions {
-    /// There is only ever one version of this API
-    ///
-    /// Clients and servers are updated at runtime in lockstep.
-    Lockstep { version: semver::Version },
-
-    /// There are multiple supported versions of this API
-    ///
-    /// Clients and servers may be updated independently of each other.  Other
-    /// parts of the system may constrain things so that either clients or
-    /// servers are always updated first, but this tool does not assume that.
-    Versioned { supported_versions: SupportedVersions },
-}
-
-impl Versions {
-    /// Constructor for a lockstep API
-    pub fn new_lockstep(version: semver::Version) -> Versions {
-        Versions::Lockstep { version }
-    }
-
-    /// Constructor for a versioned API
-    pub fn new_versioned(supported_versions: SupportedVersions) -> Versions {
-        Versions::Versioned { supported_versions }
-    }
-
-    /// Returns whether this API is versioned (as opposed to lockstep)
-    pub fn is_versioned(&self) -> bool {
-        match self {
-            Versions::Lockstep { .. } => false,
-            Versions::Versioned { .. } => true,
-        }
-    }
-
-    /// Returns whether this API is lockstep (as opposed to versioned)
-    pub fn is_lockstep(&self) -> bool {
-        match self {
-            Versions::Lockstep { .. } => true,
-            Versions::Versioned { .. } => false,
-        }
-    }
-
-    /// Iterate over the semver versions of an API that are supported
-    pub fn iter_versions_semvers(
-        &self,
-    ) -> impl Iterator<Item = &semver::Version> + '_ {
-        match self {
-            Versions::Lockstep { version } => {
-                Either::Left(std::iter::once(version))
-            }
-            Versions::Versioned { supported_versions } => {
-                Either::Right(supported_versions.iter().map(|v| v.semver()))
-            }
-        }
-    }
-
-    /// For versioned APIs only, iterate over the SupportedVersions
-    pub fn iter_versioned_versions(
-        &self,
-    ) -> Option<impl Iterator<Item = &SupportedVersion> + '_> {
-        match self {
-            Versions::Lockstep { .. } => None,
-            Versions::Versioned { supported_versions } => {
-                Some(supported_versions.iter())
-            }
-        }
     }
 }

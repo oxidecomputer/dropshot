@@ -7,8 +7,12 @@ use anyhow::Context;
 use atomicwrites::AtomicFile;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use openapi_manager_types::ApiBoundary;
+use openapi_manager_types::ApiIdent;
+use openapi_manager_types::ApiSpecFileName;
 use openapi_manager_types::ValidationBackend;
 use openapi_manager_types::ValidationContext;
+use openapi_manager_types::Versions;
 use openapiv3::OpenAPI;
 use std::io::Write;
 
@@ -19,13 +23,17 @@ pub fn validate(
     generated: &GeneratedApiSpecFile,
 ) -> anyhow::Result<Vec<(Utf8PathBuf, CheckStatus)>> {
     let openapi = generated.openapi();
-    let validation_result =
-        validate_generated_openapi_document(api, &openapi, validation)?;
+    let validation_result = validate_generated_openapi_document(
+        api,
+        &openapi,
+        generated.spec_file_name(),
+        validation,
+    )?;
     let extra_files = validation_result
         .extra_files
         .into_iter()
         .map(|(path, contents)| {
-            let full_path = env.workspace_root.join(&path);
+            let full_path = env.repo_root.join(&path);
             let status = check_file(full_path, contents)?;
             Ok((path, status))
         })
@@ -36,10 +44,19 @@ pub fn validate(
 fn validate_generated_openapi_document(
     api: &ManagedApi,
     openapi_doc: &OpenAPI,
+    file_name: &ApiSpecFileName,
     validation: Option<fn(&OpenAPI, ValidationContext<'_>)>,
 ) -> anyhow::Result<ValidationResult> {
-    let mut validation_context =
-        ValidationContextImpl { errors: Vec::new(), files: Vec::new() };
+    let mut validation_context = ValidationContextImpl {
+        ident: api.ident().clone(),
+        file_name: file_name.clone(),
+        versions: api.versions().clone(),
+        title: api.title(),
+        description: api.description(),
+        boundary: api.boundary(),
+        errors: Vec::new(),
+        files: Vec::new(),
+    };
 
     if let Some(validation) = validation {
         validation(
@@ -49,8 +66,6 @@ fn validate_generated_openapi_document(
     }
 
     // Perform any additional API-specific validation.
-    let mut validation_context =
-        ValidationContextImpl { errors: Vec::new(), files: Vec::new() };
     api.extra_validation(
         &openapi_doc,
         ValidationContext::new(&mut validation_context),
@@ -132,11 +147,11 @@ pub fn overwrite_file(
     // you putting your OpenAPI document in `/`? --- but we may as well not fail
     // if that is the case...
     if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            fs_err::create_dir_all(path).with_context(|| {
-                format!("failed to create parent directory for '{}'", path)
-            })?
-        }
+        // Call create_dir_all unconditionally: it is idempotent and doesn't
+        // error out if the parent already exists.
+        fs_err::create_dir_all(parent).with_context(|| {
+            format!("failed to create parent directory for '{}'", path)
+        })?
     }
 
     AtomicFile::new(path, atomicwrites::OverwriteBehavior::AllowOverwrite)
@@ -167,11 +182,41 @@ pub struct ValidationResult {
 }
 
 struct ValidationContextImpl {
+    ident: ApiIdent,
+    file_name: ApiSpecFileName,
+    versions: Versions,
+    title: &'static str,
+    description: &'static str,
+    boundary: ApiBoundary,
     errors: Vec<anyhow::Error>,
     files: Vec<(Utf8PathBuf, Vec<u8>)>,
 }
 
 impl ValidationBackend for ValidationContextImpl {
+    fn ident(&self) -> &ApiIdent {
+        &self.ident
+    }
+
+    fn file_name(&self) -> &ApiSpecFileName {
+        &self.file_name
+    }
+
+    fn versions(&self) -> &Versions {
+        &self.versions
+    }
+
+    fn title(&self) -> &str {
+        self.title
+    }
+
+    fn description(&self) -> &str {
+        self.description
+    }
+
+    fn boundary(&self) -> ApiBoundary {
+        self.boundary
+    }
+
     fn report_error(&mut self, error: anyhow::Error) {
         self.errors.push(error);
     }

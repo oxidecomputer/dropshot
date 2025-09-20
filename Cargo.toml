@@ -8,12 +8,16 @@ members = [
     "dropshot",
     "dropshot_endpoint",
     "openapi-manager",
+    "openapi-manager-example/apis",
+    "openapi-manager-example/bin",
     "openapi-manager-types",
 ]
 default-members = [
     "dropshot",
     "dropshot_endpoint",
     "openapi-manager",
+    "openapi-manager-example/apis",
+    "openapi-manager-example/bin",
     "openapi-manager-types",
 ]
 
@@ -25,6 +29,8 @@ repository = "https://github.com/oxidecomputer/dropshot"
 
 [workspace.dependencies]
 dropshot = { path = "dropshot" }
+openapi-manager = { path = "openapi-manager" }
+openapi-manager-example-apis = { path = "openapi-manager-example/apis" }
 openapi-manager-types = { path = "openapi-manager-types" }
 
 [workspace.lints.clippy]

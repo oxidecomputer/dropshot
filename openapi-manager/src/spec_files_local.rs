@@ -4,7 +4,7 @@
 //! tree
 
 use crate::{
-    apis::{ApiIdent, ManagedApis},
+    apis::ManagedApis,
     environment::ErrorAccumulator,
     spec_files_generic::{
         ApiFiles, ApiLoad, ApiSpecFile, ApiSpecFilesBuilder, AsRawFiles,
@@ -12,6 +12,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context};
 use camino::Utf8Path;
+use openapi_manager_types::ApiIdent;
 use std::{collections::BTreeMap, ops::Deref};
 
 /// Newtype wrapper around [`ApiSpecFile`] to describe OpenAPI documents found

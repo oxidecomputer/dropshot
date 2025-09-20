@@ -2,7 +2,6 @@
 
 //! Resolve different sources of API information (blessed, local, upstream)
 
-use crate::apis::ApiIdent;
 use crate::apis::ManagedApi;
 use crate::apis::ManagedApis;
 use crate::compatibility::api_compatible;
@@ -15,7 +14,6 @@ use crate::spec_files_blessed::BlessedFiles;
 use crate::spec_files_generated::GeneratedApiSpecFile;
 use crate::spec_files_generated::GeneratedFiles;
 use crate::spec_files_generic::ApiFiles;
-use crate::spec_files_generic::ApiSpecFileName;
 use crate::spec_files_local::LocalApiSpecFile;
 use crate::spec_files_local::LocalFiles;
 use crate::validation::overwrite_file;
@@ -25,6 +23,8 @@ use crate::validation::CheckStatus;
 use anyhow::{anyhow, Context};
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use openapi_manager_types::ApiIdent;
+use openapi_manager_types::ApiSpecFileName;
 use openapi_manager_types::ValidationContext;
 use openapiv3::OpenAPI;
 use std::collections::BTreeMap;

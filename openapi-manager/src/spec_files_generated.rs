@@ -4,14 +4,15 @@
 //! API definitions
 
 use crate::{
-    apis::{ApiIdent, ManagedApis},
+    apis::ManagedApis,
     environment::ErrorAccumulator,
     spec_files_generic::{
-        ApiFiles, ApiLoad, ApiSpecFile, ApiSpecFileName, ApiSpecFilesBuilder,
+        hash_contents, ApiFiles, ApiLoad, ApiSpecFile, ApiSpecFilesBuilder,
         AsRawFiles,
     },
 };
 use anyhow::{anyhow, bail};
+use openapi_manager_types::{ApiIdent, ApiSpecFileName, ApiSpecFileNameKind};
 use std::{collections::BTreeMap, ops::Deref};
 
 /// Newtype wrapper around [`ApiSpecFile`] to describe OpenAPI documents
@@ -92,7 +93,10 @@ impl GeneratedFiles {
                             )))
                         }
                         Ok(contents) => {
-                            let file_name = ApiSpecFileName::new_lockstep(api);
+                            let file_name = ApiSpecFileName::new(
+                                api.ident().clone(),
+                                ApiSpecFileNameKind::Lockstep,
+                            );
                             api_files.load_contents(file_name, contents);
                         }
                     }
@@ -115,10 +119,12 @@ impl GeneratedFiles {
                             )))
                         }
                         Ok(contents) => {
-                            let file_name = ApiSpecFileName::new_versioned(
-                                api,
-                                version.clone(),
-                                &contents,
+                            let file_name = ApiSpecFileName::new(
+                                api.ident().clone(),
+                                ApiSpecFileNameKind::Versioned {
+                                    version: version.clone(),
+                                    hash: hash_contents(&contents),
+                                },
                             );
                             latest = Some(file_name.clone());
                             api_files.load_contents(file_name, contents);

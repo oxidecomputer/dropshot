@@ -13,7 +13,7 @@ use crate::{
 use std::process::ExitCode;
 
 impl CheckResult {
-    pub(crate) fn to_exit_code(self) -> ExitCode {
+    pub fn to_exit_code(self) -> ExitCode {
         match self {
             CheckResult::Success => ExitCode::SUCCESS,
             CheckResult::NeedsUpdate => NEEDS_UPDATE_EXIT_CODE.into(),

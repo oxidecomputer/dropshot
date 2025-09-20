@@ -2,8 +2,9 @@
 
 //! OpenAPI manager for Dropshot.
 //!
-//! This tool generates and checks OpenAPI documents corresponding to Dropshot
-//! API traits.
+//! This tool manages OpenAPI documents corresponding to Dropshot API traits.
+//! For more information, see the
+//! [README](https://github.com/oxidecomputer/dropshot/tree/main/openapi-manager).
 
 mod apis;
 mod cmd;

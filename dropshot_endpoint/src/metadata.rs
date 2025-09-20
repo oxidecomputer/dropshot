@@ -179,12 +179,16 @@ fn semver_parts(x: &semver::Version) -> (u64, u64, u64) {
     (x.major, x.minor, x.patch)
 }
 
-fn semver_expr(span: proc_macro2::Span, x: &VersionSpecifier) -> TokenStream {
+fn semver_expr(
+    dropshot: &TokenStream,
+    span: proc_macro2::Span,
+    x: &VersionSpecifier,
+) -> TokenStream {
     match x {
         VersionSpecifier::Literal(v) => {
             let (major, minor, patch) = semver_parts(v);
             quote_spanned! { span=>
-                semver::Version::new(#major, #minor, #patch)
+                #dropshot::semver::Version::new(#major, #minor, #patch)
             }
         }
         VersionSpecifier::Identifier(ident) => {
@@ -260,7 +264,7 @@ impl ValidatedEndpointMetadata {
                 quote_spanned! {span=> #dropshot::ApiEndpointVersions::All }
             }
             VersionRange::From(x) => {
-                let v = semver_expr(span, &x);
+                let v = semver_expr(dropshot, span, &x);
                 quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::From(
                         #v
@@ -268,7 +272,7 @@ impl ValidatedEndpointMetadata {
                 }
             }
             VersionRange::Until(y) => {
-                let v = semver_expr(span, &y);
+                let v = semver_expr(dropshot, span, &y);
                 quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::Until(
                         #v
@@ -276,8 +280,8 @@ impl ValidatedEndpointMetadata {
                 }
             }
             VersionRange::FromUntil(x, y) => {
-                let x = semver_expr(span, &x);
-                let y = semver_expr(span, &y);
+                let x = semver_expr(dropshot, span, &x);
+                let y = semver_expr(dropshot, span, &y);
                 quote_spanned! {span=>
                     #dropshot::ApiEndpointVersions::from_until(
                         #x,

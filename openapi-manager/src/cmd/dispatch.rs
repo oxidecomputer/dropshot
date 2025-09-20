@@ -6,7 +6,7 @@ use crate::{
         check::check_impl, debug::debug_impl, generate::generate_impl,
         list::list_impl,
     },
-    environment::{BlessedSource, Environment, GeneratedSource},
+    environment::{BlessedSource, Environment, GeneratedSource, ResolvedEnv},
     git::GitRevision,
     output::OutputOpts,
 };
@@ -15,9 +15,9 @@ use camino::Utf8PathBuf;
 use clap::{Args, Parser, Subcommand};
 use std::process::ExitCode;
 
-/// Manage OpenAPI specifications.
+/// Manage OpenAPI documents for this repository.
 ///
-/// For more information, see dev-tools/openapi-manager/README.adoc.
+/// For more information, see <https://crates.io/crates/openapi-manager>.
 #[derive(Debug, Parser)]
 pub struct App {
     #[clap(flatten)]
@@ -70,15 +70,15 @@ pub struct BlessedSourceArgs {
     /// REVISION.
     ///
     /// The REVISION is not used as-is; instead, the tool always looks at the
-    /// merge-base between HEAD and REVISION.  So if you provide main:openapi,
-    /// then it will look at the merge-base of HEAD and "origin/main", in
-    /// directory "openapi" in that commit.
+    /// merge-base between HEAD and REVISION. So if you provide `main:openapi`,
+    /// then it will look at the merge-base of HEAD and `main`, in directory
+    /// "openapi" in that commit.
     ///
-    /// PATH is optional and defaults to "openapi".
+    /// REVISION is optional and defaults to the `default_git_branch` provided
+    /// by the OpenAPI manager binary (typically `origin/main`).
     ///
-    /// The default behavior is equivalent to `--blessed-from-git=main:openapi`.
-    /// Specifying this option is mainly useful if your branch's parent branch
-    /// is *not* `main`.
+    /// PATH is optional and defaults to `default_openapi_dir` provided by the
+    /// OpenAPI manager binary.
     #[clap(
         long,
         env("OPENAPI_MGR_BLESSED_FROM_GIT"),
@@ -99,25 +99,32 @@ pub struct BlessedSourceArgs {
     pub blessed_from_dir: Option<Utf8PathBuf>,
 }
 
-impl TryFrom<BlessedSourceArgs> for BlessedSource {
-    type Error = anyhow::Error;
+impl BlessedSourceArgs {
+    pub(crate) fn to_blessed_source(
+        &self,
+        env: &ResolvedEnv,
+    ) -> Result<BlessedSource, anyhow::Error> {
+        assert!(
+            self.blessed_from_dir.is_none() || self.blessed_from_git.is_none()
+        );
 
-    fn try_from(b: BlessedSourceArgs) -> Result<Self, Self::Error> {
-        assert!(b.blessed_from_dir.is_none() || b.blessed_from_git.is_none());
-
-        if let Some(local_directory) = b.blessed_from_dir {
-            return Ok(BlessedSource::Directory { local_directory });
+        if let Some(local_directory) = &self.blessed_from_dir {
+            return Ok(BlessedSource::Directory {
+                local_directory: local_directory.clone(),
+            });
         }
 
-        let (revision_str, maybe_directory) = match &b.blessed_from_git {
-            None => ("origin/main", None),
+        let (revision_str, maybe_directory) = match &self.blessed_from_git {
+            None => (env.default_git_branch.as_str(), None),
             Some(arg) => match arg.split_once(":") {
                 Some((r, d)) => (r, Some(d)),
                 None => (arg.as_str(), None),
             },
         };
         let revision = GitRevision::from(String::from(revision_str));
-        let directory = Utf8PathBuf::from(maybe_directory.unwrap_or("openapi"));
+        let directory = Utf8PathBuf::from(
+            maybe_directory.map_or(env.openapi_dir(), |d| d.as_ref()),
+        );
         Ok(BlessedSource::GitRevisionMergeBase { revision, directory })
     }
 }
@@ -166,7 +173,7 @@ impl DebugArgs {
         output: &OutputOpts,
     ) -> anyhow::Result<ExitCode> {
         let env = env.resolve(self.local.dir)?;
-        let blessed_source = BlessedSource::try_from(self.blessed)?;
+        let blessed_source = self.blessed.to_blessed_source(&env)?;
         let generated_source = GeneratedSource::from(self.generated);
         debug_impl(apis, &env, &blessed_source, &generated_source, output)?;
         Ok(ExitCode::SUCCESS)
@@ -209,7 +216,7 @@ impl GenerateArgs {
         output: &OutputOpts,
     ) -> anyhow::Result<ExitCode> {
         let env = env.resolve(self.local.dir)?;
-        let blessed_source = BlessedSource::try_from(self.blessed)?;
+        let blessed_source = self.blessed.to_blessed_source(&env)?;
         let generated_source = GeneratedSource::from(self.generated);
         Ok(generate_impl(
             apis,
@@ -240,7 +247,7 @@ impl CheckArgs {
         output: &OutputOpts,
     ) -> anyhow::Result<ExitCode> {
         let env = env.resolve(self.local.dir)?;
-        let blessed_source = BlessedSource::try_from(self.blessed)?;
+        let blessed_source = self.blessed.to_blessed_source(&env)?;
         let generated_source = GeneratedSource::from(self.generated);
         Ok(check_impl(apis, &env, &blessed_source, &generated_source, output)?
             .to_exit_code())
@@ -364,6 +371,7 @@ mod test {
 
         {
             let env = Environment::new(
+                "cargo openapi".to_owned(),
                 Utf8PathBuf::from(ABS_DIR),
                 Utf8PathBuf::from("foo"),
             )
@@ -374,6 +382,7 @@ mod test {
 
         {
             let env = Environment::new(
+                "cargo openapi".to_owned(),
                 Utf8PathBuf::from(ABS_DIR),
                 Utf8PathBuf::from(ABS_DIR),
             )
@@ -384,6 +393,7 @@ mod test {
 
         {
             let env = Environment::new(
+                "cargo openapi".to_owned(),
                 Utf8PathBuf::from(ABS_DIR),
                 Utf8PathBuf::from(ABS_DIR),
             )
@@ -421,36 +431,48 @@ mod test {
     // Test how we convert `BlessedSourceArgs` into `BlessedSource`.
     #[test]
     fn test_blessed_args() {
-        let source = BlessedSource::try_from(BlessedSourceArgs {
+        let env = Environment::new(
+            "cargo openapi".to_owned(),
+            "/test".into(),
+            "foo-openapi".into(),
+        )
+        .unwrap()
+        .with_default_git_branch("upstream/dev".to_owned());
+        let env = env.resolve(None).unwrap();
+
+        let source = BlessedSourceArgs {
             blessed_from_git: None,
             blessed_from_dir: None,
-        })
+        }
+        .to_blessed_source(&env)
         .unwrap();
         assert_matches!(
             source,
             BlessedSource::GitRevisionMergeBase { revision, directory}
-                if *revision == "origin/main" && directory == "openapi"
+                if *revision == "upstream/dev" && directory == "foo-openapi"
         );
 
         // Override branch only
-        let source = BlessedSource::try_from(BlessedSourceArgs {
+        let source = BlessedSourceArgs {
             blessed_from_git: Some(String::from("my/other/main")),
             blessed_from_dir: None,
-        })
+        }
+        .to_blessed_source(&env)
         .unwrap();
         assert_matches!(
             source,
             BlessedSource::GitRevisionMergeBase { revision, directory}
-                if *revision == "my/other/main" && directory == "openapi"
+                if *revision == "my/other/main" && directory == "foo-openapi"
         );
 
         // Override branch and directory
-        let source = BlessedSource::try_from(BlessedSourceArgs {
+        let source = BlessedSourceArgs {
             blessed_from_git: Some(String::from(
                 "my/other/main:other_openapi/bar",
             )),
             blessed_from_dir: None,
-        })
+        }
+        .to_blessed_source(&env)
         .unwrap();
         assert_matches!(
             source,
@@ -460,10 +482,11 @@ mod test {
         );
 
         // Override with a local directory
-        let source = BlessedSource::try_from(BlessedSourceArgs {
+        let source = BlessedSourceArgs {
             blessed_from_git: None,
             blessed_from_dir: Some(Utf8PathBuf::from("/tmp")),
-        })
+        }
+        .to_blessed_source(&env)
         .unwrap();
         assert_matches!(
             source,
