@@ -485,9 +485,10 @@ pub fn display_resolution_problems<'a, T>(
                     generated.contents(),
                 );
                 let path1 =
-                    env.openapi_dir().join(found.spec_file_name().path());
-                let path2 =
-                    env.openapi_dir().join(generated.spec_file_name().path());
+                    env.openapi_abs_dir().join(found.spec_file_name().path());
+                let path2 = env
+                    .openapi_abs_dir()
+                    .join(generated.spec_file_name().path());
                 Some((diff, path1, path2))
             }
             Problem::ExtraFileStale {
@@ -506,10 +507,11 @@ pub fn display_resolution_problems<'a, T>(
                     generated.contents(),
                 );
                 let path1 = env
-                    .openapi_dir()
+                    .openapi_abs_dir()
                     .join(spec_files[0].spec_file_name().path());
-                let path2 =
-                    env.openapi_dir().join(generated.spec_file_name().path());
+                let path2 = env
+                    .openapi_abs_dir()
+                    .join(generated.spec_file_name().path());
                 Some((diff, path1, path2))
             }
             _ => None,

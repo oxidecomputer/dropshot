@@ -7,5 +7,5 @@ error: constant `unused_endpoint` is never used
 note: the lint level is defined here
   --> tests/fail/unused_endpoint.rs:5:9
    |
-5  | #![deny(dead_code)]
+ 5 | #![deny(dead_code)]
    |         ^^^^^^^^^

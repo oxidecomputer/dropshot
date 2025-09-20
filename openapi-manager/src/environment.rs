@@ -13,6 +13,7 @@ use crate::spec_files_generated::GeneratedFiles;
 use crate::spec_files_local::walk_local_directory;
 use crate::spec_files_local::LocalFiles;
 use anyhow::Context;
+use camino::Utf8Component;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use owo_colors::OwoColorize;
@@ -38,9 +39,11 @@ impl Environment {
     /// * the command to invoke the OpenAPI manager (e.g. `"cargo openapi"`
     ///   or `"cargo xtask openapi"`)
     /// * the provided Git repository root
-    /// * the default OpenAPI directory within the repository root
+    /// * the default OpenAPI directory as a relative path within the
+    ///   repository root
     ///
-    /// Returns an error if `repo_root` is not an absolute path.
+    /// Returns an error if `repo_root` is not an absolute path or
+    /// `default_openapi_dir` is not a relative path.
     pub fn new(
         command: String,
         repo_root: Utf8PathBuf,
@@ -50,6 +53,14 @@ impl Environment {
             return Err(anyhow::anyhow!(
                 "repo_root must be an absolute path, found: {}",
                 repo_root
+            ));
+        }
+
+        if !is_normal_relative(&default_openapi_dir) {
+            return Err(anyhow::anyhow!(
+                "default_openapi_dir must be a relative path with \
+                 normal components, found: {}",
+                default_openapi_dir
             ));
         }
 
@@ -79,32 +90,61 @@ impl Environment {
         &self,
         openapi_dir: Option<Utf8PathBuf>,
     ) -> anyhow::Result<ResolvedEnv> {
-        // Use the provided `openapi_dir` joined to the *current* directory
-        // if it exists, otherwise the default directory joined to the
-        // *workspace root*.
-        let openapi_dir = if let Some(openapi_dir) = openapi_dir {
-            if openapi_dir.is_absolute() {
-                openapi_dir
-            } else {
-                let current_dir = std::env::current_dir()
-                    .context("error obtaining current directory")?;
-                let current_dir = Utf8PathBuf::try_from(current_dir)
-                    .context("current directory is not valid UTF-8")?;
-                current_dir.join(openapi_dir)
+        // This is a bit tricky:
+        //
+        // * if the openapi_dir is provided:
+        //   * first we determine the absolute path using `camino::absolute_utf8`
+        //   * then we determine the path relative to the workspace root (erroring
+        //     out if it is not a subdirectory)
+        // * if the openapi_dir is not provided, we use default_openapi_dir as
+        //   the relative directory, then join it with the workspace root to
+        //   obtain the absolute directory.
+        let (abs_dir, rel_dir) = match &openapi_dir {
+            Some(provided_dir) => {
+                // Determine the absolute path.
+                let abs_dir = camino::absolute_utf8(provided_dir)
+                    .with_context(|| {
+                        format!(
+                            "error making provided OpenAPI directory \
+                             absolute: {}",
+                            provided_dir
+                        )
+                    })?;
+
+                // Determine the path relative to the workspace root.
+                let rel_dir = abs_dir
+                    .strip_prefix(&self.repo_root)
+                    .with_context(|| {
+                        format!(
+                            "provided OpenAPI directory {} is not a \
+                             subdirectory of repository root {}",
+                            abs_dir, self.repo_root
+                        )
+                    })?
+                    .to_path_buf();
+
+                (abs_dir, rel_dir)
             }
-        } else {
-            self.repo_root.join(&self.default_openapi_dir)
+            None => {
+                let rel_dir = self.default_openapi_dir.clone();
+                let abs_dir = self.repo_root.join(&rel_dir);
+                (abs_dir, rel_dir)
+            }
         };
 
         Ok(ResolvedEnv {
             command: self.command.clone(),
             repo_root: self.repo_root.clone(),
-            local_source: LocalSource::Directory {
-                local_directory: openapi_dir,
-            },
+            local_source: LocalSource::Directory { abs_dir, rel_dir },
             default_git_branch: self.default_git_branch.clone(),
         })
     }
+}
+
+fn is_normal_relative(default_openapi_dir: &Utf8Path) -> bool {
+    default_openapi_dir
+        .components()
+        .all(|c| matches!(c, Utf8Component::Normal(_) | Utf8Component::CurDir))
 }
 
 /// Internal type for the environment where the OpenAPI directory is known.
@@ -117,9 +157,15 @@ pub(crate) struct ResolvedEnv {
 }
 
 impl ResolvedEnv {
-    pub(crate) fn openapi_dir(&self) -> &Utf8Path {
+    pub(crate) fn openapi_abs_dir(&self) -> &Utf8Path {
         match &self.local_source {
-            LocalSource::Directory { local_directory } => local_directory,
+            LocalSource::Directory { abs_dir, .. } => abs_dir,
+        }
+    }
+
+    pub(crate) fn openapi_rel_dir(&self) -> &Utf8Path {
+        match &self.local_source {
+            LocalSource::Directory { rel_dir, .. } => rel_dir,
         }
     }
 }
@@ -227,7 +273,13 @@ impl GeneratedSource {
 #[derive(Debug)]
 pub enum LocalSource {
     /// Local OpenAPI documents come from this directory
-    Directory { local_directory: Utf8PathBuf },
+    Directory {
+        /// The absolute directory path.
+        abs_dir: Utf8PathBuf,
+        /// The directory path relative to the repo root. Used for Git commands
+        /// that read contents of other commits.
+        rel_dir: Utf8PathBuf,
+    },
 }
 
 impl LocalSource {
@@ -239,16 +291,16 @@ impl LocalSource {
     ) -> anyhow::Result<(LocalFiles, ErrorAccumulator)> {
         let mut errors = ErrorAccumulator::new();
         match self {
-            LocalSource::Directory { local_directory } => {
+            LocalSource::Directory { abs_dir, .. } => {
                 eprintln!(
                     "{:>HEADER_WIDTH$} local OpenAPI documents from \
                      {:?} ... ",
                     "Loading".style(styles.success_header),
-                    local_directory,
+                    abs_dir,
                 );
                 Ok((
                     LocalFiles::load_from_directory(
-                        local_directory,
+                        abs_dir,
                         apis,
                         &mut errors,
                     )?,

@@ -323,13 +323,14 @@
 //!
 //! * [`Query`]`<Q>` extracts parameters from a query string, deserializing them
 //!   into an instance of type `Q`. `Q` must implement `serde::Deserialize` and
-//!   `schemars::JsonSchema`.
+//!   `schemars::JsonSchema`. See below for additional restrictions.
 //! * [`Path`]`<P>` extracts parameters from HTTP path, deserializing them into
 //!   an instance of type `P`. `P` must implement `serde::Deserialize` and
-//!   `schemars::JsonSchema`.
+//!   `schemars::JsonSchema`. See below for additional restrictions.
 //! * [`Header`]`<H>` extracts parameters from HTTP headers, deserializing
 //!   them into an instance of type `H`. `H` must implement
-//!   `serde::Deserialize` and `schemars::JsonSchema`.
+//!   `serde::Deserialize` and `schemars::JsonSchema`. See below for additional
+//!   restrictions.
 //! * [`TypedBody`]`<J>` extracts content from the request body by parsing the
 //!   body as JSON (or form/url-encoded) and deserializing it into an instance
 //!   of type `J`. `J` must implement `serde::Deserialize` and `schemars::JsonSchema`.
@@ -339,6 +340,15 @@
 //! * [`RawRequest`] provides access to the underlying [`hyper::Request`].  The
 //!   hope is that this would generally not be needed.  It can be useful to
 //!   implement functionality not provided by Dropshot.
+//!
+//! Generally, the type parameter for the `Query`, `Header`, and `Path` extractors
+//! should be Rust structs. The struct's field _names_ correspond to the keys in
+//! the thing being extracted (i.e., they correspond to query parameter names
+//! for `Query`, header names for `Header`, and path component names for `Path`).
+//! The struct's field _values_ should generally be Rust primitives, strings,
+//! or enums containing no data.
+//! There is no facility for automatically parsing the values _again_ (e.g.,
+//! as JSON), which means nested values or enums with data cannot be supported.
 //!
 //! `Query` and `Path` impl `SharedExtractor`.  `TypedBody`, `UntypedBody`,
 //! `StreamingBody`, and `RawRequest` impl `ExclusiveExtractor`.  Your function

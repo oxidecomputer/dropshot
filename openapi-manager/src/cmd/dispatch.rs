@@ -122,9 +122,11 @@ impl BlessedSourceArgs {
             },
         };
         let revision = GitRevision::from(String::from(revision_str));
-        let directory = Utf8PathBuf::from(
-            maybe_directory.map_or(env.openapi_dir(), |d| d.as_ref()),
-        );
+        let directory = Utf8PathBuf::from(maybe_directory.map_or(
+            // We must use the relative directory path for Git commands.
+            env.openapi_rel_dir(),
+            |d| d.as_ref(),
+        ));
         Ok(BlessedSource::GitRevisionMergeBase { revision, directory })
     }
 }
@@ -377,34 +379,43 @@ mod test {
             )
             .expect("loading environment");
             let env = env.resolve(None).expect("resolving environment");
-            assert_eq!(env.openapi_dir(), Utf8Path::new(ABS_DIR).join("foo"));
+            assert_eq!(
+                env.openapi_abs_dir(),
+                Utf8Path::new(ABS_DIR).join("foo")
+            );
         }
 
         {
-            let env = Environment::new(
+            let error = Environment::new(
                 "cargo openapi".to_owned(),
                 Utf8PathBuf::from(ABS_DIR),
                 Utf8PathBuf::from(ABS_DIR),
             )
-            .expect("loading environment");
-            let env = env.resolve(None).expect("resolving environment");
-            assert_eq!(env.openapi_dir(), ABS_DIR);
+            .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "default_openapi_dir must be a relative path with \
+                     normal components, found: {}",
+                    ABS_DIR
+                )
+            );
         }
 
         {
+            let current_dir =
+                Utf8PathBuf::try_from(std::env::current_dir().unwrap())
+                    .unwrap();
             let env = Environment::new(
                 "cargo openapi".to_owned(),
-                Utf8PathBuf::from(ABS_DIR),
-                Utf8PathBuf::from(ABS_DIR),
+                current_dir.clone(),
+                Utf8PathBuf::from("foo"),
             )
             .expect("loading environment");
             let env = env
                 .resolve(Some(Utf8PathBuf::from("bar")))
                 .expect("resolving environment");
-            assert_eq!(
-                env.openapi_dir(),
-                &std::env::current_dir().unwrap().join("bar")
-            );
+            assert_eq!(env.openapi_abs_dir(), current_dir.join("bar"));
         }
     }
 
@@ -448,7 +459,7 @@ mod test {
         .unwrap();
         assert_matches!(
             source,
-            BlessedSource::GitRevisionMergeBase { revision, directory}
+            BlessedSource::GitRevisionMergeBase { revision, directory }
                 if *revision == "upstream/dev" && directory == "foo-openapi"
         );
 

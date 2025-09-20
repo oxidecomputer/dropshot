@@ -384,7 +384,7 @@ impl Display for Fix<'_> {
 
 impl Fix<'_> {
     pub fn execute(&self, env: &ResolvedEnv) -> anyhow::Result<Vec<String>> {
-        let root = env.openapi_dir();
+        let root = env.openapi_abs_dir();
         match self {
             Fix::DeleteFiles { files } => {
                 let mut rv = Vec::new();
