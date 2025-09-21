@@ -23,8 +23,6 @@ The OpenAPI manager consists of two crates:
 
 ### Requirements
 
-The OpenAPI manager must currently be run within a Git repository. You must also ensure that `git` is available on the command line, or that the `GIT` environment variable is set to the `git` binary.
-
 You need to provide:
 
 - The API traits for your APIs (see [_API crates_](#api-crates) below). These may depend on `openapi-manager-types`.
@@ -41,6 +39,11 @@ You need to provide:
 > If you use the [`cargo xtask`](https://github.com/matklad/cargo-xtask) framework, you may choose to put the integration point within the xtask binary. However, at Oxide we've generally seen quicker compile times putting the integration point into a separate binary, and setting up a minimal xtask that just runs this binary.
 >
 > Your chosen alias is passed into the OpenAPI manager, and it will be displayed as part of user guidance. In the examples below, we'll use `cargo openapi`, as set up by the alias.
+
+In addition, if you have versioned APIs (see below):
+
+* The OpenAPI manager must be run within a Git repository.
+* You must also ensure that `git` is available on the command line, or that the `GIT` environment variable is set to the location of the Git binary.
 
 #### API crates
 

@@ -27,7 +27,8 @@ To see the example in action, run: `cargo example-openapi`. (An alias for this i
 Try the following:
 
 * Delete the contents of `documents/`, then run:
-** `cargo example-openapi check`: will say what's broken
-** `cargo test -p openapi-manager-example-bin`: will fail the `test_apis_up_to_date` test
-** `cargo example-openapi generate`: will regenerate documents
-* Uncomment the line in `apis/src/lib.rs` that says `(3, THREE_DOT_OH)`, then run `cargo example-openapi generate`.
+** `cargo example-openapi check`: will say what's broken.
+** `cargo test -p openapi-manager-example-bin`: will fail the `test_apis_up_to_date` test.
+** `cargo example-openapi generate`: will regenerate documents.
+* In `apis/src/lib.rs`, uncomment the line that says `(3, THREE_DOT_OH)`. Then, run `cargo example-openapi generate` to generate version 3.0.0 of the versioned API.
+* In `apis/src/lib.rs`, change the definition of `ThingV1` as instructed to introduce a breaking change to version 1.0.0 of the versioned API. Then, run `cargo example-openapi check`. This will produce an error.

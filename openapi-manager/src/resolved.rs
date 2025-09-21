@@ -210,7 +210,7 @@ pub enum Problem<'a> {
 
     #[error(
         "For this locally-added version, the OpenAPI document generated \
-         from the current code does not match the local file: {}.\
+         from the current code does not match the local file: {}. \
          This tool can update the local file(s) for you.",
         DisplayableVec(
             spec_files.iter().map(|s| s.spec_file_name().to_string()).collect()

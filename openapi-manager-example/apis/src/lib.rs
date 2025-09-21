@@ -68,6 +68,10 @@ pub mod versioned {
     #[derive(Serialize, JsonSchema)]
     struct ThingV1 {
         thing_str: &'static str,
+        // EXERCISE: Comment out the line above, and uncomment the line below, to
+        // introduce a breaking change to the blessed 1.0.0 version of this
+        // API.
+        // thing_number: u32,
     }
 
     #[derive(Serialize, JsonSchema)]
