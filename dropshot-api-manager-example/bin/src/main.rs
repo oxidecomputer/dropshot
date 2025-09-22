@@ -30,6 +30,7 @@ pub fn environment() -> anyhow::Result<Environment> {
     )?;
     Ok(env)
 }
+
 /// The list of APIs managed by the OpenAPI manager.
 pub fn all_apis() -> anyhow::Result<ManagedApis> {
     let apis = vec![

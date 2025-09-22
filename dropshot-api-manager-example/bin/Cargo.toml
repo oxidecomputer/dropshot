@@ -2,7 +2,7 @@
 name = "dropshot-api-manager-example-bin"
 version = "0.1.0"
 edition = "2024"
-license.workspace = true
+license = "0BSD"
 repository.workspace = true
 
 [dependencies]
