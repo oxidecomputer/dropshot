@@ -1,0 +1,19 @@
+[package]
+name = "dropshot-api-manager-example-bin"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = "1.0.99"
+camino = "1.2.0"
+clap = { version = "4.5" }
+dropshot-api-manager-example-apis.workspace = true
+dropshot-api-manager-types.workspace = true
+dropshot-api-manager.workspace = true
+openapiv3 = { version = "2.2.0", features = [ "skip_serializing_defaults" ] }
+openapi-lint = { git = "https://github.com/oxidecomputer/openapi-lint", branch = "main" }
+
+[lints]
+workspace = true

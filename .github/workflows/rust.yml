@@ -33,7 +33,7 @@ jobs:
         run: cargo --version
       - name: Report Clippy version
         run: cargo clippy -- --version
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
       - name: Run Clippy Lints
         run: cargo clippy --all-targets -- --deny warnings
 
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
       - name: Report cargo version
         run: cargo --version
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
       - name: Check Docs
         run: cargo doc --no-deps --lib --bins --examples
 
@@ -59,7 +59,7 @@ jobs:
             feature_flags: --all-features
     steps:
       - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
-      # The openapi-manager tests require origin/main to be present.
+      # The dropshot-api-manager tests require origin/main to be present.
       - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
         with:
           ref: main
@@ -67,7 +67,7 @@ jobs:
         run: cargo --version
       - name: Report rustc version
         run: rustc --version
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           # Matrix instances other than OS need to be added to this explicitly
           key: ${{ matrix.features }}

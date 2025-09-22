@@ -1,0 +1,17 @@
+[package]
+name = "dropshot-api-manager-types"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/dropshot-api-manager-types"
+
+[dependencies]
+anyhow = "1.0.99"
+camino = "1.2.0"
+paste = "1.0.15"
+semver = "1.0.27"
+
+[lints]
+workspace = true

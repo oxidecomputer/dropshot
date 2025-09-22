@@ -7,18 +7,18 @@
 members = [
     "dropshot",
     "dropshot_endpoint",
-    "openapi-manager",
-    "openapi-manager-example/apis",
-    "openapi-manager-example/bin",
-    "openapi-manager-types",
+    "dropshot-api-manager",
+    "dropshot-api-manager-example/apis",
+    "dropshot-api-manager-example/bin",
+    "dropshot-api-manager-types",
 ]
 default-members = [
     "dropshot",
     "dropshot_endpoint",
-    "openapi-manager",
-    "openapi-manager-example/apis",
-    "openapi-manager-example/bin",
-    "openapi-manager-types",
+    "dropshot-api-manager",
+    "dropshot-api-manager-example/apis",
+    "dropshot-api-manager-example/bin",
+    "dropshot-api-manager-types",
 ]
 
 resolver = "2"
@@ -29,9 +29,9 @@ repository = "https://github.com/oxidecomputer/dropshot"
 
 [workspace.dependencies]
 dropshot = { path = "dropshot" }
-openapi-manager = { path = "openapi-manager" }
-openapi-manager-example-apis = { path = "openapi-manager-example/apis" }
-openapi-manager-types = { path = "openapi-manager-types" }
+dropshot-api-manager = { path = "dropshot-api-manager" }
+dropshot-api-manager-example-apis = { path = "dropshot-api-manager-example/apis" }
+dropshot-api-manager-types = { path = "dropshot-api-manager-types" }
 
 [workspace.lints.clippy]
 # Clippy's style nits are useful, but not worth keeping in CI.

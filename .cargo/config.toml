@@ -1,4 +1,4 @@
 [alias]
 # This alias is part of the OpenAPI manager example. See
-# `../openapi-manager-example/README.adoc` for more.
-example-openapi = "run -p openapi-manager-example-bin --"
+# `../dropshot-api-manager-example/README.adoc` for more.
+example-openapi = "run -p dropshot-api-manager-example-bin --"
