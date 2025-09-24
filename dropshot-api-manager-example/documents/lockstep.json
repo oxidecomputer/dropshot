@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Lockstep API",
-    "description": "A simple lockstep-versioned API",
+    "description": "A simple lockstep API",
     "version": "1.0.0"
   },
   "paths": {

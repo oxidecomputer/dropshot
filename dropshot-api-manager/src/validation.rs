@@ -7,7 +7,6 @@ use anyhow::Context;
 use atomicwrites::AtomicFile;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use dropshot_api_manager_types::ApiBoundary;
 use dropshot_api_manager_types::ApiIdent;
 use dropshot_api_manager_types::ApiSpecFileName;
 use dropshot_api_manager_types::ManagedApiMetadata;
@@ -54,7 +53,6 @@ fn validate_generated_openapi_document(
         versions: api.versions().clone(),
         title: api.title(),
         metadata: api.metadata().clone(),
-        boundary: api.boundary(),
         errors: Vec::new(),
         files: Vec::new(),
     };
@@ -188,7 +186,6 @@ struct ValidationContextImpl {
     versions: Versions,
     title: &'static str,
     metadata: ManagedApiMetadata,
-    boundary: ApiBoundary,
     errors: Vec<anyhow::Error>,
     files: Vec<(Utf8PathBuf, Vec<u8>)>,
 }
@@ -212,10 +209,6 @@ impl ValidationBackend for ValidationContextImpl {
 
     fn metadata(&self) -> &ManagedApiMetadata {
         &self.metadata
-    }
-
-    fn boundary(&self) -> ApiBoundary {
-        self.boundary
     }
 
     fn report_error(&mut self, error: anyhow::Error) {

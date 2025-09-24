@@ -85,12 +85,14 @@ pub(crate) fn list_impl(
                 )?;
             }
 
-            writeln!(
-                &mut out,
-                "{initial_indent} {}: {}",
-                "boundary".style(styles.header),
-                api.boundary(),
-            )?;
+            if !metadata.extra.is_null() {
+                writeln!(
+                    &mut out,
+                    "{initial_indent} {}: {}",
+                    "extra".style(styles.header),
+                    metadata.extra,
+                )?;
+            }
 
             writeln!(
                 &mut out,

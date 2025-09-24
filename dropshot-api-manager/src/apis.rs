@@ -3,8 +3,7 @@
 use anyhow::{bail, Context};
 use dropshot::{ApiDescription, ApiDescriptionBuildErrors, StubContext};
 use dropshot_api_manager_types::{
-    ApiBoundary, ApiIdent, ManagedApiMetadata, SupportedVersion,
-    ValidationContext, Versions,
+    ApiIdent, ManagedApiMetadata, SupportedVersion, ValidationContext, Versions,
 };
 use openapiv3::OpenAPI;
 use std::collections::BTreeMap;
@@ -28,11 +27,6 @@ pub struct ManagedApiConfig {
 
     /// metadata about the API
     pub metadata: ManagedApiMetadata,
-
-    /// whether this API is internal or external
-    ///
-    /// This affects some of the validation applied to the OpenAPI spec.
-    pub boundary: ApiBoundary,
 
     /// The API description function, typically a reference to
     /// `stub_api_description`
@@ -63,11 +57,6 @@ pub struct ManagedApi {
     /// metadata about the API
     metadata: ManagedApiMetadata,
 
-    /// whether this API is internal or external
-    ///
-    /// This affects some of the validation applied to the OpenAPI spec.
-    boundary: ApiBoundary,
-
     /// The API description function, typically a reference to
     /// `stub_api_description`
     ///
@@ -87,7 +76,6 @@ impl From<ManagedApiConfig> for ManagedApi {
             versions: value.versions,
             title: value.title,
             metadata: value.metadata,
-            boundary: value.boundary,
             api_description: value.api_description,
             extra_validation: value.extra_validation,
         }
@@ -171,10 +159,6 @@ impl ManagedApi {
         let mut contents = Vec::new();
         openapi_def.write(&mut contents)?;
         Ok(contents)
-    }
-
-    pub fn boundary(&self) -> ApiBoundary {
-        self.boundary
     }
 
     pub fn extra_validation(

@@ -576,6 +576,8 @@ dependencies = [
  "dropshot-api-manager-types",
  "openapi-lint",
  "openapiv3",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -586,6 +588,7 @@ dependencies = [
  "camino",
  "paste",
  "semver 1.0.27",
+ "serde_json",
 ]
 
 [[package]]
