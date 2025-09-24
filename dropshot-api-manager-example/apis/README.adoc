@@ -1,0 +1,5 @@
+= OpenAPI manager example: APIs
+
+This crate consists of example API traits under management. This is the base layer, and it depends on link:../../dropshot-api-manager-types[`dropshot-api-manager-types`] but _not_ on the higher-level link:../../dropshot-api-manager[`dropshot-api-manager`] crate.
+
+For more information, see link:../README.adoc[the parent README].

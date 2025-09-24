@@ -1,0 +1,15 @@
+[package]
+name = "dropshot-api-manager-example-apis"
+version = "0.1.0"
+edition = "2021"
+license = "0BSD"
+repository.workspace = true
+
+[dependencies]
+dropshot.workspace = true
+dropshot-api-manager-types.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true
