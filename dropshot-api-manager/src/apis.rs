@@ -8,10 +8,7 @@ use dropshot_api_manager_types::{
 use openapiv3::OpenAPI;
 use std::collections::BTreeMap;
 
-/// Describes an API managed by the dropshot-api-manager crate and CLI tool
-///
-/// This struct exactly matches how we want developers to configure the list of
-/// APIs managed by this tool.
+/// Describes an API managed by the dropshot-api-manager CLI tool.
 #[derive(Clone, Debug)]
 pub struct ManagedApiConfig {
     /// The API-specific part of the filename that's used for API descriptions
@@ -40,7 +37,7 @@ pub struct ManagedApiConfig {
     pub extra_validation: Option<fn(&OpenAPI, ValidationContext<'_>)>,
 }
 
-/// Used internally to describe an API managed by this tool
+/// Used internally to describe an API managed by this tool.
 #[derive(Debug)]
 pub struct ManagedApi {
     /// The API-specific part of the filename that's used for API descriptions

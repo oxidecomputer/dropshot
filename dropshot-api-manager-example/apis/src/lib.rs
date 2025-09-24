@@ -1,6 +1,6 @@
 // Copyright 2025 Oxide Computer Company
 
-//! Example API descriptions for the Dropshot OpenAPI manager -- a couple of
+//! Example API descriptions for the Dropshot API manager -- a couple of
 //! examples, one that's lockstep and one that's versioned.
 
 pub mod lockstep {

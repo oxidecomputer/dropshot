@@ -1,4 +1,4 @@
-# Dropshot OpenAPI manager types
+# Dropshot API manager types
 
 This crate consists of base types for [Dropshot](https://docs.rs/dropshot)'s [OpenAPI manager](https://crates.io/crates/dropshot-api-manager).
 
