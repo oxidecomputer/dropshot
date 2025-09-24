@@ -1,7 +1,16 @@
 #
-# Dropshot is comprised of two packages.  Consumers only need to know about
-# "dropshot".  "dropshot" depends on "dropshot_endpoint", a procedural macro
-# used for registering API handler functions.
+# Dropshot is comprised of four published crates:
+#
+# * `dropshot`: the HTTP server
+# * `dropshot_endpoint`: procedural macros for endpoints (functions) and
+#    API descriptions (traits). Consumers do not need to depend on this
+#    crate.
+# * `dropshot-api-manager`: generates and manages OpenAPI documents from
+#   API traits
+# * `dropshot-api-manager-types`: base types for the Dropshot API manager
+#
+# Additionally, there's an end-to-end example of using the Dropshot API
+# manager inside `dropshot-api-manager-example`.
 #
 [workspace]
 members = [
@@ -32,6 +41,9 @@ dropshot = { path = "dropshot" }
 dropshot-api-manager = { path = "dropshot-api-manager" }
 dropshot-api-manager-example-apis = { path = "dropshot-api-manager-example/apis" }
 dropshot-api-manager-types = { path = "dropshot-api-manager-types" }
+schemars = "0.8.22"
+serde = { version = "1.0.224", features = ["derive"] }
+serde_json = "1.0.145"
 
 [workspace.lints.clippy]
 # Clippy's style nits are useful, but not worth keeping in CI.

@@ -23,7 +23,7 @@ openapiv3 = { version = "2.2.0", features = [ "skip_serializing_defaults" ] }
 owo-colors = "4.2.2"
 paste = "1.0.15"
 semver = "1.0.27"
-serde_json = "1.0.145"
+serde_json.workspace = true
 sha2 = "0.10.9"
 similar = { version = "2.7.0", features = ["bytes"] }
 supports-color = "3.0.2"

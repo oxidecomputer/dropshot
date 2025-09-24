@@ -8,8 +8,8 @@ repository.workspace = true
 [dependencies]
 dropshot.workspace = true
 dropshot-api-manager-types.workspace = true
-schemars = "0.8.22"
-serde = { version = "1.0.224", features = ["derive"] }
+schemars.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true
