@@ -3,7 +3,8 @@
 use anyhow::{bail, Context};
 use dropshot::{ApiDescription, ApiDescriptionBuildErrors, StubContext};
 use dropshot_api_manager_types::{
-    ApiBoundary, ApiIdent, SupportedVersion, ValidationContext, Versions,
+    ApiBoundary, ApiIdent, ManagedApiMetadata, SupportedVersion,
+    ValidationContext, Versions,
 };
 use openapiv3::OpenAPI;
 use std::collections::BTreeMap;
@@ -12,6 +13,7 @@ use std::collections::BTreeMap;
 ///
 /// This struct exactly matches how we want developers to configure the list of
 /// APIs managed by this tool.
+#[derive(Clone, Debug)]
 pub struct ManagedApiConfig {
     /// The API-specific part of the filename that's used for API descriptions
     ///
@@ -24,8 +26,8 @@ pub struct ManagedApiConfig {
     /// title of the API (goes into OpenAPI spec)
     pub title: &'static str,
 
-    /// human-readable description of the API (goes into OpenAPI spec)
-    pub description: &'static str,
+    /// metadata about the API
+    pub metadata: ManagedApiMetadata,
 
     /// whether this API is internal or external
     ///
@@ -58,8 +60,8 @@ pub struct ManagedApi {
     /// title of the API (goes into OpenAPI spec)
     title: &'static str,
 
-    /// human-readable description of the API (goes into OpenAPI spec)
-    description: &'static str,
+    /// metadata about the API
+    metadata: ManagedApiMetadata,
 
     /// whether this API is internal or external
     ///
@@ -84,7 +86,7 @@ impl From<ManagedApiConfig> for ManagedApi {
             ident: ApiIdent::from(value.ident.to_owned()),
             versions: value.versions,
             title: value.title,
-            description: value.description,
+            metadata: value.metadata,
             boundary: value.boundary,
             api_description: value.api_description,
             extra_validation: value.extra_validation,
@@ -105,8 +107,8 @@ impl ManagedApi {
         self.title
     }
 
-    pub fn description(&self) -> &'static str {
-        self.description
+    pub fn metadata(&self) -> &ManagedApiMetadata {
+        &self.metadata
     }
 
     pub fn is_lockstep(&self) -> bool {
@@ -152,11 +154,16 @@ impl ManagedApi {
             // impl formats the errors appropriately.
             anyhow::anyhow!("{}", error)
         })?;
-        let mut openapi_def = description.openapi(&self.title, version.clone());
-        openapi_def
-            .description(&self.description)
-            .contact_url("https://oxide.computer")
-            .contact_email("api@oxide.computer");
+        let mut openapi_def = description.openapi(self.title, version.clone());
+        if let Some(description) = self.metadata.description {
+            openapi_def.description(description);
+        }
+        if let Some(contact_url) = self.metadata.contact_url {
+            openapi_def.contact_url(contact_url);
+        }
+        if let Some(contact_email) = self.metadata.contact_email {
+            openapi_def.contact_email(contact_email);
+        }
 
         // Use write because it's the most reliable way to get the canonical
         // JSON order. The `json` method returns a serde_json::Value which may

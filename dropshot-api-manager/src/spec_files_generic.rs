@@ -671,7 +671,8 @@ mod test {
     use assert_matches::assert_matches;
     use dropshot::{ApiDescription, ApiDescriptionBuildErrors, StubContext};
     use dropshot_api_manager_types::{
-        ApiBoundary, SupportedVersion, SupportedVersions, Versions,
+        ApiBoundary, ManagedApiMetadata, SupportedVersion, SupportedVersions,
+        Versions,
     };
     use semver::Version;
 
@@ -787,7 +788,10 @@ mod test {
                     version: "1.0.0".parse().unwrap(),
                 },
                 title: "Lockstep API",
-                description: "A simple lockstep-versioned API",
+                metadata: ManagedApiMetadata {
+                    description: Some("A simple lockstep-versioned API"),
+                    ..ManagedApiMetadata::default()
+                },
                 boundary: ApiBoundary::Internal,
                 api_description: unimplemented_fn,
                 extra_validation: None,
@@ -800,7 +804,10 @@ mod test {
                     ]),
                 },
                 title: "Versioned API",
-                description: "A versioned API",
+                metadata: ManagedApiMetadata {
+                    description: Some("A simple lockstep-versioned API"),
+                    ..ManagedApiMetadata::default()
+                },
                 boundary: ApiBoundary::External,
                 api_description: unimplemented_fn,
                 extra_validation: None,

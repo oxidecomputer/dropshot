@@ -9,7 +9,9 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use dropshot_api_manager::{Environment, ManagedApiConfig, ManagedApis};
 use dropshot_api_manager_example_apis::*;
-use dropshot_api_manager_types::{ApiBoundary, ValidationContext, Versions};
+use dropshot_api_manager_types::{
+    ApiBoundary, ManagedApiMetadata, ValidationContext, Versions,
+};
 use openapiv3::OpenAPI;
 
 pub fn environment() -> anyhow::Result<Environment> {
@@ -39,7 +41,10 @@ pub fn all_apis() -> anyhow::Result<ManagedApis> {
             ident: "lockstep",
             versions: Versions::Lockstep { version: "1.0.0".parse().unwrap() },
             title: "Lockstep API",
-            description: "A simple lockstep-versioned API",
+            metadata: ManagedApiMetadata {
+                description: Some("A simple lockstep-versioned API"),
+                ..ManagedApiMetadata::default()
+            },
             boundary: ApiBoundary::Internal,
             api_description: lockstep::lockstep_api_mod::stub_api_description,
             extra_validation: None,
@@ -53,7 +58,10 @@ pub fn all_apis() -> anyhow::Result<ManagedApis> {
                 supported_versions: versioned::supported_versions(),
             },
             title: "Versioned API",
-            description: "A versioned API",
+            metadata: ManagedApiMetadata {
+                description: Some("A versioned API"),
+                ..ManagedApiMetadata::default()
+            },
             boundary: ApiBoundary::External,
             api_description: versioned::versioned_api_mod::stub_api_description,
             extra_validation: None,

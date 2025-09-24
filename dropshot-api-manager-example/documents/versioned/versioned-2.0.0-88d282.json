@@ -3,11 +3,7 @@
   "info": {
     "title": "Versioned API",
     "description": "A versioned API",
-    "contact": {
-      "url": "https://oxide.computer",
-      "email": "api@oxide.computer"
-    },
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "paths": {
     "/thing": {
@@ -20,7 +16,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThingV1"
+                  "$ref": "#/components/schemas/ThingV2"
                 }
               }
             }
@@ -56,15 +52,17 @@
           "request_id"
         ]
       },
-      "ThingV1": {
+      "ThingV2": {
         "type": "object",
         "properties": {
-          "thing_str": {
-            "type": "string"
+          "thing_number": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
           }
         },
         "required": [
-          "thing_str"
+          "thing_number"
         ]
       }
     },

@@ -3,10 +3,6 @@
   "info": {
     "title": "Lockstep API",
     "description": "A simple lockstep-versioned API",
-    "contact": {
-      "url": "https://oxide.computer",
-      "email": "api@oxide.computer"
-    },
     "version": "1.0.0"
   },
   "paths": {

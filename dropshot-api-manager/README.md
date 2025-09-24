@@ -10,6 +10,29 @@ For more information about API traits, see [Oxide RFD 479](https://rfd.shared.ox
 > * [Enable developer mode](https://learn.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development#activate-developer-mode), which allows non-administrators to create symlinks.
 > * Run `git config --global core.symlinks true`.
 
+## Who this is for
+
+The Dropshot OpenAPI manager was built for our needs at Oxide. But it is generally usable by many projects that use Dropshot. The manager is useful to you, if you:
+
+* Use [Dropshot](https://docs.rs/dropshot) for your HTTP APIs
+* Define your APIs using [API traits](https://docs.rs/dropshot/latest/dropshot/attr.api_description.html) rather than plain functions
+* Organize your code using the archetypal strategy, where the API trait lives in its own crate
+
+  ```mermaid
+  flowchart LR
+      dropshot_api_manager([<b>Dropshot API manager</b>]) --> api
+      types[base types]
+      api[Dropshot API trait] --> types
+      logic --> api
+
+      subgraph production_impl [implementation]
+      binary([server binary]) --> logic
+      logic[logic, database storage, etc]@{ shape: processes }
+  end
+  ```
+
+* Commit the generated OpenAPI documents to source control (Git is required if you use versioned APIs)
+
 ## Examples
 
 A fully working end-to-end example is available [within the Dropshot repository](https://github.com/oxidecomputer/dropshot/tree/main/dropshot-api-manager-example). You're welcome to copy part or all of the example as desired.

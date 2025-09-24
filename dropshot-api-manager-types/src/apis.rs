@@ -2,6 +2,19 @@
 
 use std::fmt;
 
+/// Optional metadata that's part of a `ManagedApiConfig`.
+#[derive(Clone, Debug, Default)]
+pub struct ManagedApiMetadata {
+    /// human-readable description of the API (goes into OpenAPI document)
+    pub description: Option<&'static str>,
+
+    /// the contact URL for the API
+    pub contact_url: Option<&'static str>,
+
+    /// the contact email for the API
+    pub contact_email: Option<&'static str>,
+}
+
 /// Whether an API is "internal" or "external" to the system.
 ///
 /// This is not interpreted by the OpenAPI manager itself, but it can be useful

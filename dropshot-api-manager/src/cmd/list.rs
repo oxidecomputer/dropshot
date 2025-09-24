@@ -47,16 +47,43 @@ pub(crate) fn list_impl(
                 if api.is_versioned() { "versioned" } else { "lockstep" },
             )?;
 
-            write!(
-                &mut out,
-                "{initial_indent} {}: ",
-                "description".style(styles.header)
-            )?;
-            writeln!(
-                IndentWriter::new_skip_initial(&continued_indent, &mut out),
-                "{}",
-                api.description(),
-            )?;
+            let metadata = api.metadata();
+            if let Some(description) = metadata.description {
+                write!(
+                    &mut out,
+                    "{initial_indent} {}: ",
+                    "description".style(styles.header)
+                )?;
+                writeln!(
+                    IndentWriter::new_skip_initial(&continued_indent, &mut out),
+                    "{}",
+                    description,
+                )?;
+            }
+            if let Some(contact_url) = metadata.contact_url {
+                write!(
+                    &mut out,
+                    "{initial_indent} {}: ",
+                    "contact url".style(styles.header)
+                )?;
+                writeln!(
+                    IndentWriter::new_skip_initial(&continued_indent, &mut out),
+                    "{}",
+                    contact_url,
+                )?;
+            }
+            if let Some(contact_email) = metadata.contact_email {
+                write!(
+                    &mut out,
+                    "{initial_indent} {}: ",
+                    "contact email".style(styles.header)
+                )?;
+                writeln!(
+                    IndentWriter::new_skip_initial(&continued_indent, &mut out),
+                    "{}",
+                    contact_email,
+                )?;
+            }
 
             writeln!(
                 &mut out,

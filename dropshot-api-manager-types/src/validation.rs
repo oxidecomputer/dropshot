@@ -4,7 +4,7 @@ use std::{fmt, ops::Deref};
 
 use camino::Utf8PathBuf;
 
-use crate::{ApiBoundary, Versions};
+use crate::{ApiBoundary, ManagedApiMetadata, Versions};
 
 /// Context for validation of OpenAPI specifications.
 pub struct ValidationContext<'a> {
@@ -41,9 +41,9 @@ impl<'a> ValidationContext<'a> {
         self.backend.title()
     }
 
-    /// Retrieves a human-readable description of the API being validated.
-    pub fn description(&self) -> &str {
-        self.backend.description()
+    /// Retrieves optional metadata for the API being validated.
+    pub fn metadata(&self) -> &ManagedApiMetadata {
+        self.backend.metadata()
     }
 
     /// Returns whether the API is "internal" or "external" to the system.
@@ -85,7 +85,7 @@ pub trait ValidationBackend {
     fn file_name(&self) -> &ApiSpecFileName;
     fn versions(&self) -> &Versions;
     fn title(&self) -> &str;
-    fn description(&self) -> &str;
+    fn metadata(&self) -> &ManagedApiMetadata;
     fn boundary(&self) -> ApiBoundary;
     fn report_error(&mut self, error: anyhow::Error);
     fn record_file_contents(&mut self, path: Utf8PathBuf, contents: Vec<u8>);

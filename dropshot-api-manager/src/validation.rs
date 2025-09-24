@@ -10,6 +10,7 @@ use camino::Utf8PathBuf;
 use dropshot_api_manager_types::ApiBoundary;
 use dropshot_api_manager_types::ApiIdent;
 use dropshot_api_manager_types::ApiSpecFileName;
+use dropshot_api_manager_types::ManagedApiMetadata;
 use dropshot_api_manager_types::ValidationBackend;
 use dropshot_api_manager_types::ValidationContext;
 use dropshot_api_manager_types::Versions;
@@ -52,7 +53,7 @@ fn validate_generated_openapi_document(
         file_name: file_name.clone(),
         versions: api.versions().clone(),
         title: api.title(),
-        description: api.description(),
+        metadata: api.metadata().clone(),
         boundary: api.boundary(),
         errors: Vec::new(),
         files: Vec::new(),
@@ -186,7 +187,7 @@ struct ValidationContextImpl {
     file_name: ApiSpecFileName,
     versions: Versions,
     title: &'static str,
-    description: &'static str,
+    metadata: ManagedApiMetadata,
     boundary: ApiBoundary,
     errors: Vec<anyhow::Error>,
     files: Vec<(Utf8PathBuf, Vec<u8>)>,
@@ -209,8 +210,8 @@ impl ValidationBackend for ValidationContextImpl {
         self.title
     }
 
-    fn description(&self) -> &str {
-        self.description
+    fn metadata(&self) -> &ManagedApiMetadata {
+        &self.metadata
     }
 
     fn boundary(&self) -> ApiBoundary {
