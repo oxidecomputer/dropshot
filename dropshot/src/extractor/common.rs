@@ -1,10 +1,10 @@
 // Copyright 2023 Oxide Computer Company
 
+use crate::RequestContext;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
 use crate::error::HttpError;
 use crate::server::ServerContext;
-use crate::RequestContext;
 
 use async_trait::async_trait;
 

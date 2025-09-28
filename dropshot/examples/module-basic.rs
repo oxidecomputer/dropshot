@@ -59,12 +59,12 @@ pub struct CounterValue {
 /// mountable routes
 pub mod routes {
     use crate::{CounterValue, ExampleContext};
-    use dropshot::endpoint;
     use dropshot::HttpError;
     use dropshot::HttpResponseOk;
     use dropshot::HttpResponseUpdatedNoContent;
     use dropshot::RequestContext;
     use dropshot::TypedBody;
+    use dropshot::endpoint;
     use std::sync::atomic::Ordering;
 
     /// Fetch the current value of the counter.

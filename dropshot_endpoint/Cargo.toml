@@ -3,7 +3,8 @@ name = "dropshot_endpoint"
 description = "macro used by dropshot consumers for registering handlers"
 version = "0.16.4"
 authors = ["Adam H. Leventhal <ahl@oxide.computer>"]
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
 license = "Apache-2.0"
 repository = "https://github.com/oxidecomputer/dropshot/"
 

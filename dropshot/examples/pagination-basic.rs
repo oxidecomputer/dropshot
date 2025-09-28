@@ -60,7 +60,6 @@
 //! Now we have the next three projects and a new token.  We can continue this
 //! way until we've listed all the projects.
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -74,6 +73,7 @@ use dropshot::RequestContext;
 use dropshot::ResultsPage;
 use dropshot::ServerBuilder;
 use dropshot::WhichPage;
+use dropshot::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

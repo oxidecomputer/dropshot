@@ -46,9 +46,9 @@ use crate::api_description::StubContext;
 use crate::body::Body;
 use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
+use crate::schema_util::StructMember;
 use crate::schema_util::make_subschema_for;
 use crate::schema_util::schema2struct;
-use crate::schema_util::StructMember;
 use crate::to_map::to_map;
 
 use async_trait::async_trait;
@@ -56,8 +56,8 @@ use http::HeaderMap;
 use http::StatusCode;
 use hyper::Response;
 use schemars::JsonSchema;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use slog::Logger;
 use std::cmp::min;
 use std::convert::TryFrom;
@@ -311,22 +311,22 @@ pub enum HandlerError {
 impl HandlerError {
     pub(crate) fn status_code(&self) -> StatusCode {
         match self {
-            Self::Handler { ref rsp, .. } => rsp.status(),
-            Self::Dropshot(ref e) => e.status_code.as_status(),
+            Self::Handler { rsp, .. } => rsp.status(),
+            Self::Dropshot(e) => e.status_code.as_status(),
         }
     }
 
     pub(crate) fn internal_message(&self) -> &String {
         match self {
-            Self::Handler { ref message, .. } => message,
-            Self::Dropshot(ref e) => &e.internal_message,
+            Self::Handler { message, .. } => message,
+            Self::Dropshot(e) => &e.internal_message,
         }
     }
 
     pub(crate) fn external_message(&self) -> Option<&String> {
         match self {
             Self::Handler { .. } => None,
-            Self::Dropshot(ref e) => Some(&e.external_message),
+            Self::Dropshot(e) => Some(&e.external_message),
         }
     }
 
@@ -924,7 +924,7 @@ pub struct Empty;
 /// object.
 pub trait HttpResponseContent {
     fn to_response(self, builder: http::response::Builder)
-        -> HttpHandlerResult;
+    -> HttpHandlerResult;
 
     // TODO the return type here could be something more elegant that is able
     // to produce the map of mime type -> openapiv3::MediaType that's needed in
@@ -1346,10 +1346,8 @@ impl<T: HttpCodedResponse> HttpResponseHeaders<T, NoHeaders> {
         }
     }
 }
-impl<
-        T: HttpCodedResponse,
-        H: JsonSchema + Serialize + Send + Sync + 'static,
-    > HttpResponseHeaders<T, H>
+impl<T: HttpCodedResponse, H: JsonSchema + Serialize + Send + Sync + 'static>
+    HttpResponseHeaders<T, H>
 {
     pub fn new(body: T, headers: H) -> Self {
         Self {
@@ -1363,10 +1361,8 @@ impl<
         &mut self.other_headers
     }
 }
-impl<
-        T: HttpCodedResponse,
-        H: JsonSchema + Serialize + Send + Sync + 'static,
-    > HttpResponse for HttpResponseHeaders<T, H>
+impl<T: HttpCodedResponse, H: JsonSchema + Serialize + Send + Sync + 'static>
+    HttpResponse for HttpResponseHeaders<T, H>
 {
     fn to_result(self) -> HttpHandlerResult {
         let HttpResponseHeaders { body, structured_headers, other_headers } =
@@ -1398,8 +1394,8 @@ impl<
     fn response_metadata() -> ApiEndpointResponse {
         let mut metadata = T::response_metadata();
 
-        let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
+        let mut generator = schemars::r#gen::SchemaGenerator::new(
+            schemars::r#gen::SchemaSettings::openapi3(),
         );
         let schema = generator.root_schema_for::<H>().schema.into();
 

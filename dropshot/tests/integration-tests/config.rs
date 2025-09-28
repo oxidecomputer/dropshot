@@ -2,15 +2,15 @@
 
 //! Tests for configuration file.
 
-use dropshot::test_util::read_config;
 use dropshot::Body;
+use dropshot::test_util::read_config;
 use dropshot::{
     ConfigDropshot, ConfigTls, HandlerTaskMode, HttpError, HttpResponseOk,
     RequestContext,
 };
 use dropshot::{HttpServer, ServerBuilder};
-use slog::o;
 use slog::Logger;
+use slog::o;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU16, Ordering};
 use tempfile::NamedTempFile;

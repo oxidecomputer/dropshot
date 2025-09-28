@@ -13,19 +13,9 @@
 //! TODO-hardening: add test cases that exceed limits (e.g., query string length,
 //! JSON body length)
 
-use dropshot::channel;
-use dropshot::endpoint;
-use dropshot::http_response_found;
-use dropshot::http_response_see_other;
-use dropshot::http_response_temporary_redirect;
-use dropshot::test_util::object_delete;
-use dropshot::test_util::read_content_length;
-use dropshot::test_util::read_json;
-use dropshot::test_util::read_string;
-use dropshot::test_util::TEST_HEADER_1;
-use dropshot::test_util::TEST_HEADER_2;
 use dropshot::ApiDescription;
 use dropshot::Body;
+use dropshot::CONTENT_TYPE_JSON;
 use dropshot::HttpError;
 use dropshot::HttpResponseDeleted;
 use dropshot::HttpResponseFound;
@@ -43,19 +33,29 @@ use dropshot::TypedBody;
 use dropshot::UntypedBody;
 use dropshot::WebsocketChannelResult;
 use dropshot::WebsocketConnection;
-use dropshot::CONTENT_TYPE_JSON;
-use futures::stream::StreamExt;
+use dropshot::channel;
+use dropshot::endpoint;
+use dropshot::http_response_found;
+use dropshot::http_response_see_other;
+use dropshot::http_response_temporary_redirect;
+use dropshot::test_util::TEST_HEADER_1;
+use dropshot::test_util::TEST_HEADER_2;
+use dropshot::test_util::object_delete;
+use dropshot::test_util::read_content_length;
+use dropshot::test_util::read_json;
+use dropshot::test_util::read_string;
 use futures::SinkExt;
 use futures::TryStreamExt;
+use futures::stream::StreamExt;
 use http::StatusCode;
 use hyper::Method;
 use hyper::Response;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use tokio_tungstenite::tungstenite::protocol::Role;
-use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::Role;
 use uuid::Uuid;
 
 use crate::common;

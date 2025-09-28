@@ -9,12 +9,11 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    from_map::from_map_insensitive, ApiEndpointBodyContentType,
-    ApiEndpointParameterLocation, HttpError, RequestContext, RequestInfo,
-    ServerContext,
+    ApiEndpointBodyContentType, ApiEndpointParameterLocation, HttpError,
+    RequestContext, RequestInfo, ServerContext, from_map::from_map_insensitive,
 };
 
-use super::{metadata::get_metadata, ExtractorMetadata, SharedExtractor};
+use super::{ExtractorMetadata, SharedExtractor, metadata::get_metadata};
 
 /// `Header<HeaderType>` is an extractor used to deserialize an instance of
 /// `HeaderType` from an HTTP request's header values. `HeaderType` may be any
@@ -93,7 +92,7 @@ mod tests {
     use schemars::JsonSchema;
     use serde::Deserialize;
 
-    use crate::{extractor::header::http_request_load_header, RequestInfo};
+    use crate::{RequestInfo, extractor::header::http_request_load_header};
 
     #[test]
     fn test_header_parsing() {
