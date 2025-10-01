@@ -291,6 +291,18 @@
 )]
 #![cfg_attr(feature = "internal-docs", doc = simple_mermaid::mermaid!("../large-service-dep-graph.mmd"))]
 //!
+//! ### Dropshot API manager
+//!
+//! For OpenAPI document generation from API traits, the Dropshot project
+//! provides an **OpenAPI manager**. The manager can be used to:
+//!
+//! * Generate OpenAPI documents from API traits
+//! * Check that OpenAPI documents are up-to-date, including in CI
+//! * Manage [versioned](#api-versioning) API documents
+//!
+//! For more information, see the documentation for
+//! [`dropshot-api-manager`](https://crates.io/crates/dropshot-api-manager).
+//!
 //! ### `#[endpoint { ... }]` attribute parameters
 //!
 //! The `endpoint` attribute accepts parameters the affect the operation of
