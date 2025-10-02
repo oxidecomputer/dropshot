@@ -903,8 +903,6 @@ async fn http_request_handle<C: ServerContext>(
     let request = request.map(crate::Body::wrap);
     let method = request.method().clone();
     let uri = request.uri();
-
-    // Store request headers for compression check before moving the request
     let request_headers = request.headers().clone();
 
     let found_version =
@@ -987,7 +985,6 @@ async fn http_request_handle<C: ServerContext>(
         }
     };
 
-    // Apply gzip compression if appropriate
     if crate::compression::should_compress_response(
         &method,
         &request_headers,
