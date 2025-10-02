@@ -123,6 +123,10 @@ pub fn should_compress_response(
         return false;
     }
 
+    if response_headers.contains_key(http::header::CONTENT_RANGE) {
+        return false;
+    }
+
     if !accepts_gzip_encoding(request_headers) {
         return false;
     }
@@ -133,6 +137,18 @@ pub fn should_compress_response(
 
     if response_extensions.get::<NoCompression>().is_some() {
         return false;
+    }
+
+    if let Some(content_length) =
+        response_headers.get(http::header::CONTENT_LENGTH)
+    {
+        if let Ok(length_str) = content_length.to_str() {
+            if let Ok(length) = length_str.parse::<u64>() {
+                if length < MIN_COMPRESS_SIZE {
+                    return false;
+                }
+            }
+        }
     }
 
     // Only compress when we know the content type
@@ -206,35 +222,36 @@ pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
 
     // Vary header is critical for caching - prevents serving compressed
     // responses to clients that don't accept gzip
-    if let Some(existing_vary) = parts.headers.get(http::header::VARY) {
-        if let Ok(vary_str) = existing_vary.to_str() {
-            let has_accept_encoding = vary_str
-                .split(',')
-                .any(|v| v.trim().eq_ignore_ascii_case("accept-encoding"));
+    let vary_has_accept_encoding = parts
+        .headers
+        .get_all(http::header::VARY)
+        .iter()
+        .any(header_value_contains_accept_encoding);
 
-            if !has_accept_encoding {
-                let new_vary = format!("{}, Accept-Encoding", vary_str);
-                // Silently skip on malformed header to preserve existing behavior
-                if let Ok(new_vary_value) = HeaderValue::from_str(&new_vary) {
-                    parts.headers.insert(http::header::VARY, new_vary_value);
-                }
-            }
-        }
-    } else {
-        parts.headers.insert(
+    if !vary_has_accept_encoding {
+        parts.headers.append(
             http::header::VARY,
             HeaderValue::from_static("Accept-Encoding"),
         );
     }
 
+    parts.headers.remove(http::header::ACCEPT_RANGES);
     parts.headers.remove(http::header::CONTENT_LENGTH);
 
     Response::from_parts(parts, compressed_body)
 }
 
+fn header_value_contains_accept_encoding(value: &HeaderValue) -> bool {
+    value.to_str().is_ok_and(|vary| {
+        vary.split(',')
+            .any(|v| v.trim().eq_ignore_ascii_case("accept-encoding"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http::Extensions;
 
     #[test]
     fn test_accepts_gzip_encoding_basic() {
@@ -244,6 +261,117 @@ mod tests {
             HeaderValue::from_static("gzip"),
         );
         assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_should_compress_response_rejects_content_range() {
+        let request_method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+
+        let response_status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        response_headers.insert(
+            http::header::CONTENT_RANGE,
+            HeaderValue::from_static("bytes 0-100/200"),
+        );
+
+        let response_extensions = Extensions::new();
+
+        assert!(!should_compress_response(
+            &request_method,
+            &request_headers,
+            response_status,
+            &response_headers,
+            &response_extensions,
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_respects_content_length_threshold() {
+        let request_method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+
+        let response_status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        response_headers.insert(
+            http::header::CONTENT_LENGTH,
+            HeaderValue::from_str(&(MIN_COMPRESS_SIZE - 1).to_string())
+                .unwrap(),
+        );
+
+        let response_extensions = Extensions::new();
+
+        assert!(!should_compress_response(
+            &request_method,
+            &request_headers,
+            response_status,
+            &response_headers,
+            &response_extensions,
+        ));
+    }
+
+    #[test]
+    fn test_apply_gzip_compression_removes_accept_ranges_and_sets_vary() {
+        let body = "x".repeat((MIN_COMPRESS_SIZE + 10) as usize);
+        let response = Response::builder()
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .header(http::header::ACCEPT_RANGES, "bytes")
+            .body(Body::from(body))
+            .unwrap();
+
+        let compressed = apply_gzip_compression(response);
+        let headers = compressed.headers();
+
+        let gzip = HeaderValue::from_static("gzip");
+        assert_eq!(headers.get(http::header::CONTENT_ENCODING), Some(&gzip));
+        assert!(!headers.contains_key(http::header::ACCEPT_RANGES));
+
+        let vary_values: Vec<_> = headers
+            .get_all(http::header::VARY)
+            .iter()
+            .map(|value| value.to_str().unwrap().to_string())
+            .collect();
+        assert!(vary_values
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case("accept-encoding")));
+    }
+
+    #[test]
+    fn test_apply_gzip_compression_avoids_duplicate_vary_entries() {
+        let body = "x".repeat((MIN_COMPRESS_SIZE + 10) as usize);
+        let response = Response::builder()
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .header(http::header::VARY, "Accept-Encoding, Accept-Language")
+            .body(Body::from(body))
+            .unwrap();
+
+        let compressed = apply_gzip_compression(response);
+        let mut accept_encoding_count = 0;
+        for value in compressed.headers().get_all(http::header::VARY).iter() {
+            let text = value.to_str().unwrap();
+            accept_encoding_count += text
+                .split(',')
+                .filter(|v| v.trim().eq_ignore_ascii_case("accept-encoding"))
+                .count();
+        }
+
+        assert_eq!(accept_encoding_count, 1);
     }
 
     #[test]
