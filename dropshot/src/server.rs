@@ -903,8 +903,6 @@ async fn http_request_handle<C: ServerContext>(
     let request = request.map(crate::Body::wrap);
     let method = request.method().clone();
     let uri = request.uri();
-    let request_headers = request.headers().clone();
-
     let found_version =
         server.version_policy.request_version(&request, &request_log)?;
     let lookup_result = server.router.lookup_route(
@@ -912,14 +910,14 @@ async fn http_request_handle<C: ServerContext>(
         uri.path().into(),
         found_version.as_ref(),
     )?;
-    let request_info = RequestInfo::new(&request, remote_addr);
     let rqctx = RequestContext {
         server: Arc::clone(&server),
-        request: request_info,
+        request: RequestInfo::new(&request, remote_addr),
         endpoint: lookup_result.endpoint,
         request_id: request_id.to_string(),
         log: request_log.clone(),
     };
+    let request_headers = rqctx.request.headers().clone();
     let handler = lookup_result.handler;
 
     let mut response = match server.config.default_handler_task_mode {
