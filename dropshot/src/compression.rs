@@ -6,20 +6,91 @@ use crate::body::Body;
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue, Response};
 use http_body_util::BodyExt;
-use hyper::body::Body as HttpBody;
+use hyper::body::Body as HttpBodyTrait;
 use std::io::Write;
 
 /// Checks if the request accepts gzip encoding based on the Accept-Encoding header.
+/// Handles quality values (q parameter) and rejects gzip if q=0.
 pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
-    if let Some(accept_encoding) = headers.get(http::header::ACCEPT_ENCODING) {
-        if let Ok(encoding_str) = accept_encoding.to_str() {
-            // Simple check for gzip in the Accept-Encoding header
-            // This handles cases like "gzip", "gzip, deflate", "deflate, gzip, br", etc.
-            return encoding_str
-                .split(',')
-                .any(|encoding| encoding.trim().eq_ignore_ascii_case("gzip"));
+    let Some(accept_encoding) = headers.get(http::header::ACCEPT_ENCODING)
+    else {
+        return false;
+    };
+
+    let Ok(encoding_str) = accept_encoding.to_str() else {
+        return false;
+    };
+
+    // Parse each encoding directive
+    for directive in encoding_str.split(',') {
+        let directive = directive.trim();
+
+        // Split on semicolon to separate encoding from parameters
+        let mut parts = directive.split(';');
+        let encoding = parts.next().unwrap_or("").trim();
+
+        // Check if this is gzip or * (wildcard)
+        let is_gzip = encoding.eq_ignore_ascii_case("gzip");
+        let is_wildcard = encoding == "*";
+
+        if !is_gzip && !is_wildcard {
+            continue;
+        }
+
+        // Parse quality value if present
+        let mut quality = 1.0;
+        for param in parts {
+            let param = param.trim();
+            if let Some(q_value) = param.strip_prefix("q=") {
+                if let Ok(q) = q_value.parse::<f32>() {
+                    quality = q;
+                }
+            }
+        }
+
+        // If quality is 0, this encoding is explicitly rejected
+        if quality == 0.0 {
+            if is_gzip {
+                return false;
+            }
+            // If wildcard is rejected, continue checking for explicit gzip
+            continue;
+        }
+
+        // Accept gzip if quality > 0
+        if is_gzip && quality > 0.0 {
+            return true;
+        }
+
+        // Accept wildcard with quality > 0 (but keep looking for explicit gzip)
+        if is_wildcard && quality > 0.0 {
+            // Wildcard matches, but continue to see if gzip is explicitly mentioned
+            // We'll return true after checking all directives
         }
     }
+
+    // Check if wildcard was present with non-zero quality
+    for directive in encoding_str.split(',') {
+        let directive = directive.trim();
+        let mut parts = directive.split(';');
+        let encoding = parts.next().unwrap_or("").trim();
+
+        if encoding == "*" {
+            let mut quality = 1.0;
+            for param in parts {
+                let param = param.trim();
+                if let Some(q_value) = param.strip_prefix("q=") {
+                    if let Ok(q) = q_value.parse::<f32>() {
+                        quality = q;
+                    }
+                }
+            }
+            if quality > 0.0 {
+                return true;
+            }
+        }
+    }
+
     false
 }
 
@@ -44,25 +115,23 @@ pub fn should_compress_response(
     }
 
     // Only compress compressible content types (text-based formats)
-    if let Some(content_type) = response_headers.get(http::header::CONTENT_TYPE)
-    {
-        if let Ok(ct_str) = content_type.to_str() {
-            let is_compressible = ct_str.starts_with("application/json")
-                || ct_str.starts_with("text/")
-                || ct_str.starts_with("application/xml")
-                || ct_str.starts_with("application/javascript")
-                || ct_str.starts_with("application/x-javascript");
+    // If there's no content-type or it can't be parsed, don't compress
+    let Some(content_type) = response_headers.get(http::header::CONTENT_TYPE)
+    else {
+        return false;
+    };
 
-            if !is_compressible {
-                return false;
-            }
-        }
-    }
+    let Ok(ct_str) = content_type.to_str() else {
+        return false;
+    };
 
-    // TODO: Check body size and only compress if above a threshold (e.g., 1KB)
-    // This requires reading the body, which we'll do during compression anyway.
+    let is_compressible = ct_str.starts_with("application/json")
+        || ct_str.starts_with("text/")
+        || ct_str.starts_with("application/xml")
+        || ct_str.starts_with("application/javascript")
+        || ct_str.starts_with("application/x-javascript");
 
-    true
+    is_compressible
 }
 
 /// Minimum size in bytes for a response to be compressed.
@@ -110,8 +179,11 @@ pub async fn apply_gzip_compression(
             HeaderValue::from_static("gzip"),
         );
 
-        // Remove content-length since it will be different after compression
-        parts.headers.remove(http::header::CONTENT_LENGTH);
+        // Set content-length to the compressed size
+        parts.headers.insert(
+            http::header::CONTENT_LENGTH,
+            HeaderValue::from(compressed_bytes.len()),
+        );
 
         // Create a new body with compressed content
         let compressed_body = Body::from(Bytes::from(compressed_bytes));

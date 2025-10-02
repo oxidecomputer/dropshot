@@ -25,6 +25,9 @@ struct LargeTestData {
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
     api.register(api_large_response).unwrap();
+    api.register(api_image_response).unwrap();
+    api.register(api_small_response).unwrap();
+    api.register(api_disable_compression_response).unwrap();
     api
 }
 
@@ -45,6 +48,65 @@ async fn api_large_response(
             .to_string(),
         repeated_data,
     }))
+}
+
+/// Returns a binary response (image) that should not be compressed
+#[endpoint {
+    method = GET,
+    path = "/image-response",
+}]
+async fn api_image_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    // Create a fake image response (just random bytes, but large enough)
+    let image_data = vec![0u8; 2048]; // 2KB of binary data
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/png")
+        .body(dropshot::Body::from(image_data))
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
+}
+
+/// Returns a small JSON response (under 1KB) that should not be compressed
+#[endpoint {
+    method = GET,
+    path = "/small-response",
+}]
+async fn api_small_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<HttpResponseOk<LargeTestData>, HttpError> {
+    // Small response under 1KB
+    Ok(HttpResponseOk(LargeTestData {
+        message: "Small response".to_string(),
+        repeated_data: vec!["short".to_string()],
+    }))
+}
+
+/// Returns a large response with compression disabled
+#[endpoint {
+    method = GET,
+    path = "/disable-compression-response",
+}]
+async fn api_disable_compression_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    // Create a large response
+    let repeated_text = "This is some repetitive text. ".repeat(100);
+    let data = LargeTestData {
+        message: "Large response with compression disabled".to_string(),
+        repeated_data: vec![repeated_text; 10],
+    };
+
+    let json_body = serde_json::to_vec(&data)
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-dropshot-disable-compression", "true")
+        .body(dropshot::Body::from(json_body))
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
 }
 
 async fn get_response_bytes(
@@ -240,6 +302,133 @@ async fn test_no_compression_for_streaming_responses() {
     // Consume the body to verify it works (and to allow teardown to proceed)
     let body_bytes = get_response_bytes(&mut response).await;
     assert!(!body_bytes.is_empty(), "Streaming response should have content");
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_no_compression_for_non_compressible_content_types() {
+    let api = api();
+    let testctx = common::test_setup("no_compression_non_compressible", api);
+    let client = &testctx.client_testctx;
+
+    // Request an image with Accept-Encoding: gzip
+    let uri = client.url("/image-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Image request should succeed");
+
+    // Binary content (images) should NOT be compressed
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "Binary content (image/png) should not be compressed even with Accept-Encoding: gzip"
+    );
+
+    // Verify content-type is correct
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE),
+        Some(&header::HeaderValue::from_static("image/png")),
+        "Content-Type should be image/png"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_compression_disabled_with_header() {
+    let api = api();
+    let testctx = common::test_setup("compression_disabled_header", api);
+    let client = &testctx.client_testctx;
+
+    // Request with Accept-Encoding: gzip, but response has disable header
+    let uri = client.url("/disable-compression-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should NOT be compressed due to x-dropshot-disable-compression header
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "Response with x-dropshot-disable-compression header should not be compressed"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_no_compression_below_size_threshold() {
+    let api = api();
+    let testctx = common::test_setup("no_compression_small_response", api);
+    let client = &testctx.client_testctx;
+
+    // Request a small response (under 1KB) with Accept-Encoding: gzip
+    let uri = client.url("/small-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Small response request should succeed");
+
+    // Small responses (under 1KB) should NOT be compressed
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "Responses under 1KB should not be compressed"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_reject_gzip_with_quality_zero() {
+    let api = api();
+    let testctx = common::test_setup("reject_gzip_quality_zero", api);
+    let client = &testctx.client_testctx;
+
+    // Request with gzip explicitly rejected (q=0)
+    let uri = client.url("/large-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip;q=0, deflate")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should NOT be compressed since gzip has q=0
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "Response should not use gzip when client sets q=0 for gzip"
+    );
 
     testctx.teardown().await;
 }
