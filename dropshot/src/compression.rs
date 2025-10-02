@@ -17,66 +17,81 @@ use tokio_util::io::{ReaderStream, StreamReader};
 #[derive(Debug, Clone, Copy)]
 pub struct NoCompression;
 
+/// Parses the `Accept-Encoding` header into a list of encodings and their
+/// associated quality factors. Returns the encoding names in lowercase for
+/// easier comparisons.
+fn parse_accept_encoding(header: &HeaderValue) -> Vec<(String, f32)> {
+    const DEFAULT_QUALITY: f32 = 1.0;
+
+    let Ok(header_value) = header.to_str() else {
+        return Vec::new();
+    };
+
+    header_value
+        .split(',')
+        .filter_map(|directive| {
+            let mut parts = directive.trim().split(';');
+            let encoding = parts.next()?.trim();
+            if encoding.is_empty() {
+                return None;
+            }
+
+            let mut quality = DEFAULT_QUALITY;
+            for param in parts {
+                let mut param = param.splitn(2, '=');
+                let name = param.next()?.trim();
+                let value = param.next()?.trim();
+
+                if name.eq_ignore_ascii_case("q") {
+                    if let Ok(parsed) = value.parse::<f32>() {
+                        quality = parsed.clamp(0.0, 1.0);
+                    }
+                }
+            }
+
+            Some((encoding.to_ascii_lowercase(), quality))
+        })
+        .collect()
+}
+
 /// Checks if the request accepts gzip encoding based on the Accept-Encoding header.
-/// Handles quality values (q parameter) and rejects gzip if q=0.
+/// Handles quality values (q parameter) using RFC-compliant preference rules.
 pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
     let Some(accept_encoding) = headers.get(http::header::ACCEPT_ENCODING)
     else {
         return false;
     };
-    let Ok(encoding_str) = accept_encoding.to_str() else {
-        return false;
-    };
 
-    // First pass: look for explicit gzip directive
-    for directive in encoding_str.split(',') {
-        let directive = directive.trim();
-        let mut parts = directive.split(';');
-        let encoding = parts.next().unwrap_or("").trim();
+    let mut best_gzip_quality: Option<f32> = None;
+    let mut best_wildcard_quality: Option<f32> = None;
 
-        let is_gzip = encoding.eq_ignore_ascii_case("gzip");
-        let is_wildcard = encoding == "*";
-        if !is_gzip && !is_wildcard {
-            continue;
-        }
-
-        let mut quality = 1.0;
-        for param in parts {
-            let param = param.trim();
-            if let Some(q_value) = param.strip_prefix("q=") {
-                if let Ok(q) = q_value.parse::<f32>() {
-                    quality = q;
-                }
+    // RFC 9110 §12.5.3 specifies that the most preferred (highest quality)
+    // representation wins, so we retain the maximum q-value we see for each
+    // relevant coding.
+    for (encoding, quality) in parse_accept_encoding(accept_encoding) {
+        match encoding.as_str() {
+            "gzip" => {
+                best_gzip_quality = Some(
+                    best_gzip_quality
+                        .map_or(quality, |current| current.max(quality)),
+                );
             }
-        }
-
-        match (is_gzip, quality) {
-            (true, 0.0) => return false, // Explicit gzip rejection
-            (true, q) if q > 0.0 => return true, // Explicit gzip acceptance
-            _ => continue, // Wildcard or rejected wildcard
+            "*" => {
+                best_wildcard_quality = Some(
+                    best_wildcard_quality
+                        .map_or(quality, |current| current.max(quality)),
+                );
+            }
+            _ => {}
         }
     }
 
-    // Second pass: check if wildcard accepts gzip (explicit gzip takes precedence)
-    for directive in encoding_str.split(',') {
-        let directive = directive.trim();
-        let mut parts = directive.split(';');
-        let encoding = parts.next().unwrap_or("").trim();
+    if let Some(quality) = best_gzip_quality {
+        return quality > 0.0;
+    }
 
-        if encoding == "*" {
-            let mut quality = 1.0;
-            for param in parts {
-                let param = param.trim();
-                if let Some(q_value) = param.strip_prefix("q=") {
-                    if let Ok(q) = q_value.parse::<f32>() {
-                        quality = q;
-                    }
-                }
-            }
-            if quality > 0.0 {
-                return true;
-            }
-        }
+    if let Some(quality) = best_wildcard_quality {
+        return quality > 0.0;
     }
 
     false
@@ -129,20 +144,22 @@ pub fn should_compress_response(
         return false;
     };
 
+    let ct_lower = ct_str.to_ascii_lowercase();
+
     // SSE streams prioritize latency over compression
-    if ct_str.starts_with("text/event-stream") {
+    if ct_lower.starts_with("text/event-stream") {
         return false;
     }
 
-    let is_compressible = ct_str.starts_with("application/json")
-        || ct_str.starts_with("text/")
-        || ct_str.starts_with("application/xml")
-        || ct_str.starts_with("application/javascript")
-        || ct_str.starts_with("application/x-javascript");
+    let is_compressible = ct_lower.starts_with("application/json")
+        || ct_lower.starts_with("text/")
+        || ct_lower.starts_with("application/xml")
+        || ct_lower.starts_with("application/javascript")
+        || ct_lower.starts_with("application/x-javascript");
 
     // RFC 6839 structured syntax suffixes (+json, +xml)
     let has_compressible_suffix =
-        ct_str.contains("+json") || ct_str.contains("+xml");
+        ct_lower.contains("+json") || ct_lower.contains("+xml");
 
     is_compressible || has_compressible_suffix
 }
@@ -301,7 +318,8 @@ mod tests {
     }
 
     #[test]
-    fn test_accepts_gzip_encoding_gzip_acceptance_overrides_wildcard_rejection() {
+    fn test_accepts_gzip_encoding_gzip_acceptance_overrides_wildcard_rejection()
+    {
         // Explicit gzip acceptance should work even if wildcard is rejected
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -309,6 +327,30 @@ mod tests {
             HeaderValue::from_static("*;q=0, gzip;q=1.0"),
         );
         assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_prefers_highest_quality() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip;q=0, gzip;q=0.5"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip;q=0.8, gzip;q=0"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip;q=0, *;q=1"),
+        );
+        assert!(!accepts_gzip_encoding(&headers));
     }
 
     #[test]
@@ -581,7 +623,7 @@ mod tests {
         let mut response_headers = HeaderMap::new();
         response_headers.insert(
             http::header::CONTENT_TYPE,
-            HeaderValue::from_static("text/event-stream"),
+            HeaderValue::from_static("TEXT/EVENT-STREAM"),
         );
         let extensions = http::Extensions::new();
 
@@ -608,6 +650,7 @@ mod tests {
         // Test various compressible content types
         let compressible_types = vec![
             "application/json",
+            "APPLICATION/JSON",
             "text/plain",
             "text/html",
             "text/css",
@@ -615,8 +658,10 @@ mod tests {
             "application/javascript",
             "application/x-javascript",
             "application/problem+json",
+            "application/problem+JSON",
             "application/hal+json",
             "application/soap+xml",
+            "application/SOAP+XML",
         ];
 
         for content_type in compressible_types {
