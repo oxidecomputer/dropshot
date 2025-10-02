@@ -186,8 +186,6 @@ const MIN_COMPRESS_SIZE: u64 = 512; // 512 bytes
 /// This function wraps the response body in a gzip encoder that compresses data
 /// as it's being sent, avoiding the need to buffer the entire response in memory.
 /// If the body has a known exact size smaller than MIN_COMPRESS_SIZE, compression is skipped.
-/// On any error during compression setup, this function logs the error and returns
-/// the original uncompressed response.
 pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
     let (mut parts, body) = response.into_parts();
 
@@ -244,6 +242,8 @@ pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
             if !has_accept_encoding {
                 // Append Accept-Encoding to existing Vary header
                 let new_vary = format!("{}, Accept-Encoding", vary_str);
+                // Note: If HeaderValue::from_str fails (e.g., malformed header),
+                // we silently skip updating the Vary header to preserve existing behavior
                 if let Ok(new_vary_value) = HeaderValue::from_str(&new_vary) {
                     parts.headers.insert(http::header::VARY, new_vary_value);
                 }
@@ -261,4 +261,473 @@ pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
     parts.headers.remove(http::header::CONTENT_LENGTH);
 
     Response::from_parts(parts, compressed_body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_accepts_gzip_encoding_basic() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_with_positive_quality() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip;q=0.8"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_rejects_zero_quality() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip;q=0"),
+        );
+        assert!(!accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_wildcard() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("*"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_wildcard_with_quality() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("*;q=0.5"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_wildcard_rejected() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("*;q=0"),
+        );
+        assert!(!accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_multiple_encodings() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("deflate, gzip, br"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_gzip_takes_precedence_over_wildcard() {
+        // Explicit gzip rejection should override wildcard acceptance
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("*;q=1.0, gzip;q=0"),
+        );
+        assert!(!accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_gzip_acceptance_overrides_wildcard_rejection() {
+        // Explicit gzip acceptance should work even if wildcard is rejected
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("*;q=0, gzip;q=1.0"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_case_insensitive() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("GZIP"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("GzIp"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_no_header() {
+        let headers = HeaderMap::new();
+        assert!(!accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_with_spaces() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("deflate , gzip ; q=0.8 , br"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_malformed_quality() {
+        // If quality parsing fails, should default to 1.0
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip;q=invalid"),
+        );
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_should_compress_response_basic() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extensions = http::Extensions::new();
+
+        assert!(should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_head_method() {
+        let method = http::Method::HEAD;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_no_content() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::NO_CONTENT;
+        let response_headers = HeaderMap::new();
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_not_modified() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::NOT_MODIFIED;
+        let response_headers = HeaderMap::new();
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_partial_content() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::PARTIAL_CONTENT;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_no_accept_encoding() {
+        let method = http::Method::GET;
+        let request_headers = HeaderMap::new();
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_already_encoded() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        response_headers.insert(
+            http::header::CONTENT_ENCODING,
+            HeaderValue::from_static("br"),
+        );
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_no_compression_extension() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let mut extensions = http::Extensions::new();
+        extensions.insert(NoCompression);
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_no_content_type() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let response_headers = HeaderMap::new();
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_sse() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("text/event-stream"),
+        );
+        let extensions = http::Extensions::new();
+
+        assert!(!should_compress_response(
+            &method,
+            &request_headers,
+            status,
+            &response_headers,
+            &extensions
+        ));
+    }
+
+    #[test]
+    fn test_should_compress_response_compressible_content_types() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let extensions = http::Extensions::new();
+
+        // Test various compressible content types
+        let compressible_types = vec![
+            "application/json",
+            "text/plain",
+            "text/html",
+            "text/css",
+            "application/xml",
+            "application/javascript",
+            "application/x-javascript",
+            "application/problem+json",
+            "application/hal+json",
+            "application/soap+xml",
+        ];
+
+        for content_type in compressible_types {
+            let mut response_headers = HeaderMap::new();
+            response_headers.insert(
+                http::header::CONTENT_TYPE,
+                HeaderValue::from_str(content_type).unwrap(),
+            );
+
+            assert!(
+                should_compress_response(
+                    &method,
+                    &request_headers,
+                    status,
+                    &response_headers,
+                    &extensions
+                ),
+                "Expected {} to be compressible",
+                content_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_should_compress_response_non_compressible_content_types() {
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            http::header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip"),
+        );
+        let status = http::StatusCode::OK;
+        let extensions = http::Extensions::new();
+
+        // Test various non-compressible content types
+        let non_compressible_types = vec![
+            "image/png",
+            "image/jpeg",
+            "video/mp4",
+            "application/pdf",
+            "application/zip",
+            "application/gzip",
+            "application/octet-stream",
+        ];
+
+        for content_type in non_compressible_types {
+            let mut response_headers = HeaderMap::new();
+            response_headers.insert(
+                http::header::CONTENT_TYPE,
+                HeaderValue::from_str(content_type).unwrap(),
+            );
+
+            assert!(
+                !should_compress_response(
+                    &method,
+                    &request_headers,
+                    status,
+                    &response_headers,
+                    &extensions
+                ),
+                "Expected {} to not be compressible",
+                content_type
+            );
+        }
+    }
 }
