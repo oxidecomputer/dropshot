@@ -906,6 +906,7 @@ pub use api_description::TagConfig;
 pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use body::Body;
+pub use compression::NoCompression;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use config::HandlerTaskMode;

@@ -901,7 +901,7 @@ async fn http_request_handle<C: ServerContext>(
     // this to take forever.
     // TODO-correctness: Do we need to dump the body on errors?
     let request = request.map(crate::Body::wrap);
-    let method = request.method();
+    let method = request.method().clone();
     let uri = request.uri();
 
     // Store request headers for compression check before moving the request
@@ -989,15 +989,13 @@ async fn http_request_handle<C: ServerContext>(
 
     // Apply gzip compression if appropriate
     if crate::compression::should_compress_response(
+        &method,
         &request_headers,
+        response.status(),
         response.headers(),
+        response.extensions(),
     ) {
-        response = crate::compression::apply_gzip_compression(response)
-            .map_err(|e| {
-                HandlerError::Dropshot(crate::HttpError::for_internal_error(
-                    format!("compression error: {}", e),
-                ))
-            })?;
+        response = crate::compression::apply_gzip_compression(response);
     }
 
     response.headers_mut().insert(

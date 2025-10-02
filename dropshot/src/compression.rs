@@ -9,6 +9,14 @@ use http::{HeaderMap, HeaderValue, Response};
 use hyper::body::{Body as HttpBodyTrait, Frame};
 use tokio_util::io::{ReaderStream, StreamReader};
 
+/// Marker type for disabling compression on a response.
+/// Insert this into response extensions to prevent compression:
+/// ```ignore
+/// response.extensions_mut().insert(NoCompression);
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct NoCompression;
+
 /// Checks if the request accepts gzip encoding based on the Accept-Encoding header.
 /// Handles quality values (q parameter) and rejects gzip if q=0.
 pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
@@ -96,9 +104,32 @@ pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
 
 /// Determines if a response should be compressed with gzip.
 pub fn should_compress_response(
+    request_method: &http::Method,
     request_headers: &HeaderMap<HeaderValue>,
+    response_status: http::StatusCode,
     response_headers: &HeaderMap<HeaderValue>,
+    response_extensions: &http::Extensions,
 ) -> bool {
+    // Don't compress responses that must not have a body
+    // (1xx informational, 204 No Content, 304 Not Modified)
+    if response_status.is_informational()
+        || response_status == http::StatusCode::NO_CONTENT
+        || response_status == http::StatusCode::NOT_MODIFIED
+    {
+        return false;
+    }
+
+    // Don't compress HEAD requests (they have no body)
+    if request_method == http::Method::HEAD {
+        return false;
+    }
+
+    // Don't compress partial content responses (206)
+    // Compressing already-ranged content changes the meaning for clients
+    if response_status == http::StatusCode::PARTIAL_CONTENT {
+        return false;
+    }
+
     // Don't compress if client doesn't accept gzip
     if !accepts_gzip_encoding(request_headers) {
         return false;
@@ -109,8 +140,8 @@ pub fn should_compress_response(
         return false;
     }
 
-    // Don't compress if explicitly disabled
-    if response_headers.contains_key("x-dropshot-disable-compression") {
+    // Don't compress if explicitly disabled via extension
+    if response_extensions.get::<NoCompression>().is_some() {
         return false;
     }
 
@@ -125,34 +156,47 @@ pub fn should_compress_response(
         return false;
     };
 
+    // Don't compress Server-Sent Events (SSE) - these are streaming responses
+    // where we want low latency, not compression
+    if ct_str.starts_with("text/event-stream") {
+        return false;
+    }
+
+    // Check for standard compressible content types
     let is_compressible = ct_str.starts_with("application/json")
         || ct_str.starts_with("text/")
         || ct_str.starts_with("application/xml")
         || ct_str.starts_with("application/javascript")
         || ct_str.starts_with("application/x-javascript");
 
-    is_compressible
+    // Also check for structured syntax suffixes (+json, +xml)
+    // This handles media types like application/problem+json, application/hal+json, etc.
+    // See RFC 6839 for structured syntax suffix registration
+    let has_compressible_suffix =
+        ct_str.contains("+json") || ct_str.contains("+xml");
+
+    is_compressible || has_compressible_suffix
 }
 
 /// Minimum size in bytes for a response to be compressed.
 /// Responses smaller than this won't benefit from compression and may actually get larger.
-const MIN_COMPRESS_SIZE: u64 = 32; // 32 bytes
+const MIN_COMPRESS_SIZE: u64 = 512; // 512 bytes
 
 /// Applies gzip compression to a response using streaming compression.
 /// This function wraps the response body in a gzip encoder that compresses data
 /// as it's being sent, avoiding the need to buffer the entire response in memory.
 /// If the body has a known exact size smaller than MIN_COMPRESS_SIZE, compression is skipped.
-pub fn apply_gzip_compression(
-    response: Response<Body>,
-) -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>> {
+/// On any error during compression setup, this function logs the error and returns
+/// the original uncompressed response.
+pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
     let (mut parts, body) = response.into_parts();
 
     // Check the size hint to see if we should skip compression
     let size_hint = body.size_hint();
     if let Some(exact_size) = size_hint.exact() {
-        if exact_size < MIN_COMPRESS_SIZE {
-            // Body is too small, don't compress
-            return Ok(Response::from_parts(parts, body));
+        if exact_size == 0 || exact_size < MIN_COMPRESS_SIZE {
+            // Body is empty or too small, don't compress
+            return Response::from_parts(parts, body);
         }
     }
 
@@ -187,8 +231,34 @@ pub fn apply_gzip_compression(
         HeaderValue::from_static("gzip"),
     );
 
+    // Add or update Vary header to include Accept-Encoding
+    // This is critical for HTTP caching - caches must not serve compressed
+    // responses to clients that don't accept gzip
+    if let Some(existing_vary) = parts.headers.get(http::header::VARY) {
+        // Vary header exists, append Accept-Encoding if not already present
+        if let Ok(vary_str) = existing_vary.to_str() {
+            let has_accept_encoding = vary_str
+                .split(',')
+                .any(|v| v.trim().eq_ignore_ascii_case("accept-encoding"));
+
+            if !has_accept_encoding {
+                // Append Accept-Encoding to existing Vary header
+                let new_vary = format!("{}, Accept-Encoding", vary_str);
+                if let Ok(new_vary_value) = HeaderValue::from_str(&new_vary) {
+                    parts.headers.insert(http::header::VARY, new_vary_value);
+                }
+            }
+        }
+    } else {
+        // No Vary header exists, set it to Accept-Encoding
+        parts.headers.insert(
+            http::header::VARY,
+            HeaderValue::from_static("Accept-Encoding"),
+        );
+    }
+
     // Remove content-length since we don't know the compressed size
     parts.headers.remove(http::header::CONTENT_LENGTH);
 
-    Ok(Response::from_parts(parts, compressed_body))
+    Response::from_parts(parts, compressed_body)
 }

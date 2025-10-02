@@ -34,6 +34,10 @@ fn api() -> ApiDescription<usize> {
     api.register(api_image_response).unwrap();
     api.register(api_small_response).unwrap();
     api.register(api_disable_compression_response).unwrap();
+    api.register(api_json_suffix_response).unwrap();
+    api.register(api_xml_suffix_response).unwrap();
+    api.register(api_no_content_response).unwrap();
+    api.register(api_not_modified_response).unwrap();
     api
 }
 
@@ -74,7 +78,7 @@ async fn api_image_response(
         .map_err(|e| HttpError::for_internal_error(e.to_string()))
 }
 
-/// Returns a tiny JSON response (under 32 bytes) that should not be compressed
+/// Returns a tiny JSON response (under 512 bytes) that should not be compressed
 #[endpoint {
     method = GET,
     path = "/small-response",
@@ -82,7 +86,7 @@ async fn api_image_response(
 async fn api_small_response(
     _rqctx: RequestContext<usize>,
 ) -> Result<HttpResponseOk<TinyData>, HttpError> {
-    // Tiny response under 32 bytes threshold: {"x":0} is only 7 bytes
+    // Tiny response under 512 bytes threshold: {"x":0} is only 7 bytes
     Ok(HttpResponseOk(TinyData { x: 0 }))
 }
 
@@ -104,11 +108,83 @@ async fn api_disable_compression_response(
     let json_body = serde_json::to_vec(&data)
         .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
 
-    Response::builder()
+    let mut response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-dropshot-disable-compression", "true")
         .body(dropshot::Body::from(json_body))
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+
+    // Disable compression using the NoCompression extension
+    response.extensions_mut().insert(dropshot::NoCompression);
+
+    Ok(response)
+}
+
+/// Returns a response with application/problem+json content type
+#[endpoint {
+    method = GET,
+    path = "/json-suffix-response",
+}]
+async fn api_json_suffix_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    let data = LargeTestData {
+        message: "Testing +json suffix".to_string(),
+        repeated_data: vec!["data".to_string(); 100],
+    };
+
+    let json_body = serde_json::to_vec(&data)
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))?;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/problem+json")
+        .body(dropshot::Body::from(json_body))
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
+}
+
+/// Returns a response with application/soap+xml content type
+#[endpoint {
+    method = GET,
+    path = "/xml-suffix-response",
+}]
+async fn api_xml_suffix_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    let xml_body = "<root>".repeat(100).into_bytes();
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/soap+xml")
+        .body(dropshot::Body::from(xml_body))
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
+}
+
+/// Returns a 204 No Content response
+#[endpoint {
+    method = GET,
+    path = "/no-content-response",
+}]
+async fn api_no_content_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    Response::builder()
+        .status(StatusCode::NO_CONTENT)
+        .body(dropshot::Body::empty())
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
+}
+
+/// Returns a 304 Not Modified response
+#[endpoint {
+    method = GET,
+    path = "/not-modified-response",
+}]
+async fn api_not_modified_response(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    Response::builder()
+        .status(StatusCode::NOT_MODIFIED)
+        .body(dropshot::Body::empty())
         .map_err(|e| HttpError::for_internal_error(e.to_string()))
 }
 
@@ -347,12 +423,12 @@ async fn test_no_compression_for_non_compressible_content_types() {
 }
 
 #[tokio::test]
-async fn test_compression_disabled_with_header() {
+async fn test_compression_disabled_with_extension() {
     let api = api();
-    let testctx = common::test_setup("compression_disabled_header", api);
+    let testctx = common::test_setup("compression_disabled_extension", api);
     let client = &testctx.client_testctx;
 
-    // Request with Accept-Encoding: gzip, but response has disable header
+    // Request with Accept-Encoding: gzip, but response has NoCompression extension
     let uri = client.url("/disable-compression-response");
     let request = Request::builder()
         .method(Method::GET)
@@ -366,11 +442,11 @@ async fn test_compression_disabled_with_header() {
         .await
         .expect("Request should succeed");
 
-    // Should NOT be compressed due to x-dropshot-disable-compression header
+    // Should NOT be compressed due to NoCompression extension
     assert_eq!(
         response.headers().get(header::CONTENT_ENCODING),
         None,
-        "Response with x-dropshot-disable-compression header should not be compressed"
+        "Response with NoCompression extension should not be compressed"
     );
 
     testctx.teardown().await;
@@ -382,7 +458,7 @@ async fn test_no_compression_below_size_threshold() {
     let testctx = common::test_setup("no_compression_small_response", api);
     let client = &testctx.client_testctx;
 
-    // Request a tiny response (under 32 bytes) with Accept-Encoding: gzip
+    // Request a tiny response (under 512 bytes) with Accept-Encoding: gzip
     let uri = client.url("/small-response");
     let request = Request::builder()
         .method(Method::GET)
@@ -396,11 +472,11 @@ async fn test_no_compression_below_size_threshold() {
         .await
         .expect("Small response request should succeed");
 
-    // Tiny responses (under 32 bytes) should NOT be compressed
+    // Tiny responses (under 512 bytes) should NOT be compressed
     assert_eq!(
         response.headers().get(header::CONTENT_ENCODING),
         None,
-        "Responses under 32 bytes should not be compressed"
+        "Responses under 512 bytes should not be compressed"
     );
 
     testctx.teardown().await;
@@ -435,3 +511,164 @@ async fn test_reject_gzip_with_quality_zero() {
 
     testctx.teardown().await;
 }
+
+#[tokio::test]
+async fn test_vary_header_is_set() {
+    let api = api();
+    let testctx = common::test_setup("vary_header_set", api);
+    let client = &testctx.client_testctx;
+
+    // Request with Accept-Encoding: gzip
+    let uri = client.url("/large-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should have Vary: Accept-Encoding header
+    assert!(
+        response.headers().contains_key(header::VARY),
+        "Response should have Vary header"
+    );
+
+    let vary_value =
+        response.headers().get(header::VARY).unwrap().to_str().unwrap();
+    assert!(
+        vary_value.to_lowercase().contains("accept-encoding"),
+        "Vary header should include Accept-Encoding, got: {}",
+        vary_value
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_json_suffix_is_compressed() {
+    let api = api();
+    let testctx = common::test_setup("json_suffix_compressed", api);
+    let client = &testctx.client_testctx;
+
+    // Request with Accept-Encoding: gzip for application/problem+json
+    let uri = client.url("/json-suffix-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should be compressed since application/problem+json has +json suffix
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        Some(&header::HeaderValue::from_static("gzip")),
+        "Response with +json suffix should be compressed"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_xml_suffix_is_compressed() {
+    let api = api();
+    let testctx = common::test_setup("xml_suffix_compressed", api);
+    let client = &testctx.client_testctx;
+
+    // Request with Accept-Encoding: gzip for application/soap+xml
+    let uri = client.url("/xml-suffix-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should be compressed since application/soap+xml has +xml suffix
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        Some(&header::HeaderValue::from_static("gzip")),
+        "Response with +xml suffix should be compressed"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_no_compression_for_204_no_content() {
+    let api = api();
+    let testctx = common::test_setup("no_compression_204", api);
+    let client = &testctx.client_testctx;
+
+    // Request with Accept-Encoding: gzip for 204 response
+    let uri = client.url("/no-content-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::NO_CONTENT)
+        .await
+        .expect("Request should succeed");
+
+    // Should NOT be compressed (204 must not have body)
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "204 No Content should not have Content-Encoding header"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_no_compression_for_304_not_modified() {
+    let api = api();
+    let testctx = common::test_setup("no_compression_304", api);
+    let client = &testctx.client_testctx;
+
+    // Request with Accept-Encoding: gzip for 304 response
+    let uri = client.url("/not-modified-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::NOT_MODIFIED)
+        .await
+        .expect("Request should succeed");
+
+    // Should NOT be compressed (304 must not have body)
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "304 Not Modified should not have Content-Encoding header"
+    );
+
+    testctx.teardown().await;
+}
+
+// Note: HEAD request test is omitted from integration tests because Dropshot
+// requires explicit HEAD endpoint registration. The HEAD logic is tested via
+// unit tests in should_compress_response.

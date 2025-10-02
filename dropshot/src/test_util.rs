@@ -62,7 +62,7 @@ const ALLOWED_HEADERS: [AllowedHeader<'static>; 10] = [
     AllowedHeader::new("content-type"),
     AllowedHeader::new("date"),
     AllowedHeader::new("location"),
-    AllowedHeader::new("x-dropshot-disable-compression"),
+    AllowedHeader::new("vary"),
     AllowedHeader::new("x-request-id"),
     AllowedHeader {
         name: "transfer-encoding",
