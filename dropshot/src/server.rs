@@ -993,12 +993,11 @@ async fn http_request_handle<C: ServerContext>(
         response.headers(),
     ) {
         response = crate::compression::apply_gzip_compression(response)
-            .await
             .map_err(|e| {
-            HandlerError::Dropshot(crate::HttpError::for_internal_error(
-                format!("compression error: {}", e),
-            ))
-        })?;
+                HandlerError::Dropshot(crate::HttpError::for_internal_error(
+                    format!("compression error: {}", e),
+                ))
+            })?;
     }
 
     response.headers_mut().insert(

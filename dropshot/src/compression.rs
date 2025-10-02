@@ -3,11 +3,11 @@
 //! Response compression support for Dropshot.
 
 use crate::body::Body;
-use bytes::Bytes;
+use async_compression::tokio::bufread::GzipEncoder;
+use futures::{StreamExt, TryStreamExt};
 use http::{HeaderMap, HeaderValue, Response};
-use http_body_util::BodyExt;
-use hyper::body::Body as HttpBodyTrait;
-use std::io::Write;
+use hyper::body::{Body as HttpBodyTrait, Frame};
+use tokio_util::io::{ReaderStream, StreamReader};
 
 /// Checks if the request accepts gzip encoding based on the Accept-Encoding header.
 /// Handles quality values (q parameter) and rejects gzip if q=0.
@@ -136,61 +136,59 @@ pub fn should_compress_response(
 
 /// Minimum size in bytes for a response to be compressed.
 /// Responses smaller than this won't benefit from compression and may actually get larger.
-const MIN_COMPRESS_SIZE: usize = 1024; // 1KB
+const MIN_COMPRESS_SIZE: u64 = 32; // 32 bytes
 
-/// Applies gzip compression to a response.
-/// This is an async function that consumes the entire body, compresses it, and returns a new response.
-/// If the body is smaller than MIN_COMPRESS_SIZE, compression is skipped.
-/// Streaming responses (those without a known size) are not compressed.
-pub async fn apply_gzip_compression(
+/// Applies gzip compression to a response using streaming compression.
+/// This function wraps the response body in a gzip encoder that compresses data
+/// as it's being sent, avoiding the need to buffer the entire response in memory.
+/// If the body has a known exact size smaller than MIN_COMPRESS_SIZE, compression is skipped.
+pub fn apply_gzip_compression(
     response: Response<Body>,
 ) -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>> {
     let (mut parts, body) = response.into_parts();
 
-    // Check if this is a streaming response (no exact size known)
-    // If so, don't compress it as buffering would defeat the purpose of streaming
+    // Check the size hint to see if we should skip compression
     let size_hint = body.size_hint();
-    if size_hint.exact().is_none() {
-        return Ok(Response::from_parts(parts, body));
+    if let Some(exact_size) = size_hint.exact() {
+        if exact_size < MIN_COMPRESS_SIZE {
+            // Body is too small, don't compress
+            return Ok(Response::from_parts(parts, body));
+        }
     }
 
-    // Collect the entire body into bytes
-    let body_bytes = body.collect().await?.to_bytes();
+    // Convert body to a stream of data chunks
+    let data_stream = body.into_data_stream();
 
-    // Don't compress if the body is too small
-    if body_bytes.len() < MIN_COMPRESS_SIZE {
-        // Return the original response unchanged
-        return Ok(Response::from_parts(parts, Body::from(body_bytes)));
-    }
+    // Map errors to io::Error so StreamReader can use them
+    let io_stream = data_stream
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
 
-    // Compress the body using gzip
-    let mut encoder = flate2::write::GzEncoder::new(
-        Vec::new(),
-        flate2::Compression::default(),
+    // Convert the stream to an AsyncRead using StreamReader
+    let async_read = StreamReader::new(io_stream);
+
+    // Wrap in a buffered reader and then a GzipEncoder for streaming compression
+    let gzip_encoder = GzipEncoder::new(tokio::io::BufReader::new(async_read));
+
+    // Convert the encoder back to a stream using ReaderStream
+    let compressed_stream = ReaderStream::new(gzip_encoder);
+
+    // Convert the stream back to an HTTP body
+    let compressed_body = Body::wrap(http_body_util::StreamBody::new(
+        compressed_stream.map(|result| {
+            result.map(Frame::data).map_err(|e| {
+                Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+            })
+        }),
+    ));
+
+    // Add gzip content-encoding header
+    parts.headers.insert(
+        http::header::CONTENT_ENCODING,
+        HeaderValue::from_static("gzip"),
     );
-    encoder.write_all(&body_bytes)?;
-    let compressed_bytes = encoder.finish()?;
 
-    // Only use compression if it actually makes the response smaller
-    if compressed_bytes.len() < body_bytes.len() {
-        // Add gzip content-encoding header
-        parts.headers.insert(
-            http::header::CONTENT_ENCODING,
-            HeaderValue::from_static("gzip"),
-        );
+    // Remove content-length since we don't know the compressed size
+    parts.headers.remove(http::header::CONTENT_LENGTH);
 
-        // Set content-length to the compressed size
-        parts.headers.insert(
-            http::header::CONTENT_LENGTH,
-            HeaderValue::from(compressed_bytes.len()),
-        );
-
-        // Create a new body with compressed content
-        let compressed_body = Body::from(Bytes::from(compressed_bytes));
-
-        Ok(Response::from_parts(parts, compressed_body))
-    } else {
-        // Compression didn't help, return uncompressed
-        Ok(Response::from_parts(parts, Body::from(body_bytes)))
-    }
+    Ok(Response::from_parts(parts, compressed_body))
 }

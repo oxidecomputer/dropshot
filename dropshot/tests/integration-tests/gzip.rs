@@ -22,6 +22,12 @@ struct LargeTestData {
     repeated_data: Vec<String>,
 }
 
+// Tiny test payload for testing size threshold
+#[derive(Deserialize, Serialize, schemars::JsonSchema)]
+struct TinyData {
+    x: u8,
+}
+
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
     api.register(api_large_response).unwrap();
@@ -68,19 +74,16 @@ async fn api_image_response(
         .map_err(|e| HttpError::for_internal_error(e.to_string()))
 }
 
-/// Returns a small JSON response (under 1KB) that should not be compressed
+/// Returns a tiny JSON response (under 32 bytes) that should not be compressed
 #[endpoint {
     method = GET,
     path = "/small-response",
 }]
 async fn api_small_response(
     _rqctx: RequestContext<usize>,
-) -> Result<HttpResponseOk<LargeTestData>, HttpError> {
-    // Small response under 1KB
-    Ok(HttpResponseOk(LargeTestData {
-        message: "Small response".to_string(),
-        repeated_data: vec!["short".to_string()],
-    }))
+) -> Result<HttpResponseOk<TinyData>, HttpError> {
+    // Tiny response under 32 bytes threshold: {"x":0} is only 7 bytes
+    Ok(HttpResponseOk(TinyData { x: 0 }))
 }
 
 /// Returns a large response with compression disabled
@@ -379,7 +382,7 @@ async fn test_no_compression_below_size_threshold() {
     let testctx = common::test_setup("no_compression_small_response", api);
     let client = &testctx.client_testctx;
 
-    // Request a small response (under 1KB) with Accept-Encoding: gzip
+    // Request a tiny response (under 32 bytes) with Accept-Encoding: gzip
     let uri = client.url("/small-response");
     let request = Request::builder()
         .method(Method::GET)
@@ -393,11 +396,11 @@ async fn test_no_compression_below_size_threshold() {
         .await
         .expect("Small response request should succeed");
 
-    // Small responses (under 1KB) should NOT be compressed
+    // Tiny responses (under 32 bytes) should NOT be compressed
     assert_eq!(
         response.headers().get(header::CONTENT_ENCODING),
         None,
-        "Responses under 1KB should not be compressed"
+        "Responses under 32 bytes should not be compressed"
     );
 
     testctx.teardown().await;

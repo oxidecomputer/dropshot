@@ -14,13 +14,13 @@ categories = ["network-programming", "web-programming::http-server"]
 workspace = true
 
 [dependencies]
+async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 base64 = "0.22.1"
 bytes = "1"
 camino = { version = "1.2.0", features = ["serde1"] }
 debug-ignore = "1.0.5"
-flate2 = "1.0"
 form_urlencoded = "1.2.2"
 futures = "0.3.31"
 hostname = "0.4.0"
@@ -77,6 +77,10 @@ features = [ "derive" ]
 [dependencies.tokio]
 version = "1.47"
 features = [ "full" ]
+
+[dependencies.tokio-util]
+version = "0.7"
+features = [ "io", "compat" ]
 
 [dependencies.usdt]
 version = "0.6.0"
