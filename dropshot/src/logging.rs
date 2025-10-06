@@ -281,7 +281,7 @@ mod test {
         "##;
         let config =
             read_config::<ConfigLogging>("stderr-terminal", config).unwrap();
-        config.to_logger("test-logger").unwrap();
+        let _ = config.to_logger("test-logger").unwrap();
     }
 
     // Bad "mode = file" configurations
