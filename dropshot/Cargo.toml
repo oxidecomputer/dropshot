@@ -87,10 +87,8 @@ version = "1.18.1"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
-# While a 1.0 version is out, there is no way to generate an OpenAPIv3 spec without adding nullable
-# for all of the fields - see https://docs.rs/schemars/1.0.4/src/schemars/generate.rs.html#126 for
-# how SchemaSettings::option_nullable is handled now. As the other transformers are not public
-# creating our own version would take quite a bit of source code copy
+# While newer versions of schemars are available, they are not trivial for us to update to.
+# See oxidecomputer/dropshot#1375 for more information.
 version = "0.8.22"
 features = [ "uuid1" ]
 
