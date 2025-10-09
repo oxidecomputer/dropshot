@@ -12,7 +12,7 @@ use crate::common;
 
 extern crate slog;
 
-fn api() -> ApiDescription<usize> {
+pub fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
     api.register(api_streaming).unwrap();
     api.register(api_not_streaming).unwrap();

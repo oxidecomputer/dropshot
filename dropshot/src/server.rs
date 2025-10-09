@@ -901,7 +901,7 @@ async fn http_request_handle<C: ServerContext>(
     // this to take forever.
     // TODO-correctness: Do we need to dump the body on errors?
     let request = request.map(crate::Body::wrap);
-    let method = request.method();
+    let method = request.method().clone();
     let uri = request.uri();
     let found_version =
         server.version_policy.request_version(&request, &request_log)?;
@@ -915,8 +915,9 @@ async fn http_request_handle<C: ServerContext>(
         request: RequestInfo::new(&request, remote_addr),
         endpoint: lookup_result.endpoint,
         request_id: request_id.to_string(),
-        log: request_log,
+        log: request_log.clone(),
     };
+    let request_headers = rqctx.request.headers().clone();
     let handler = lookup_result.handler;
 
     let mut response = match server.config.default_handler_task_mode {
@@ -930,7 +931,7 @@ async fn http_request_handle<C: ServerContext>(
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();
-            let request_log = rqctx.log.clone();
+            let request_log = request_log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
@@ -981,6 +982,17 @@ async fn http_request_handle<C: ServerContext>(
             }
         }
     };
+
+    if crate::compression::should_compress_response(
+        &method,
+        &request_headers,
+        response.status(),
+        response.headers(),
+        response.extensions(),
+    ) {
+        response = crate::compression::apply_gzip_compression(response);
+    }
+
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),
