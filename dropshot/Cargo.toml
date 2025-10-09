@@ -87,6 +87,8 @@ version = "1.18.1"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
+# While newer versions of schemars are available, they are not trivial for us to update to.
+# See oxidecomputer/dropshot#1375 for more information.
 version = "0.8.22"
 features = [ "uuid1" ]
 
