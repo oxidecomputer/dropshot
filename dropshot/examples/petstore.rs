@@ -1,6 +1,6 @@
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseOk, PaginationParams,
-    Path, Query, RequestContext, ResultsPage, TypedBody,
+    ApiDescription, HttpError, HttpResponseOk, PaginationParams, Path, Query,
+    RequestContext, ResultsPage, TypedBody, endpoint,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

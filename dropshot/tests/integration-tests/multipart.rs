@@ -4,7 +4,7 @@
 
 use dropshot::test_util::read_string;
 use dropshot::{
-    endpoint, ApiDescription, Body, HttpError, MultipartBody, RequestContext,
+    ApiDescription, Body, HttpError, MultipartBody, RequestContext, endpoint,
 };
 use http::{Method, Response, StatusCode};
 

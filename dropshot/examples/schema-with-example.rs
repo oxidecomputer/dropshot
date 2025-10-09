@@ -3,7 +3,7 @@
 //! and how that will be reflected in the resultant JSON generated when ran.
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseOk, RequestContext,
+    ApiDescription, HttpError, HttpResponseOk, RequestContext, endpoint,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

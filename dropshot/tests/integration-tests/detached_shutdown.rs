@@ -5,7 +5,7 @@
 
 use dropshot::Body;
 use dropshot::{
-    endpoint, ApiDescription, HandlerTaskMode, HttpError, RequestContext,
+    ApiDescription, HandlerTaskMode, HttpError, RequestContext, endpoint,
 };
 use http::{Method, Response, StatusCode};
 use std::time::Duration;

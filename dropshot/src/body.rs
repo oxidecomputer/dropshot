@@ -3,8 +3,8 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
+use http_body_util::combinators::BoxBody;
 use hyper::body::{Body as HttpBody, Bytes, Frame};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;

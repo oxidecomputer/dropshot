@@ -2,8 +2,8 @@
 
 //! schemars helper functions
 
-use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
+use schemars::schema::SchemaObject;
 
 use std::fmt;
 
@@ -26,7 +26,7 @@ pub(crate) fn schema2struct(
     schema_name: &str,
     kind: &str,
     schema: &schemars::schema::Schema,
-    generator: &schemars::gen::SchemaGenerator,
+    generator: &schemars::r#gen::SchemaGenerator,
     required: bool,
 ) -> Vec<StructMember> {
     match schema2struct_impl(schema, generator, required) {
@@ -43,7 +43,7 @@ pub(crate) fn schema2struct(
 /// This function is invoked recursively on subschemas.
 fn schema2struct_impl(
     schema: &schemars::schema::Schema,
-    generator: &schemars::gen::SchemaGenerator,
+    generator: &schemars::r#gen::SchemaGenerator,
     required: bool,
 ) -> Result<Vec<StructMember>, Box<Schema2StructError>> {
     // We ignore schema.metadata, which includes things like doc comments, and
@@ -152,7 +152,7 @@ fn schema2struct_impl(
                             Schema2StructError::InvalidSubschema(
                                 invalid.clone(),
                             ),
-                        ))
+                        ));
                     }
                 }
             }
@@ -241,9 +241,9 @@ impl fmt::Display for Schema2StructError {
 impl std::error::Error for Schema2StructError {}
 
 pub(crate) fn make_subschema_for<T: JsonSchema>(
-    gen: &mut schemars::gen::SchemaGenerator,
+    r#gen: &mut schemars::r#gen::SchemaGenerator,
 ) -> schemars::schema::Schema {
-    gen.subschema_for::<T>()
+    r#gen.subschema_for::<T>()
 }
 
 pub(crate) fn schema_extensions(
@@ -936,8 +936,8 @@ mod test {
         #[derive(JsonSchema)]
         struct Empty {}
 
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
 
         let schema = Empty::json_schema(&mut generator);
         let _ = j2oas_schema(None, &schema);
@@ -974,8 +974,8 @@ mod test {
             B { b: f32 },
         }
 
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
 
         let schema = SuperGarbage::json_schema(&mut generator);
         let _ = j2oas_schema(None, &schema);
@@ -991,8 +991,8 @@ mod test {
         enum Union {
             A { a: u32 },
         }
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
         let schema = Union::json_schema(&mut generator);
         let _ = j2oas_schema(None, &schema);
         for (key, schema) in generator.definitions().iter() {
@@ -1007,8 +1007,8 @@ mod test {
         struct Foo {
             bar: String,
         }
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let generator = schemars::r#gen::SchemaGenerator::new(settings);
         let root_schema = generator.into_root_schema_for::<Option<Foo>>();
         let schema = root_schema.schema;
         let os = j2oas_schema_object(None, &schema);
@@ -1110,8 +1110,8 @@ mod test {
         }
 
         fn assert_enum_error<T: JsonSchema>() {
-            let mut generator = schemars::gen::SchemaGenerator::new(
-                schemars::gen::SchemaSettings::openapi3(),
+            let mut generator = schemars::r#gen::SchemaGenerator::new(
+                schemars::r#gen::SchemaSettings::openapi3(),
             );
             let schema: schemars::schema::Schema =
                 generator.root_schema_for::<T>().schema.into();
@@ -1155,8 +1155,8 @@ mod test {
             front: Option<String>,
         }
 
-        let schema = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
+        let schema = schemars::r#gen::SchemaGenerator::new(
+            schemars::r#gen::SchemaSettings::openapi3(),
         )
         .into_root_schema_for::<BlackSheep>()
         .schema;

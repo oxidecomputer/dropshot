@@ -1,15 +1,15 @@
 // Copyright 2023 Oxide Computer Company
 
-use crate::api_description::ApiSchemaGenerator;
-use crate::pagination::PAGINATION_PARAM_SENTINEL;
-use crate::schema_util::schema2struct;
-use crate::schema_util::schema_extensions;
-use crate::schema_util::StructMember;
-use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 use crate::ApiEndpointParameter;
 use crate::ApiEndpointParameterLocation;
 use crate::ExtensionMode;
 use crate::ExtractorMetadata;
+use crate::api_description::ApiSchemaGenerator;
+use crate::pagination::PAGINATION_PARAM_SENTINEL;
+use crate::schema_util::StructMember;
+use crate::schema_util::schema_extensions;
+use crate::schema_util::schema2struct;
+use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 use schemars::JsonSchema;
 
 /// Convenience function to generate parameter metadata from types implementing
@@ -20,7 +20,7 @@ pub(crate) fn get_metadata<ParamType>(
 where
     ParamType: JsonSchema,
 {
-    let mut settings = schemars::gen::SchemaSettings::openapi3();
+    let mut settings = schemars::r#gen::SchemaSettings::openapi3();
 
     // Headers can't be null.
     if let ApiEndpointParameterLocation::Header = loc {
@@ -29,7 +29,7 @@ where
 
     // Generate the type for `ParamType` then pluck out each member of
     // the structure to encode as an individual parameter.
-    let mut generator = schemars::gen::SchemaGenerator::new(settings);
+    let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
     let schema = generator.root_schema_for::<ParamType>().schema.into();
 
     let extension_mode = match schema_extensions(&schema) {
@@ -87,14 +87,14 @@ where
 mod test {
     use crate::api_description::ExtensionMode;
     use crate::{
-        api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
-        ApiEndpointParameterLocation, PaginationParams,
+        ApiEndpointParameter, ApiEndpointParameterLocation, PaginationParams,
+        api_description::ApiEndpointParameterMetadata,
     };
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
-    use super::get_metadata;
     use super::ExtractorMetadata;
+    use super::get_metadata;
 
     #[derive(Deserialize, Serialize, JsonSchema)]
     #[allow(dead_code)]

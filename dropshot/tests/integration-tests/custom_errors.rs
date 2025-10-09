@@ -2,8 +2,6 @@
 
 //! Test cases for user-defined error types.
 
-use dropshot::endpoint;
-use dropshot::test_util::TestContext;
 use dropshot::ApiDescription;
 use dropshot::ErrorStatusCode;
 use dropshot::HttpError;
@@ -11,6 +9,8 @@ use dropshot::HttpResponseError;
 use dropshot::HttpResponseOk;
 use dropshot::Path;
 use dropshot::RequestContext;
+use dropshot::endpoint;
+use dropshot::test_util::TestContext;
 use http::Method;
 use http::StatusCode;
 use schemars::JsonSchema;

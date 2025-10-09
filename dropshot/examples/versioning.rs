@@ -95,7 +95,6 @@
 //! {"thing1_late":"hello from a LATE v1"}
 //! ```
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ClientSpecifiesVersionInHeader;
 use dropshot::ConfigDropshot;
@@ -106,6 +105,7 @@ use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
+use dropshot::endpoint;
 use http::HeaderName;
 use schemars::JsonSchema;
 use serde::Serialize;
