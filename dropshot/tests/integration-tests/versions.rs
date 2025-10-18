@@ -2,7 +2,6 @@
 
 //! Exercise the API versioning behavior
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ClientSpecifiesVersionInHeader;
 use dropshot::HttpError;
@@ -11,6 +10,7 @@ use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
+use dropshot::endpoint;
 use reqwest::Method;
 use reqwest::StatusCode;
 use schemars::JsonSchema;

@@ -25,16 +25,16 @@ use std::collections::HashMap;
 
 use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{ToTokens, format_ident, quote, quote_spanned};
 use serde::Deserialize;
 use serde_tokenstream::{
-    from_tokenstream, from_tokenstream_spanned, ParseWrapper,
+    ParseWrapper, from_tokenstream, from_tokenstream_spanned,
 };
-use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Error};
+use syn::{Error, parse_quote, parse_quote_spanned, spanned::Spanned};
 
 use crate::{
     channel::ChannelParams,
-    doc::{string_to_doc_attrs, ExtractedDoc},
+    doc::{ExtractedDoc, string_to_doc_attrs},
     endpoint::EndpointParams,
     error_store::{ErrorSink, ErrorStore},
     metadata::{
@@ -46,7 +46,7 @@ use crate::{
         ItemTraitPartParsed, TraitItemFnForSignature, TraitItemPartParsed,
         UnparsedBlock,
     },
-    util::{get_crate, MacroKind},
+    util::{MacroKind, get_crate},
 };
 
 pub(crate) fn do_trait(
@@ -592,11 +592,7 @@ impl<'ast> ContextItem<'ast> {
         }
 
         // Don't return the type if there were errors.
-        if errors.has_errors() {
-            Self::Invalid(ty)
-        } else {
-            Self::Valid(ty)
-        }
+        if errors.has_errors() { Self::Invalid(ty) } else { Self::Valid(ty) }
     }
 
     fn new_missing(
@@ -1191,13 +1187,19 @@ impl<'ast> ApiFnItem<'ast> {
                 for attr in rest {
                     let msg = match (first, attr) {
                         (ApiAttr::Endpoint(_), ApiAttr::Endpoint(_)) => {
-                            format!("method `{name}` marked as endpoint multiple times")
+                            format!(
+                                "method `{name}` marked as endpoint multiple times"
+                            )
                         }
                         (ApiAttr::Channel(_), ApiAttr::Channel(_)) => {
-                            format!("method `{name}` marked as channel multiple times")
+                            format!(
+                                "method `{name}` marked as channel multiple times"
+                            )
                         }
                         _ => {
-                            format!("method `{name}` marked as both endpoint and channel")
+                            format!(
+                                "method `{name}` marked as both endpoint and channel"
+                            )
                         }
                     };
 

@@ -6,9 +6,9 @@
 //! proper tagging innate.
 
 use dropshot::{
-    endpoint, ApiDescription, ConfigLogging, ConfigLoggingLevel,
-    EndpointTagPolicy, HttpError, HttpResponseOk, RequestContext,
-    ServerBuilder, TagConfig, TagDetails, TagExternalDocs,
+    ApiDescription, ConfigLogging, ConfigLoggingLevel, EndpointTagPolicy,
+    HttpError, HttpResponseOk, RequestContext, ServerBuilder, TagConfig,
+    TagDetails, TagExternalDocs, endpoint,
 };
 
 #[endpoint {

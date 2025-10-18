@@ -4,9 +4,9 @@
 
 use std::{fmt, iter::Peekable};
 
-use proc_macro2::{extra::DelimSpan, TokenStream};
-use quote::{quote_spanned, ToTokens};
-use syn::{parse_quote, spanned::Spanned, visit::Visit, Error};
+use proc_macro2::{TokenStream, extra::DelimSpan};
+use quote::{ToTokens, quote_spanned};
+use syn::{Error, parse_quote, spanned::Spanned, visit::Visit};
 
 use crate::error_store::ErrorSink;
 

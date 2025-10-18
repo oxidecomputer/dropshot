@@ -2,7 +2,6 @@
 //! Example use of Dropshot where a client wants to act on
 //! a custom context object that outlives endpoint functions.
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -10,13 +9,14 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
+use dropshot::endpoint;
 use futures::FutureExt;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

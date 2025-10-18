@@ -3,7 +3,7 @@
 //! Test cases for streaming requests.
 
 use dropshot::Body;
-use dropshot::{endpoint, ApiDescription, HttpError, RequestContext};
+use dropshot::{ApiDescription, HttpError, RequestContext, endpoint};
 use http::{Method, Response, StatusCode};
 use http_body_util::BodyExt;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};

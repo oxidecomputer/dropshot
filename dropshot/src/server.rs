@@ -1,6 +1,7 @@
 // Copyright 2024 Oxide Computer Company
 //! Generic server-wide state and facilities
 
+use super::ProbeRegistration;
 use super::api_description::ApiDescription;
 use super::body::Body;
 use super::config::{ConfigDropshot, ConfigTls};
@@ -11,7 +12,6 @@ use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 use super::versioning::VersionPolicy;
-use super::ProbeRegistration;
 
 use async_stream::stream;
 use debug_ignore::DebugIgnore;
@@ -20,11 +20,11 @@ use futures::future::{
 };
 use futures::lock::Mutex;
 use futures::stream::{Stream, StreamExt};
-use hyper::service::Service;
 use hyper::Request;
 use hyper::Response;
+use hyper::service::Service;
 use rustls;
-use scopeguard::{guard, ScopeGuard};
+use scopeguard::{ScopeGuard, guard};
 use std::convert::TryFrom;
 use std::future::Future;
 use std::mem;
@@ -37,12 +37,12 @@ use std::task::{Context, Poll};
 use tokio::io::ReadBuf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
-use tokio_rustls::{server::TlsStream, TlsAcceptor};
+use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use uuid::Uuid;
 use waitgroup::WaitGroup;
 
-use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
+use crate::config::HandlerTaskMode;
 use slog::Logger;
 use thiserror::Error;
 
@@ -1079,9 +1079,7 @@ pub enum BuildError {
         #[source]
         error: std::io::Error,
     },
-    #[error(
-        "unversioned servers cannot have endpoints with specific versions"
-    )]
+    #[error("unversioned servers cannot have endpoints with specific versions")]
     UnversionedServerHasVersionedRoutes,
 }
 
@@ -1206,14 +1204,14 @@ mod test {
     // Referring to the current crate as "dropshot::" instead of "crate::"
     // helps the endpoint macro with module lookup.
     use crate as dropshot;
-    use dropshot::endpoint;
-    use dropshot::test_util::ClientTestContext;
-    use dropshot::test_util::LogContext;
     use dropshot::ConfigLogging;
     use dropshot::ConfigLoggingLevel;
     use dropshot::HttpError;
     use dropshot::HttpResponseOk;
     use dropshot::RequestContext;
+    use dropshot::endpoint;
+    use dropshot::test_util::ClientTestContext;
+    use dropshot::test_util::LogContext;
     use http::StatusCode;
     use hyper::Method;
 
