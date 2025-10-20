@@ -1,8 +1,8 @@
 // Copyright 2020 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseOk, PaginationParams,
-    Query, RequestContext, ResultsPage,
+    ApiDescription, HttpError, HttpResponseOk, PaginationParams, Query,
+    RequestContext, ResultsPage, endpoint,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

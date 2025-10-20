@@ -5,12 +5,12 @@ use super::error::HttpError;
 use super::error_status_code::ClientErrorStatusCode;
 use super::handler::RouteHandler;
 
+use crate::ApiEndpoint;
+use crate::RequestEndpointMetadata;
 use crate::api_description::ApiEndpointVersions;
 use crate::from_map::MapError;
 use crate::from_map::MapValue;
 use crate::server::ServerContext;
-use crate::ApiEndpoint;
-use crate::RequestEndpointMetadata;
 use http::Method;
 use percent_encoding::percent_decode_str;
 use semver::Version;
@@ -268,7 +268,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                                 path, lit, varname
                             );
                         }
-                        HttpRouterEdges::Literals(ref mut literals) => literals
+                        HttpRouterEdges::Literals(literals) => literals
                             .entry(lit)
                             .or_insert_with(|| Box::new(HttpRouterNode::new())),
                     }
@@ -302,10 +302,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                             path, new_varname, varname,
                         ),
 
-                        HttpRouterEdges::VariableSingle(
-                            varname,
-                            ref mut node,
-                        ) => {
+                        HttpRouterEdges::VariableSingle(varname, node) => {
                             if *new_varname != *varname {
                                 // Don't allow people to use different names for
                                 // the same part of the path.  Again, this could
@@ -363,10 +360,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                             path, new_varname, varname,
                         ),
 
-                        HttpRouterEdges::VariableRest(
-                            varname,
-                            ref mut node,
-                        ) => {
+                        HttpRouterEdges::VariableRest(varname, node) => {
                             if *new_varname != *varname {
                                 /*
                                  * Don't allow people to use different names for
@@ -466,7 +460,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 Some(HttpRouterEdges::Literals(edges)) => {
                     edges.get(&segment_string)
                 }
-                Some(HttpRouterEdges::VariableSingle(varname, ref node)) => {
+                Some(HttpRouterEdges::VariableSingle(varname, node)) => {
                     variables.insert(
                         varname.clone(),
                         VariableValue::String(segment_string),
@@ -634,11 +628,7 @@ where
 {
     Box::new(node.methods.iter().flat_map(move |(m, handlers)| {
         handlers.iter().filter_map(move |h| {
-            if h.versions.matches(version) {
-                Some((m, h))
-            } else {
-                None
-            }
+            if h.versions.matches(version) { Some((m, h)) } else { None }
         })
     }))
 }
@@ -722,7 +712,7 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
                     // it's time to find the next node.
                     match self.path.last_mut() {
                         None => break None,
-                        Some((_, ref mut last)) => match last.next() {
+                        Some((_, last)) => match last.next() {
                             None => {
                                 self.path.pop();
                                 assert!(self.method.next().is_none());
@@ -842,16 +832,16 @@ mod test {
     use super::super::handler::HttpRouteHandler;
     use super::super::handler::RequestContext;
     use super::super::handler::RouteHandler;
-    use super::input_path_to_segments;
     use super::HttpRouter;
     use super::PathSegment;
+    use super::input_path_to_segments;
+    use crate::ApiEndpoint;
+    use crate::ApiEndpointResponse;
+    use crate::Body;
     use crate::api_description::ApiEndpointBodyContentType;
     use crate::api_description::ApiEndpointVersions;
     use crate::from_map::from_map;
     use crate::router::VariableValue;
-    use crate::ApiEndpoint;
-    use crate::ApiEndpointResponse;
-    use crate::Body;
     use http::Method;
     use http::StatusCode;
     use hyper::Response;
@@ -1158,24 +1148,39 @@ mod test {
         // Insert a route into the middle of the tree.  This will let us look at
         // parent nodes, sibling nodes, and child nodes.
         router.insert(new_endpoint(new_handler(), Method::GET, "/foo/bar"));
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/foo/bar".into())
-            .is_ok());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/foo/bar/".into())
-            .is_ok());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "//foo/bar".into())
-            .is_ok());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "//foo//bar".into())
-            .is_ok());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "//foo//bar//".into())
-            .is_ok());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "///foo///bar///".into())
-            .is_ok());
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "/foo/bar".into())
+                .is_ok()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "/foo/bar/".into())
+                .is_ok()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "//foo/bar".into())
+                .is_ok()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "//foo//bar".into())
+                .is_ok()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "//foo//bar//".into())
+                .is_ok()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "///foo///bar///".into()
+                )
+                .is_ok()
+        );
 
         // TODO-cleanup: consider having a "build" step that constructs a
         // read-only router and does validation like making sure that there's a
@@ -1241,9 +1246,9 @@ mod test {
         // back, even if we use different names that normalize to "/".
         // Before we start, sanity-check that there's nothing at the root
         // already.  Other test cases examine the errors in more detail.
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/".into())
-            .is_err());
+        assert!(
+            router.lookup_route_unversioned(&Method::GET, "/".into()).is_err()
+        );
         router.insert(new_endpoint(new_handler_named("h1"), Method::GET, "/"));
         let result =
             router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
@@ -1263,9 +1268,9 @@ mod test {
         // we get both this handler and the previous one if we ask for the
         // corresponding method and that we get no handler for a different,
         // third method.
-        assert!(router
-            .lookup_route_unversioned(&Method::PUT, "/".into())
-            .is_err());
+        assert!(
+            router.lookup_route_unversioned(&Method::PUT, "/".into()).is_err()
+        );
         router.insert(new_endpoint(new_handler_named("h2"), Method::PUT, "/"));
         let result =
             router.lookup_route_unversioned(&Method::PUT, "/".into()).unwrap();
@@ -1275,16 +1280,20 @@ mod test {
             router.lookup_route_unversioned(&Method::GET, "/".into()).unwrap();
         assert_eq!(result.handler.label(), "h1");
         assert!(result.endpoint.variables.is_empty());
-        assert!(router
-            .lookup_route_unversioned(&Method::DELETE, "/".into())
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::DELETE, "/".into())
+                .is_err()
+        );
 
         // Now insert a handler one level deeper.  Verify that all the previous
         // handlers behave as we expect, and that we have one handler at the new
         // path, whichever name we use for it.
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/foo".into())
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "/foo".into())
+                .is_err()
+        );
         router.insert(new_endpoint(
             new_handler_named("h3"),
             Method::GET,
@@ -1318,18 +1327,26 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h3");
         assert!(result.endpoint.variables.is_empty());
-        assert!(router
-            .lookup_route_unversioned(&Method::PUT, "/foo".into())
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(&Method::PUT, "/foo/".into())
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(&Method::PUT, "//foo//".into())
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(&Method::PUT, "/foo//".into())
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::PUT, "/foo".into())
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::PUT, "/foo/".into())
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::PUT, "//foo//".into())
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::PUT, "/foo//".into())
+                .is_err()
+        );
     }
 
     #[test]
@@ -1413,9 +1430,14 @@ mod test {
         // This isn't an important use case today, but we'd like to know if we
         // change the behavior, intentionally or otherwise.
         let mut router = HttpRouter::new();
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/not{a}variable".into())
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/not{a}variable".into()
+                )
+                .is_err()
+        );
         router.insert(new_endpoint(
             new_handler_named("h4"),
             Method::GET,
@@ -1426,12 +1448,22 @@ mod test {
             .unwrap();
         assert_eq!(result.handler.label(), "h4");
         assert!(result.endpoint.variables.is_empty());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/not{b}variable".into())
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/notnotavariable".into())
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/not{b}variable".into()
+                )
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/notnotavariable".into()
+                )
+                .is_err()
+        );
     }
 
     #[test]
@@ -1443,12 +1475,16 @@ mod test {
             Method::GET,
             "/projects/{project_id}",
         ));
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/projects".into())
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(&Method::GET, "/projects/".into())
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "/projects".into())
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(&Method::GET, "/projects/".into())
+                .is_err()
+        );
         let result = router
             .lookup_route_unversioned(&Method::GET, "/projects/p12345".into())
             .unwrap();
@@ -1461,12 +1497,14 @@ mod test {
             *result.endpoint.variables.get("project_id").unwrap(),
             VariableValue::String("p12345".to_string())
         );
-        assert!(router
-            .lookup_route_unversioned(
-                &Method::GET,
-                "/projects/p12345/child".into()
-            )
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/projects/p12345/child".into()
+                )
+                .is_err()
+        );
         let result = router
             .lookup_route_unversioned(&Method::GET, "/projects/p12345/".into())
             .unwrap();
@@ -1545,24 +1583,30 @@ mod test {
             Method::GET,
             "/projects/{project_id}/instances",
         ));
-        assert!(router
-            .lookup_route_unversioned(
-                &Method::GET,
-                "/projects/instances".into()
-            )
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(
-                &Method::GET,
-                "/projects//instances".into()
-            )
-            .is_err());
-        assert!(router
-            .lookup_route_unversioned(
-                &Method::GET,
-                "/projects///instances".into()
-            )
-            .is_err());
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/projects/instances".into()
+                )
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/projects//instances".into()
+                )
+                .is_err()
+        );
+        assert!(
+            router
+                .lookup_route_unversioned(
+                    &Method::GET,
+                    "/projects///instances".into()
+                )
+                .is_err()
+        );
         let result = router
             .lookup_route_unversioned(
                 &Method::GET,

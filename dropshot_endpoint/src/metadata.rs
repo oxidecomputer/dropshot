@@ -3,15 +3,15 @@
 //! Code to handle metadata associated with an endpoint.
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote_spanned, ToTokens};
+use quote::{ToTokens, format_ident, quote_spanned};
 use serde::Deserialize;
 use serde_tokenstream::ParseWrapper;
-use syn::{spanned::Spanned, Error};
+use syn::{Error, spanned::Spanned};
 
 use crate::{
     doc::ExtractedDoc,
     error_store::ErrorSink,
-    util::{get_crate, is_wildcard_path, MacroKind, ValidContentType},
+    util::{MacroKind, ValidContentType, get_crate, is_wildcard_path},
 };
 
 #[allow(non_snake_case)]

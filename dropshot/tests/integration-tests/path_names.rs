@@ -1,7 +1,7 @@
 // Copyright 2022 Oxide Computer Company
 
 use dropshot::{
-    endpoint, ApiDescription, HttpError, HttpResponseOk, Path, RequestContext,
+    ApiDescription, HttpError, HttpResponseOk, Path, RequestContext, endpoint,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;

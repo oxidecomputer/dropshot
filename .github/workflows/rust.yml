@@ -54,11 +54,18 @@ jobs:
         # macos-14 for M1 runners
         os: [ubuntu-22.04, windows-2022, macos-14]
         features: [all, default]
+        rust-version:
+          - stable
+          # 1.85 is the MSRV
+          - "1.85"
         include:
           - features: all
             feature_flags: --all-features
     steps:
       - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust-version }}
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
@@ -70,4 +77,7 @@ jobs:
       - name: Build
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
-        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose
+        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact --skip fail
+      - name: Run trybuild tests
+        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact fail
+

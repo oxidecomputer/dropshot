@@ -1,14 +1,14 @@
 // Copyright 2025 Oxide Computer Company
 
 use dropshot::{
-    channel, endpoint, http_response_found, http_response_see_other,
-    http_response_temporary_redirect, ApiDescription,
-    ApiDescriptionRegisterError, FreeformBody, Header, HttpError,
-    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
+    ApiDescription, ApiDescriptionRegisterError, FreeformBody, Header,
+    HttpError, HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
     HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
     HttpResponseSeeOther, HttpResponseTemporaryRedirect,
     HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
+    channel, endpoint, http_response_found, http_response_see_other,
+    http_response_temporary_redirect,
 };
 use dropshot::{Body, WebsocketConnection};
 use schemars::JsonSchema;
@@ -567,7 +567,7 @@ impl<T: JsonSchema> JsonSchema for WithXRustType<T> {
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
+        r#gen: &mut schemars::r#gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
         use schemars::schema::*;
 
@@ -585,7 +585,7 @@ impl<T: JsonSchema> JsonSchema for WithXRustType<T> {
             "version": "*",
             "path": "foo",
             "parameters": [
-                gen.subschema_for::<T>(),
+                r#gen.subschema_for::<T>(),
             ],
         });
         extensions.insert("x-rust-type".to_string(), rust_type);

@@ -9,6 +9,10 @@ default-members = ["dropshot", "dropshot_endpoint" ]
 
 resolver = "2"
 
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+
 [workspace.lints.clippy]
 # Clippy's style nits are useful, but not worth keeping in CI.
 style = { level = "allow", priority = -1 }

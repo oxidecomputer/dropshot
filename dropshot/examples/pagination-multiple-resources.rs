@@ -3,7 +3,6 @@
 //! multiple resources.  See the other pagination examples for more information
 //! about how to run this.
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -19,6 +18,7 @@ use dropshot::RequestContext;
 use dropshot::ResultsPage;
 use dropshot::ServerBuilder;
 use dropshot::WhichPage;
+use dropshot::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

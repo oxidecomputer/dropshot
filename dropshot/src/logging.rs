@@ -179,12 +179,12 @@ fn log_drain_for_file(
 
 #[cfg(test)]
 mod test {
+    use crate::ConfigLogging;
+    use crate::test_util::BunyanLogRecordSpec;
     use crate::test_util::read_bunyan_log;
     use crate::test_util::read_config;
     use crate::test_util::verify_bunyan_records;
     use crate::test_util::verify_bunyan_records_sequential;
-    use crate::test_util::BunyanLogRecordSpec;
-    use crate::ConfigLogging;
     use libc;
     use slog::Logger;
     use std::fs;

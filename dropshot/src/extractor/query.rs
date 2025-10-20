@@ -3,14 +3,14 @@
 //! Querystring-related extractor(s)
 
 use super::metadata::get_metadata;
-use crate::api_description::ApiEndpointBodyContentType;
-use crate::api_description::ApiEndpointParameterLocation;
-use crate::error::HttpError;
-use crate::server::ServerContext;
 use crate::ExtractorMetadata;
 use crate::RequestContext;
 use crate::RequestInfo;
 use crate::SharedExtractor;
+use crate::api_description::ApiEndpointBodyContentType;
+use crate::api_description::ApiEndpointParameterLocation;
+use crate::error::HttpError;
+use crate::server::ServerContext;
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
