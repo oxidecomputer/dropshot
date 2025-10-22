@@ -19,19 +19,19 @@ async-stream = "0.3.6"
 async-trait = "0.1.89"
 base64 = "0.22.1"
 bytes = "1"
-camino = { version = "1.2.0", features = ["serde1"] }
+camino = { version = "1.2.1", features = ["serde1"] }
 debug-ignore = "1.0.5"
 form_urlencoded = "1.2.2"
 futures = "0.3.31"
 hostname = "0.4.0"
 http = "1.3.1"
 http-body-util = "0.1.3"
-indexmap = "2.11.4"
+indexmap = "2.12.0"
 multer = "3.1.0"
 paste = "1.0.15"
 percent-encoding = "2.3.2"
 rustls = "0.22.4"
-rustls-pemfile = "2.1.3"
+rustls-pemfile = "2.2.0"
 scopeguard = "1.2.0"
 semver = "1.0.27"
 serde_json = "1.0.145"
@@ -39,14 +39,14 @@ serde_path_to_error = "0.1.20"
 serde_urlencoded = "0.7.1"
 sha1 = "0.10.6"
 simple-mermaid = { version = "0.2.0", optional = true }
-slog = { version = "2.5.0", features = ["dynamic-keys"] }
+slog = { version = "2.8.2", features = ["dynamic-keys"] }
 slog-async = "2.8.0"
 slog-bunyan = "2.5.0"
 slog-json = "2.6.1"
 slog-term = "2.9.2"
-thiserror = "2.0.16"
+thiserror = "2.0.17"
 tokio-rustls = "0.25.0"
-toml = "0.9.6"
+toml = "0.9.8"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
@@ -71,11 +71,11 @@ version = "2.2.0"
 features = [ "skip_serializing_defaults" ]
 
 [dependencies.serde]
-version = "1.0.224"
+version = "1.0.228"
 features = [ "derive" ]
 
 [dependencies.tokio]
-version = "1.47"
+version = "1.48"
 features = [ "full" ]
 
 [dependencies.tokio-util]
@@ -92,31 +92,33 @@ version = "1.18.1"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
+# While newer versions of schemars are available, they are not trivial for us to update to.
+# See oxidecomputer/dropshot#1375 for more information.
 version = "0.8.22"
 features = [ "uuid1" ]
 
 [dev-dependencies]
 anyhow = "1.0.100"
 async-channel = "2.5.0"
-buf-list = "1.0.3"
+buf-list = "1.1.2"
 expectorate = "1.2.0"
 flate2 = "1.0"
 hyper-rustls = "0.26.0"
 hyper-staticfile = "0.10"
 lazy_static = "1.5.0"
-libc = "0.2.175"
+libc = "0.2.177"
 mime_guess = "2.0.5"
 subprocess = "0.2.9"
-tempfile = "3.22"
-trybuild = "1.0.111"
+tempfile = "3.23"
+trybuild = "1.0.112"
 # Used by the https examples and tests
 pem = "3.0"
-rcgen = "0.14.4"
+rcgen = "0.14.5"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.24.0"
 
 [dev-dependencies.reqwest]
-version = "0.12.23"
+version = "0.12.24"
 # Using rustls-tls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
 features = [ "json", "rustls-tls" ]
@@ -131,7 +133,7 @@ version = "0.8.22"
 features = [ "chrono", "uuid1" ]
 
 [dev-dependencies.slog]
-version = "2.5.0"
+version = "2.8.2"
 features = [ "max_level_trace", "release_max_level_debug" ]
 
 # This is required for the build.rs script to check for an appropriate compiler
