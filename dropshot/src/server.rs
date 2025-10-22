@@ -3,6 +3,8 @@
 
 use super::api_description::ApiDescription;
 use super::body::Body;
+use super::compression::apply_gzip_compression;
+use super::compression::should_compress_response;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
@@ -105,6 +107,9 @@ pub struct ServerConfig {
     /// is made to deal with headers that appear multiple times in a single
     /// request.
     pub log_headers: Vec<String>,
+    /// Whether to enable gzip compression for responses when response contents
+    /// allow it and clients ask for it through the Accept-Encoding header.
+    pub compression: bool,
 }
 
 /// See [`ServerBuilder`] instead.
@@ -188,6 +193,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
             log_headers: config.log_headers.clone(),
+            compression: config.compression,
         };
 
         let tls_acceptor = tls
@@ -983,14 +989,16 @@ async fn http_request_handle<C: ServerContext>(
         }
     };
 
-    if crate::compression::should_compress_response(
-        &method,
-        &request_headers,
-        response.status(),
-        response.headers(),
-        response.extensions(),
-    ) {
-        response = crate::compression::apply_gzip_compression(response);
+    if server.config.compression
+        && should_compress_response(
+            &method,
+            &request_headers,
+            response.status(),
+            response.headers(),
+            response.extensions(),
+        )
+    {
+        response = apply_gzip_compression(response);
     }
 
     response.headers_mut().insert(

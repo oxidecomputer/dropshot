@@ -672,3 +672,91 @@ async fn test_no_compression_for_304_not_modified() {
 // Note: HEAD request test is omitted from integration tests because Dropshot
 // requires explicit HEAD endpoint registration. The HEAD logic is tested via
 // unit tests in should_compress_response.
+
+#[tokio::test]
+async fn test_compression_config_disabled() {
+    // Test that compression is disabled when config.compression = false (default)
+    let api = api();
+    let config =
+        dropshot::ConfigDropshot { compression: false, ..Default::default() };
+    let logctx =
+        crate::common::create_log_context("compression_config_disabled");
+    let log = logctx.log.new(slog::o!());
+    let testctx = dropshot::test_util::TestContext::new(
+        api,
+        0_usize,
+        &config,
+        Some(logctx),
+        log,
+    );
+    let client = &testctx.client_testctx;
+
+    // Request WITH Accept-Encoding: gzip but compression disabled in config
+    let uri = client.url("/large-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should NOT be compressed due to config.compression = false
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        None,
+        "Response should not be compressed when config.compression = false"
+    );
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_compression_config_enabled() {
+    // Test that compression works when config.compression = true
+    let api = api();
+    let config =
+        dropshot::ConfigDropshot { compression: true, ..Default::default() };
+    let logctx =
+        crate::common::create_log_context("compression_config_enabled");
+    let log = logctx.log.new(slog::o!());
+    let testctx = dropshot::test_util::TestContext::new(
+        api,
+        0_usize,
+        &config,
+        Some(logctx),
+        log,
+    );
+    let client = &testctx.client_testctx;
+
+    // Request WITH Accept-Encoding: gzip and compression enabled in config
+    let uri = client.url("/large-response");
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(&uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let mut response = client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed");
+
+    // Should be compressed since config.compression = true
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        Some(&header::HeaderValue::from_static("gzip")),
+        "Response should be compressed when config.compression = true"
+    );
+
+    // Verify the response can be decompressed
+    let compressed_body = get_response_bytes(&mut response).await;
+    let _decompressed = decompress_gzip(&compressed_body); // Should not panic
+
+    testctx.teardown().await;
+}

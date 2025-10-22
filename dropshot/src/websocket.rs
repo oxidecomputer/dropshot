@@ -385,6 +385,7 @@ mod tests {
                     default_handler_task_mode:
                         HandlerTaskMode::CancelOnDisconnect,
                     log_headers: Default::default(),
+                    compression: true,
                 },
                 router: HttpRouter::new(),
                 log: log.clone(),
