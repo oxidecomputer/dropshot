@@ -11,9 +11,81 @@ use http::{header, Method, StatusCode};
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::common;
+use crate::common::{create_log_context, test_setup};
 
 extern crate slog;
+
+// Helper functions for tests
+
+/// Creates a request builder with gzip Accept-Encoding header
+fn make_gzip_request(uri: &http::Uri) -> Request<dropshot::Body> {
+    Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request")
+}
+
+/// Makes a request with gzip Accept-Encoding header and returns the response
+async fn get_gzip_response(
+    client: &dropshot::test_util::ClientTestContext,
+    uri: &http::Uri,
+) -> Response<dropshot::Body> {
+    let request = make_gzip_request(uri);
+    client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed")
+}
+
+/// Makes a request without Accept-Encoding header and returns the response
+async fn make_plain_request_response(
+    client: &dropshot::test_util::ClientTestContext,
+    uri: &http::Uri,
+) -> Response<dropshot::Body> {
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+    client
+        .make_request_with_request(request, StatusCode::OK)
+        .await
+        .expect("Request should succeed")
+}
+
+/// Asserts that a response has gzip encoding
+fn assert_gzip_encoded(response: &Response<dropshot::Body>) {
+    assert_eq!(
+        response.headers().get(header::CONTENT_ENCODING),
+        Some(&header::HeaderValue::from_static("gzip"))
+    );
+}
+
+/// Verifies that compressed and uncompressed responses match when decompressed
+async fn assert_compression_works(
+    uncompressed_response: &mut Response<dropshot::Body>,
+    compressed_response: &mut Response<dropshot::Body>,
+) {
+    let uncompressed_body = get_response_bytes(uncompressed_response).await;
+    let compressed_body = get_response_bytes(compressed_response).await;
+
+    // Compressed should be smaller
+    assert!(
+        compressed_body.len() < uncompressed_body.len(),
+        "Gzipped response ({} bytes) should be smaller than uncompressed response ({} bytes)",
+        compressed_body.len(),
+        uncompressed_body.len()
+    );
+
+    // Decompressed should match original
+    let decompressed_body = decompress_gzip(&compressed_body);
+    assert_eq!(
+        decompressed_body, uncompressed_body,
+        "Decompressed gzip response should match uncompressed response"
+    );
+}
 
 // Test payload that's large enough to benefit from compression
 #[derive(Deserialize, Serialize, schemars::JsonSchema)]
@@ -216,78 +288,27 @@ fn decompress_gzip(compressed_data: &[u8]) -> Vec<u8> {
 
 #[tokio::test]
 async fn test_gzip_compression_with_accept_encoding() {
-    let api = api();
-    let testctx = common::test_setup("gzip_compression_accept_encoding", api);
+    let testctx = test_setup("gzip_compression_accept_encoding", api());
     let client = &testctx.client_testctx;
 
-    // Make request WITHOUT Accept-Encoding: gzip header
     let uri = client.url("/large-response");
-    let request_no_gzip = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
 
-    let mut response_no_gzip = client
-        .make_request_with_request(request_no_gzip, StatusCode::OK)
-        .await
-        .expect("Request without gzip should succeed");
+    // Make requests and get responses directly
+    let mut response_no_gzip = make_plain_request_response(client, &uri).await;
+    let mut response_with_gzip = get_gzip_response(client, &uri).await;
 
-    // Make request WITH Accept-Encoding: gzip header
-    let request_with_gzip = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
-
-    let mut response_with_gzip = client
-        .make_request_with_request(request_with_gzip, StatusCode::OK)
-        .await
-        .expect("Request with gzip should succeed");
-
-    // Get response bodies
-    let uncompressed_body = get_response_bytes(&mut response_no_gzip).await;
-    let compressed_body = get_response_bytes(&mut response_with_gzip).await;
-
-    // When gzip is implemented, the gzipped response should:
-    // 1. Have Content-Encoding: gzip header
-    assert_eq!(
-        response_with_gzip.headers().get(header::CONTENT_ENCODING),
-        Some(&header::HeaderValue::from_static("gzip")),
-        "Response with Accept-Encoding: gzip should have Content-Encoding: gzip header"
-    );
-
-    // 2. Be smaller than the uncompressed response
-    assert!(
-        compressed_body.len() < uncompressed_body.len(),
-        "Gzipped response ({} bytes) should be smaller than uncompressed response ({} bytes)",
-        compressed_body.len(),
-        uncompressed_body.len()
-    );
-
-    // 3. When decompressed, should match the original response
-    let decompressed_body = decompress_gzip(&compressed_body);
-    assert_eq!(
-        decompressed_body, uncompressed_body,
-        "Decompressed gzip response should match uncompressed response"
-    );
-
-    // The response without Accept-Encoding should NOT have Content-Encoding header
-    assert_eq!(
-        response_no_gzip.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Response without Accept-Encoding: gzip should not have Content-Encoding header"
-    );
+    // Verify compression works correctly
+    assert_gzip_encoded(&response_with_gzip);
+    assert_eq!(response_no_gzip.headers().get(header::CONTENT_ENCODING), None);
+    assert_compression_works(&mut response_no_gzip, &mut response_with_gzip)
+        .await;
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_gzip_compression_accepts_multiple_encodings() {
-    let api = api();
-    let testctx =
-        common::test_setup("gzip_compression_multiple_encodings", api);
+    let testctx = test_setup("gzip_compression_multiple_encodings", api());
     let client = &testctx.client_testctx;
 
     // Test that gzip works when client accepts multiple encodings including gzip
@@ -305,11 +326,7 @@ async fn test_gzip_compression_accepts_multiple_encodings() {
         .expect("Request with multiple accept encodings should succeed");
 
     // Should still use gzip compression
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        Some(&header::HeaderValue::from_static("gzip")),
-        "Response should use gzip when it's one of multiple accepted encodings"
-    );
+    assert_gzip_encoded(&response);
 
     // Verify the response can be decompressed
     let compressed_body = get_response_bytes(&mut response).await;
@@ -320,22 +337,15 @@ async fn test_gzip_compression_accepts_multiple_encodings() {
 
 #[tokio::test]
 async fn test_no_gzip_without_accept_encoding() {
-    let api = api();
-    let testctx = common::test_setup("no_gzip_without_accept", api);
+    let testctx = test_setup("no_gzip_without_accept", api());
     let client = &testctx.client_testctx;
 
-    // Request without any Accept-Encoding header should not get compressed response
-    let response = client
-        .make_request_no_body(Method::GET, "/large-response", StatusCode::OK)
-        .await
-        .expect("Request without accept encoding should succeed");
+    let uri = client.url("/large-response");
 
-    // Should not have Content-Encoding header
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Response without Accept-Encoding should not be compressed"
-    );
+    // Request without any Accept-Encoding header should not get compressed response
+    let response = make_plain_request_response(client, &uri).await;
+
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
@@ -343,13 +353,11 @@ async fn test_no_gzip_without_accept_encoding() {
 #[tokio::test]
 async fn test_no_compression_for_streaming_responses() {
     // Test that streaming responses are not compressed even when client accepts gzip
-    let api = crate::streaming::api();
-    let testctx = common::test_setup("no_compression_streaming", api);
+    let testctx =
+        test_setup("no_compression_streaming", crate::streaming::api());
     let client = &testctx.client_testctx;
 
     // Make request with Accept-Encoding: gzip header
-    // Note: We can't use make_request_no_body because it doesn't let us set custom headers
-    // So we'll use the RequestBuilder pattern used by the client internally
     let uri = client.url("/streaming");
     let request = hyper::Request::builder()
         .method(http::Method::GET)
@@ -364,19 +372,13 @@ async fn test_no_compression_for_streaming_responses() {
         .expect("Streaming request with gzip accept should succeed");
 
     // Should have chunked transfer encoding
-    let transfer_encoding_header = response.headers().get("transfer-encoding");
     assert_eq!(
+        response.headers().get("transfer-encoding"),
         Some(&http::HeaderValue::from_static("chunked")),
-        transfer_encoding_header,
         "Streaming response should have transfer-encoding: chunked"
     );
 
-    // Should NOT have gzip content encoding even though client accepts it
-    assert_eq!(
-        response.headers().get(http::header::CONTENT_ENCODING),
-        None,
-        "Streaming response should not be compressed even with Accept-Encoding: gzip"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     // Consume the body to verify it works (and to allow teardown to proceed)
     let body_bytes = get_response_bytes(&mut response).await;
@@ -387,36 +389,18 @@ async fn test_no_compression_for_streaming_responses() {
 
 #[tokio::test]
 async fn test_no_compression_for_non_compressible_content_types() {
-    let api = api();
-    let testctx = common::test_setup("no_compression_non_compressible", api);
+    let testctx = test_setup("no_compression_non_compressible", api());
     let client = &testctx.client_testctx;
 
     // Request an image with Accept-Encoding: gzip
     let uri = client.url("/image-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
+    let response = get_gzip_response(client, &uri).await;
 
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Image request should succeed");
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
-    // Binary content (images) should NOT be compressed
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Binary content (image/png) should not be compressed even with Accept-Encoding: gzip"
-    );
-
-    // Verify content-type is correct
     assert_eq!(
         response.headers().get(header::CONTENT_TYPE),
-        Some(&header::HeaderValue::from_static("image/png")),
-        "Content-Type should be image/png"
+        Some(&header::HeaderValue::from_static("image/png"))
     );
 
     testctx.teardown().await;
@@ -424,68 +408,35 @@ async fn test_no_compression_for_non_compressible_content_types() {
 
 #[tokio::test]
 async fn test_compression_disabled_with_extension() {
-    let api = api();
-    let testctx = common::test_setup("compression_disabled_extension", api);
+    let testctx = test_setup("compression_disabled_extension", api());
     let client = &testctx.client_testctx;
 
     // Request with Accept-Encoding: gzip, but response has NoCompression extension
     let uri = client.url("/disable-compression-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
+    let response = get_gzip_response(client, &uri).await;
 
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Request should succeed");
-
-    // Should NOT be compressed due to NoCompression extension
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Response with NoCompression extension should not be compressed"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_no_compression_below_size_threshold() {
-    let api = api();
-    let testctx = common::test_setup("no_compression_small_response", api);
+    let testctx = test_setup("no_compression_small_response", api());
     let client = &testctx.client_testctx;
 
     // Request a tiny response (under 512 bytes) with Accept-Encoding: gzip
     let uri = client.url("/small-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
+    let response = get_gzip_response(client, &uri).await;
 
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Small response request should succeed");
-
-    // Tiny responses (under 512 bytes) should NOT be compressed
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Responses under 512 bytes should not be compressed"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_reject_gzip_with_quality_zero() {
-    let api = api();
-    let testctx = common::test_setup("reject_gzip_quality_zero", api);
+    let testctx = test_setup("reject_gzip_quality_zero", api());
     let client = &testctx.client_testctx;
 
     // Request with gzip explicitly rejected (q=0)
@@ -502,35 +453,19 @@ async fn test_reject_gzip_with_quality_zero() {
         .await
         .expect("Request should succeed");
 
-    // Should NOT be compressed since gzip has q=0
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Response should not use gzip when client sets q=0 for gzip"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_vary_header_is_set() {
-    let api = api();
-    let testctx = common::test_setup("vary_header_set", api);
+    let testctx = test_setup("vary_header_set", api());
     let client = &testctx.client_testctx;
 
     // Request with Accept-Encoding: gzip
     let uri = client.url("/large-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
-
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Request should succeed");
+    let response = get_gzip_response(client, &uri).await;
 
     // Should have Vary: Accept-Encoding header
     assert!(
@@ -551,120 +486,68 @@ async fn test_vary_header_is_set() {
 
 #[tokio::test]
 async fn test_json_suffix_is_compressed() {
-    let api = api();
-    let testctx = common::test_setup("json_suffix_compressed", api);
+    let testctx = test_setup("json_suffix_compressed", api());
     let client = &testctx.client_testctx;
 
     // Request with Accept-Encoding: gzip for application/problem+json
     let uri = client.url("/json-suffix-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
-
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Request should succeed");
+    let response = get_gzip_response(client, &uri).await;
 
     // Should be compressed since application/problem+json has +json suffix
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        Some(&header::HeaderValue::from_static("gzip")),
-        "Response with +json suffix should be compressed"
-    );
+    assert_gzip_encoded(&response);
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_xml_suffix_is_compressed() {
-    let api = api();
-    let testctx = common::test_setup("xml_suffix_compressed", api);
+    let testctx = test_setup("xml_suffix_compressed", api());
     let client = &testctx.client_testctx;
 
     // Request with Accept-Encoding: gzip for application/soap+xml
     let uri = client.url("/xml-suffix-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
-
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Request should succeed");
+    let response = get_gzip_response(client, &uri).await;
 
     // Should be compressed since application/soap+xml has +xml suffix
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        Some(&header::HeaderValue::from_static("gzip")),
-        "Response with +xml suffix should be compressed"
-    );
+    assert_gzip_encoded(&response);
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_no_compression_for_204_no_content() {
-    let api = api();
-    let testctx = common::test_setup("no_compression_204", api);
+    let testctx = test_setup("no_compression_204", api());
     let client = &testctx.client_testctx;
 
     // Request with Accept-Encoding: gzip for 204 response
     let uri = client.url("/no-content-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
+    let request = make_gzip_request(&uri);
 
     let response = client
         .make_request_with_request(request, StatusCode::NO_CONTENT)
         .await
         .expect("Request should succeed");
 
-    // Should NOT be compressed (204 must not have body)
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "204 No Content should not have Content-Encoding header"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
 
 #[tokio::test]
 async fn test_no_compression_for_304_not_modified() {
-    let api = api();
-    let testctx = common::test_setup("no_compression_304", api);
+    let testctx = test_setup("no_compression_304", api());
     let client = &testctx.client_testctx;
 
     // Request with Accept-Encoding: gzip for 304 response
     let uri = client.url("/not-modified-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
+    let request = make_gzip_request(&uri);
 
     let response = client
         .make_request_with_request(request, StatusCode::NOT_MODIFIED)
         .await
         .expect("Request should succeed");
 
-    // Should NOT be compressed (304 must not have body)
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "304 Not Modified should not have Content-Encoding header"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
@@ -676,14 +559,12 @@ async fn test_no_compression_for_304_not_modified() {
 #[tokio::test]
 async fn test_compression_config_disabled() {
     // Test that compression is disabled when config.compression = false (default)
-    let api = api();
     let config =
         dropshot::ConfigDropshot { compression: false, ..Default::default() };
-    let logctx =
-        crate::common::create_log_context("compression_config_disabled");
+    let logctx = create_log_context("compression_config_disabled");
     let log = logctx.log.new(slog::o!());
     let testctx = dropshot::test_util::TestContext::new(
-        api,
+        api(),
         0_usize,
         &config,
         Some(logctx),
@@ -693,24 +574,9 @@ async fn test_compression_config_disabled() {
 
     // Request WITH Accept-Encoding: gzip but compression disabled in config
     let uri = client.url("/large-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
+    let response = get_gzip_response(client, &uri).await;
 
-    let response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Request should succeed");
-
-    // Should NOT be compressed due to config.compression = false
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        None,
-        "Response should not be compressed when config.compression = false"
-    );
+    assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
     testctx.teardown().await;
 }
@@ -718,14 +584,12 @@ async fn test_compression_config_disabled() {
 #[tokio::test]
 async fn test_compression_config_enabled() {
     // Test that compression works when config.compression = true
-    let api = api();
     let config =
         dropshot::ConfigDropshot { compression: true, ..Default::default() };
-    let logctx =
-        crate::common::create_log_context("compression_config_enabled");
+    let logctx = create_log_context("compression_config_enabled");
     let log = logctx.log.new(slog::o!());
     let testctx = dropshot::test_util::TestContext::new(
-        api,
+        api(),
         0_usize,
         &config,
         Some(logctx),
@@ -735,24 +599,10 @@ async fn test_compression_config_enabled() {
 
     // Request WITH Accept-Encoding: gzip and compression enabled in config
     let uri = client.url("/large-response");
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri(&uri)
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(dropshot::Body::empty())
-        .expect("Failed to construct request");
-
-    let mut response = client
-        .make_request_with_request(request, StatusCode::OK)
-        .await
-        .expect("Request should succeed");
+    let mut response = get_gzip_response(client, &uri).await;
 
     // Should be compressed since config.compression = true
-    assert_eq!(
-        response.headers().get(header::CONTENT_ENCODING),
-        Some(&header::HeaderValue::from_static("gzip")),
-        "Response should be compressed when config.compression = true"
-    );
+    assert_gzip_encoded(&response);
 
     // Verify the response can be decompressed
     let compressed_body = get_response_bytes(&mut response).await;
