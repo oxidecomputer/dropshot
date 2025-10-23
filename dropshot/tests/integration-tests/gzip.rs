@@ -2,12 +2,16 @@
 
 //! Test cases for gzip response compression.
 
+use bytes::Bytes;
 use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
+use futures::stream;
 use http::{header, Method, StatusCode};
+use http_body_util::StreamBody;
+use hyper::body::Frame;
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
 
@@ -100,6 +104,51 @@ struct TinyData {
     x: u8,
 }
 
+const STREAMING_TEXT_CHUNK: &str = "{\"message\":\"streaming chunk\"}\n";
+const STREAMING_TEXT_CHUNK_COUNT: usize = 32;
+
+fn streaming_payload() -> Vec<u8> {
+    STREAMING_TEXT_CHUNK.repeat(STREAMING_TEXT_CHUNK_COUNT).into_bytes()
+}
+
+fn streaming_body_stream(
+) -> impl futures::Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send {
+    stream::iter((0..STREAMING_TEXT_CHUNK_COUNT).map(|_| {
+        Result::<Frame<Bytes>, std::io::Error>::Ok(Frame::data(
+            Bytes::from_static(STREAMING_TEXT_CHUNK.as_bytes()),
+        ))
+    }))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/streaming-missing-content-type",
+}]
+async fn streaming_without_content_type(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    let body = dropshot::Body::wrap(StreamBody::new(streaming_body_stream()));
+    Response::builder()
+        .status(StatusCode::OK)
+        .body(body)
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
+}
+
+#[endpoint {
+    method = GET,
+    path = "/streaming-with-content-type",
+}]
+async fn streaming_with_content_type(
+    _rqctx: RequestContext<usize>,
+) -> Result<Response<dropshot::Body>, HttpError> {
+    let body = dropshot::Body::wrap(StreamBody::new(streaming_body_stream()));
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/plain")
+        .body(body)
+        .map_err(|e| HttpError::for_internal_error(e.to_string()))
+}
+
 fn api() -> ApiDescription<usize> {
     let mut api = ApiDescription::new();
     api.register(api_large_response).unwrap();
@@ -110,6 +159,8 @@ fn api() -> ApiDescription<usize> {
     api.register(api_xml_suffix_response).unwrap();
     api.register(api_no_content_response).unwrap();
     api.register(api_not_modified_response).unwrap();
+    api.register(streaming_without_content_type).unwrap();
+    api.register(streaming_with_content_type).unwrap();
     api
 }
 
@@ -351,14 +402,12 @@ async fn test_no_gzip_without_accept_encoding() {
 }
 
 #[tokio::test]
-async fn test_no_compression_for_streaming_responses() {
-    // Test that streaming responses are not compressed even when client accepts gzip
-    let testctx =
-        test_setup("no_compression_streaming", crate::streaming::api());
+async fn test_streaming_without_content_type_skips_compression() {
+    let testctx = test_setup("streaming_missing_content_type", api());
     let client = &testctx.client_testctx;
 
     // Make request with Accept-Encoding: gzip header
-    let uri = client.url("/streaming");
+    let uri = client.url("/streaming-missing-content-type");
     let request = hyper::Request::builder()
         .method(http::Method::GET)
         .uri(&uri)
@@ -380,9 +429,40 @@ async fn test_no_compression_for_streaming_responses() {
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
-    // Consume the body to verify it works (and to allow teardown to proceed)
+    // Consume stream and confirm body is the uncompressed payload
     let body_bytes = get_response_bytes(&mut response).await;
-    assert!(!body_bytes.is_empty(), "Streaming response should have content");
+    assert_eq!(body_bytes, streaming_payload());
+
+    testctx.teardown().await;
+}
+
+#[tokio::test]
+async fn test_streaming_with_content_type_is_compressed() {
+    let testctx = test_setup("streaming_with_content_type_compressed", api());
+    let client = &testctx.client_testctx;
+
+    let uri = client.url("/streaming-with-content-type");
+    let request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri(&uri)
+        .header(http::header::ACCEPT_ENCODING, "gzip")
+        .body(dropshot::Body::empty())
+        .expect("Failed to construct request");
+
+    let mut response = client
+        .make_request_with_request(request, http::StatusCode::OK)
+        .await
+        .expect("Streaming request with content type should succeed");
+
+    assert_gzip_encoded(&response);
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE),
+        Some(&header::HeaderValue::from_static("text/plain"))
+    );
+
+    let compressed_body = get_response_bytes(&mut response).await;
+    let decompressed = decompress_gzip(&compressed_body);
+    assert_eq!(decompressed, streaming_payload(),);
 
     testctx.teardown().await;
 }
