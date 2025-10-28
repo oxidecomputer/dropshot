@@ -235,6 +235,8 @@ pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
         );
     }
 
+    // because we're streaming, we can't handle ranges and we don't know the
+    // length of the response ahead of time
     parts.headers.remove(http::header::ACCEPT_RANGES);
     parts.headers.remove(http::header::CONTENT_LENGTH);
 
