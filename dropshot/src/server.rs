@@ -3,6 +3,8 @@
 
 use super::api_description::ApiDescription;
 use super::body::Body;
+use super::compression::apply_gzip_compression;
+use super::compression::should_compress_response;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
@@ -105,6 +107,9 @@ pub struct ServerConfig {
     /// is made to deal with headers that appear multiple times in a single
     /// request.
     pub log_headers: Vec<String>,
+    /// Whether to enable gzip compression for responses when response contents
+    /// allow it and clients ask for it through the Accept-Encoding header.
+    pub compression: bool,
 }
 
 /// See [`ServerBuilder`] instead.
@@ -188,6 +193,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
             log_headers: config.log_headers.clone(),
+            compression: config.compression,
         };
 
         let tls_acceptor = tls
@@ -901,7 +907,7 @@ async fn http_request_handle<C: ServerContext>(
     // this to take forever.
     // TODO-correctness: Do we need to dump the body on errors?
     let request = request.map(crate::Body::wrap);
-    let method = request.method();
+    let method = request.method().clone();
     let uri = request.uri();
     let found_version =
         server.version_policy.request_version(&request, &request_log)?;
@@ -915,8 +921,9 @@ async fn http_request_handle<C: ServerContext>(
         request: RequestInfo::new(&request, remote_addr),
         endpoint: lookup_result.endpoint,
         request_id: request_id.to_string(),
-        log: request_log,
+        log: request_log.clone(),
     };
+    let request_headers = rqctx.request.headers().clone();
     let handler = lookup_result.handler;
 
     let mut response = match server.config.default_handler_task_mode {
@@ -930,7 +937,7 @@ async fn http_request_handle<C: ServerContext>(
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();
-            let request_log = rqctx.log.clone();
+            let request_log = request_log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
@@ -981,6 +988,19 @@ async fn http_request_handle<C: ServerContext>(
             }
         }
     };
+
+    if server.config.compression
+        && should_compress_response(
+            &method,
+            &request_headers,
+            response.status(),
+            response.headers(),
+            response.extensions(),
+        )
+    {
+        response = apply_gzip_compression(response);
+    }
+
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),
