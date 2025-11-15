@@ -114,9 +114,9 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
     ) -> Result<Version, HttpError>;
 }
 
-/// Implementation of `DynamicVersionPolicy` where the client must specify a
+/// Implementation of `DynamicVersionPolicy` where the client specifies a
 /// specific semver in a specific header and we always use whatever they
-/// requested
+/// requested.
 ///
 /// An incoming request will be rejected with a 400-level error if:
 ///
@@ -125,6 +125,10 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
 ///   [`ClientSpecifiesVersionInHeader::new()`], which implies that the client
 ///   is trying to use a newer version of the API than this server supports.
 ///
+/// By default, incoming requests will also be rejected with a 400-level error
+/// if the header is missing. To override this behavior, supply a default
+/// version via [`Self::on_missing`].
+///
 /// If you need anything more flexible (e.g., validating the provided version
 /// against a fixed set of supported versions), you'll want to impl
 /// `DynamicVersionPolicy` yourself.
@@ -132,10 +136,11 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
 pub struct ClientSpecifiesVersionInHeader {
     name: HeaderName,
     max_version: Version,
+    on_missing: Option<Version>,
 }
 
 impl ClientSpecifiesVersionInHeader {
-    /// Make a new `ClientSpecifiesVersionInHeader` policy
+    /// Make a new `ClientSpecifiesVersionInHeader` policy.
     ///
     /// Arguments:
     ///
@@ -148,7 +153,25 @@ impl ClientSpecifiesVersionInHeader {
         name: HeaderName,
         max_version: Version,
     ) -> ClientSpecifiesVersionInHeader {
-        ClientSpecifiesVersionInHeader { name, max_version }
+        ClientSpecifiesVersionInHeader { name, max_version, on_missing: None }
+    }
+
+    /// If the header is missing, use the provided version instead.
+    ///
+    /// By default, the policy will reject requests with a missing header. Call
+    /// this function to use the provided version instead.
+    ///
+    /// Typically, the provided version should either be a fixed supported
+    /// version (for backwards compatibility with older clients), or the newest
+    /// supported version (in case clients are generally kept up-to-date but not
+    /// all clients send the header).
+    ///
+    /// Using this function is not recommended if you control all clients—in
+    /// that case, arrange for clients to send the header instead. In
+    /// particular, **at Oxide, do not use this function for internal APIs.**
+    pub fn on_missing(mut self, version: Version) -> Self {
+        self.on_missing = Some(version);
+        self
     }
 }
 
@@ -159,13 +182,25 @@ impl DynamicVersionPolicy for ClientSpecifiesVersionInHeader {
         _log: &Logger,
     ) -> Result<Version, HttpError> {
         let v = parse_header(request.headers(), &self.name)?;
-        if v <= self.max_version {
-            Ok(v)
-        } else {
-            Err(HttpError::for_bad_request(
+        match (v, &self.on_missing) {
+            (Some(v), _) => {
+                if v <= self.max_version {
+                    Ok(v)
+                } else {
+                    Err(HttpError::for_bad_request(
+                        None,
+                        format!(
+                            "server does not support this API version: {}",
+                            v
+                        ),
+                    ))
+                }
+            }
+            (None, Some(on_missing)) => Ok(on_missing.clone()),
+            (None, None) => Err(HttpError::for_bad_request(
                 None,
-                format!("server does not support this API version: {}", v),
-            ))
+                format!("missing expected header {:?}", self.name),
+            )),
         }
     }
 }
@@ -175,17 +210,12 @@ impl DynamicVersionPolicy for ClientSpecifiesVersionInHeader {
 fn parse_header<T>(
     headers: &http::HeaderMap,
     header_name: &HeaderName,
-) -> Result<T, HttpError>
+) -> Result<Option<T>, HttpError>
 where
     T: FromStr,
     <T as FromStr>::Err: std::fmt::Display,
 {
-    let v_value = headers.get(header_name).ok_or_else(|| {
-        HttpError::for_bad_request(
-            None,
-            format!("missing expected header {:?}", header_name),
-        )
-    })?;
+    let Some(v_value) = headers.get(header_name) else { return Ok(None) };
 
     let v_str = v_value.to_str().map_err(|_| {
         HttpError::for_bad_request(
@@ -197,10 +227,12 @@ where
         )
     })?;
 
-    v_str.parse::<T>().map_err(|e| {
+    let v = v_str.parse::<T>().map_err(|e| {
         HttpError::for_bad_request(
             None,
             format!("bad value for header {:?}: {}: {}", header_name, e, v_str),
         )
-    })
+    })?;
+
+    Ok(Some(v))
 }
