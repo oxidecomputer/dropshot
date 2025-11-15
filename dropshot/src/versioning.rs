@@ -165,6 +165,10 @@ impl ClientSpecifiesVersionInHeader {
     /// version (for backwards compatibility with older clients), or the newest
     /// supported version (in case clients are generally kept up-to-date but not
     /// all clients send the header).
+    ///
+    /// Using this function is not recommended if you control all clients—in
+    /// that case, arrange for clients to send the header instead. In
+    /// particular, **at Oxide, do not use this function for internal APIs.**
     pub fn on_missing(mut self, version: Version) -> Self {
         self.on_missing = Some(version);
         self
