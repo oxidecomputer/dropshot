@@ -5,8 +5,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
 40 | |         _rqctx: RequestContext<()>,
 41 | |         _params: Query<QueryParams>,
 42 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |________________________________________________________^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -33,8 +38,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
 40 | |         _rqctx: RequestContext<()>,
 41 | |         _params: Query<QueryParams>,
 42 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |________________________________________________________^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -58,8 +68,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_trait_endpoint5.rs:41:18
    |
 41 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -83,8 +98,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_trait_endpoint5.rs:28:18
    |
 28 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -108,8 +128,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_trait_endpoint5.rs:22:5
    |
 22 |     #[endpoint {
-   |     ^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |     ^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:

@@ -2,8 +2,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_channel5.rs:24:14
    |
 24 |     _params: Query<QueryParams>,
-   |              ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |              ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_channel5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -31,8 +36,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
 24 | |     _params: Query<QueryParams>,
 25 | |     _upgraded: WebsocketConnection,
 26 | | ) -> dropshot::WebsocketChannelResult {
-   | |_____________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |_____________________________________^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_channel5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -59,8 +69,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
 19 | |     protocol = WEBSOCKETS,
 20 | |     path = "/test",
 21 | | }]
-   | |__^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |__^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_channel5.rs:13:1
+   |
+13 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
