@@ -80,7 +80,7 @@ features = [ "full" ]
 
 [dependencies.tokio-util]
 version = "0.7"
-features = [ "io", "compat" ]
+features = [ "io" ]
 
 [dependencies.usdt]
 version = "0.6.0"
