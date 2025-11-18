@@ -301,22 +301,17 @@ pub enum ApiEndpointParameterMetadata {
     Body(ApiEndpointBodyContentType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum ApiEndpointBodyContentType {
     /// application/octet-stream
     Bytes,
     /// application/json
+    #[default]
     Json,
     /// application/x-www-form-urlencoded
     UrlEncoded,
     /// multipart/form-data
     MultipartFormData,
-}
-
-impl Default for ApiEndpointBodyContentType {
-    fn default() -> Self {
-        Self::Json
-    }
 }
 
 impl ApiEndpointBodyContentType {
