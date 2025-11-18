@@ -5,8 +5,13 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
 39 | |         _rqctx: RequestContext<()>,
 40 | |         _params: Query<QueryParams>,
 41 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   | |________________________________________________________^ unsatisfied trait bound
    |
+help: the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `schemars::JsonSchema`:
              &'a T
              &'a mut T
@@ -30,8 +35,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
 39 | |         _rqctx: RequestContext<()>,
 40 | |         _params: Query<QueryParams>,
 41 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |________________________________________________________^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -58,8 +68,13 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
 39 | |         _rqctx: RequestContext<()>,
 40 | |         _params: Query<QueryParams>,
 41 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   | |________________________________________________________^ unsatisfied trait bound
    |
+help: the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `schemars::JsonSchema`:
              &'a T
              &'a mut T
@@ -83,8 +98,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
 39 | |         _rqctx: RequestContext<()>,
 40 | |         _params: Query<QueryParams>,
 41 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   | |________________________________________________________^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -108,8 +128,13 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
   --> tests/fail/bad_trait_endpoint4.rs:40:18
    |
 40 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `schemars::JsonSchema`:
              &'a T
              &'a mut T
@@ -130,8 +155,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_trait_endpoint4.rs:40:18
    |
 40 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -155,8 +185,13 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
   --> tests/fail/bad_trait_endpoint4.rs:27:18
    |
 27 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `schemars::JsonSchema`:
              &'a T
              &'a mut T
@@ -177,8 +212,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_trait_endpoint4.rs:27:18
    |
 27 |         _params: Query<QueryParams>,
-   |                  ^^^^^^^^^^^^^^^^^^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |                  ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:
@@ -202,8 +242,13 @@ error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfi
   --> tests/fail/bad_trait_endpoint4.rs:21:5
    |
 21 |     #[endpoint {
-   |     ^ the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+   |     ^ unsatisfied trait bound
    |
+help: the trait `schemars::JsonSchema` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `schemars::JsonSchema`:
              &'a T
              &'a mut T
@@ -224,8 +269,13 @@ error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not sati
   --> tests/fail/bad_trait_endpoint4.rs:21:5
    |
 21 |     #[endpoint {
-   |     ^ the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+   |     ^ unsatisfied trait bound
    |
+help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
+  --> tests/fail/bad_trait_endpoint4.rs:12:1
+   |
+12 | struct QueryParams {
+   | ^^^^^^^^^^^^^^^^^^
    = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `QueryParams` type
    = note: for types from other crates check whether the crate offers a `serde` feature flag
    = help: the following other types implement trait `serde_core::de::Deserialize<'de>`:

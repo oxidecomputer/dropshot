@@ -16,13 +16,31 @@ error: endpoint `variadic_argument` must not have a variadic argument
 32 |         ...
    |         ^^^
 
-error: only foreign, `unsafe extern "C"`, or `unsafe extern "C-unwind"` functions may have a C-variadic arg
+error: functions cannot be both `async` and C-variadic
+  --> tests/fail/bad_trait_channel21.rs:29:5
+   |
+29 |     async fn variadic_argument(
+   |     ^^^^^ `async` because of this
+...
+32 |         ...
+   |         ^^^ C-variadic because of this
+
+error: associated functions cannot have a C variable argument list
   --> tests/fail/bad_trait_channel21.rs:32:9
    |
 32 |         ...
    |         ^^^
 
-error: only foreign, `unsafe extern "C"`, or `unsafe extern "C-unwind"` functions may have a C-variadic arg
+error: functions cannot be both `async` and C-variadic
+  --> tests/fail/bad_trait_channel21.rs:42:5
+   |
+42 |     async fn variadic_argument(
+   |     ^^^^^ `async` because of this
+...
+45 |         ...
+   |         ^^^ C-variadic because of this
+
+error: associated functions cannot have a C variable argument list
   --> tests/fail/bad_trait_channel21.rs:45:9
    |
 45 |         ...
