@@ -97,6 +97,41 @@ pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
     false
 }
 
+/// Checks if a content type is compressible.
+/// This is used to determine if the Vary: Accept-Encoding header should be added,
+/// even if compression doesn't occur for this particular request.
+pub fn is_compressible_content_type(
+    response_headers: &HeaderMap<HeaderValue>,
+) -> bool {
+    // Only compress when we know the content type
+    let Some(content_type) = response_headers.get(http::header::CONTENT_TYPE)
+    else {
+        return false;
+    };
+    let Ok(ct_str) = content_type.to_str() else {
+        return false;
+    };
+
+    let ct_lower = ct_str.to_ascii_lowercase();
+
+    // SSE streams prioritize latency over compression
+    if ct_lower.starts_with("text/event-stream") {
+        return false;
+    }
+
+    let is_compressible = ct_lower.starts_with("application/json")
+        || ct_lower.starts_with("text/")
+        || ct_lower.starts_with("application/xml")
+        || ct_lower.starts_with("application/javascript")
+        || ct_lower.starts_with("application/x-javascript");
+
+    // RFC 6839 structured syntax suffixes (+json, +xml)
+    let has_compressible_suffix =
+        ct_lower.contains("+json") || ct_lower.contains("+xml");
+
+    is_compressible || has_compressible_suffix
+}
+
 /// Determines if a response should be compressed with gzip.
 pub fn should_compress_response(
     request_method: &http::Method,
@@ -151,33 +186,9 @@ pub fn should_compress_response(
         }
     }
 
-    // Only compress when we know the content type
-    let Some(content_type) = response_headers.get(http::header::CONTENT_TYPE)
-    else {
-        return false;
-    };
-    let Ok(ct_str) = content_type.to_str() else {
-        return false;
-    };
-
-    let ct_lower = ct_str.to_ascii_lowercase();
-
-    // SSE streams prioritize latency over compression
-    if ct_lower.starts_with("text/event-stream") {
-        return false;
-    }
-
-    let is_compressible = ct_lower.starts_with("application/json")
-        || ct_lower.starts_with("text/")
-        || ct_lower.starts_with("application/xml")
-        || ct_lower.starts_with("application/javascript")
-        || ct_lower.starts_with("application/x-javascript");
-
-    // RFC 6839 structured syntax suffixes (+json, +xml)
-    let has_compressible_suffix =
-        ct_lower.contains("+json") || ct_lower.contains("+xml");
-
-    is_compressible || has_compressible_suffix
+    // technically redundant with check outside of the call, but kept here
+    // because it's logically part of "should compress?" question
+    is_compressible_content_type(response_headers)
 }
 
 /// Minimum size in bytes for a response to be compressed.
@@ -222,18 +233,7 @@ pub fn apply_gzip_compression(response: Response<Body>) -> Response<Body> {
 
     // Vary header is critical for caching - prevents serving compressed
     // responses to clients that don't accept gzip
-    let vary_has_accept_encoding = parts
-        .headers
-        .get_all(http::header::VARY)
-        .iter()
-        .any(header_value_contains_accept_encoding);
-
-    if !vary_has_accept_encoding {
-        parts.headers.append(
-            http::header::VARY,
-            HeaderValue::from_static("Accept-Encoding"),
-        );
-    }
+    add_vary_header(&mut parts.headers);
 
     // because we're streaming, we can't handle ranges and we don't know the
     // length of the response ahead of time
@@ -248,6 +248,25 @@ fn header_value_contains_accept_encoding(value: &HeaderValue) -> bool {
         vary.split(',')
             .any(|v| v.trim().eq_ignore_ascii_case("accept-encoding"))
     })
+}
+
+/// Adds the Vary: Accept-Encoding header to a response if not already present.
+/// This is critical for correct caching behavior with intermediate caches.
+pub fn add_vary_header(headers: &mut HeaderMap<HeaderValue>) {
+    let vary_values = headers.get_all(http::header::VARY);
+
+    // can't and shouldn't add anything if we already have "*"
+    // https://datatracker.ietf.org/doc/html/rfc7231#section-7.1.4
+    if vary_values.iter().any(|v| v == "*") {
+        return;
+    }
+
+    if !vary_values.iter().any(header_value_contains_accept_encoding) {
+        headers.append(
+            http::header::VARY,
+            HeaderValue::from_static("Accept-Encoding"),
+        );
+    }
 }
 
 #[cfg(test)]

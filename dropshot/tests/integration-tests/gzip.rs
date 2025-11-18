@@ -690,3 +690,43 @@ async fn test_compression_config_enabled() {
 
     testctx.teardown().await;
 }
+
+#[tokio::test]
+async fn test_vary_header_on_non_gzip_requests() {
+    // Test that Vary: Accept-Encoding is present even when client doesn't
+    // accept gzip. This is critical for correct caching behavior.
+    //
+    // Without this header, the following sequence causes incorrect behavior:
+    // 1. Client A (no gzip) requests resource → cache stores uncompressed
+    //    response without Vary header
+    // 2. Client B (gzip support) requests same resource → cache serves the
+    //    uncompressed version, even though Client B could handle compression
+    let testctx = test_setup("vary_header_no_gzip", api());
+    let client = &testctx.client_testctx;
+
+    // Request WITHOUT Accept-Encoding: gzip for a compressible resource
+    let uri = client.url("/large-response");
+    let response = make_plain_request_response(client, &uri).await;
+
+    // Should NOT be compressed
+    assert!(
+        response.headers().get(header::CONTENT_ENCODING).is_none(),
+        "Response should not be compressed"
+    );
+
+    // Should still have Vary: Accept-Encoding header
+    assert!(
+        response.headers().contains_key(header::VARY),
+        "Response should have Vary header even without gzip encoding"
+    );
+
+    let vary_value =
+        response.headers().get(header::VARY).unwrap().to_str().unwrap();
+    assert!(
+        vary_value.to_lowercase().contains("accept-encoding"),
+        "Vary header should include Accept-Encoding, got: {}",
+        vary_value
+    );
+
+    testctx.teardown().await;
+}

@@ -3,7 +3,9 @@
 
 use super::api_description::ApiDescription;
 use super::body::Body;
+use super::compression::add_vary_header;
 use super::compression::apply_gzip_compression;
+use super::compression::is_compressible_content_type;
 use super::compression::should_compress_response;
 use super::config::{ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
@@ -990,15 +992,29 @@ async fn http_request_handle<C: ServerContext>(
     };
 
     if server.config.compression
-        && should_compress_response(
+        && is_compressible_content_type(response.headers())
+    {
+        // Add Vary: Accept-Encoding header for all compressible content
+        // types. This needs to be there even if the response ends up not being
+        // compressed because it tells caches how to handle the possibility that
+        // responses could be compressed or not.
+        //
+        // This tells caches (like browsers and CDNs) that the response content
+        // depends on the value of the Accept-Encoding header. Without this, a
+        // cache might mistakenly serve a compressed response to a client that
+        // cannot decompress it, or serve an uncompressed response to a client
+        // that could have benefited from compression.
+        add_vary_header(response.headers_mut());
+
+        if should_compress_response(
             &method,
             &request_headers,
             response.status(),
             response.headers(),
             response.extensions(),
-        )
-    {
-        response = apply_gzip_compression(response);
+        ) {
+            response = apply_gzip_compression(response);
+        }
     }
 
     response.headers_mut().insert(
