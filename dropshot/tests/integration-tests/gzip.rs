@@ -15,9 +15,28 @@ use hyper::body::Frame;
 use hyper::{Request, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::common::{create_log_context, test_setup};
+use crate::common::create_log_context;
 
 extern crate slog;
+
+// Helper function for tests in this file
+// Since we're testing gzip compression, most tests need compression enabled
+fn test_setup(
+    test_name: &str,
+    api: ApiDescription<usize>,
+) -> dropshot::test_util::TestContext<usize> {
+    let config =
+        dropshot::ConfigDropshot { compression: true, ..Default::default() };
+    let logctx = create_log_context(test_name);
+    let log = logctx.log.new(slog::o!());
+    dropshot::test_util::TestContext::new(
+        api,
+        0_usize,
+        &config,
+        Some(logctx),
+        log,
+    )
+}
 
 // Helper functions for tests
 

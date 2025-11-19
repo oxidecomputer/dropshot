@@ -66,7 +66,7 @@ fn test_valid_config_all_settings() {
             default_request_body_max_bytes: 1048576,
             default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
             log_headers: vec!["X-Forwarded-For".to_string()],
-            compression: true,
+            compression: false,
         },
     );
 }
