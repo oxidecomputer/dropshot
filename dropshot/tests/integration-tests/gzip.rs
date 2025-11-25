@@ -413,9 +413,13 @@ async fn test_no_gzip_without_accept_encoding() {
     let uri = client.url("/large-response");
 
     // Request without any Accept-Encoding header should not get compressed response
-    let response = make_plain_request_response(client, &uri).await;
+    let mut response = make_plain_request_response(client, &uri).await;
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
+
+    // Consume the response body to avoid blocking teardown on platforms with
+    // small socket buffers (e.g., illumos).
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -547,12 +551,15 @@ async fn test_reject_gzip_with_quality_zero() {
         .body(dropshot::Body::empty())
         .expect("Failed to construct request");
 
-    let response = client
+    let mut response = client
         .make_request_with_request(request, StatusCode::OK)
         .await
         .expect("Request should succeed");
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
+
+    // Consume response body (see test_no_gzip_without_accept_encoding).
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -564,7 +571,7 @@ async fn test_vary_header_is_set() {
 
     // Request with Accept-Encoding: gzip
     let uri = client.url("/large-response");
-    let response = get_gzip_response(client, &uri).await;
+    let mut response = get_gzip_response(client, &uri).await;
 
     // Should have Vary: Accept-Encoding header
     assert!(
@@ -579,6 +586,9 @@ async fn test_vary_header_is_set() {
         "Vary header should include Accept-Encoding, got: {}",
         vary_value
     );
+
+    // Consume response body (see test_no_gzip_without_accept_encoding).
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -673,9 +683,12 @@ async fn test_compression_config_disabled() {
 
     // Request WITH Accept-Encoding: gzip but compression disabled in config
     let uri = client.url("/large-response");
-    let response = get_gzip_response(client, &uri).await;
+    let mut response = get_gzip_response(client, &uri).await;
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
+
+    // Consume response body (see test_no_gzip_without_accept_encoding).
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -725,7 +738,7 @@ async fn test_vary_header_on_non_gzip_requests() {
 
     // Request WITHOUT Accept-Encoding: gzip for a compressible resource
     let uri = client.url("/large-response");
-    let response = make_plain_request_response(client, &uri).await;
+    let mut response = make_plain_request_response(client, &uri).await;
 
     // Should NOT be compressed
     assert!(
@@ -746,6 +759,9 @@ async fn test_vary_header_on_non_gzip_requests() {
         "Vary header should include Accept-Encoding, got: {}",
         vary_value
     );
+
+    // Consume response body (see test_no_gzip_without_accept_encoding).
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
