@@ -7,7 +7,7 @@ use super::compression::add_vary_header;
 use super::compression::apply_gzip_compression;
 use super::compression::is_compressible_content_type;
 use super::compression::should_compress_response;
-use super::config::{ConfigDropshot, ConfigTls};
+use super::config::{CompressionConfig, ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
 use super::handler::HandlerError;
@@ -109,9 +109,8 @@ pub struct ServerConfig {
     /// is made to deal with headers that appear multiple times in a single
     /// request.
     pub log_headers: Vec<String>,
-    /// Whether to enable gzip compression for responses when response contents
-    /// allow it and clients ask for it through the Accept-Encoding header.
-    pub compression: bool,
+    /// Configuration for response compression.
+    pub compression: CompressionConfig,
 }
 
 /// See [`ServerBuilder`] instead.
@@ -991,19 +990,16 @@ async fn http_request_handle<C: ServerContext>(
         }
     };
 
-    if server.config.compression
+    if matches!(server.config.compression, CompressionConfig::Gzip)
         && is_compressible_content_type(response.headers())
     {
         // Add Vary: Accept-Encoding header for all compressible content
         // types. This needs to be there even if the response ends up not being
-        // compressed because it tells caches how to handle the possibility that
-        // responses could be compressed or not.
-        //
-        // This tells caches (like browsers and CDNs) that the response content
-        // depends on the value of the Accept-Encoding header. Without this, a
-        // cache might mistakenly serve a compressed response to a client that
-        // cannot decompress it, or serve an uncompressed response to a client
-        // that could have benefited from compression.
+        // compressed because it tells caches (like browsers and CDNs) that the
+        // response content depends on the value of the Accept-Encoding header.
+        // Without this, a cache might mistakenly serve a compressed response to
+        // a client that cannot decompress it, or serve an uncompressed response
+        // to a client that could have benefited from compression.
         add_vary_header(response.headers_mut());
 
         if should_compress_response(

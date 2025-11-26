@@ -6,6 +6,17 @@ use serde::Serialize;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+/// Configuration for response compression
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CompressionConfig {
+    /// Compression is disabled
+    #[default]
+    None,
+    /// Gzip compression is enabled
+    Gzip,
+}
+
 /// Raw [`rustls::ServerConfig`] TLS configuration for use with
 /// [`ConfigTls::Dynamic`]
 pub type RawTlsConfig = rustls::ServerConfig;
@@ -63,10 +74,9 @@ pub struct ConfigDropshot {
     /// is made to deal with headers that appear multiple times in a single
     /// request.
     pub log_headers: Vec<String>,
-    /// Whether to enable gzip compression for responses when response contents
-    /// allow it and clients ask for it through the Accept-Encoding header.
-    /// Defaults to true.
-    pub compression: bool,
+    /// Whether to enable compression for responses (when response contents
+    /// allow it and clients ask for it through the Accept-Encoding header).
+    pub compression: CompressionConfig,
 }
 
 /// Enum specifying options for how a Dropshot server should run its handler
@@ -123,7 +133,7 @@ impl Default for ConfigDropshot {
             default_request_body_max_bytes: 1024,
             default_handler_task_mode: HandlerTaskMode::Detached,
             log_headers: Default::default(),
-            compression: false,
+            compression: CompressionConfig::default(),
         }
     }
 }
@@ -142,7 +152,7 @@ struct DeserializedConfigDropshot {
     request_body_max_bytes: Option<InvalidConfig>,
     default_handler_task_mode: HandlerTaskMode,
     log_headers: Vec<String>,
-    compression: bool,
+    compression: CompressionConfig,
 }
 
 impl From<DeserializedConfigDropshot> for ConfigDropshot {

@@ -4,8 +4,8 @@
 //! mode, including certificate loading and supported modes.
 
 use dropshot::{
-    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk, HttpServer,
-    ServerBuilder,
+    CompressionConfig, ConfigDropshot, ConfigTls, HandlerTaskMode,
+    HttpResponseOk, HttpServer, ServerBuilder,
 };
 use slog::{o, Logger};
 use std::convert::TryFrom;
@@ -116,7 +116,7 @@ fn make_server(
         default_request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         log_headers: Default::default(),
-        compression: true,
+        compression: CompressionConfig::Gzip,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.to_path_buf(),
@@ -431,7 +431,7 @@ async fn test_server_is_https() {
         default_request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         log_headers: Default::default(),
-        compression: true,
+        compression: CompressionConfig::Gzip,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),

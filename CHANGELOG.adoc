@@ -16,6 +16,7 @@
 https://github.com/oxidecomputer/dropshot/compare/v0.16.4\...HEAD[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1475[#1475] Added `ClientSpecifiesVersionInHeader::on_missing` to provide a default version when the header is missing, intended for use when you're not in control of all clients
+* https://github.com/oxidecomputer/dropshot/pull/1448[#1448] Added support for gzipping responses when clients request it through the `Accept-Encoding` header. Compression is off by default: existing consumers won't see a behavior change unless they opt in with `compression: CompressionConfig::Gzip`.
 
 == 0.16.4 (released 2025-09-04)
 

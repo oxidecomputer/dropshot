@@ -25,8 +25,10 @@ fn test_setup(
     test_name: &str,
     api: ApiDescription<usize>,
 ) -> dropshot::test_util::TestContext<usize> {
-    let config =
-        dropshot::ConfigDropshot { compression: true, ..Default::default() };
+    let config = dropshot::ConfigDropshot {
+        compression: dropshot::CompressionConfig::Gzip,
+        ..Default::default()
+    };
     let logctx = create_log_context(test_name);
     let log = logctx.log.new(slog::o!());
     dropshot::test_util::TestContext::new(
@@ -667,9 +669,11 @@ async fn test_no_compression_for_304_not_modified() {
 
 #[tokio::test]
 async fn test_compression_config_disabled() {
-    // Test that compression is disabled when config.compression = false (default)
-    let config =
-        dropshot::ConfigDropshot { compression: false, ..Default::default() };
+    // Test that compression is disabled when compression = "none" (default)
+    let config = dropshot::ConfigDropshot {
+        compression: dropshot::CompressionConfig::None,
+        ..Default::default()
+    };
     let logctx = create_log_context("compression_config_disabled");
     let log = logctx.log.new(slog::o!());
     let testctx = dropshot::test_util::TestContext::new(
@@ -695,9 +699,11 @@ async fn test_compression_config_disabled() {
 
 #[tokio::test]
 async fn test_compression_config_enabled() {
-    // Test that compression works when config.compression = true
-    let config =
-        dropshot::ConfigDropshot { compression: true, ..Default::default() };
+    // Test that compression works when compression = "gzip"
+    let config = dropshot::ConfigDropshot {
+        compression: dropshot::CompressionConfig::Gzip,
+        ..Default::default()
+    };
     let logctx = create_log_context("compression_config_enabled");
     let log = logctx.log.new(slog::o!());
     let testctx = dropshot::test_util::TestContext::new(
@@ -713,7 +719,7 @@ async fn test_compression_config_enabled() {
     let uri = client.url("/large-response");
     let mut response = get_gzip_response(client, &uri).await;
 
-    // Should be compressed since config.compression = true
+    // Should be compressed since compression = "gzip"
     assert_gzip_encoded(&response);
 
     // Verify the response can be decompressed
