@@ -1077,6 +1077,30 @@ where
 pub struct HttpResponseCreated<T: HttpResponseContent + Send + Sync + 'static>(
     pub T,
 );
+
+impl<T: HttpResponseContent + Send + Sync + 'static> HttpResponseCreated<T> {
+    /// Convert this response into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints return similar response
+    /// types that are convertible into a common type.
+    pub fn map<U, F>(self, f: F) -> HttpResponseCreated<U>
+    where
+        U: HttpResponseContent + Send + Sync + 'static,
+        F: FnOnce(T) -> U,
+    {
+        HttpResponseCreated(f(self.0))
+    }
+
+    /// Similar to [`HttpResponseCreated::map`] but with support for
+    /// fallibility.
+    pub fn try_map<U, E, F>(self, f: F) -> Result<HttpResponseCreated<U>, E>
+    where
+        U: HttpResponseContent + Send + Sync + 'static,
+        F: FnOnce(T) -> Result<U, E>,
+    {
+        Ok(HttpResponseCreated(f(self.0)?))
+    }
+}
+
 impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     for HttpResponseCreated<T>
 {
@@ -1099,6 +1123,30 @@ impl<T: HttpResponseContent + Send + Sync + 'static>
 pub struct HttpResponseAccepted<T: HttpResponseContent + Send + Sync + 'static>(
     pub T,
 );
+
+impl<T: HttpResponseContent + Send + Sync + 'static> HttpResponseAccepted<T> {
+    /// Convert this response into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints return similar response
+    /// types that are convertible into a common type.
+    pub fn map<U, F>(self, f: F) -> HttpResponseAccepted<U>
+    where
+        U: HttpResponseContent + Send + Sync + 'static,
+        F: FnOnce(T) -> U,
+    {
+        HttpResponseAccepted(f(self.0))
+    }
+
+    /// Similar to [`HttpResponseAccepted::map`] but with support for
+    /// fallibility.
+    pub fn try_map<U, E, F>(self, f: F) -> Result<HttpResponseAccepted<U>, E>
+    where
+        U: HttpResponseContent + Send + Sync + 'static,
+        F: FnOnce(T) -> Result<U, E>,
+    {
+        Ok(HttpResponseAccepted(f(self.0)?))
+    }
+}
+
 impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     for HttpResponseAccepted<T>
 {
@@ -1120,6 +1168,29 @@ impl<T: HttpResponseContent + Send + Sync + 'static>
 pub struct HttpResponseOk<T: HttpResponseContent + Send + Sync + 'static>(
     pub T,
 );
+
+impl<T: HttpResponseContent + Send + Sync + 'static> HttpResponseOk<T> {
+    /// Convert this response into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints return similar response
+    /// types that are convertible into a common type.
+    pub fn map<U, F>(self, f: F) -> HttpResponseOk<U>
+    where
+        U: HttpResponseContent + Send + Sync + 'static,
+        F: FnOnce(T) -> U,
+    {
+        HttpResponseOk(f(self.0))
+    }
+
+    /// Similar to [`HttpResponseOk::map`] but with support for fallibility.
+    pub fn try_map<U, E, F>(self, f: F) -> Result<HttpResponseOk<U>, E>
+    where
+        U: HttpResponseContent + Send + Sync + 'static,
+        F: FnOnce(T) -> Result<U, E>,
+    {
+        Ok(HttpResponseOk(f(self.0)?))
+    }
+}
+
 impl<T: HttpResponseContent + Send + Sync + 'static> HttpCodedResponse
     for HttpResponseOk<T>
 {
@@ -1361,6 +1432,35 @@ impl<
 
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
         &mut self.other_headers
+    }
+
+    /// Convert this response into one with a different body type parameter;
+    /// this may be useful when multiple, related endpoints return similar
+    /// response types that are convertible into a common type.
+    pub fn map<U, F>(self, f: F) -> HttpResponseHeaders<U, H>
+    where
+        U: HttpCodedResponse,
+        F: FnOnce(T) -> U,
+    {
+        HttpResponseHeaders {
+            body: f(self.body),
+            structured_headers: self.structured_headers,
+            other_headers: self.other_headers,
+        }
+    }
+
+    /// Similar to [`HttpResponseHeaders::map`] but with support for
+    /// fallibility.
+    pub fn try_map<U, E, F>(self, f: F) -> Result<HttpResponseHeaders<U, H>, E>
+    where
+        U: HttpCodedResponse,
+        F: FnOnce(T) -> Result<U, E>,
+    {
+        Ok(HttpResponseHeaders {
+            body: f(self.body)?,
+            structured_headers: self.structured_headers,
+            other_headers: self.other_headers,
+        })
     }
 }
 impl<

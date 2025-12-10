@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.16.5\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/1490[#1490] Added `map` and `try_map` to `Query`, `Path`, `Header`, `HttpResponseOk`, `HttpResponseCreated`, `HttpResponseAccepted`, and `HttpResponseHeaders`, similar to `map` and `try_map` that already exist on `TypedBody`.
+
 == 0.16.5 (released 2025-11-20)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.16.4\...v0.16.5[Full list of commits]
