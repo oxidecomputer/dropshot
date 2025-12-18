@@ -28,11 +28,13 @@ error: functions cannot be both `async` and C-variadic
 33 |         ...
    |         ^^^ C-variadic because of this
 
-error: associated functions cannot have a C variable argument list
+error: `...` is not supported for non-extern functions
   --> tests/fail/bad_trait_endpoint21.rs:33:9
    |
 33 |         ...
    |         ^^^
+   |
+   = help: only `extern "C"` and `extern "C-unwind"` functions may have a C variable argument list
 
 error: functions cannot be both `async` and C-variadic
   --> tests/fail/bad_trait_endpoint21.rs:43:5
@@ -43,11 +45,13 @@ error: functions cannot be both `async` and C-variadic
 46 |         ...
    |         ^^^ C-variadic because of this
 
-error: associated functions cannot have a C variable argument list
+error: `...` is not supported for non-extern functions
   --> tests/fail/bad_trait_endpoint21.rs:46:9
    |
 46 |         ...
    |         ^^^
+   |
+   = help: only `extern "C"` and `extern "C-unwind"` functions may have a C variable argument list
 
 error[E0658]: C-variadic functions are unstable
   --> tests/fail/bad_trait_endpoint21.rs:30:5
