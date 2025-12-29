@@ -20,6 +20,7 @@ pub(crate) struct ResponseInfo {
     pub remote_addr: std::net::SocketAddr,
     pub status_code: u16,
     pub message: String,
+    pub latency: std::time::Duration,
 }
 
 #[cfg(feature = "usdt-probes")]
