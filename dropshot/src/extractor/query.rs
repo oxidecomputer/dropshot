@@ -31,6 +31,26 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
     pub fn into_inner(self) -> QueryType {
         self.inner
     }
+
+    /// Convert this `Query` into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints take query parameters
+    /// that are similar and convertible into a common type.
+    pub fn map<T, F>(self, f: F) -> Query<T>
+    where
+        T: DeserializeOwned + JsonSchema + Send + Sync,
+        F: FnOnce(QueryType) -> T,
+    {
+        Query { inner: f(self.inner) }
+    }
+
+    /// Similar to [`Query::map`] but with support for fallibility.
+    pub fn try_map<T, E, F>(self, f: F) -> Result<Query<T>, E>
+    where
+        T: DeserializeOwned + JsonSchema + Send + Sync,
+        F: FnOnce(QueryType) -> Result<T, E>,
+    {
+        Ok(Query { inner: f(self.inner)? })
+    }
 }
 
 /// Given an HTTP request, pull out the query string and attempt to deserialize

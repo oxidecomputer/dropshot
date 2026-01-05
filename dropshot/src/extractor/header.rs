@@ -43,6 +43,26 @@ impl<HeaderType: DeserializeOwned + JsonSchema + Send + Sync>
     pub fn into_inner(self) -> HeaderType {
         self.inner
     }
+
+    /// Convert this `Header` into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints take header parameters
+    /// that are similar and convertible into a common type.
+    pub fn map<T, F>(self, f: F) -> Header<T>
+    where
+        T: DeserializeOwned + JsonSchema + Send + Sync,
+        F: FnOnce(HeaderType) -> T,
+    {
+        Header { inner: f(self.inner) }
+    }
+
+    /// Similar to [`Header::map`] but with support for fallibility.
+    pub fn try_map<T, E, F>(self, f: F) -> Result<Header<T>, E>
+    where
+        T: DeserializeOwned + JsonSchema + Send + Sync,
+        F: FnOnce(HeaderType) -> Result<T, E>,
+    {
+        Ok(Header { inner: f(self.inner)? })
+    }
 }
 
 /// Given an HTTP request, pull out the headers and attempt to deserialize
