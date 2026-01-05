@@ -44,7 +44,7 @@ slog-bunyan = "2.5.0"
 slog-json = "2.6.1"
 slog-term = "2.9.2"
 thiserror = "2.0.17"
-tokio-rustls = "0.25.0"
+tokio-rustls = "0.26"
 toml = "0.9.10"
 waitgroup = "0.1.2"
 
