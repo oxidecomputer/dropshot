@@ -796,7 +796,8 @@ async fn http_request_handle_wrap<C: ServerContext>(
     // In the case the client disconnects early, the scopeguard allows us
     // to perform extra housekeeping before this task is dropped.
     let on_disconnect = guard((), |_| {
-        let latency_us = start_time.elapsed().as_micros();
+        let latency = start_time.elapsed();
+        let latency_us = latency.as_micros();
 
         warn!(request_log, "request handling cancelled (client disconnected)";
             "latency_us" => latency_us,
@@ -813,6 +814,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                 message: String::from(
                     "client disconnected before response returned",
                 ),
+                latency,
             }
         });
     });
@@ -830,7 +832,8 @@ async fn http_request_handle_wrap<C: ServerContext>(
     // cancelled and we can safely "defuse" the scopeguard.
     let _ = ScopeGuard::into_inner(on_disconnect);
 
-    let latency_us = start_time.elapsed().as_micros();
+    let latency = start_time.elapsed();
+    let latency_us = latency.as_micros();
     let response = match maybe_response {
         Err(error) => {
             {
@@ -848,6 +851,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                         message: message_external
                             .cloned()
                             .unwrap_or_else(|| message_internal.clone()),
+                        latency,
                     }
                 });
 
@@ -877,6 +881,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
                     remote_addr,
                     status_code: response.status().as_u16(),
                     message: "".to_string(),
+                    latency,
                 }
             });
 
