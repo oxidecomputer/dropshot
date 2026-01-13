@@ -57,32 +57,31 @@ fn parse_accept_encoding(header: &HeaderValue) -> Vec<(String, f32)> {
 /// Checks if the request accepts gzip encoding based on the Accept-Encoding header.
 /// Handles quality values (q parameter) using RFC-compliant preference rules.
 pub fn accepts_gzip_encoding(headers: &HeaderMap<HeaderValue>) -> bool {
-    let Some(accept_encoding) = headers.get(http::header::ACCEPT_ENCODING)
-    else {
-        return false;
-    };
-
     let mut best_gzip_quality: Option<f32> = None;
     let mut best_wildcard_quality: Option<f32> = None;
 
+    // RFC 9110 §5.3 allows the same header to appear multiple times,
+    // semantically equivalent to a comma-separated list.
     // RFC 9110 §12.5.3 specifies that the most preferred (highest quality)
     // representation wins, so we retain the maximum q-value we see for each
     // relevant coding.
-    for (encoding, quality) in parse_accept_encoding(accept_encoding) {
-        match encoding.as_str() {
-            "gzip" => {
-                best_gzip_quality = Some(
-                    best_gzip_quality
-                        .map_or(quality, |current| current.max(quality)),
-                );
+    for accept_encoding in headers.get_all(http::header::ACCEPT_ENCODING) {
+        for (encoding, quality) in parse_accept_encoding(accept_encoding) {
+            match encoding.as_str() {
+                "gzip" => {
+                    best_gzip_quality = Some(
+                        best_gzip_quality
+                            .map_or(quality, |current| current.max(quality)),
+                    );
+                }
+                "*" => {
+                    best_wildcard_quality = Some(
+                        best_wildcard_quality
+                            .map_or(quality, |current| current.max(quality)),
+                    );
+                }
+                _ => {}
             }
-            "*" => {
-                best_wildcard_quality = Some(
-                    best_wildcard_quality
-                        .map_or(quality, |current| current.max(quality)),
-                );
-            }
-            _ => {}
         }
     }
 
@@ -488,6 +487,15 @@ mod tests {
         // If quality parsing fails, should default to 1.0
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT_ENCODING, v("gzip;q=invalid"));
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_multiple_headers() {
+        // RFC 9110 §5.3: multiple header lines are equivalent to comma-separated
+        let mut headers = HeaderMap::new();
+        headers.insert(ACCEPT_ENCODING, v("deflate"));
+        headers.append(ACCEPT_ENCODING, v("gzip"));
         assert!(accepts_gzip_encoding(&headers));
     }
 
