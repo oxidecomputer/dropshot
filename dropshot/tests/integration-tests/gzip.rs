@@ -499,7 +499,7 @@ async fn test_no_compression_for_non_compressible_content_types() {
 
     // Request an image with Accept-Encoding: gzip
     let uri = client.url("/image-response");
-    let response = get_gzip_response(client, &uri).await;
+    let mut response = get_gzip_response(client, &uri).await;
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
@@ -507,6 +507,8 @@ async fn test_no_compression_for_non_compressible_content_types() {
         response.headers().get(header::CONTENT_TYPE),
         Some(&header::HeaderValue::from_static("image/png"))
     );
+
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -518,9 +520,11 @@ async fn test_compression_disabled_with_extension() {
 
     // Request with Accept-Encoding: gzip, but response has NoCompression extension
     let uri = client.url("/disable-compression-response");
-    let response = get_gzip_response(client, &uri).await;
+    let mut response = get_gzip_response(client, &uri).await;
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
+
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -602,10 +606,12 @@ async fn test_json_suffix_is_compressed() {
 
     // Request with Accept-Encoding: gzip for application/problem+json
     let uri = client.url("/json-suffix-response");
-    let response = get_gzip_response(client, &uri).await;
+    let mut response = get_gzip_response(client, &uri).await;
 
     // Should be compressed since application/problem+json has +json suffix
     assert_gzip_encoded(&response);
+
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }
@@ -617,10 +623,12 @@ async fn test_xml_suffix_is_compressed() {
 
     // Request with Accept-Encoding: gzip for application/soap+xml
     let uri = client.url("/xml-suffix-response");
-    let response = get_gzip_response(client, &uri).await;
+    let mut response = get_gzip_response(client, &uri).await;
 
     // Should be compressed since application/soap+xml has +xml suffix
     assert_gzip_encoded(&response);
+
+    get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
 }

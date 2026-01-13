@@ -956,7 +956,7 @@ async fn http_request_handle<C: ServerContext>(
                             warn!(request_log, "request completed after handler was already cancelled";
                                 "response_code" => error.status_code().as_u16(),
                                 "error_message_internal" => error.internal_message(),
-                                "error_message_external" => error.external_message(),,
+                                "error_message_external" => error.external_message(),
                             );
                         }
                     }

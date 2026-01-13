@@ -39,12 +39,21 @@ fn parse_accept_encoding(header: &HeaderValue) -> Vec<(String, f32)> {
             let mut quality = DEFAULT_QUALITY;
             for param in parts {
                 let mut param = param.splitn(2, '=');
-                let name = param.next()?.trim();
-                let value = param.next()?.trim();
+                let Some(name) = param.next() else {
+                    continue;
+                };
+                let name = name.trim();
+
+                let Some(value) = param.next() else {
+                    continue;
+                };
+                let value = value.trim();
 
                 if name.eq_ignore_ascii_case("q") {
                     if let Ok(parsed) = value.parse::<f32>() {
-                        quality = parsed.clamp(0.0, 1.0);
+                        if parsed.is_finite() {
+                            quality = parsed.clamp(0.0, 1.0);
+                        }
                     }
                 }
             }
@@ -119,6 +128,8 @@ pub fn is_compressible_content_type(
     }
 
     let is_compressible = ct_lower.starts_with("application/json")
+        || ct_lower.starts_with("application/ndjson")
+        || ct_lower.starts_with("application/x-ndjson")
         || ct_lower.starts_with("text/")
         || ct_lower.starts_with("application/xml")
         || ct_lower.starts_with("application/javascript")
@@ -192,7 +203,7 @@ pub fn should_compress_response(
 
 /// Minimum size in bytes for a response to be compressed.
 /// Responses smaller than this won't benefit from compression and may actually get larger.
-const MIN_COMPRESS_SIZE: u64 = 512;
+pub(crate) const MIN_COMPRESS_SIZE: u64 = 512;
 
 /// Applies gzip compression to a response using streaming compression.
 /// This function wraps the response body in a gzip encoder that compresses data
@@ -487,6 +498,20 @@ mod tests {
         // If quality parsing fails, should default to 1.0
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT_ENCODING, v("gzip;q=invalid"));
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_ignores_malformed_parameters() {
+        let mut headers = HeaderMap::new();
+        headers.insert(ACCEPT_ENCODING, v("gzip;foo"));
+        assert!(accepts_gzip_encoding(&headers));
+    }
+
+    #[test]
+    fn test_accepts_gzip_encoding_non_finite_quality_defaults() {
+        let mut headers = HeaderMap::new();
+        headers.insert(ACCEPT_ENCODING, v("gzip;q=NaN"));
         assert!(accepts_gzip_encoding(&headers));
     }
 
