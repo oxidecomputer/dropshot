@@ -961,13 +961,13 @@ async fn http_request_handle<C: ServerContext>(
 
             // The only way we can fail to receive on `rx` is if `tx` is
             // dropped before a result is sent, which can only happen if
-            // `handle_request` panics. We will propogate such a panic here,
+            // `handle_request` panics. We will propagate such a panic here,
             // just as we would have in `CancelOnDisconnect` mode above (where
             // we call the handler directly).
             match rx.await {
                 Ok(result) => result?,
                 Err(_) => {
-                    error!(request_log, "handler panicked; propogating panic");
+                    error!(request_log, "handler panicked; propagating panic");
 
                     // To get the panic, we now need to await `handler_task`; we
                     // know it is complete _and_ it failed, because it has
