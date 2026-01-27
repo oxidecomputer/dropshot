@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.16.6\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.16.7\...HEAD[Full list of commits]
+
+== 0.16.7 (released 2026-01-27)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.16.6\...v0.16.7[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1520[#1520] Added `From<T>` for `TypedBody<T>`, `Path<T>`, `Query<T>`, and `Header<T>` as constructors
 
