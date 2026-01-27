@@ -1,4 +1,4 @@
-// Copyright 2025 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Querystring-related extractor(s)
 
@@ -50,6 +50,14 @@ impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> Query<QueryType> {
         F: FnOnce(QueryType) -> Result<T, E>,
     {
         Ok(Query { inner: f(self.inner)? })
+    }
+}
+
+impl<QueryType: DeserializeOwned + JsonSchema + Send + Sync> From<QueryType>
+    for Query<QueryType>
+{
+    fn from(value: QueryType) -> Self {
+        Self { inner: value }
     }
 }
 
