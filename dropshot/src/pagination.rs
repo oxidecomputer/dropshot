@@ -237,7 +237,7 @@ where
     /// Consumers should use
     /// [`RequestContext`][crate::handler::RequestContext::page_limit()]
     /// to access this value.
-    pub(crate) limit: Option<NonZeroU32>,
+    pub limit: Option<NonZeroU32>,
 }
 
 pub(crate) const PAGINATION_PARAM_SENTINEL: &str =
@@ -420,8 +420,8 @@ enum PaginationVersion {
 /// Parts of the pagination token that actually get serialized
 #[derive(Debug, Deserialize, Serialize)]
 struct SerializedToken<PageSelector> {
-    v: PaginationVersion,
-    page_start: PageSelector,
+    pub v: PaginationVersion,
+    pub page_start: PageSelector,
 }
 
 /// Construct a serialized page token from a consumer's page selector
