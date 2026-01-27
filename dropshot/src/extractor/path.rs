@@ -1,4 +1,4 @@
-// Copyright 2025 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! URL-related extractor(s)
 
@@ -50,6 +50,12 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
         F: FnOnce(PathType) -> Result<T, E>,
     {
         Ok(Path { inner: f(self.inner)? })
+    }
+}
+
+impl<PathType: JsonSchema + Send + Sync> From<PathType> for Path<PathType> {
+    fn from(value: PathType) -> Self {
+        Self { inner: value }
     }
 }
 
