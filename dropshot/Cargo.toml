@@ -104,7 +104,7 @@ libc = "0.2.180"
 mime_guess = "2.0.5"
 subprocess = "0.2.14"
 tempfile = "3.24"
-trybuild = "1.0.114"
+trybuild = "1.0.115"
 # Used by the https examples and tests
 pem = "3.0"
 rcgen = "0.14.7"
