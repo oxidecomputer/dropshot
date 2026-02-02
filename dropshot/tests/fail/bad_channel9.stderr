@@ -4,7 +4,11 @@ error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgum
 24 |     _: Query<QueryParams>,
    |        ^^^^^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
    |
-   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+  --> src/handler.rs
+   |
+   | impl<T: 'static + ServerContext> RequestContextArgument for RequestContext<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgument` is not satisfied
   --> tests/fail/bad_channel9.rs:19:1
@@ -15,7 +19,11 @@ error[E0277]: the trait bound `dropshot::Query<QueryParams>: RequestContextArgum
 22 | | }]
    | |__^ the trait `RequestContextArgument` is not implemented for `dropshot::Query<QueryParams>`
    |
-   = help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+help: the trait `RequestContextArgument` is implemented for `RequestContext<T>`
+  --> src/handler.rs
+   |
+   | impl<T: 'static + ServerContext> RequestContextArgument for RequestContext<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = note: this error originates in the attribute macro `channel` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(dropshot::Query<QueryParams>, WebsocketUpgrade) -> impl Future<Output = Result<http::response::Response<Body>, HttpError>> {bad_channel_adapter}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
