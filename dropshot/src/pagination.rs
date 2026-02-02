@@ -234,10 +234,24 @@ where
 
     /// Client-requested limit on page size (optional)
     ///
-    /// Consumers should use
-    /// [`RequestContext`][crate::handler::RequestContext::page_limit()]
-    /// to access this value.
+    /// While this is publicly settable via the `Deserialize` implementation, it
+    /// is untrusted and therefore hidden from users. Consumers should instead
+    /// use [`RequestContext`][crate::handler::RequestContext::page_limit()],
+    /// which has gone through validation against the server config, to access
+    /// this value.
     pub(crate) limit: Option<NonZeroU32>,
+}
+
+impl<ScanParams, PageSelector> PaginationParams<ScanParams, PageSelector>
+where
+    ScanParams: DeserializeOwned,
+    PageSelector: DeserializeOwned + Serialize,
+{
+    /// Construct a new [`PaginationParams`] representing the first page of a
+    /// scan.
+    pub fn new_first_page(p: ScanParams, limit: Option<NonZeroU32>) -> Self {
+        Self { page: WhichPage::First(p), limit }
+    }
 }
 
 pub(crate) const PAGINATION_PARAM_SENTINEL: &str =

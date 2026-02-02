@@ -1,4 +1,4 @@
-// Copyright 2025 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Header extractor
 
@@ -62,6 +62,14 @@ impl<HeaderType: DeserializeOwned + JsonSchema + Send + Sync>
         F: FnOnce(HeaderType) -> Result<T, E>,
     {
         Ok(Header { inner: f(self.inner)? })
+    }
+}
+
+impl<HeaderType: DeserializeOwned + JsonSchema + Send + Sync> From<HeaderType>
+    for Header<HeaderType>
+{
+    fn from(value: HeaderType) -> Self {
+        Self { inner: value }
     }
 }
 
