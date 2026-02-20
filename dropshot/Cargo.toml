@@ -102,7 +102,7 @@ hyper-staticfile = "0.10"
 lazy_static = "1.5.0"
 libc = "0.2.182"
 mime_guess = "2.0.5"
-subprocess = "0.2.15"
+subprocess = "1.0.0"
 tempfile = "3.25"
 trybuild = "1.0.116"
 # Used by the https examples and tests
