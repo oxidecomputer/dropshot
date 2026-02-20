@@ -527,7 +527,7 @@ where
 ///                // Alternatively, an `ErrorStatusCode` can be constructed
 ///                // from a `u16`, but the `ErrorStatusCode::from_u16`
 ///                // constructor validates that the status code is a 4xx
-//                 // or 5xx.
+///                // or 5xx.
 ///                //
 ///                // This allows using extended status codes, while still
 ///                // ensuring that they are errors.
