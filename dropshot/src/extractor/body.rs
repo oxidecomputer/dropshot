@@ -1,4 +1,4 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Body-related extractor(s)
 
@@ -51,7 +51,7 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
     pub fn map<T, F>(self, f: F) -> TypedBody<T>
     where
         T: JsonSchema + DeserializeOwned + Send + Sync,
-        F: Fn(BodyType) -> T,
+        F: FnOnce(BodyType) -> T,
     {
         TypedBody { inner: f(self.inner) }
     }
@@ -60,9 +60,17 @@ impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync>
     pub fn try_map<T, E, F>(self, f: F) -> Result<TypedBody<T>, E>
     where
         T: JsonSchema + DeserializeOwned + Send + Sync,
-        F: Fn(BodyType) -> Result<T, E>,
+        F: FnOnce(BodyType) -> Result<T, E>,
     {
         Ok(TypedBody { inner: f(self.inner)? })
+    }
+}
+
+impl<BodyType: JsonSchema + DeserializeOwned + Send + Sync> From<BodyType>
+    for TypedBody<BodyType>
+{
+    fn from(value: BodyType) -> Self {
+        TypedBody { inner: value }
     }
 }
 
@@ -514,5 +522,20 @@ mod tests {
         .await;
 
         assert!(r.is_ok())
+    }
+
+    #[test]
+    fn test_typed_body_from() {
+        #[derive(Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
+        struct SampleBody {
+            field: String,
+        }
+
+        let sample = SampleBody { field: "value".to_string() };
+
+        let typed_body: crate::extractor::body::TypedBody<SampleBody> =
+            sample.clone().into();
+
+        assert_eq!(typed_body.into_inner(), sample);
     }
 }

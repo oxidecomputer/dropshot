@@ -1,7 +1,7 @@
 [package]
 name = "dropshot"
 description = "expose REST APIs from a Rust program"
-version = "0.16.4"
+version = "0.16.7"
 authors = ["David Pacheco <dap@oxidecomputer.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -19,14 +19,14 @@ async-stream = "0.3.6"
 async-trait = "0.1.89"
 base64 = "0.22.1"
 bytes = "1"
-camino = { version = "1.2.1", features = ["serde1"] }
+camino = { version = "1.2.2", features = ["serde1"] }
 debug-ignore = "1.0.5"
 form_urlencoded = "1.2.2"
-futures = "0.3.31"
-hostname = "0.4.0"
-http = "1.3.1"
+futures = "0.3.32"
+hostname = "0.4.2"
+http = "1.4.0"
 http-body-util = "0.1.3"
-indexmap = "2.12.0"
+indexmap = "2.13.0"
 multer = "3.1.0"
 paste = "1.0.15"
 percent-encoding = "2.3.2"
@@ -34,7 +34,7 @@ rustls = "0.22.4"
 rustls-pemfile = "2.2.0"
 scopeguard = "1.2.0"
 semver = "1.0.27"
-serde_json = "1.0.145"
+serde_json = "1.0.149"
 serde_path_to_error = "0.1.20"
 serde_urlencoded = "0.7.1"
 sha1 = "0.10.6"
@@ -44,18 +44,18 @@ slog-async = "2.8.0"
 slog-bunyan = "2.5.0"
 slog-json = "2.6.1"
 slog-term = "2.9.2"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 tokio-rustls = "0.25.0"
-toml = "0.9.8"
+toml = "1.0.1"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
-version = "0.4.42"
+version = "0.4.43"
 features = [ "serde", "std", "clock" ]
 default-features = false
 
 [dependencies.dropshot_endpoint]
-version = "^0.16.4"
+version = "^0.16.7"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
@@ -63,7 +63,7 @@ version = "1.8.1"
 features = [ "full" ]
 
 [dependencies.hyper-util]
-version = "0.1.18"
+version = "0.1.20"
 features = [ "full" ]
 
 [dependencies.openapiv3]
@@ -75,7 +75,7 @@ version = "1.0.228"
 features = [ "derive" ]
 
 [dependencies.tokio]
-version = "1.48"
+version = "1.49"
 features = [ "full" ]
 
 [dependencies.tokio-util]
@@ -88,7 +88,7 @@ optional = true
 default-features = false
 
 [dependencies.uuid]
-version = "1.18.1"
+version = "1.21.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
@@ -98,7 +98,7 @@ version = "0.8.22"
 features = [ "uuid1" ]
 
 [dev-dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 async-channel = "2.5.0"
 buf-list = "1.1.2"
 expectorate = "1.2.0"
@@ -106,25 +106,25 @@ flate2 = "1.0"
 hyper-rustls = "0.26.0"
 hyper-staticfile = "0.10"
 lazy_static = "1.5.0"
-libc = "0.2.177"
+libc = "0.2.182"
 mime_guess = "2.0.5"
-subprocess = "0.2.9"
-tempfile = "3.23"
-trybuild = "1.0.114"
+subprocess = "0.2.15"
+tempfile = "3.25"
+trybuild = "1.0.116"
 # Used by the https examples and tests
 pem = "3.0"
-rcgen = "0.14.5"
+rcgen = "0.14.7"
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.24.0"
 
 [dev-dependencies.reqwest]
-version = "0.12.24"
+version = "0.12.28"
 # Using rustls-tls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
 features = [ "json", "rustls-tls" ]
 
 [dev-dependencies.rustls-pki-types]
-version = "1.13.0"
+version = "1.14.0"
 # Needed for CertificateDer::into_owned
 features = ["alloc"]
 

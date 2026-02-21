@@ -1,4 +1,4 @@
-// Copyright 2025 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! URL-related extractor(s)
 
@@ -30,6 +30,32 @@ impl<PathType: JsonSchema + Send + Sync> Path<PathType> {
     // TODO drop this in favor of Deref?  + Display and Debug for convenience?
     pub fn into_inner(self) -> PathType {
         self.inner
+    }
+
+    /// Convert this `Path` into one with a different type parameter; this
+    /// may be useful when multiple, related endpoints take path parameters that
+    /// are similar and convertible into a common type.
+    pub fn map<T, F>(self, f: F) -> Path<T>
+    where
+        T: JsonSchema + Send + Sync,
+        F: FnOnce(PathType) -> T,
+    {
+        Path { inner: f(self.inner) }
+    }
+
+    /// Similar to [`Path::map`] but with support for fallibility.
+    pub fn try_map<T, E, F>(self, f: F) -> Result<Path<T>, E>
+    where
+        T: JsonSchema + Send + Sync,
+        F: FnOnce(PathType) -> Result<T, E>,
+    {
+        Ok(Path { inner: f(self.inner)? })
+    }
+}
+
+impl<PathType: JsonSchema + Send + Sync> From<PathType> for Path<PathType> {
+    fn from(value: PathType) -> Self {
+        Self { inner: value }
     }
 }
 
