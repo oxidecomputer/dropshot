@@ -197,24 +197,38 @@ async fn test_demo2query() {
         .expect_err("expected failure");
     assert_eq!(
         error.message,
-        "unable to parse query string: invalid digit found in string"
+        "unable to parse query string: invalid type: \
+        string \"bar\", expected u32"
     );
 
-    // Test case: duplicated field name
-    let error = testctx
+    // Test case: duplicated field name (we take the last one)
+    let mut response = testctx
         .client_testctx
         .make_request(
             Method::GET,
-            "/testing/demo2query?test1=foo&test1=bar",
+            "/testing/demo2query?test1=overwritten&test1=foo",
             None as Option<()>,
-            StatusCode::BAD_REQUEST,
+            StatusCode::OK,
         )
         .await
-        .expect_err("expected failure");
-    assert_eq!(
-        error.message,
-        "unable to parse query string: duplicate field `test1`"
-    );
+        .expect("expected success");
+    let json: DemoJsonBody = read_json(&mut response).await;
+    assert_eq!(json.test1, "foo");
+
+    // Test case: multiple value for a query parameter sequence
+    let mut response = testctx
+        .client_testctx
+        .make_request(
+            Method::GET,
+            "/testing/demo2query?test1=foo&test3=bar&test3=baz",
+            None as Option<()>,
+            StatusCode::OK,
+        )
+        .await
+        .expect("expected success");
+    let json: DemoJsonBody = read_json(&mut response).await;
+    assert_eq!(json.test1, "foo");
+    assert_eq!(json.test3, vec!["bar".to_string(), "baz".to_string()]);
 
     testctx.teardown().await;
 }
@@ -228,7 +242,11 @@ async fn test_demo2json() {
     let testctx = common::test_setup("demo2json", api);
 
     // Test case: optional field
-    let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
+    let input = DemoJsonBody {
+        test1: "bar".to_string(),
+        test2: None,
+        test3: Default::default(),
+    };
     let mut response = testctx
         .client_testctx
         .make_request(
@@ -244,7 +262,11 @@ async fn test_demo2json() {
     assert_eq!(json.test2, None);
 
     // Test case: both fields populated
-    let input = DemoJsonBody { test1: "bar".to_string(), test2: Some(15) };
+    let input = DemoJsonBody {
+        test1: "bar".to_string(),
+        test2: Some(15),
+        test3: Default::default(),
+    };
     let mut response = testctx
         .client_testctx
         .make_request(
@@ -341,7 +363,11 @@ async fn test_demo2urlencoded() {
     let testctx = common::test_setup("demo2urlencoded", api);
 
     // Test case: optional field
-    let input = DemoJsonBody { test1: "bar".to_string(), test2: None };
+    let input = DemoJsonBody {
+        test1: "bar".to_string(),
+        test2: None,
+        test3: Default::default(),
+    };
     let mut response = testctx
         .client_testctx
         .make_request_url_encoded(
@@ -357,7 +383,11 @@ async fn test_demo2urlencoded() {
     assert_eq!(json.test2, None);
 
     // Test case: both fields populated
-    let input = DemoJsonBody { test1: "baz".to_string(), test2: Some(20) };
+    let input = DemoJsonBody {
+        test1: "baz".to_string(),
+        test2: Some(20),
+        test3: Default::default(),
+    };
     let mut response = testctx
         .client_testctx
         .make_request_url_encoded(
@@ -373,7 +403,11 @@ async fn test_demo2urlencoded() {
     assert_eq!(json.test2, Some(20));
 
     // Error case: wrong content type for endpoint
-    let input = DemoJsonBody { test1: "qux".to_string(), test2: Some(30) };
+    let input = DemoJsonBody {
+        test1: "qux".to_string(),
+        test2: Some(30),
+        test3: Default::default(),
+    };
     let error = testctx
         .client_testctx
         .make_request(
@@ -441,7 +475,11 @@ async fn test_demo3json() {
     let testctx = common::test_setup("demo3json", api);
 
     // Test case: everything filled in.
-    let json_input = DemoJsonBody { test1: "bart".to_string(), test2: Some(0) };
+    let json_input = DemoJsonBody {
+        test1: "bart".to_string(),
+        test2: Some(0),
+        test3: vec!["milhouse".to_string()],
+    };
 
     let mut response = testctx
         .client_testctx
@@ -458,9 +496,14 @@ async fn test_demo3json() {
     assert_eq!(json.json.test2.unwrap(), 0);
     assert_eq!(json.query.test1, "martin");
     assert_eq!(json.query.test2.unwrap(), 2);
+    assert_eq!(json.json.test3, vec!["milhouse".to_string()]);
 
     // Test case: error parsing query
-    let json_input = DemoJsonBody { test1: "bart".to_string(), test2: Some(0) };
+    let json_input = DemoJsonBody {
+        test1: "bart".to_string(),
+        test2: Some(0),
+        test3: Default::default(),
+    };
     let error = testctx
         .client_testctx
         .make_request(
@@ -1178,6 +1221,8 @@ async fn demo_handler_args_1(
 pub struct DemoQueryArgs {
     pub test1: String,
     pub test2: Option<u32>,
+    #[serde(default)]
+    pub test3: Vec<String>,
 }
 #[endpoint {
     method = GET,
@@ -1194,6 +1239,8 @@ async fn demo_handler_args_2query(
 pub struct DemoJsonBody {
     pub test1: String,
     pub test2: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub test3: Vec<String>,
 }
 #[endpoint {
     method = GET,
