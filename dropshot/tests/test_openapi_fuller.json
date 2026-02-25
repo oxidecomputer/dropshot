@@ -336,13 +336,19 @@
         ],
         "operationId": "vzerolower",
         "responses": {
-          "default": {
-            "description": "",
+          "101": {
+            "description": "Negotiating protocol upgrade from HTTP/1.1 to WebSocket",
             "content": {
               "*/*": {
                 "schema": {}
               }
             }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "x-dropshot-websocket": {}
@@ -356,7 +362,7 @@
         "operationId": "handler18",
         "responses": {
           "200": {
-            "description": "",
+            "description": "successful operation",
             "content": {
               "*/*": {
                 "schema": {}
