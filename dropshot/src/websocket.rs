@@ -8,9 +8,10 @@
 
 use crate::api_description::ExtensionMode;
 use crate::body::Body;
+use crate::handler::HttpHandlerResult;
 use crate::{
-    ApiEndpointBodyContentType, ExclusiveExtractor, ExtractorMetadata,
-    HttpError, RequestContext, ServerContext,
+    ApiEndpointBodyContentType, ApiEndpointResponse, ExclusiveExtractor,
+    ExtractorMetadata, HttpError, HttpResponse, RequestContext, ServerContext,
 };
 use async_trait::async_trait;
 use base64::Engine;
@@ -45,7 +46,37 @@ pub type WebsocketChannelResult =
 /// [WebsocketUpgrade::handle]'s return type.
 /// The `#[endpoint]` handler must return the value returned by
 /// [WebsocketUpgrade::handle]. (This is done for you by `#[channel]`.)
-pub type WebsocketEndpointResult = Result<Response<Body>, HttpError>;
+pub type WebsocketEndpointResult = Result<SwitchingToWebsocket, HttpError>;
+
+pub struct SwitchingToWebsocket {
+    accept_key: String,
+}
+
+impl HttpResponse for SwitchingToWebsocket {
+    fn to_result(self) -> HttpHandlerResult {
+        Response::builder()
+            .status(StatusCode::SWITCHING_PROTOCOLS)
+            .header(header::CONNECTION, "Upgrade")
+            .header(header::UPGRADE, "websocket")
+            .header(header::SEC_WEBSOCKET_ACCEPT, self.accept_key)
+            .body(Body::empty())
+            .map_err(Into::into)
+    }
+    fn response_metadata() -> ApiEndpointResponse {
+        const UPGRADE_DESCRIPTION: &str =
+            "Negotiating protocol upgrade from HTTP/1.1 to WebSocket.";
+        ApiEndpointResponse {
+            schema: None,
+            headers: vec![],
+            success: Some(StatusCode::SWITCHING_PROTOCOLS),
+            // FIXME(?): this becomes empty-string when schema is None
+            description: Some(UPGRADE_DESCRIPTION.to_string()),
+        }
+    }
+    fn status_code(&self) -> StatusCode {
+        StatusCode::SWITCHING_PROTOCOLS
+    }
+}
 
 /// The upgraded connection passed as the last argument to the websocket
 /// handler function. [`WebsocketConnection::into_inner`] can be used to
@@ -257,13 +288,7 @@ impl WebsocketUpgrade {
                         }
                     }
                 });
-                Response::builder()
-                    .status(StatusCode::SWITCHING_PROTOCOLS)
-                    .header(header::CONNECTION, "Upgrade")
-                    .header(header::UPGRADE, "websocket")
-                    .header(header::SEC_WEBSOCKET_ACCEPT, accept_key)
-                    .body(Body::empty())
-                    .map_err(Into::into)
+                Ok(SwitchingToWebsocket { accept_key })
             }
         }
     }
