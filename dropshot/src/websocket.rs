@@ -64,12 +64,11 @@ impl HttpResponse for SwitchingToWebsocket {
     }
     fn response_metadata() -> ApiEndpointResponse {
         const UPGRADE_DESCRIPTION: &str =
-            "Negotiating protocol upgrade from HTTP/1.1 to WebSocket.";
+            "Negotiating protocol upgrade from HTTP/1.1 to WebSocket";
         ApiEndpointResponse {
             schema: None,
             headers: vec![],
             success: Some(StatusCode::SWITCHING_PROTOCOLS),
-            // FIXME(?): this becomes empty-string when schema is None
             description: Some(UPGRADE_DESCRIPTION.to_string()),
         }
     }
