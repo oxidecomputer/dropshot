@@ -25,7 +25,7 @@ version = "1.0"
 features = [ "derive" ]
 
 [dependencies.syn]
-version = "2.0.114"
+version = "2.0.116"
 features = [ "full", "visit", "extra-traits" ]
 
 [dev-dependencies]
