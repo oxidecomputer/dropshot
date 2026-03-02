@@ -650,7 +650,7 @@ mod test {
             querystring: &str,
         ) -> (T, Option<NonZeroU32>) {
             let pagparams: PaginationParams<T, MyPageSelector> =
-                serde_urlencoded::from_str(querystring).unwrap();
+                serde_qs::from_str(querystring).unwrap();
             let limit = pagparams.limit;
             let scan_params = match pagparams.page {
                 WhichPage::Next(..) => panic!("expected first page"),
@@ -709,11 +709,11 @@ mod test {
         // TODO-polish The actual error messages for the following cases are
         // pretty poor, so we don't test them here, but we should clean these
         // up.
-        fn parse_as_error(querystring: &str) -> serde_urlencoded::de::Error {
-            serde_urlencoded::from_str::<
+        fn parse_as_error(querystring: &str) {
+            serde_qs::from_str::<
                 PaginationParams<MyScanParams, MyPageSelector>,
             >(querystring)
-            .unwrap_err()
+            .unwrap_err();
         }
 
         // missing required field ("the_field")
@@ -733,7 +733,7 @@ mod test {
             querystring: &str,
         ) -> (MyPageSelector, Option<NonZeroU32>) {
             let pagparams: PaginationParams<MyScanParams, MyPageSelector> =
-                serde_urlencoded::from_str(querystring).unwrap();
+                serde_qs::from_str(querystring).unwrap();
             let limit = pagparams.limit;
             let page_selector = match pagparams.page {
                 WhichPage::Next(x) => x,
@@ -779,8 +779,7 @@ mod test {
         }
 
         let pagparams: PaginationParams<SketchyScanParams, MyPageSelector> =
-            serde_urlencoded::from_str(&format!("page_token={}", token))
-                .unwrap();
+            serde_qs::from_str(&format!("page_token={}", token)).unwrap();
         assert_eq!(pagparams.limit, None);
         match &pagparams.page {
             WhichPage::First(..) => {

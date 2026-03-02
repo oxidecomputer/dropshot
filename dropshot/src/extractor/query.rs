@@ -70,8 +70,7 @@ where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,
 {
     let raw_query_string = request.uri().query().unwrap_or("");
-    // TODO-correctness: are query strings defined to be urlencoded in this way?
-    match serde_urlencoded::from_str(raw_query_string) {
+    match serde_qs::from_str(raw_query_string) {
         Ok(q) => Ok(Query { inner: q }),
         Err(e) => Err(HttpError::for_bad_request(
             None,
