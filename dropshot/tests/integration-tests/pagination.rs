@@ -42,8 +42,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use subprocess::Exec;
-use subprocess::NullFile;
-use subprocess::Popen;
+use subprocess::Job;
+use subprocess::Redirection;
 use uuid::Uuid;
 
 use crate::common;
@@ -765,7 +765,7 @@ async fn test_paginate_dictionary() {
 }
 
 struct ExampleContext {
-    child: Popen,
+    child: Job,
     client: ClientTestContext,
     logctx: Option<LogContext>,
 }
@@ -814,10 +814,11 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
     // It would be better to put this in some log file that we manage similarly
     // to a LogContext so that it would be available for debugging when wanted
     // but removed upon successful completion of the test.
-    let config = Exec::cmd(cmd_path).arg(port.to_string()).stderr(NullFile);
+    let config =
+        Exec::cmd(cmd_path).arg(port.to_string()).stderr(Redirection::Null);
     let cmdline = config.to_cmdline_lossy();
     info!(&log, "starting child process"; "cmdline" => &cmdline);
-    let child = config.popen().unwrap();
+    let child = config.start().unwrap();
 
     // Wait up to 10 seconds for the actual HTTP server to start up.  We'll
     // continue trying to make requests against it until they fail for an
