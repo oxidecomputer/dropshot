@@ -1,4 +1,5 @@
-// Copyright 2023 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
+
 //! Implements websocket upgrades as an Extractor for use in API route handler
 //! parameters to indicate that the given endpoint is meant to be upgraded to
 //! a websocket.
@@ -6,7 +7,7 @@
 //! This exposes a raw upgraded HTTP connection to a user-provided async future,
 //! which will be spawned to handle the incoming connection.
 
-use crate::api_description::ExtensionMode;
+use crate::api_description::{ApiSchemaGenerator, ExtensionMode};
 use crate::body::Body;
 use crate::handler::HttpHandlerResult;
 use crate::{
@@ -66,7 +67,10 @@ impl HttpResponse for SwitchingToWebsocket {
         const UPGRADE_DESCRIPTION: &str =
             "Negotiating protocol upgrade from HTTP/1.1 to WebSocket";
         ApiEndpointResponse {
-            schema: None,
+            schema: Some(ApiSchemaGenerator::Static {
+                schema: Box::new(schemars::schema::Schema::Bool(false)),
+                dependencies: Default::default(),
+            }),
             headers: vec![],
             success: Some(StatusCode::SWITCHING_PROTOCOLS),
             description: Some(UPGRADE_DESCRIPTION.to_string()),
