@@ -142,6 +142,18 @@ pub fn is_compressible_content_type(
     is_compressible || has_compressible_suffix
 }
 
+// Note that should_compress_response intentionally answers only "should
+// Dropshot apply gzip?" rather than implementing full RFC 9110 content-coding
+// negotiation.
+//
+// For example, a request with `Accept-Encoding: br, identity;q=0` is treated as
+// "don't gzip" and will currently fall back to an uncompressed response if gzip
+// is not applied, even though a fully compliant server would return 406 Not
+// Acceptable because `identity` was explicitly rejected.
+//
+// If this ever matters for a real client, handle it after the compression
+// decision by rejecting identity fallback with 406.
+
 /// Determines if a response should be compressed with gzip.
 pub fn should_compress_response(
     request_method: &http::Method,
