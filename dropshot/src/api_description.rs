@@ -1,4 +1,4 @@
-// Copyright 2025 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Describes the endpoints and handler functions in your API
 
@@ -996,10 +996,16 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     },
                 );
                 openapiv3::Response {
-                    // TODO: perhaps we should require even free-form
-                    // responses to have a description since it's required
-                    // by OpenAPI.
-                    description: "".to_string(),
+                    description: if let Some(description) =
+                        &endpoint.response.description
+                    {
+                        description.clone()
+                    } else {
+                        // TODO: perhaps we should require even free-form
+                        // responses to have a description since it's required
+                        // by OpenAPI.
+                        "".to_string()
+                    },
                     content,
                     ..Default::default()
                 }
