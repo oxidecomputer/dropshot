@@ -880,6 +880,7 @@ mod schema_util;
 mod server;
 mod to_map;
 mod type_util;
+mod typespec;
 mod versioning;
 mod websocket;
 
@@ -905,6 +906,8 @@ pub use api_description::TagConfig;
 pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use body::Body;
+// TypeSpec generation is currently experimental.
+pub use typespec::api_to_typespec;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use config::HandlerTaskMode;

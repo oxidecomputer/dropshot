@@ -415,7 +415,7 @@ impl std::fmt::Debug for ApiSchemaGenerator {
 /// to generate an OpenAPI spec or to run an HTTP server implementing the API.
 pub struct ApiDescription<Context: ServerContext> {
     /// In practice, all the information we need is encoded in the router.
-    router: HttpRouter<Context>,
+    pub(crate) router: HttpRouter<Context>,
     tag_config: TagConfig,
 }
 
