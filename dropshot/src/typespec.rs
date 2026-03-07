@@ -190,6 +190,11 @@ pub fn api_to_typespec<C: ServerContext>(
         }
     }
 
+    // Check if any schema uses format: "uuid" so we emit the uuid scalar.
+    ctx.needs_uuid_scalar = definitions
+        .values()
+        .any(|schema| schema_uses_uuid_format(schema));
+
     // Emit preamble.
     ctx.emit_preamble(title, version);
 
@@ -209,6 +214,13 @@ pub fn api_to_typespec<C: ServerContext>(
         .unwrap();
         writeln!(ctx.out, "  next_page?: string | null;").unwrap();
         writeln!(ctx.out, "}}").unwrap();
+        writeln!(ctx.out).unwrap();
+    }
+
+    // Emit uuid scalar if any schema uses format: "uuid".
+    if ctx.needs_uuid_scalar {
+        writeln!(ctx.out, "@format(\"uuid\")").unwrap();
+        writeln!(ctx.out, "scalar uuid extends string;").unwrap();
         writeln!(ctx.out).unwrap();
     }
 
@@ -271,6 +283,8 @@ struct TypeSpecContext {
     error_types: std::collections::HashSet<String>,
     /// Whether any operation uses a freeform response.
     needs_freeform_response: bool,
+    /// Whether any type references `uuid` (needs scalar definition).
+    needs_uuid_scalar: bool,
 }
 
 impl TypeSpecContext {
@@ -280,6 +294,7 @@ impl TypeSpecContext {
             results_page_rewrites: std::collections::HashMap::new(),
             error_types: std::collections::HashSet::new(),
             needs_freeform_response: false,
+            needs_uuid_scalar: false,
         }
     }
 
@@ -971,7 +986,7 @@ fn instance_type_to_typespec(
             match format.as_deref() {
                 Some("date") => "plainDate".to_string(),
                 Some("date-time") => "utcDateTime".to_string(),
-                Some("uuid") => "string".to_string(), // no built-in uuid
+                Some("uuid") => "uuid".to_string(),
                 Some("ip") | Some("ipv4") | Some("ipv6") => {
                     "string".to_string()
                 }
@@ -1032,6 +1047,51 @@ fn instance_type_to_typespec(
 /// type name (e.g. "Widget"). Detection is heuristic: the name must end in
 /// "ResultsPage" and the schema must have `items` (array) and `next_page`
 /// (nullable string) properties.
+/// Returns true if a schema uses format: "uuid" anywhere within it.
+/// We need to recurse because uuid can appear inside inline property schemas
+/// or anyOf/oneOf variants, not just at the top level. Cross-type references
+/// use $ref and become separate definitions, so this doesn't recurse across
+/// named types.
+fn schema_uses_uuid_format(schema: &Schema) -> bool {
+    match schema {
+        Schema::Bool(_) => false,
+        Schema::Object(obj) => {
+            if obj.format.as_deref() == Some("uuid") {
+                return true;
+            }
+            if let Some(object) = &obj.object {
+                for prop in object.properties.values() {
+                    if schema_uses_uuid_format(prop) {
+                        return true;
+                    }
+                }
+            }
+            if let Some(subschemas) = &obj.subschemas {
+                let lists = [
+                    &subschemas.one_of,
+                    &subschemas.any_of,
+                    &subschemas.all_of,
+                ];
+                for list in lists.into_iter().flatten() {
+                    for s in list {
+                        if schema_uses_uuid_format(s) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            if let Some(arr) = &obj.array {
+                if let Some(SingleOrVec::Single(item)) = &arr.items {
+                    if schema_uses_uuid_format(item) {
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+    }
+}
+
 fn detect_results_pages(
     definitions: &IndexMap<String, Schema>,
 ) -> std::collections::HashMap<String, String> {
@@ -1255,9 +1315,9 @@ fn emit_validation_decorators(
     // and date-time/uri are already reflected in the TypeSpec type.
     if let Some(fmt) = &obj.format {
         match fmt.as_str() {
-            "date-time" | "date" | "uri" | "int8" | "int16" | "int32"
-            | "int64" | "uint8" | "uint16" | "uint32" | "uint64"
-            | "float" | "double" => {}
+            "date-time" | "date" | "uri" | "uuid" | "int8" | "int16"
+            | "int32" | "int64" | "uint8" | "uint16" | "uint32"
+            | "uint64" | "float" | "double" => {}
             f => {
                 writeln!(out, "{}@format(\"{}\")", indent, f).unwrap();
             }
