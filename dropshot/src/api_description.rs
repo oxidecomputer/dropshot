@@ -375,8 +375,8 @@ pub struct ApiEndpointResponse {
 /// Metadata for an API endpoint's error response type.
 #[derive(Debug)]
 pub struct ApiEndpointErrorResponse {
-    schema: ApiSchemaGenerator,
-    type_name: &'static str,
+    pub(crate) schema: ApiSchemaGenerator,
+    pub(crate) type_name: &'static str,
 }
 
 impl ApiEndpointErrorResponse {
