@@ -213,14 +213,16 @@ pub fn api_to_typespec<C: ServerContext>(
     }
 
     // Emit the FreeformResponse model if any operation needs it.
+    // @defaultResponse tells TypeSpec/OpenAPI this is the catch-all response
+    // (rendered as `default` in OpenAPI, matching dropshot's behavior).
     if ctx.needs_freeform_response {
         writeln!(
             ctx.out,
-            "@doc(\"Response with unknown status code and untyped body\")"
+            "@doc(\"Response with untyped body\")"
         )
         .unwrap();
+        writeln!(ctx.out, "@defaultResponse").unwrap();
         writeln!(ctx.out, "model FreeformResponse {{").unwrap();
-        writeln!(ctx.out, "  @statusCode statusCode: int32;").unwrap();
         writeln!(ctx.out, "  @body body: bytes;").unwrap();
         writeln!(ctx.out, "}}").unwrap();
         writeln!(ctx.out).unwrap();
@@ -396,12 +398,25 @@ impl TypeSpecContext {
         // Non-object type alias (e.g. a named string type).
         let ts_type = schemars_obj_to_typespec(obj);
         self.emit_doc_from_metadata(obj.metadata.as_deref());
-        emit_validation_decorators(
-            &mut self.out,
-            &Schema::Object(obj.clone()),
-            "",
-        );
-        writeln!(self.out, "scalar {} extends {};", name, ts_type).unwrap();
+
+        // If the resolved type is a union (e.g. from anyOf/oneOf), emit as
+        // a TypeSpec `union` rather than `scalar extends` — scalars can only
+        // extend a single base type.
+        if ts_type.contains(" | ") {
+            writeln!(self.out, "union {} {{", name).unwrap();
+            for variant in ts_type.split(" | ") {
+                writeln!(self.out, "  {},", variant).unwrap();
+            }
+            writeln!(self.out, "}}").unwrap();
+        } else {
+            emit_validation_decorators(
+                &mut self.out,
+                &Schema::Object(obj.clone()),
+                "",
+            );
+            writeln!(self.out, "scalar {} extends {};", name, ts_type)
+                .unwrap();
+        }
         writeln!(self.out).unwrap();
     }
 
