@@ -73,10 +73,18 @@ enum InstanceState {
 }
 
 model LookupResult {
+  @format("uuid")
+  id: string;
   target: NameOrId;
 }
 
-scalar NameOrId extends string | uint64;
+@doc("A name unique within the parent collection")
+@minLength(1)
+@maxLength(63)
+@pattern("^[a-z]([a-zA-Z0-9-]*[a-zA-Z0-9]+)?$")
+scalar Name extends string;
+
+scalar NameOrId extends string | Name;
 
 model PaintJob {
   color: Color;
