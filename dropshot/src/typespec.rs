@@ -9,6 +9,7 @@
 use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointParameterMetadata;
 use crate::api_description::ApiSchemaGenerator;
+use crate::api_description::ExtensionMode;
 use crate::server::ServerContext;
 use crate::ApiDescription;
 
@@ -52,6 +53,7 @@ pub fn api_to_typespec<C: ServerContext>(
             body: None,
             response: ResponseInfo::default(),
             error_type: None,
+            extension_mode: endpoint.extension_mode.clone(),
         };
 
         // Parameters (path, query, header).
@@ -519,6 +521,27 @@ impl TypeSpecContext {
                 .unwrap();
         }
 
+        // Dropshot extensions.
+        match &op.extension_mode {
+            ExtensionMode::None => {}
+            ExtensionMode::Paginated(value) => {
+                let tsp_val = json_to_tsp_literal(value);
+                writeln!(
+                    self.out,
+                    "@extension(\"x-dropshot-pagination\", {})",
+                    tsp_val,
+                )
+                .unwrap();
+            }
+            ExtensionMode::Websocket => {
+                writeln!(
+                    self.out,
+                    "@extension(\"x-dropshot-websocket\", #{{}})",
+                )
+                .unwrap();
+            }
+        }
+
         // Deprecated.
         if op.deprecated {
             writeln!(self.out, "#deprecated \"deprecated\"").unwrap();
@@ -659,6 +682,7 @@ struct OpInfo {
     body: Option<BodyInfo>,
     response: ResponseInfo,
     error_type: Option<String>,
+    extension_mode: ExtensionMode,
 }
 
 struct ParamInfo {

@@ -135,10 +135,10 @@ All done:
 
 - ✓ Detect `ResultsPage` pattern and emit as `model ResultsPage<T> { ... }`
   with generic usage at call sites
-- Consider operation grouping: nested namespaces or `interface` blocks by
-  path prefix
-- Handle dropshot extensions (pagination, websocket) as comments or
-  `@extension` decorators
+- ~~Consider operation grouping~~ — not doing this, flat ops are fine
+- ✓ Dropshot extensions emitted as `@extension` decorators on operations:
+  `@extension("x-dropshot-pagination", #{required: #[...]})` and
+  `@extension("x-dropshot-websocket", #{})`
 - Decide on public API surface (feature flag, method placement)
 
 ### Remaining medium-priority items
@@ -151,8 +151,8 @@ All done:
 
 ## Open questions
 
-- **Namespace naming**: how to sanitize `info.title` → valid TypeSpec identifier.
-  PascalCase, strip non-alphanumeric.
+- **Namespace naming**: the caller picks a namespace name that is already a valid
+  TypeSpec identifier. No automatic sanitization of the title.
 - **Operation grouping**: flat ops in top namespace vs. `interface` blocks.
   Start flat, iterate.
 - **`4XX`/`5XX` error pattern**: TypeSpec uses `@error model` + union returns.
