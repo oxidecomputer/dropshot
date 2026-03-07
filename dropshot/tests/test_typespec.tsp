@@ -15,6 +15,12 @@ model ResultsPage<T> {
   next_page?: string | null;
 }
 
+@doc("Response with unknown status code and untyped body")
+model FreeformResponse {
+  @statusCode statusCode: int32;
+  @body body: bytes;
+}
+
 enum Color {
   Red,
   Green,
@@ -37,6 +43,10 @@ model Constrained {
   @doc("DNS-style name")
   @pattern("^[a-z][a-z0-9-]*$")
   slug: string;
+}
+
+model DeviceAuthRequest {
+  client_id: string;
 }
 
 @doc("Error information from a response.")
@@ -145,6 +155,16 @@ op authed_get(@header authorization: string, @header x_request_id?: string): Wid
 @get
 op constrained_get(): Constrained | Error;
 
+@doc("Start device auth")
+@route("/device/auth")
+@post
+op device_auth(@header contentType: "application/x-www-form-urlencoded", @body body: DeviceAuthRequest): void | Error;
+
+@doc("Get device token")
+@route("/device/token")
+@post
+op device_token(): FreeformResponse | Error;
+
 @route("/flexible")
 @get
 op flexible_get(): Flexible | Error;
@@ -203,6 +223,11 @@ op task_start(@body body: WidgetCreate): {
   @statusCode _: 202;
   @body body: Widget;
 } | Error;
+
+@doc("Upload raw bytes")
+@route("/upload")
+@post
+op upload_bytes(@header contentType: "application/octet-stream", @body body: bytes): void | Error;
 
 @doc("Create a widget")
 @route("/widgets")

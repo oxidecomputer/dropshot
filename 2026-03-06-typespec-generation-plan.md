@@ -145,9 +145,11 @@ All done:
 
 - ✓ Additional status codes (202, 303) — already handled by generic logic
 - ✓ Untagged/externally-tagged unions — handled by union/scalar fallback
-- Non-JSON request bodies (`application/octet-stream`, `x-www-form-urlencoded`)
-- `format: binary` → `bytes`
-- `default` response (wildcard `*/*` content type, 8 nexus operations)
+- ✓ Non-JSON request bodies (`application/octet-stream`, `x-www-form-urlencoded`)
+  — `@header contentType` decorator with `@body body: bytes` or `@body body: T`
+- ✓ `format: binary` → `bytes` (octet-stream and multipart bodies)
+- ✓ Freeform responses (`Response<Body>`, the `*/*` / default pattern) —
+  `FreeformResponse` model with `@statusCode statusCode: int32; @body body: bytes`
 
 ## Open questions
 
