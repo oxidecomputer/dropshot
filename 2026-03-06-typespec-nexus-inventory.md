@@ -26,47 +26,34 @@ Stats: 213 paths, 457 schemas, 311 operations, 29 tags.
 
 ### High priority (pervasive in nexus)
 
-**oneOf-of-single-string-consts (described enums)**: 35 schemas where each
-variant is `{type: "string", enum: ["Value"]}` with its own description. These
-are serde string enums where each variant has a doc comment. We currently emit
-these as a union of literal types; should emit as a TypeSpec `enum` with `@doc`
-on each member.
+**~~oneOf-of-single-string-consts (described enums)~~**: Done. Emitted as
+TypeSpec `enum` with `@doc` on each member.
 
-**~~allOf single-$ref wrapper~~**: Not actually a concern. The 304 occurrences
-of `allOf: [{$ref: "..."}]` in the OpenAPI JSON are an OAS 3.0 workaround
-(sibling keywords next to `$ref` are ignored, so schemars wraps in `allOf`).
-Since we generate TypeSpec from dropshot's schemars `Schema` objects directly —
-not from the OpenAPI JSON — we never see this wrapper. The schemars schema has
-the ref and metadata (nullable, description, default) together on the same
-`SchemaObject`. TypeSpec can express this cleanly with no wrapper needed.
+**~~allOf single-$ref wrapper~~**: Not a concern. The 304 occurrences in the
+OpenAPI JSON are an OAS 3.0 workaround. Since we generate from schemars
+`Schema` objects directly, we never see this wrapper.
 
-**Error responses**: Every operation has `4XX` and `5XX` responses referencing
-`#/components/responses/Error`. The Error schema is
-`{message: string, request_id: string, error_code?: string}`. Should emit as
-an `@error` model and include in operation return types or handle via a
-convention.
+**~~Error responses~~**: Done. Error models get `@error` decorator and a
+synthetic `@statusCode` field with `@minValue(400) @maxValue(599)`. Operations
+return `SuccessType | Error`.
 
-**Pagination (`ResultsPage<T>`)**: 65 `*ResultsPage` schemas, all with
-`{items: T[], next_page?: string | null}`. 78 operations carry
-`x-dropshot-pagination`. Phase 3 of the plan covers heuristic detection and
-generic emission.
+**~~Pagination (`ResultsPage<T>`)~~**: Done. Heuristic detection emits a
+generic `model ResultsPage<T>` and rewrites concrete names to generic form.
 
-**Validation decorators**: Nexus uses:
-- `minimum`: 216 uses (134 are `minimum: 0` for unsigned, 82 are `minimum: 1`)
-- `maxLength`: 7, `minLength`: 6
-- `pattern`: 14 uses across 10 unique patterns
-- `maximum`: 1
-- `minItems`: 3, `maxItems`: 8
+**~~Validation decorators~~**: Done. Emits `@minValue`, `@maxValue`,
+`@minValueExclusive`, `@maxValueExclusive`, `@minLength`, `@maxLength`,
+`@pattern`, `@minItems`, `@maxItems`.
 
-Map to `@minValue`, `@maxValue`, `@minLength`, `@maxLength`, `@pattern`,
-`@minItems`, `@maxItems`.
+**~~Default values~~**: Done. Property defaults from schemars metadata emitted
+as TypeSpec value literals (numbers, booleans, strings, `#[]` for arrays,
+`#{...}` for objects, `null`).
 
-**Default values**: 33 real property defaults including `null`, `[]`, `false`,
-`true`, string values, and a few complex object defaults.
-
-**$ref parameters**: Most path and query params reference named schemas like
-`NameOrId`, `Name`, sort-mode enums. 164 path params and 260 query params use
-`$ref` rather than inline type definitions.
+**~~$ref parameters~~**: Not a concern. The `schema2struct` extraction in
+dropshot dereferences `$ref`s when building parameter schemas. The
+`ApiSchemaGenerator::Static` for parameters contains inline schemas with
+resolved types plus a `dependencies` map. The "$ref parameters" in the nexus
+OpenAPI are re-introduced by the OpenAPI code path, not present in the internal
+structures we walk.
 
 ### Medium priority
 
@@ -117,10 +104,10 @@ These features exist in TypeSpec but aren't needed for the nexus API:
 
 ## Recommended implementation order
 
-1. Described string enums (oneOf-of-string-consts → enum with @doc)
-2. Error responses (@error model)
-3. Validation decorators (@minValue, @maxLength, @pattern, etc.)
-4. Default values
-5. Additional status codes (202, 303)
-6. ResultsPage generic detection
+1. ~~Described string enums (oneOf-of-string-consts → enum with @doc)~~
+2. ~~Error responses (@error model)~~
+3. ~~Validation decorators (@minValue, @maxLength, @pattern, etc.)~~
+4. ~~Default values~~
+5. ~~ResultsPage generic detection~~
+6. Additional status codes (202, 303)
 7. Untagged unions
