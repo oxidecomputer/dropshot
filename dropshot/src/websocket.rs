@@ -377,7 +377,7 @@ impl tokio::io::AsyncWrite for WebsocketConnectionRaw {
 #[cfg(test)]
 mod tests {
     use crate::body::Body;
-    use crate::config::HandlerTaskMode;
+    use crate::config::{CompressionConfig, HandlerTaskMode};
     use crate::router::HttpRouter;
     use crate::server::{DropshotState, ServerConfig};
     use crate::{
@@ -413,6 +413,7 @@ mod tests {
                     default_handler_task_mode:
                         HandlerTaskMode::CancelOnDisconnect,
                     log_headers: Default::default(),
+                    compression: CompressionConfig::Gzip,
                 },
                 router: HttpRouter::new(),
                 log: log.clone(),
