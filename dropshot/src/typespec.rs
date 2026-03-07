@@ -320,7 +320,7 @@ impl TypeSpecContext {
                     writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d))
                         .unwrap();
                 }
-                emit_validation_decorators(&mut self.out, prop_schema);
+                emit_validation_decorators(&mut self.out, prop_schema, "  ");
                 let default_suffix = schema_default(prop_schema)
                     .map(|d| format!(" = {}", d))
                     .unwrap_or_default();
@@ -358,6 +358,11 @@ impl TypeSpecContext {
         // Non-object type alias (e.g. a named string type).
         let ts_type = schemars_obj_to_typespec(obj);
         self.emit_doc_from_metadata(obj.metadata.as_deref());
+        emit_validation_decorators(
+            &mut self.out,
+            &Schema::Object(obj.clone()),
+            "",
+        );
         writeln!(self.out, "scalar {} extends {};", name, ts_type).unwrap();
         writeln!(self.out).unwrap();
     }
@@ -1122,49 +1127,74 @@ fn extract_single_enum_value(schema: &Schema) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 /// Emit TypeSpec validation decorators for a schema's constraints.
-fn emit_validation_decorators(out: &mut String, schema: &Schema) {
+fn emit_validation_decorators(
+    out: &mut String,
+    schema: &Schema,
+    indent: &str,
+) {
     let obj = match schema {
         Schema::Object(obj) => obj,
         _ => return,
     };
 
+    // String format hints (uuid, ip, etc.) that aren't captured by the
+    // type mapping. Integer/float formats (int32, uint64, float, double)
+    // and date-time/uri are already reflected in the TypeSpec type.
+    if let Some(fmt) = &obj.format {
+        match fmt.as_str() {
+            "date-time" | "date" | "uri" | "int8" | "int16" | "int32"
+            | "int64" | "uint8" | "uint16" | "uint32" | "uint64"
+            | "float" | "double" => {}
+            f => {
+                writeln!(out, "{}@format(\"{}\")", indent, f).unwrap();
+            }
+        }
+    }
+
     // Number validation: @minValue, @maxValue.
     if let Some(number) = &obj.number {
         if let Some(min) = number.minimum {
-            writeln!(out, "  @minValue({})", format_f64(min)).unwrap();
+            writeln!(out, "{}@minValue({})", indent, format_f64(min)).unwrap();
         }
         if let Some(max) = number.maximum {
-            writeln!(out, "  @maxValue({})", format_f64(max)).unwrap();
+            writeln!(out, "{}@maxValue({})", indent, format_f64(max)).unwrap();
         }
         if let Some(min) = number.exclusive_minimum {
-            writeln!(out, "  @minValueExclusive({})", format_f64(min)).unwrap();
+            writeln!(out, "{}@minValueExclusive({})", indent, format_f64(min))
+                .unwrap();
         }
         if let Some(max) = number.exclusive_maximum {
-            writeln!(out, "  @maxValueExclusive({})", format_f64(max)).unwrap();
+            writeln!(out, "{}@maxValueExclusive({})", indent, format_f64(max))
+                .unwrap();
         }
     }
 
     // String validation: @minLength, @maxLength, @pattern.
     if let Some(string) = &obj.string {
         if let Some(min) = string.min_length {
-            writeln!(out, "  @minLength({})", min).unwrap();
+            writeln!(out, "{}@minLength({})", indent, min).unwrap();
         }
         if let Some(max) = string.max_length {
-            writeln!(out, "  @maxLength({})", max).unwrap();
+            writeln!(out, "{}@maxLength({})", indent, max).unwrap();
         }
         if let Some(pat) = &string.pattern {
-            writeln!(out, "  @pattern(\"{}\")", escape_tsp_string(pat))
-                .unwrap();
+            writeln!(
+                out,
+                "{}@pattern(\"{}\")",
+                indent,
+                escape_tsp_string(pat)
+            )
+            .unwrap();
         }
     }
 
     // Array validation: @minItems, @maxItems.
     if let Some(array) = &obj.array {
         if let Some(min) = array.min_items {
-            writeln!(out, "  @minItems({})", min).unwrap();
+            writeln!(out, "{}@minItems({})", indent, min).unwrap();
         }
         if let Some(max) = array.max_items {
-            writeln!(out, "  @maxItems({})", max).unwrap();
+            writeln!(out, "{}@maxItems({})", indent, max).unwrap();
         }
     }
 }

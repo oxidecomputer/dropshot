@@ -350,15 +350,24 @@ async fn login_redirect(
 
 // -- Untagged unions --
 
+/// A name unique within the parent collection
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[schemars(rename = "Name")]
+struct Name(
+    #[schemars(length(min = 1, max = 63), regex(pattern = r"^[a-z]([a-zA-Z0-9-]*[a-zA-Z0-9]+)?$"))]
+    String,
+);
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum NameOrId {
-    Name(String),
-    Id(u64),
+    Id(uuid::Uuid),
+    Name(Name),
 }
 
 #[derive(Serialize, JsonSchema)]
 struct LookupResult {
+    id: uuid::Uuid,
     target: NameOrId,
 }
 
