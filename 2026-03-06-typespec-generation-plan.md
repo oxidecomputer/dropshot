@@ -183,6 +183,14 @@ output is solid and covers the full API surface, experiment with `tsp compile`
 on the output and compare against the existing OpenAPI. If the results are
 close enough, we can evaluate deprecating `gen_openapi()`.
 
+## Target application
+
+The flagship dropshot API we care about is the Oxide external API in
+`oxidecomputer/omicron` (specifically `nexus/external-api`). The feature set
+of the TypeSpec generator needs to cover everything that API uses. Before
+declaring any phase complete, validate against the omicron external API to
+discover gaps.
+
 ## Iteration strategy
 
 Start with the simplest possible case. Get one endpoint looking right. Then
