@@ -2,11 +2,13 @@
 
 use dropshot::{
     api_to_typespec, endpoint, http_response_see_other, ApiDescription,
-    FreeformBody, Header, HttpError, HttpResponseAccepted,
+    Body, FreeformBody, Header, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
     HttpResponseOk, HttpResponseSeeOther, HttpResponseUpdatedNoContent,
     PaginationParams, Path, Query, RequestContext, ResultsPage, TypedBody,
+    UntypedBody,
 };
+use http::Response;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -406,6 +408,54 @@ async fn project_list(
     unimplemented!();
 }
 
+// -- Octet-stream request body --
+
+#[endpoint {
+    method = POST,
+    path = "/upload",
+}]
+/// Upload raw bytes
+async fn upload_bytes(
+    _rqctx: RequestContext<()>,
+    _body: UntypedBody,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    unimplemented!();
+}
+
+// -- Form-urlencoded request body --
+
+#[derive(Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct DeviceAuthRequest {
+    client_id: String,
+}
+
+#[endpoint {
+    method = POST,
+    path = "/device/auth",
+    content_type = "application/x-www-form-urlencoded",
+}]
+/// Start device auth
+async fn device_auth(
+    _rqctx: RequestContext<()>,
+    _body: TypedBody<DeviceAuthRequest>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+// -- Freeform response (hand-rolled Response<Body>) --
+
+#[endpoint {
+    method = POST,
+    path = "/device/token",
+}]
+/// Get device token
+async fn device_token(
+    _rqctx: RequestContext<()>,
+) -> Result<Response<Body>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(ping).unwrap();
@@ -426,6 +476,9 @@ fn make_api() -> ApiDescription<()> {
     api.register(login_redirect).unwrap();
     api.register(lookup).unwrap();
     api.register(project_list).unwrap();
+    api.register(upload_bytes).unwrap();
+    api.register(device_auth).unwrap();
+    api.register(device_token).unwrap();
     api
 }
 

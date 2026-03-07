@@ -60,11 +60,20 @@ pub fn api_to_typespec<C: ServerContext>(
         for param in &endpoint.parameters {
             match &param.metadata {
                 ApiEndpointParameterMetadata::Body(ct) => {
-                    let ts_type = schema_gen_to_typespec(
-                        &param.schema,
-                        &mut generator,
-                        &mut definitions,
-                    );
+                    // For octet-stream and multipart bodies, the schema
+                    // is `{type: "string", format: "binary"}` which we
+                    // represent as `bytes` in TypeSpec.
+                    let ts_type = match ct {
+                        ApiEndpointBodyContentType::Bytes
+                        | ApiEndpointBodyContentType::MultipartFormData => {
+                            "bytes".to_string()
+                        }
+                        _ => schema_gen_to_typespec(
+                            &param.schema,
+                            &mut generator,
+                            &mut definitions,
+                        ),
+                    };
                     op.body = Some(BodyInfo {
                         ts_type,
                         content_type: ct.clone(),
@@ -127,6 +136,13 @@ pub fn api_to_typespec<C: ServerContext>(
         if let Some(desc) = &endpoint.response.description {
             op.response.description = Some(desc.clone());
         }
+        // When both schema and status code are None, the endpoint returns
+        // a hand-rolled Response<Body> (freeform).
+        if endpoint.response.schema.is_none()
+            && endpoint.response.success.is_none()
+        {
+            op.response.freeform = true;
+        }
 
         // Response headers.
         for header in &endpoint.response.headers {
@@ -164,10 +180,13 @@ pub fn api_to_typespec<C: ServerContext>(
     let results_pages = detect_results_pages(&definitions);
     ctx.results_page_rewrites = results_pages;
 
-    // Collect error type names from operations.
+    // Collect error type names and freeform flag from operations.
     for op in &ops {
         if let Some(error_name) = &op.error_type {
             ctx.error_types.insert(error_name.clone());
+        }
+        if op.response.freeform {
+            ctx.needs_freeform_response = true;
         }
     }
 
@@ -189,6 +208,20 @@ pub fn api_to_typespec<C: ServerContext>(
         )
         .unwrap();
         writeln!(ctx.out, "  next_page?: string | null;").unwrap();
+        writeln!(ctx.out, "}}").unwrap();
+        writeln!(ctx.out).unwrap();
+    }
+
+    // Emit the FreeformResponse model if any operation needs it.
+    if ctx.needs_freeform_response {
+        writeln!(
+            ctx.out,
+            "@doc(\"Response with unknown status code and untyped body\")"
+        )
+        .unwrap();
+        writeln!(ctx.out, "model FreeformResponse {{").unwrap();
+        writeln!(ctx.out, "  @statusCode statusCode: int32;").unwrap();
+        writeln!(ctx.out, "  @body body: bytes;").unwrap();
         writeln!(ctx.out, "}}").unwrap();
         writeln!(ctx.out).unwrap();
     }
@@ -234,6 +267,8 @@ struct TypeSpecContext {
     results_page_rewrites: std::collections::HashMap<String, String>,
     /// Set of model names that are error types (should get `@error` decorator).
     error_types: std::collections::HashSet<String>,
+    /// Whether any operation uses a freeform response.
+    needs_freeform_response: bool,
 }
 
 impl TypeSpecContext {
@@ -242,6 +277,7 @@ impl TypeSpecContext {
             out: String::new(),
             results_page_rewrites: std::collections::HashMap::new(),
             error_types: std::collections::HashSet::new(),
+            needs_freeform_response: false,
         }
     }
 
@@ -572,7 +608,34 @@ impl TypeSpecContext {
 
         // Body param.
         if let Some(body) = &op.body {
-            params_parts.push(format!("@body body: {}", body.ts_type));
+            match body.content_type {
+                ApiEndpointBodyContentType::Json => {
+                    params_parts
+                        .push(format!("@body body: {}", body.ts_type));
+                }
+                ApiEndpointBodyContentType::Bytes => {
+                    params_parts.push(format!(
+                        "@header contentType: \"application/octet-stream\", \
+                         @body body: {}",
+                        body.ts_type
+                    ));
+                }
+                ApiEndpointBodyContentType::UrlEncoded => {
+                    params_parts.push(format!(
+                        "@header contentType: \
+                         \"application/x-www-form-urlencoded\", \
+                         @body body: {}",
+                        body.ts_type
+                    ));
+                }
+                ApiEndpointBodyContentType::MultipartFormData => {
+                    params_parts.push(format!(
+                        "@header contentType: \"multipart/form-data\", \
+                         @body body: {}",
+                        body.ts_type
+                    ));
+                }
+            }
         }
 
         if params_parts.len() <= 2 {
@@ -601,6 +664,15 @@ impl TypeSpecContext {
         resp: &ResponseInfo,
         error_type: Option<&str>,
     ) -> String {
+        // Freeform responses (hand-rolled Response<Body>) get the
+        // FreeformResponse model — no typed body or status code.
+        if resp.freeform {
+            return match error_type {
+                Some(e) => format!("FreeformResponse | {}", e),
+                None => "FreeformResponse".to_string(),
+            };
+        }
+
         let body_type = match resp.ts_type.as_deref() {
             // "null" comes from `()`, "never" from `Schema::Bool(false)`
             // (no-content types like HttpResponseDeleted). Both mean void.
@@ -662,6 +734,9 @@ struct ResponseInfo {
     status_code: Option<u16>,
     description: Option<String>,
     headers: Vec<HeaderInfo>,
+    /// True when the endpoint returns a hand-rolled `Response<Body>` — both
+    /// schema and status code are unknown. Rendered as `FreeformResponse`.
+    freeform: bool,
 }
 
 struct HeaderInfo {
@@ -694,7 +769,6 @@ struct ParamInfo {
     description: Option<String>,
 }
 
-#[allow(dead_code)]
 struct BodyInfo {
     ts_type: String,
     content_type: ApiEndpointBodyContentType,
