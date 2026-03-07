@@ -110,6 +110,18 @@ model WidgetCreate {
   name: string;
 }
 
+model WithDefaults {
+  @doc("Answer to everything")
+  @minValue(0)
+  answer?: uint32 = 42;
+  @doc("Is it on?")
+  enabled?: boolean = false;
+  @doc("Optional name")
+  label?: string = "unnamed";
+  @doc("Tags with default empty list")
+  tags?: string[] = #[];
+}
+
 
 @route("/authed")
 @get
@@ -183,6 +195,13 @@ op widget_update(
   @query force?: boolean | null,
   @body body: WidgetCreate
 ): void | Error;
+
+@route("/with-defaults")
+@post
+op with_defaults_create(@body body: WithDefaults): {
+  @statusCode _: 201;
+  @body body: WithDefaults;
+} | Error;
 
 @doc("Get with etag")
 @route("/with-etag")

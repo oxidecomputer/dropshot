@@ -285,6 +285,43 @@ async fn constrained_get(
     unimplemented!();
 }
 
+// -- Default values --
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct WithDefaults {
+    /// Answer to everything
+    #[serde(default = "forty_two")]
+    answer: u32,
+    /// Is it on?
+    #[serde(default)]
+    enabled: bool,
+    /// Tags with default empty list
+    #[serde(default)]
+    tags: Vec<String>,
+    /// Optional name
+    #[serde(default = "default_name")]
+    label: String,
+}
+
+fn forty_two() -> u32 {
+    42
+}
+
+fn default_name() -> String {
+    "unnamed".to_string()
+}
+
+#[endpoint {
+    method = POST,
+    path = "/with-defaults",
+}]
+async fn with_defaults_create(
+    _rqctx: RequestContext<()>,
+    _body: TypedBody<WithDefaults>,
+) -> Result<HttpResponseCreated<WithDefaults>, HttpError> {
+    unimplemented!();
+}
+
 // -- Pagination (ResultsPage<T>) --
 
 #[derive(Deserialize, JsonSchema, Serialize)]
@@ -325,6 +362,7 @@ fn make_api() -> ApiDescription<()> {
     api.register(authed_get).unwrap();
     api.register(instance_state_get).unwrap();
     api.register(constrained_get).unwrap();
+    api.register(with_defaults_create).unwrap();
     api.register(project_list).unwrap();
     api
 }
