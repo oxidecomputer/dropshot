@@ -147,11 +147,37 @@ pub fn api_to_typespec<C: ServerContext>(
         }
     }
 
+    // Detect ResultsPage instantiations and build a rewrite map.
+    let results_pages = detect_results_pages(&definitions);
+    ctx.results_page_rewrites = results_pages;
+
     // Emit preamble.
     ctx.emit_preamble(title, version);
 
-    // Emit model definitions.
+    // Emit the generic ResultsPage model if any instantiations were found.
+    if !ctx.results_page_rewrites.is_empty() {
+        writeln!(ctx.out, "model ResultsPage<T> {{").unwrap();
+        writeln!(
+            ctx.out,
+            "  @doc(\"list of items on this page of results\")"
+        )
+        .unwrap();
+        writeln!(ctx.out, "  items: T[];").unwrap();
+        writeln!(
+            ctx.out,
+            "  @doc(\"token used to fetch the next page of results (if any)\")"
+        )
+        .unwrap();
+        writeln!(ctx.out, "  next_page?: string | null;").unwrap();
+        writeln!(ctx.out, "}}").unwrap();
+        writeln!(ctx.out).unwrap();
+    }
+
+    // Emit model definitions (skipping ResultsPage instantiations).
     for (name, schema) in &definitions {
+        if ctx.results_page_rewrites.contains_key(name.as_str()) {
+            continue;
+        }
         ctx.emit_model(name, schema);
     }
 
@@ -167,6 +193,12 @@ pub fn api_to_typespec<C: ServerContext>(
         ctx.emit_op(op);
     }
 
+    // Rewrite concrete ResultsPage names to generic form.
+    for (concrete, item_type) in &ctx.results_page_rewrites {
+        let generic = format!("ResultsPage<{}>", item_type);
+        ctx.out = ctx.out.replace(concrete.as_str(), &generic);
+    }
+
     ctx.out
 }
 
@@ -176,11 +208,18 @@ pub fn api_to_typespec<C: ServerContext>(
 
 struct TypeSpecContext {
     out: String,
+    /// Map from concrete ResultsPage name (e.g. "WidgetResultsPage") to the
+    /// item type name (e.g. "Widget"). When a ref targets one of these, we
+    /// emit `ResultsPage<Widget>` instead.
+    results_page_rewrites: std::collections::HashMap<String, String>,
 }
 
 impl TypeSpecContext {
     fn new() -> Self {
-        Self { out: String::new() }
+        Self {
+            out: String::new(),
+            results_page_rewrites: std::collections::HashMap::new(),
+        }
     }
 
     fn emit_preamble(&mut self, title: &str, version: &semver::Version) {
@@ -331,6 +370,40 @@ impl TypeSpecContext {
         obj: &SchemaObject,
         variants: &[Schema],
     ) {
+        // Detect described string enums: oneOf where every variant is
+        // {type: "string", enum: ["SingleValue"]} with an optional
+        // description. Emit as a TypeSpec enum with @doc per member.
+        if let Some(members) = detect_described_string_enum(variants) {
+            self.emit_doc_from_metadata(obj.metadata.as_deref());
+            writeln!(self.out, "enum {} {{", name).unwrap();
+            for (i, member) in members.iter().enumerate() {
+                let comma = if i + 1 < members.len() { "," } else { "" };
+                if let Some(desc) = &member.description {
+                    writeln!(
+                        self.out,
+                        "  @doc(\"{}\")",
+                        escape_tsp_string(desc)
+                    )
+                    .unwrap();
+                }
+                if is_valid_tsp_ident(&member.value) {
+                    writeln!(self.out, "  {}{}", member.value, comma)
+                        .unwrap();
+                } else {
+                    writeln!(
+                        self.out,
+                        "  `{}`: \"{}\"{comma}",
+                        member.value,
+                        escape_tsp_string(&member.value),
+                    )
+                    .unwrap();
+                }
+            }
+            writeln!(self.out, "}}").unwrap();
+            writeln!(self.out).unwrap();
+            return;
+        }
+
         // Detect discriminated unions: oneOf where each variant is an
         // object with a shared property whose schema is a single-value
         // string enum (the tag). Emit as model inheritance with
@@ -781,6 +854,95 @@ fn instance_type_to_typespec(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ResultsPage detection
+// ---------------------------------------------------------------------------
+
+/// Detect definitions that are ResultsPage instantiations.
+///
+/// Returns a map from concrete name (e.g. "WidgetResultsPage") to the item
+/// type name (e.g. "Widget"). Detection is heuristic: the name must end in
+/// "ResultsPage" and the schema must have `items` (array) and `next_page`
+/// (nullable string) properties.
+fn detect_results_pages(
+    definitions: &IndexMap<String, Schema>,
+) -> std::collections::HashMap<String, String> {
+    let mut results = std::collections::HashMap::new();
+
+    for (name, schema) in definitions {
+        if !name.ends_with("ResultsPage") {
+            continue;
+        }
+        let prefix = &name[..name.len() - "ResultsPage".len()];
+        if prefix.is_empty() {
+            continue;
+        }
+
+        // Verify the schema shape: object with `items` array and `next_page`.
+        let has_expected_shape = match schema {
+            Schema::Object(SchemaObject {
+                object: Some(obj), ..
+            }) => {
+                obj.properties.contains_key("items")
+                    && obj.properties.contains_key("next_page")
+            }
+            _ => false,
+        };
+
+        if has_expected_shape {
+            results.insert(name.clone(), prefix.to_string());
+        }
+    }
+
+    results
+}
+
+// ---------------------------------------------------------------------------
+// Described string enum detection
+// ---------------------------------------------------------------------------
+
+struct DescribedEnumMember {
+    value: String,
+    description: Option<String>,
+}
+
+/// Detect a oneOf where every variant is a single-value string enum,
+/// optionally with a description. This is schemars' encoding of a Rust
+/// enum where each variant has a doc comment.
+fn detect_described_string_enum(
+    variants: &[Schema],
+) -> Option<Vec<DescribedEnumMember>> {
+    let mut members = Vec::new();
+    for variant in variants {
+        match variant {
+            Schema::Object(SchemaObject {
+                metadata,
+                instance_type:
+                    Some(SingleOrVec::Single(instance_type)),
+                enum_values: Some(values),
+                ..
+            }) if **instance_type == InstanceType::String
+                && values.len() == 1 =>
+            {
+                let value = match &values[0] {
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => return None,
+                };
+                let description = metadata
+                    .as_ref()
+                    .and_then(|m| m.description.clone());
+                members.push(DescribedEnumMember { value, description });
+            }
+            _ => return None,
+        }
+    }
+    if members.is_empty() {
+        None
+    } else {
+        Some(members)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Discriminated union detection
