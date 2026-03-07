@@ -81,6 +81,11 @@ outputs have different enough needs that abstraction would be premature.
 | `$ref` / definition name | model name reference |
 | free-form object | `Record<unknown>` |
 | `ResultsPage<T>` (heuristic) | `model ResultsPage<T> { items: T[]; nextPage?: string; }` |
+| schemars `type: string, format: uuid` | `uuid` (custom scalar, emitted when needed) |
+| schemars `type: string, format: binary` | `bytes` |
+| `UntypedBody` / `StreamingBody` | `@header contentType: "application/octet-stream", @body body: bytes` |
+| `TypedBody<T>` + `UrlEncoded` | `@header contentType: "application/x-www-form-urlencoded", @body body: T` |
+| `Response<Body>` (freeform) | `@defaultResponse model FreeformResponse { @body body: bytes; }` |
 
 ## Implementation plan
 
@@ -129,7 +134,8 @@ All done:
 - ✓ Path/query/header parameters with various types
 - ✓ Default values → `prop?: Type = value` with full literal support
 - ✓ Described string enums → `enum` with `@doc` per member
-- ✓ Discriminated unions → `@discriminator` + extends pattern
+- ✓ Discriminated unions → `@discriminator` + extends pattern, variant models
+  qualified with parent name (e.g. `DiskStateAttached`), `@doc` on variants
 
 ### Phase 3: Generics and polish
 
@@ -149,7 +155,16 @@ All done:
   — `@header contentType` decorator with `@body body: bytes` or `@body body: T`
 - ✓ `format: binary` → `bytes` (octet-stream and multipart bodies)
 - ✓ Freeform responses (`Response<Body>`, the `*/*` / default pattern) —
-  `FreeformResponse` model with `@statusCode statusCode: int32; @body body: bytes`
+  `@defaultResponse model FreeformResponse { @body body: bytes; }`
+- ✓ `format: "uuid"` → `@format("uuid") scalar uuid extends string;` emitted
+  when needed, used as type in properties and union variants
+- ✓ Untagged union with non-string scalars (e.g. `NameOrId` = uuid | Name) →
+  `union NameOrId { uuid, Name }` (was broken: `scalar extends A | B` is invalid)
+- ✓ Nullable named-type refs (`Option<SomeStruct>`) — schemars `allOf` wrapping
+  handled correctly, produces `SomeStruct | null`
+- ✓ Arrays of named types (`Vec<SomeStruct>`) → `SomeStruct[]`
+- ✓ Discriminated unions with unit variants (no payload beyond tag) — variant
+  models only contain the tag field
 
 ## Open questions
 

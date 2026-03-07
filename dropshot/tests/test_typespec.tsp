@@ -70,25 +70,30 @@ model DiskState {
   state: string;
 }
 
-model creating extends DiskState {
+@doc("Disk is being initialized")
+model DiskStateCreating extends DiskState {
   state: "creating";
 }
 
-model detached extends DiskState {
+@doc("Disk is detached")
+model DiskStateDetached extends DiskState {
   state: "detached";
 }
 
-model attaching extends DiskState {
+@doc("Disk is being attached to an instance")
+model DiskStateAttaching extends DiskState {
   state: "attaching";
   instance: uuid;
 }
 
-model attached extends DiskState {
+@doc("Disk is attached to an instance")
+model DiskStateAttached extends DiskState {
   state: "attached";
   instance: uuid;
 }
 
-model destroyed extends DiskState {
+@doc("Disk has been destroyed")
+model DiskStateDestroyed extends DiskState {
   state: "destroyed";
 }
 
@@ -151,12 +156,12 @@ model Shape {
   kind: string;
 }
 
-model Circle extends Shape {
+model ShapeCircle extends Shape {
   kind: "Circle";
   radius: float64;
 }
 
-model Rectangle extends Shape {
+model ShapeRectangle extends Shape {
   kind: "Rectangle";
   height: float64;
   width: float64;
