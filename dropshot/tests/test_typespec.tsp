@@ -182,6 +182,7 @@ op paint_get(): PaintJob | Error;
 op ping(): void | Error;
 
 @doc("List projects")
+@extension("x-dropshot-pagination", #{required: #[]})
 @route("/projects")
 @get
 op project_list(
