@@ -321,12 +321,16 @@ impl TypeSpecContext {
                         .unwrap();
                 }
                 emit_validation_decorators(&mut self.out, prop_schema);
+                let default_suffix = schema_default(prop_schema)
+                    .map(|d| format!(" = {}", d))
+                    .unwrap_or_default();
                 writeln!(
                     self.out,
-                    "  {}{}: {};",
+                    "  {}{}: {}{};",
                     escape_property_name(prop_name),
                     optional,
                     ts_type,
+                    default_suffix,
                 )
                 .unwrap();
             }
@@ -1212,6 +1216,51 @@ fn is_empty_schema(schema: &Schema) -> bool {
             extensions: _,
         }) => true,
         _ => false,
+    }
+}
+
+/// Extract a default value from a schema and convert to TypeSpec literal.
+fn schema_default(schema: &Schema) -> Option<String> {
+    match schema {
+        Schema::Object(obj) => {
+            let val = obj.metadata.as_ref()?.default.as_ref()?;
+            Some(json_to_tsp_literal(val))
+        }
+        _ => None,
+    }
+}
+
+/// Convert a serde_json::Value to a TypeSpec value literal.
+fn json_to_tsp_literal(val: &serde_json::Value) -> String {
+    match val {
+        serde_json::Value::Null => "null".to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::String(s) => {
+            format!("\"{}\"", escape_tsp_string(s))
+        }
+        serde_json::Value::Array(arr) => {
+            if arr.is_empty() {
+                "#[]".to_string()
+            } else {
+                let items: Vec<String> =
+                    arr.iter().map(json_to_tsp_literal).collect();
+                format!("#[{}]", items.join(", "))
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            if obj.is_empty() {
+                "#{{}}".to_string()
+            } else {
+                let fields: Vec<String> = obj
+                    .iter()
+                    .map(|(k, v)| {
+                        format!("{}: {}", k, json_to_tsp_literal(v))
+                    })
+                    .collect();
+                format!("#{{{}}}", fields.join(", "))
+            }
+        }
     }
 }
 

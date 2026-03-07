@@ -111,31 +111,42 @@ Get the output compiling under `tsp` and looking like what a human would write.
 
 6. **Validate**: `tsp compile` the output, confirm it's valid.
 
-### Phase 2: Expand feature coverage
+### Phase 2: Expand feature coverage ✓
 
-One feature at a time, testing against existing test endpoints:
+All done:
 
-- Enum types → `enum Name { ... }`
-- Request bodies (`TypedBody<T>`) → `@body body: T`
-- Multiple response status codes → union return types
-- Error responses → `@error model` pattern
-- Doc comments → `@doc("...")`
-- Tags → `@tag("name")`
-- Validation decorators (`@minLength`, `@minValue`, `@maxValue`)
-- Nullable → `Type | null`
-- Free-form JSON → `Record<unknown>`
-- Response headers → `@header` in response model
-- Path/query/header parameters with various types
+- ✓ Enum types → `enum Name { ... }`
+- ✓ Request bodies (`TypedBody<T>`) → `@body body: T`
+- ✓ Multiple response status codes → union return types
+- ✓ Error responses → `@error model` with `@statusCode` range, `| Error` in ops
+- ✓ Doc comments → `@doc("...")`
+- ✓ Tags → `@tag("name")`
+- ✓ Validation decorators (`@minValue`, `@maxValue`, `@minLength`, `@maxLength`,
+  `@pattern`, `@minItems`, `@maxItems`, exclusive variants)
+- ✓ Nullable → `Type | null`
+- ✓ Free-form JSON → `Record<unknown>`
+- ✓ Response headers → `@header` in response model
+- ✓ Path/query/header parameters with various types
+- ✓ Default values → `prop?: Type = value` with full literal support
+- ✓ Described string enums → `enum` with `@doc` per member
+- ✓ Discriminated unions → `@discriminator` + extends pattern
 
 ### Phase 3: Generics and polish
 
-- Detect `ResultsPage` pattern and emit as `model ResultsPage<T> { ... }`
+- ✓ Detect `ResultsPage` pattern and emit as `model ResultsPage<T> { ... }`
   with generic usage at call sites
 - Consider operation grouping: nested namespaces or `interface` blocks by
   path prefix
 - Handle dropshot extensions (pagination, websocket) as comments or
   `@extension` decorators
 - Decide on public API surface (feature flag, method placement)
+
+### Remaining medium-priority items
+
+- Additional status codes (202, 303)
+- Untagged/externally-tagged unions (`IpNet`, `IpRange`, `NameOrId`)
+- Non-JSON request bodies (`application/octet-stream`, `x-www-form-urlencoded`)
+- `format: binary` → `bytes`
 
 ## Open questions
 
