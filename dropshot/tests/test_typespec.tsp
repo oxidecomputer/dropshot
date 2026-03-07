@@ -15,6 +15,9 @@ model ResultsPage<T> {
   next_page?: string | null;
 }
 
+@format("uuid")
+scalar uuid extends string;
+
 @doc("Response with untyped body")
 @defaultResponse
 model FreeformResponse {
@@ -83,8 +86,7 @@ enum InstanceState {
 }
 
 model LookupResult {
-  @format("uuid")
-  id: string;
+  id: uuid;
   target: NameOrId;
 }
 
@@ -95,7 +97,7 @@ model LookupResult {
 scalar Name extends string;
 
 union NameOrId {
-  string,
+  uuid,
   Name,
 }
 
