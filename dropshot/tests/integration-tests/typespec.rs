@@ -25,7 +25,7 @@ async fn ping(
 }
 
 // A GET endpoint that returns a typed response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 struct Widget {
     /// The widget's name
     name: String,
@@ -456,6 +456,79 @@ async fn device_token(
     unimplemented!();
 }
 
+// -- Discriminated union with mixed unit/payload variants --
+// Like omicron's DiskState: some variants are just a tag, others carry data.
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "state", rename_all = "snake_case")]
+enum DiskState {
+    /// Disk is being initialized
+    Creating,
+    /// Disk is detached
+    Detached,
+    /// Disk is being attached to an instance
+    Attaching {
+        /// The instance this disk is being attached to
+        instance: uuid::Uuid,
+    },
+    /// Disk is attached to an instance
+    Attached {
+        /// The instance this disk is attached to
+        instance: uuid::Uuid,
+    },
+    /// Disk has been destroyed
+    Destroyed,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/disks/{id}/state",
+}]
+/// Get disk state
+async fn disk_state_get(
+    _rqctx: RequestContext<()>,
+    _path: Path<WidgetPathArgs>,
+) -> Result<HttpResponseOk<DiskState>, HttpError> {
+    unimplemented!();
+}
+
+// -- Complex struct with nullable refs, arrays of refs, and defaults --
+// Like omicron's InstanceCreate: exercises allOf wrapping for nullable
+// named types, arrays of named types, and complex default values.
+
+#[derive(Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct CompositeCreate {
+    /// The widget's name
+    name: String,
+    /// Desired color (if any)
+    color: Option<Color>,
+    /// Desired shape (if any)
+    shape: Option<Shape>,
+    /// Initial set of widgets
+    #[serde(default)]
+    widgets: Vec<Widget>,
+    /// Whether to start immediately
+    #[serde(default = "default_true")]
+    start: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[endpoint {
+    method = POST,
+    path = "/composites",
+}]
+/// Create a composite
+async fn composite_create(
+    _rqctx: RequestContext<()>,
+    _body: TypedBody<CompositeCreate>,
+) -> Result<HttpResponseCreated<Widget>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(ping).unwrap();
@@ -479,6 +552,8 @@ fn make_api() -> ApiDescription<()> {
     api.register(upload_bytes).unwrap();
     api.register(device_auth).unwrap();
     api.register(device_token).unwrap();
+    api.register(disk_state_get).unwrap();
+    api.register(composite_create).unwrap();
     api
 }
 
