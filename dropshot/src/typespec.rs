@@ -519,7 +519,13 @@ impl TypeSpecContext {
         // object with a shared property whose schema is a single-value
         // string enum (the tag). Emit as model inheritance with
         // @discriminator on the base model.
-        if let Some(disc) = detect_discriminator(variants) {
+        if let Some(mut disc) = detect_discriminator(variants) {
+            // Qualify variant model names with the parent name.
+            for v in &mut disc.variants {
+                v.model_name =
+                    format!("{}{}", name, to_pascal_case(&v.tag_value));
+            }
+
             self.emit_doc_from_metadata(obj.metadata.as_deref());
             writeln!(self.out, "@discriminator(\"{}\")", disc.tag).unwrap();
             writeln!(self.out, "model {} {{", name).unwrap();
@@ -528,6 +534,14 @@ impl TypeSpecContext {
             writeln!(self.out).unwrap();
             // Emit variant models that extend the base.
             for variant in &disc.variants {
+                if let Some(desc) = &variant.description {
+                    writeln!(
+                        self.out,
+                        "@doc(\"{}\")",
+                        escape_tsp_string(desc)
+                    )
+                    .unwrap();
+                }
                 writeln!(
                     self.out,
                     "model {} extends {} {{",
@@ -1183,6 +1197,7 @@ struct DiscriminatedUnion {
 struct DiscriminatedVariant {
     tag_value: String,
     model_name: String,
+    description: Option<String>,
     properties: Vec<VariantProperty>,
 }
 
@@ -1263,17 +1278,21 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
             })
             .collect();
 
+        let description = obj
+            .metadata
+            .as_deref()
+            .and_then(|m| m.description.clone());
+
         result_variants.push(DiscriminatedVariant {
             tag_value,
-            model_name: format!("{}{}", tag.chars().next().unwrap().to_ascii_uppercase(), &tag[1..]),
+            model_name: String::new(), // filled in below
+            description,
             properties,
         });
     }
 
-    // Use the tag value as the model name (it's typically PascalCase already).
-    for v in &mut result_variants {
-        v.model_name = v.tag_value.clone();
-    }
+    // Variant model names are not yet known — the parent name is needed
+    // to qualify them. Leave model_name empty; the caller will fill it in.
 
     Some(DiscriminatedUnion { tag, variants: result_variants })
 }
@@ -1501,10 +1520,8 @@ fn is_valid_tsp_ident(s: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-fn to_namespace_id(title: &str) -> String {
-    // Convert title to PascalCase identifier.
-    title
-        .split(|c: char| !c.is_ascii_alphanumeric())
+fn to_pascal_case(s: &str) -> String {
+    s.split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|s| !s.is_empty())
         .map(|word| {
             let mut chars = word.chars();
@@ -1513,6 +1530,10 @@ fn to_namespace_id(title: &str) -> String {
             format!("{}{}", first, rest)
         })
         .collect::<String>()
+}
+
+fn to_namespace_id(title: &str) -> String {
+    to_pascal_case(title)
 }
 
 #[cfg(test)]
