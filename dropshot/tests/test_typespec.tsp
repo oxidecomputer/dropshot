@@ -15,9 +15,9 @@ model ResultsPage<T> {
   next_page?: string | null;
 }
 
-@doc("Response with unknown status code and untyped body")
+@doc("Response with untyped body")
+@defaultResponse
 model FreeformResponse {
-  @statusCode statusCode: int32;
   @body body: bytes;
 }
 
@@ -94,7 +94,10 @@ model LookupResult {
 @pattern("^[a-z]([a-zA-Z0-9-]*[a-zA-Z0-9]+)?$")
 scalar Name extends string;
 
-scalar NameOrId extends string | Name;
+union NameOrId {
+  string,
+  Name,
+}
 
 model PaintJob {
   color: Color;
