@@ -21,6 +21,35 @@ enum Color {
   Blue
 }
 
+model Constrained {
+  @doc("Must be between 1 and 100")
+  @minValue(1)
+  @maxValue(100)
+  count: uint32;
+  @doc("Between 1 and 10 items")
+  @minItems(1)
+  @maxItems(10)
+  items: string[];
+  @doc("Short name")
+  @minLength(1)
+  @maxLength(63)
+  name: string;
+  @doc("DNS-style name")
+  @pattern("^[a-z][a-z0-9-]*$")
+  slug: string;
+}
+
+@doc("Error information from a response.")
+@error
+model Error {
+  @minValue(400)
+  @maxValue(599)
+  @statusCode statusCode: int32;
+  error_code?: string;
+  message: string;
+  request_id: string;
+}
+
 model Flexible {
   @doc("Free-form metadata")
   metadata: unknown;
@@ -66,6 +95,7 @@ model Rectangle extends Shape {
 
 model Widget {
   @doc("How many we have")
+  @minValue(0)
   count: uint32;
   @doc("Is it enabled?")
   enabled: boolean;
@@ -83,31 +113,35 @@ model WidgetCreate {
 
 @route("/authed")
 @get
-op authed_get(@header authorization: string, @header x_request_id?: string): Widget;
+op authed_get(@header authorization: string, @header x_request_id?: string): Widget | Error;
+
+@route("/constrained")
+@get
+op constrained_get(): Constrained | Error;
 
 @route("/flexible")
 @get
-op flexible_get(): Flexible;
+op flexible_get(): Flexible | Error;
 
 @route("/instance-state")
 @get
-op instance_state_get(): InstanceState;
+op instance_state_get(): InstanceState | Error;
 
 @doc("Old endpoint")
 #deprecated "deprecated"
 @route("/old")
 @get
-op old_get(): void;
+op old_get(): void | Error;
 
 @doc("Get paint job")
 @route("/paint")
 @get
-op paint_get(): PaintJob;
+op paint_get(): PaintJob | Error;
 
 @doc("Health check")
 @route("/ping")
 @get
-op ping(): void;
+op ping(): void | Error;
 
 @doc("List projects")
 @route("/projects")
@@ -116,12 +150,12 @@ op project_list(
   @query limit?: uint32 | null,
   @query name_or_id?: string | null,
   @query page_token?: string | null
-): ResultsPage<Widget>;
+): ResultsPage<Widget> | Error;
 
 @doc("Raw bytes")
 @route("/raw")
 @get
-op raw_get(): void;
+op raw_get(): void | Error;
 
 @doc("Create a widget")
 @route("/widgets")
@@ -129,18 +163,18 @@ op raw_get(): void;
 op widget_create(@body body: WidgetCreate): {
   @statusCode _: 201;
   @body body: Widget;
-};
+} | Error;
 
 @doc("Delete a widget")
 @tag("widgets")
 @route("/widgets/{id}")
 @delete
-op widget_delete(@path id: string): void;
+op widget_delete(@path id: string): void | Error;
 
 @doc("Get a widget")
 @route("/widgets/{id}")
 @get
-op widget_get(@path id: string): Widget;
+op widget_get(@path id: string): Widget | Error;
 
 @route("/widgets/{id}")
 @put
@@ -148,7 +182,7 @@ op widget_update(
   @path id: string,
   @query force?: boolean | null,
   @body body: WidgetCreate
-): void;
+): void | Error;
 
 @doc("Get with etag")
 @route("/with-etag")
@@ -156,4 +190,4 @@ op widget_update(
 op with_etag(): {
   @header etag: string;
   @body body: Widget;
-};
+} | Error;
