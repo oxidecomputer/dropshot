@@ -125,6 +125,17 @@ pub fn api_to_typespec<C: ServerContext>(
             op.response.description = Some(desc.clone());
         }
 
+        // Response headers.
+        for header in &endpoint.response.headers {
+            let ts_type =
+                schema_to_typespec_inline(&header.schema, &mut definitions);
+            op.response.headers.push(HeaderInfo {
+                name: header.name.clone(),
+                ts_type,
+                required: header.required,
+            });
+        }
+
         ops.push(op);
     }
 
@@ -320,6 +331,48 @@ impl TypeSpecContext {
         obj: &SchemaObject,
         variants: &[Schema],
     ) {
+        // Detect discriminated unions: oneOf where each variant is an
+        // object with a shared property whose schema is a single-value
+        // string enum (the tag). Emit as model inheritance with
+        // @discriminator on the base model.
+        if let Some(disc) = detect_discriminator(variants) {
+            self.emit_doc_from_metadata(obj.metadata.as_deref());
+            writeln!(self.out, "@discriminator(\"{}\")", disc.tag).unwrap();
+            writeln!(self.out, "model {} {{", name).unwrap();
+            writeln!(self.out, "  {}: string;", disc.tag).unwrap();
+            writeln!(self.out, "}}").unwrap();
+            writeln!(self.out).unwrap();
+            // Emit variant models that extend the base.
+            for variant in &disc.variants {
+                writeln!(
+                    self.out,
+                    "model {} extends {} {{",
+                    variant.model_name, name,
+                )
+                .unwrap();
+                writeln!(
+                    self.out,
+                    "  {}: \"{}\";",
+                    disc.tag, variant.tag_value
+                )
+                .unwrap();
+                for prop in &variant.properties {
+                    writeln!(
+                        self.out,
+                        "  {}{}: {};",
+                        escape_property_name(&prop.name),
+                        if prop.required { "" } else { "?" },
+                        prop.ts_type,
+                    )
+                    .unwrap();
+                }
+                writeln!(self.out, "}}").unwrap();
+                writeln!(self.out).unwrap();
+            }
+            return;
+        }
+
+        // Non-discriminated union: emit as TypeSpec union with inline types.
         self.emit_doc_from_metadata(obj.metadata.as_deref());
         let variant_types: Vec<String> =
             variants.iter().map(|s| schemars_to_typespec(s)).collect();
@@ -405,17 +458,40 @@ impl TypeSpecContext {
 
     fn build_return_type(&self, resp: &ResponseInfo) -> String {
         let body_type = match resp.ts_type.as_deref() {
-            Some("null") | None => "void",
+            // "null" comes from `()`, "never" from `Schema::Bool(false)`
+            // (no-content types like HttpResponseDeleted). Both mean void.
+            Some("null") | Some("never") | None => "void",
             Some(t) => t,
         };
 
-        match resp.status_code {
-            Some(200) => body_type.to_string(),
-            Some(201) => format!("{{\n  @statusCode _: 201;\n  @body body: {};\n}}", body_type),
-            Some(204) => "void".to_string(),
-            Some(code) => format!("{{\n  @statusCode _: {};\n  @body body: {};\n}}", code, body_type),
-            None => body_type.to_string(),
+        let has_headers = !resp.headers.is_empty();
+        let needs_block = has_headers
+            || !matches!(resp.status_code, Some(200) | Some(204) | None);
+
+        if !needs_block {
+            return body_type.to_string();
         }
+
+        let mut parts = Vec::new();
+        if let Some(code) = resp.status_code {
+            if code != 200 {
+                parts.push(format!("  @statusCode _: {};", code));
+            }
+        }
+        for h in &resp.headers {
+            let optional = if h.required { "" } else { "?" };
+            parts.push(format!(
+                "  @header {}{}: {};",
+                escape_property_name(&h.name),
+                optional,
+                h.ts_type
+            ));
+        }
+        if body_type != "void" {
+            parts.push(format!("  @body body: {};", body_type));
+        }
+
+        format!("{{\n{}\n}}", parts.join("\n"))
     }
 
     fn emit_doc_from_metadata(
@@ -436,6 +512,13 @@ struct ResponseInfo {
     ts_type: Option<String>,
     status_code: Option<u16>,
     description: Option<String>,
+    headers: Vec<HeaderInfo>,
+}
+
+struct HeaderInfo {
+    name: String,
+    ts_type: String,
+    required: bool,
 }
 
 struct OpInfo {
@@ -534,6 +617,22 @@ fn schemars_to_typespec(schema: &Schema) -> String {
 
 /// Convert a schemars `SchemaObject` to a TypeSpec type string.
 fn schemars_obj_to_typespec(obj: &SchemaObject) -> String {
+    let nullable = obj
+        .extensions
+        .get("nullable")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let base = schemars_obj_to_typespec_inner(obj);
+
+    if nullable {
+        format!("{} | null", base)
+    } else {
+        base
+    }
+}
+
+fn schemars_obj_to_typespec_inner(obj: &SchemaObject) -> String {
     // Reference → model name.
     if let Some(reference) = &obj.reference {
         return ref_to_type_name(reference);
@@ -683,6 +782,134 @@ fn instance_type_to_typespec(
 // Helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Discriminated union detection
+// ---------------------------------------------------------------------------
+
+struct DiscriminatedUnion {
+    tag: String,
+    variants: Vec<DiscriminatedVariant>,
+}
+
+struct DiscriminatedVariant {
+    tag_value: String,
+    model_name: String,
+    properties: Vec<VariantProperty>,
+}
+
+struct VariantProperty {
+    name: String,
+    ts_type: String,
+    required: bool,
+}
+
+/// Detect whether a oneOf schema represents a discriminated union.
+///
+/// Returns `Some` if every variant is an object with a common property
+/// whose schema is a single-value string enum (the discriminator tag).
+fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
+    if variants.is_empty() {
+        return None;
+    }
+
+    // Find candidate tag properties: present in every variant as a
+    // single-value string enum.
+    let mut candidate_tag: Option<String> = None;
+
+    for (i, variant) in variants.iter().enumerate() {
+        let obj = match variant {
+            Schema::Object(obj) => obj,
+            _ => return None,
+        };
+        let object = obj.object.as_ref()?;
+
+        // Find properties that are single-value string enums.
+        let tag_props: Vec<&String> = object
+            .properties
+            .iter()
+            .filter(|(_, schema)| is_single_value_string_enum(schema))
+            .map(|(name, _)| name)
+            .collect();
+
+        if i == 0 {
+            // First variant: any single-value-enum property is a candidate.
+            if tag_props.is_empty() {
+                return None;
+            }
+            candidate_tag = Some(tag_props[0].clone());
+        } else {
+            // Subsequent variants must have the same tag property.
+            let tag = candidate_tag.as_ref()?;
+            if !tag_props.iter().any(|p| *p == tag) {
+                return None;
+            }
+        }
+    }
+
+    let tag = candidate_tag?;
+    let mut result_variants = Vec::new();
+
+    for variant in variants {
+        let obj = match variant {
+            Schema::Object(obj) => obj,
+            _ => return None,
+        };
+        let object = obj.object.as_ref()?;
+        let required: std::collections::HashSet<&str> =
+            object.required.iter().map(|s| s.as_str()).collect();
+
+        // Extract the tag value.
+        let tag_schema = object.properties.get(&tag)?;
+        let tag_value = extract_single_enum_value(tag_schema)?;
+
+        // Collect non-tag properties.
+        let properties = object
+            .properties
+            .iter()
+            .filter(|(name, _)| *name != &tag)
+            .map(|(name, schema)| VariantProperty {
+                name: name.clone(),
+                ts_type: schemars_to_typespec(schema),
+                required: required.contains(name.as_str()),
+            })
+            .collect();
+
+        result_variants.push(DiscriminatedVariant {
+            tag_value,
+            model_name: format!("{}{}", tag.chars().next().unwrap().to_ascii_uppercase(), &tag[1..]),
+            properties,
+        });
+    }
+
+    // Use the tag value as the model name (it's typically PascalCase already).
+    for v in &mut result_variants {
+        v.model_name = v.tag_value.clone();
+    }
+
+    Some(DiscriminatedUnion { tag, variants: result_variants })
+}
+
+fn is_single_value_string_enum(schema: &Schema) -> bool {
+    extract_single_enum_value(schema).is_some()
+}
+
+fn extract_single_enum_value(schema: &Schema) -> Option<String> {
+    match schema {
+        Schema::Object(SchemaObject {
+            enum_values: Some(values),
+            ..
+        }) if values.len() == 1 => match &values[0] {
+            serde_json::Value::String(s) => Some(s.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 fn ref_to_type_name(reference: &str) -> String {
     // schemars refs look like "#/definitions/TypeName"
     const DEFS_PREFIX: &str = "#/definitions/";
@@ -797,4 +1024,5 @@ mod tests {
         assert!(!is_valid_tsp_ident("123"));
         assert!(!is_valid_tsp_ident("foo-bar"));
     }
+
 }

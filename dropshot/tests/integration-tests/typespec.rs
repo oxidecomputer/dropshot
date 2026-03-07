@@ -1,9 +1,10 @@
 // Copyright 2026 Oxide Computer Company
 
 use dropshot::{
-    api_to_typespec, endpoint, ApiDescription, HttpError, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseOk, HttpResponseUpdatedNoContent, Path,
-    Query, RequestContext, TypedBody,
+    api_to_typespec, endpoint, ApiDescription, FreeformBody, Header, HttpError,
+    HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
+    HttpResponseOk, HttpResponseUpdatedNoContent, Path, Query, RequestContext,
+    TypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -106,6 +107,131 @@ async fn widget_delete(
     unimplemented!();
 }
 
+// -- Enum types --
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind")]
+enum Shape {
+    Circle { radius: f64 },
+    Rectangle { width: f64, height: f64 },
+}
+
+#[derive(Serialize, JsonSchema)]
+struct PaintJob {
+    color: Color,
+    shape: Shape,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/paint",
+}]
+/// Get paint job
+async fn paint_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<PaintJob>, HttpError> {
+    unimplemented!();
+}
+
+// -- Nullable and free-form JSON --
+
+#[derive(Serialize, JsonSchema)]
+struct Flexible {
+    /// Required string
+    name: String,
+    /// Nullable field
+    nickname: Option<String>,
+    /// Free-form metadata
+    metadata: serde_json::Value,
+    /// A list of tags
+    tags: Vec<String>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/flexible",
+}]
+async fn flexible_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<Flexible>, HttpError> {
+    unimplemented!();
+}
+
+// -- Response headers --
+
+#[derive(Serialize, JsonSchema)]
+struct EtagHeader {
+    etag: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/with-etag",
+}]
+/// Get with etag
+async fn with_etag(
+    _rqctx: RequestContext<()>,
+) -> Result<
+    HttpResponseHeaders<HttpResponseOk<Widget>, EtagHeader>,
+    HttpError,
+> {
+    unimplemented!();
+}
+
+// -- Free-form body --
+
+#[endpoint {
+    method = GET,
+    path = "/raw",
+}]
+/// Raw bytes
+async fn raw_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<FreeformBody>, HttpError> {
+    unimplemented!();
+}
+
+// -- Deprecated endpoint --
+
+#[endpoint {
+    method = GET,
+    path = "/old",
+    deprecated = true,
+}]
+/// Old endpoint
+async fn old_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<()>, HttpError> {
+    unimplemented!();
+}
+
+// -- Header parameters --
+
+#[derive(Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct AuthHeaders {
+    authorization: String,
+    x_request_id: Option<String>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/authed",
+}]
+async fn authed_get(
+    _rqctx: RequestContext<()>,
+    _headers: Header<AuthHeaders>,
+) -> Result<HttpResponseOk<Widget>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(ping).unwrap();
@@ -113,6 +239,12 @@ fn make_api() -> ApiDescription<()> {
     api.register(widget_create).unwrap();
     api.register(widget_update).unwrap();
     api.register(widget_delete).unwrap();
+    api.register(paint_get).unwrap();
+    api.register(flexible_get).unwrap();
+    api.register(with_etag).unwrap();
+    api.register(raw_get).unwrap();
+    api.register(old_get).unwrap();
+    api.register(authed_get).unwrap();
     api
 }
 
