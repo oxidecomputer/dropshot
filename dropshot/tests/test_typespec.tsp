@@ -30,6 +30,19 @@ enum Color {
   Blue
 }
 
+model CompositeCreate {
+  @doc("Desired color (if any)")
+  color?: Color | null;
+  @doc("The widget's name")
+  name: string;
+  @doc("Desired shape (if any)")
+  shape?: Shape | null;
+  @doc("Whether to start immediately")
+  start?: boolean = true;
+  @doc("Initial set of widgets")
+  widgets?: Widget[] = #[];
+}
+
 model Constrained {
   @doc("Must be between 1 and 100")
   @minValue(1)
@@ -50,6 +63,33 @@ model Constrained {
 
 model DeviceAuthRequest {
   client_id: string;
+}
+
+@discriminator("state")
+model DiskState {
+  state: string;
+}
+
+model creating extends DiskState {
+  state: "creating";
+}
+
+model detached extends DiskState {
+  state: "detached";
+}
+
+model attaching extends DiskState {
+  state: "attaching";
+  instance: uuid;
+}
+
+model attached extends DiskState {
+  state: "attached";
+  instance: uuid;
+}
+
+model destroyed extends DiskState {
+  state: "destroyed";
 }
 
 @doc("Error information from a response.")
@@ -156,6 +196,14 @@ model WithDefaults {
 @get
 op authed_get(@header authorization: string, @header x_request_id?: string): Widget | Error;
 
+@doc("Create a composite")
+@route("/composites")
+@post
+op composite_create(@body body: CompositeCreate): {
+  @statusCode _: 201;
+  @body body: Widget;
+} | Error;
+
 @route("/constrained")
 @get
 op constrained_get(): Constrained | Error;
@@ -169,6 +217,11 @@ op device_auth(@header contentType: "application/x-www-form-urlencoded", @body b
 @route("/device/token")
 @post
 op device_token(): FreeformResponse | Error;
+
+@doc("Get disk state")
+@route("/disks/{id}/state")
+@get
+op disk_state_get(@path id: string): DiskState | Error;
 
 @route("/flexible")
 @get
