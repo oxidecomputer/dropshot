@@ -76,8 +76,11 @@
 //! ```
 //!
 //! This server returns a 404 for all resources because no API functions were
-//! registered.  See `examples/basic.rs` for a simple, documented example that
-//! provides a few resources using shared state.
+//! registered.  See [`examples/basic.rs`] for a simple, documented example
+//! that provides a few resources using shared state.
+//!
+//! [`examples/basic.rs`]:
+//!     https://github.com/oxidecomputer/dropshot/blob/main/dropshot/examples/basic.rs
 //!
 //! ## API Handler Functions
 //!
