@@ -57,17 +57,20 @@ structures we walk.
 
 ### Medium priority
 
-**Status code 202 (Accepted)**: 12 operations. Need `@statusCode _: 202`.
+**~~Status code 202 (Accepted)~~**: Done. Already handled by the generic
+status code logic — any non-200/204 code emits a block with `@statusCode`.
 
-**Status code 303 (See Other)**: 1 operation (SAML login). Need
-`@statusCode _: 303` + `@header location`.
+**~~Status code 303 (See Other)~~**: Done. Same mechanism, plus response
+headers (`@header location`) are emitted correctly.
 
 **`default` response**: 8 operations use a wildcard `*/*` schema response
 (device auth, binary downloads, websocket). May need special handling.
 
-**Untagged/externally-tagged unions**: 3 schemas (`IpNet`, `IpRange`,
-`NameOrId`) use oneOf with `allOf`-wrapped `$ref` variants and `title` fields
-instead of a tag property.
+**~~Untagged/externally-tagged unions~~**: Already handled. Non-discriminated
+`oneOf`/`anyOf` falls through to TypeSpec `union` or `scalar extends` emission.
+Primitive-only untagged enums (like `NameOrId` = `string | uint64`) emit as
+`scalar NameOrId extends string | uint64`. Object-variant unions emit as
+`union Name { variant1, variant2 }`.
 
 **Request body content types**: application/json (90), application/octet-stream
 (2), application/x-www-form-urlencoded (2).
@@ -109,5 +112,5 @@ These features exist in TypeSpec but aren't needed for the nexus API:
 3. ~~Validation decorators (@minValue, @maxLength, @pattern, etc.)~~
 4. ~~Default values~~
 5. ~~ResultsPage generic detection~~
-6. Additional status codes (202, 303)
-7. Untagged unions
+6. ~~Additional status codes (202, 303)~~
+7. ~~Untagged unions~~

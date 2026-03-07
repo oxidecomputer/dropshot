@@ -143,10 +143,11 @@ All done:
 
 ### Remaining medium-priority items
 
-- Additional status codes (202, 303)
-- Untagged/externally-tagged unions (`IpNet`, `IpRange`, `NameOrId`)
+- ✓ Additional status codes (202, 303) — already handled by generic logic
+- ✓ Untagged/externally-tagged unions — handled by union/scalar fallback
 - Non-JSON request bodies (`application/octet-stream`, `x-www-form-urlencoded`)
 - `format: binary` → `bytes`
+- `default` response (wildcard `*/*` content type, 8 nexus operations)
 
 ## Open questions
 

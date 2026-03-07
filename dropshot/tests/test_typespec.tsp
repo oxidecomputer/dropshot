@@ -72,6 +72,12 @@ enum InstanceState {
   destroying
 }
 
+model LookupResult {
+  target: NameOrId;
+}
+
+scalar NameOrId extends string | uint64;
+
 model PaintJob {
   color: Color;
   shape: Shape;
@@ -139,6 +145,18 @@ op flexible_get(): Flexible | Error;
 @get
 op instance_state_get(): InstanceState | Error;
 
+@doc("Redirect to login")
+@route("/login")
+@get
+op login_redirect(): {
+  @statusCode _: 303;
+  @header location: string;
+} | Error;
+
+@route("/lookup")
+@get
+op lookup(): LookupResult | Error;
+
 @doc("Old endpoint")
 #deprecated "deprecated"
 @route("/old")
@@ -168,6 +186,14 @@ op project_list(
 @route("/raw")
 @get
 op raw_get(): void | Error;
+
+@doc("Start a task")
+@route("/tasks")
+@post
+op task_start(@body body: WidgetCreate): {
+  @statusCode _: 202;
+  @body body: Widget;
+} | Error;
 
 @doc("Create a widget")
 @route("/widgets")

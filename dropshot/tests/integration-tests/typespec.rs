@@ -1,10 +1,11 @@
 // Copyright 2026 Oxide Computer Company
 
 use dropshot::{
-    api_to_typespec, endpoint, ApiDescription, FreeformBody, Header, HttpError,
+    api_to_typespec, endpoint, http_response_see_other, ApiDescription,
+    FreeformBody, Header, HttpError, HttpResponseAccepted,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
-    HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
-    Query, RequestContext, ResultsPage, TypedBody,
+    HttpResponseOk, HttpResponseSeeOther, HttpResponseUpdatedNoContent,
+    PaginationParams, Path, Query, RequestContext, ResultsPage, TypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -322,6 +323,55 @@ async fn with_defaults_create(
     unimplemented!();
 }
 
+// -- Additional status codes --
+
+#[endpoint {
+    method = POST,
+    path = "/tasks",
+}]
+/// Start a task
+async fn task_start(
+    _rqctx: RequestContext<()>,
+    _body: TypedBody<WidgetCreate>,
+) -> Result<HttpResponseAccepted<Widget>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/login",
+}]
+/// Redirect to login
+async fn login_redirect(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseSeeOther, HttpError> {
+    http_response_see_other("https://example.com".to_string())
+}
+
+// -- Untagged unions --
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+enum NameOrId {
+    Name(String),
+    Id(u64),
+}
+
+#[derive(Serialize, JsonSchema)]
+struct LookupResult {
+    target: NameOrId,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/lookup",
+}]
+async fn lookup(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<LookupResult>, HttpError> {
+    unimplemented!();
+}
+
 // -- Pagination (ResultsPage<T>) --
 
 #[derive(Deserialize, JsonSchema, Serialize)]
@@ -363,6 +413,9 @@ fn make_api() -> ApiDescription<()> {
     api.register(instance_state_get).unwrap();
     api.register(constrained_get).unwrap();
     api.register(with_defaults_create).unwrap();
+    api.register(task_start).unwrap();
+    api.register(login_redirect).unwrap();
+    api.register(lookup).unwrap();
     api.register(project_list).unwrap();
     api
 }
