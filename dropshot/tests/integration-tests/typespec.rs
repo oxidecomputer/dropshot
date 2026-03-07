@@ -3,8 +3,8 @@
 use dropshot::{
     api_to_typespec, endpoint, ApiDescription, FreeformBody, Header, HttpError,
     HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
-    HttpResponseOk, HttpResponseUpdatedNoContent, Path, Query, RequestContext,
-    TypedBody,
+    HttpResponseOk, HttpResponseUpdatedNoContent, PaginationParams, Path,
+    Query, RequestContext, ResultsPage, TypedBody,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -232,6 +232,56 @@ async fn authed_get(
     unimplemented!();
 }
 
+// -- Described string enum --
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum InstanceState {
+    /// The instance is running
+    Running,
+    /// The instance is stopped
+    Stopped,
+    /// The instance is being created
+    Creating,
+    /// The instance is being destroyed
+    Destroying,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/instance-state",
+}]
+async fn instance_state_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<InstanceState>, HttpError> {
+    unimplemented!();
+}
+
+// -- Pagination (ResultsPage<T>) --
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct ProjectScanParams {
+    #[serde(default)]
+    name_or_id: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct ProjectPageSelector {
+    last_seen: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/projects",
+}]
+/// List projects
+async fn project_list(
+    _rqctx: RequestContext<()>,
+    _query: Query<PaginationParams<ProjectScanParams, ProjectPageSelector>>,
+) -> Result<HttpResponseOk<ResultsPage<Widget>>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(ping).unwrap();
@@ -245,6 +295,8 @@ fn make_api() -> ApiDescription<()> {
     api.register(raw_get).unwrap();
     api.register(old_get).unwrap();
     api.register(authed_get).unwrap();
+    api.register(instance_state_get).unwrap();
+    api.register(project_list).unwrap();
     api
 }
 
