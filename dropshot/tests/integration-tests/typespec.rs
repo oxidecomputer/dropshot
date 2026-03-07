@@ -257,6 +257,34 @@ async fn instance_state_get(
     unimplemented!();
 }
 
+// -- Validation constraints --
+
+#[derive(Serialize, JsonSchema)]
+struct Constrained {
+    /// Must be between 1 and 100
+    #[schemars(range(min = 1, max = 100))]
+    count: u32,
+    /// Short name
+    #[schemars(length(min = 1, max = 63))]
+    name: String,
+    /// DNS-style name
+    #[schemars(regex(pattern = r"^[a-z][a-z0-9-]*$"))]
+    slug: String,
+    /// Between 1 and 10 items
+    #[schemars(length(min = 1, max = 10))]
+    items: Vec<String>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/constrained",
+}]
+async fn constrained_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<Constrained>, HttpError> {
+    unimplemented!();
+}
+
 // -- Pagination (ResultsPage<T>) --
 
 #[derive(Deserialize, JsonSchema, Serialize)]
@@ -296,6 +324,7 @@ fn make_api() -> ApiDescription<()> {
     api.register(old_get).unwrap();
     api.register(authed_get).unwrap();
     api.register(instance_state_get).unwrap();
+    api.register(constrained_get).unwrap();
     api.register(project_list).unwrap();
     api
 }

@@ -51,6 +51,7 @@ pub fn api_to_typespec<C: ServerContext>(
             params: Vec::new(),
             body: None,
             response: ResponseInfo::default(),
+            error_type: None,
         };
 
         // Parameters (path, query, header).
@@ -136,6 +137,16 @@ pub fn api_to_typespec<C: ServerContext>(
             });
         }
 
+        // Error type.
+        if let Some(error) = &endpoint.error {
+            let error_name = schema_gen_to_typespec(
+                &error.schema,
+                &mut generator,
+                &mut definitions,
+            );
+            op.error_type = Some(error_name);
+        }
+
         ops.push(op);
     }
 
@@ -150,6 +161,13 @@ pub fn api_to_typespec<C: ServerContext>(
     // Detect ResultsPage instantiations and build a rewrite map.
     let results_pages = detect_results_pages(&definitions);
     ctx.results_page_rewrites = results_pages;
+
+    // Collect error type names from operations.
+    for op in &ops {
+        if let Some(error_name) = &op.error_type {
+            ctx.error_types.insert(error_name.clone());
+        }
+    }
 
     // Emit preamble.
     ctx.emit_preamble(title, version);
@@ -212,6 +230,8 @@ struct TypeSpecContext {
     /// item type name (e.g. "Widget"). When a ref targets one of these, we
     /// emit `ResultsPage<Widget>` instead.
     results_page_rewrites: std::collections::HashMap<String, String>,
+    /// Set of model names that are error types (should get `@error` decorator).
+    error_types: std::collections::HashSet<String>,
 }
 
 impl TypeSpecContext {
@@ -219,6 +239,7 @@ impl TypeSpecContext {
         Self {
             out: String::new(),
             results_page_rewrites: std::collections::HashMap::new(),
+            error_types: std::collections::HashSet::new(),
         }
     }
 
@@ -273,7 +294,19 @@ impl TypeSpecContext {
         // Object type → model with properties.
         if let Some(object) = &obj.object {
             self.emit_doc_from_metadata(obj.metadata.as_deref());
+            if self.error_types.contains(name) {
+                writeln!(self.out, "@error").unwrap();
+            }
             writeln!(self.out, "model {} {{", name).unwrap();
+
+            // Error models get a synthetic @statusCode field so TypeSpec
+            // knows which HTTP status codes this error covers.
+            if self.error_types.contains(name) {
+                writeln!(self.out, "  @minValue(400)").unwrap();
+                writeln!(self.out, "  @maxValue(599)").unwrap();
+                writeln!(self.out, "  @statusCode statusCode: int32;")
+                    .unwrap();
+            }
 
             let required_set: std::collections::HashSet<&str> =
                 object.required.iter().map(|s| s.as_str()).collect();
@@ -287,6 +320,7 @@ impl TypeSpecContext {
                     writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d))
                         .unwrap();
                 }
+                emit_validation_decorators(&mut self.out, prop_schema);
                 writeln!(
                     self.out,
                     "  {}{}: {};",
@@ -525,11 +559,16 @@ impl TypeSpecContext {
         }
 
         // Return type.
-        let return_type = self.build_return_type(&op.response);
+        let return_type =
+            self.build_return_type(&op.response, op.error_type.as_deref());
         writeln!(self.out, ": {};", return_type).unwrap();
     }
 
-    fn build_return_type(&self, resp: &ResponseInfo) -> String {
+    fn build_return_type(
+        &self,
+        resp: &ResponseInfo,
+        error_type: Option<&str>,
+    ) -> String {
         let body_type = match resp.ts_type.as_deref() {
             // "null" comes from `()`, "never" from `Schema::Bool(false)`
             // (no-content types like HttpResponseDeleted). Both mean void.
@@ -541,30 +580,35 @@ impl TypeSpecContext {
         let needs_block = has_headers
             || !matches!(resp.status_code, Some(200) | Some(204) | None);
 
-        if !needs_block {
-            return body_type.to_string();
-        }
-
-        let mut parts = Vec::new();
-        if let Some(code) = resp.status_code {
-            if code != 200 {
-                parts.push(format!("  @statusCode _: {};", code));
+        let success_type = if !needs_block {
+            body_type.to_string()
+        } else {
+            let mut parts = Vec::new();
+            if let Some(code) = resp.status_code {
+                if code != 200 {
+                    parts.push(format!("  @statusCode _: {};", code));
+                }
             }
-        }
-        for h in &resp.headers {
-            let optional = if h.required { "" } else { "?" };
-            parts.push(format!(
-                "  @header {}{}: {};",
-                escape_property_name(&h.name),
-                optional,
-                h.ts_type
-            ));
-        }
-        if body_type != "void" {
-            parts.push(format!("  @body body: {};", body_type));
-        }
+            for h in &resp.headers {
+                let optional = if h.required { "" } else { "?" };
+                parts.push(format!(
+                    "  @header {}{}: {};",
+                    escape_property_name(&h.name),
+                    optional,
+                    h.ts_type
+                ));
+            }
+            if body_type != "void" {
+                parts.push(format!("  @body body: {};", body_type));
+            }
 
-        format!("{{\n{}\n}}", parts.join("\n"))
+            format!("{{\n{}\n}}", parts.join("\n"))
+        };
+
+        match error_type {
+            Some(e) => format!("{} | {}", success_type, e),
+            None => success_type,
+        }
     }
 
     fn emit_doc_from_metadata(
@@ -605,6 +649,7 @@ struct OpInfo {
     params: Vec<ParamInfo>,
     body: Option<BodyInfo>,
     response: ResponseInfo,
+    error_type: Option<String>,
 }
 
 struct ParamInfo {
@@ -1071,6 +1116,63 @@ fn extract_single_enum_value(schema: &Schema) -> Option<String> {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Emit TypeSpec validation decorators for a schema's constraints.
+fn emit_validation_decorators(out: &mut String, schema: &Schema) {
+    let obj = match schema {
+        Schema::Object(obj) => obj,
+        _ => return,
+    };
+
+    // Number validation: @minValue, @maxValue.
+    if let Some(number) = &obj.number {
+        if let Some(min) = number.minimum {
+            writeln!(out, "  @minValue({})", format_f64(min)).unwrap();
+        }
+        if let Some(max) = number.maximum {
+            writeln!(out, "  @maxValue({})", format_f64(max)).unwrap();
+        }
+        if let Some(min) = number.exclusive_minimum {
+            writeln!(out, "  @minValueExclusive({})", format_f64(min)).unwrap();
+        }
+        if let Some(max) = number.exclusive_maximum {
+            writeln!(out, "  @maxValueExclusive({})", format_f64(max)).unwrap();
+        }
+    }
+
+    // String validation: @minLength, @maxLength, @pattern.
+    if let Some(string) = &obj.string {
+        if let Some(min) = string.min_length {
+            writeln!(out, "  @minLength({})", min).unwrap();
+        }
+        if let Some(max) = string.max_length {
+            writeln!(out, "  @maxLength({})", max).unwrap();
+        }
+        if let Some(pat) = &string.pattern {
+            writeln!(out, "  @pattern(\"{}\")", escape_tsp_string(pat))
+                .unwrap();
+        }
+    }
+
+    // Array validation: @minItems, @maxItems.
+    if let Some(array) = &obj.array {
+        if let Some(min) = array.min_items {
+            writeln!(out, "  @minItems({})", min).unwrap();
+        }
+        if let Some(max) = array.max_items {
+            writeln!(out, "  @maxItems({})", max).unwrap();
+        }
+    }
+}
+
+/// Format an f64 as an integer string if it has no fractional part.
+fn format_f64(v: f64) -> String {
+    if v.fract() == 0.0 && v.is_finite() {
+        format!("{}", v as i64)
+    } else {
+        format!("{}", v)
+    }
+}
 
 fn ref_to_type_name(reference: &str) -> String {
     // schemars refs look like "#/definitions/TypeName"
