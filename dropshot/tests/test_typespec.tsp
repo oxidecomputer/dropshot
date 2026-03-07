@@ -8,6 +8,13 @@ using OpenAPI;
 @info(#{ version: "1.0.0" })
 namespace WidgetService;
 
+model ResultsPage<T> {
+  @doc("list of items on this page of results")
+  items: T[];
+  @doc("token used to fetch the next page of results (if any)")
+  next_page?: string | null;
+}
+
 enum Color {
   Red,
   Green,
@@ -23,6 +30,17 @@ model Flexible {
   nickname?: string | null;
   @doc("A list of tags")
   tags: string[];
+}
+
+enum InstanceState {
+  @doc("The instance is running")
+  running,
+  @doc("The instance is stopped")
+  stopped,
+  @doc("The instance is being created")
+  creating,
+  @doc("The instance is being destroyed")
+  destroying
 }
 
 model PaintJob {
@@ -71,6 +89,10 @@ op authed_get(@header authorization: string, @header x_request_id?: string): Wid
 @get
 op flexible_get(): Flexible;
 
+@route("/instance-state")
+@get
+op instance_state_get(): InstanceState;
+
 @doc("Old endpoint")
 #deprecated "deprecated"
 @route("/old")
@@ -86,6 +108,15 @@ op paint_get(): PaintJob;
 @route("/ping")
 @get
 op ping(): void;
+
+@doc("List projects")
+@route("/projects")
+@get
+op project_list(
+  @query limit?: uint32 | null,
+  @query name_or_id?: string | null,
+  @query page_token?: string | null
+): ResultsPage<Widget>;
 
 @doc("Raw bytes")
 @route("/raw")
