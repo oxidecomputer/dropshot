@@ -88,7 +88,7 @@ optional = true
 default-features = false
 
 [dependencies.uuid]
-version = "1.21.0"
+version = "1.22.0"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
