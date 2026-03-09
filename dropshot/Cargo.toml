@@ -75,7 +75,7 @@ version = "1.0.228"
 features = [ "derive" ]
 
 [dependencies.tokio]
-version = "1.49"
+version = "1.50"
 features = [ "full" ]
 
 [dependencies.tokio-util]
