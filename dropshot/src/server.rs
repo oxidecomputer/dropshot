@@ -225,6 +225,13 @@ impl<C: ServerContext> HttpServerStarter<C> {
             version_policy,
         });
 
+        // NOTE: `endpoints(None)` uses `None` to mean "all endpoints,
+        // regardless of version." For versioned APIs where different versions
+        // use different path parameter names at the same position, the path
+        // logged here will use whichever name was registered first. This is not
+        // a huge deal since it's just a logging-only path, but we should
+        // probably address this at some point, starting by replacing
+        // Option<&Version> with an explicit enum.
         for (path, method, endpoint) in app_state.router.endpoints(None) {
             debug!(&log, "registered endpoint";
                 "method" => &method,
