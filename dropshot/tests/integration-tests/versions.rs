@@ -8,6 +8,7 @@ use dropshot::ClientSpecifiesVersionInHeader;
 use dropshot::HttpError;
 use dropshot::HttpErrorResponseBody;
 use dropshot::HttpResponseOk;
+use dropshot::Path;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::VersionPolicy;
@@ -383,9 +384,17 @@ fn test_versions_openapi() {
 #[test]
 fn test_versions_openapi_same_names() {
     // This approach uses freestanding functions in separate modules.
+    // Each version uses a different path parameter name at the same position
+    // ({item_id} in v1, {id} in v2) to exercise versioned variable names.
     let api_function_modules = {
         mod v1 {
             use super::*;
+
+            #[derive(Deserialize, JsonSchema)]
+            pub struct DemoPath {
+                #[allow(dead_code)]
+                item_id: String,
+            }
 
             #[derive(JsonSchema, Serialize)]
             pub struct MyReturn {
@@ -395,11 +404,12 @@ fn test_versions_openapi_same_names() {
 
             #[endpoint {
                 method = GET,
-                path = "/demo",
+                path = "/demo/{item_id}",
                 versions = .."2.0.0"
             }]
             pub async fn the_operation(
                 _rqctx: RequestContext<()>,
+                _path: Path<DemoPath>,
             ) -> Result<HttpResponseOk<MyReturn>, HttpError> {
                 unimplemented!();
             }
@@ -407,6 +417,12 @@ fn test_versions_openapi_same_names() {
 
         mod v2 {
             use super::*;
+
+            #[derive(Deserialize, JsonSchema)]
+            pub struct DemoPath {
+                #[allow(dead_code)]
+                id: String,
+            }
 
             #[derive(JsonSchema, Serialize)]
             pub struct MyReturn {
@@ -416,11 +432,12 @@ fn test_versions_openapi_same_names() {
 
             #[endpoint {
                 method = GET,
-                path = "/demo",
+                path = "/demo/{id}",
                 versions = "2.0.0"..
             }]
             pub async fn the_operation(
                 _rqctx: RequestContext<()>,
+                _path: Path<DemoPath>,
             ) -> Result<HttpResponseOk<MyReturn>, HttpError> {
                 unimplemented!();
             }
@@ -436,6 +453,12 @@ fn test_versions_openapi_same_names() {
     // This requires applying overrides to the names in order to have them show
     // up with the same name in each version.
     let api_function_overrides = {
+        #[derive(Deserialize, JsonSchema)]
+        struct DemoPathV1 {
+            #[allow(dead_code)]
+            item_id: String,
+        }
+
         #[derive(JsonSchema, Serialize)]
         #[schemars(rename = "MyReturn")]
         struct MyReturnV1 {
@@ -445,14 +468,21 @@ fn test_versions_openapi_same_names() {
 
         #[endpoint {
             method = GET,
-            path = "/demo",
+            path = "/demo/{item_id}",
             versions = ..subversion::TWO_ZERO_ZERO,
             operation_id = "the_operation",
         }]
         async fn the_operation_v1(
             _rqctx: RequestContext<()>,
+            _path: Path<DemoPathV1>,
         ) -> Result<HttpResponseOk<MyReturnV1>, HttpError> {
             unimplemented!();
+        }
+
+        #[derive(Deserialize, JsonSchema)]
+        struct DemoPathV2 {
+            #[allow(dead_code)]
+            id: String,
         }
 
         #[derive(JsonSchema, Serialize)]
@@ -464,12 +494,13 @@ fn test_versions_openapi_same_names() {
 
         #[endpoint {
             method = GET,
-            path = "/demo",
+            path = "/demo/{id}",
             versions = subversion::TWO_ZERO_ZERO..,
             operation_id = "the_operation"
         }]
         async fn the_operation_v2(
             _rqctx: RequestContext<()>,
+            _path: Path<DemoPathV2>,
         ) -> Result<HttpResponseOk<MyReturnV2>, HttpError> {
             unimplemented!();
         }
@@ -513,11 +544,116 @@ fn test_versions_openapi_same_names() {
     assert_eq!(func_mods_v2, traits_v2);
 }
 
+/// End-to-end test: versioned path parameter names produce the correct
+/// variable bindings when actual HTTP requests flow through the server.
+#[tokio::test]
+async fn test_versions_path_params() {
+    // Define two versions of an endpoint at the same path with different
+    // path parameter names.
+    mod v1 {
+        use super::*;
+
+        #[derive(Deserialize, JsonSchema)]
+        pub struct DemoPath {
+            pub item_id: String,
+        }
+
+        #[endpoint {
+            method = GET,
+            path = "/demo/{item_id}",
+            versions = .."2.0.0"
+        }]
+        pub async fn handler(
+            _rqctx: RequestContext<()>,
+            path: Path<DemoPath>,
+        ) -> Result<HttpResponseOk<String>, HttpError> {
+            Ok(HttpResponseOk(format!("v1:{}", path.into_inner().item_id)))
+        }
+    }
+
+    mod v2 {
+        use super::*;
+
+        #[derive(Deserialize, JsonSchema)]
+        pub struct DemoPath {
+            pub id: String,
+        }
+
+        #[endpoint {
+            method = GET,
+            path = "/demo/{id}",
+            versions = "2.0.0"..
+        }]
+        pub async fn handler(
+            _rqctx: RequestContext<()>,
+            path: Path<DemoPath>,
+        ) -> Result<HttpResponseOk<String>, HttpError> {
+            Ok(HttpResponseOk(format!("v2:{}", path.into_inner().id)))
+        }
+    }
+
+    let mut api = ApiDescription::new();
+    api.register(v1::handler).unwrap();
+    api.register(v2::handler).unwrap();
+
+    let logctx = common::create_log_context("test_versions_path_params");
+    let server = ServerBuilder::new(api, (), logctx.log.clone())
+        .version_policy(VersionPolicy::Dynamic(Box::new(
+            ClientSpecifiesVersionInHeader::new(
+                VERSION_HEADER_NAME.parse().unwrap(),
+                Version::new(3, 0, 0),
+            ),
+        )))
+        .start()
+        .unwrap();
+
+    let server_addr = server.local_addr();
+    let url = format!("http://{}/demo/my-thing", server_addr);
+    let client = reqwest::Client::new();
+
+    // Version 1.x: handler receives the value via {item_id}.
+    let response = client
+        .get(&url)
+        .header(VERSION_HEADER_NAME, "1.0.0")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: String = response.json().await.unwrap();
+    assert_eq!(body, "v1:my-thing");
+
+    // Version 2.x: handler receives the value via {id}.
+    let response = client
+        .get(&url)
+        .header(VERSION_HEADER_NAME, "2.0.0")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: String = response.json().await.unwrap();
+    assert_eq!(body, "v2:my-thing");
+
+    server.close().await.unwrap();
+    logctx.cleanup_successful();
+}
+
 // The contents of this module logically belongs inside
 // test_versions_openapi_same_names().  It can't go there due to
 // oxidecomputer/dropshot#1128.
 mod trait_based {
     use super::*;
+
+    #[derive(Deserialize, JsonSchema)]
+    pub struct DemoPathV1 {
+        #[allow(dead_code)]
+        item_id: String,
+    }
+
+    #[derive(Deserialize, JsonSchema)]
+    pub struct DemoPathV2 {
+        #[allow(dead_code)]
+        id: String,
+    }
 
     #[derive(JsonSchema, Serialize)]
     #[schemars(rename = "MyReturn")]
@@ -541,22 +677,24 @@ mod trait_based {
 
         #[endpoint {
             method = GET,
-            path = "/demo",
+            path = "/demo/{item_id}",
             versions = .."2.0.0",
             operation_id = "the_operation",
         }]
         async fn the_operation_v1(
             _rqctx: RequestContext<Self::Context>,
+            _path: Path<DemoPathV1>,
         ) -> Result<HttpResponseOk<MyReturnV1>, HttpError>;
 
         #[endpoint {
             method = GET,
-            path = "/demo",
+            path = "/demo/{id}",
             versions = "2.0.0"..,
             operation_id = "the_operation"
         }]
         async fn the_operation_v2(
             _rqctx: RequestContext<Self::Context>,
+            _path: Path<DemoPathV2>,
         ) -> Result<HttpResponseOk<MyReturnV2>, HttpError>;
     }
 }
