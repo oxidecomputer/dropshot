@@ -15,7 +15,7 @@ use crate::router::PathSegment;
 use crate::schema_util::j2oas_schema;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
-use crate::type_util::type_is_string_enum;
+use crate::type_util::type_is_string_seq;
 use crate::CONTENT_TYPE_JSON;
 use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
 use crate::CONTENT_TYPE_OCTET_STREAM;
@@ -560,8 +560,9 @@ impl<Context: ServerContext> ApiDescription<Context> {
     }
 
     /// Validate that named parameters have appropriate types and there are no
-    /// duplicates. Parameters must have scalar types except in the case of the
-    /// received for a wildcard path which must be an array of String.
+    /// duplicates. Path parameters must have scalar types except in the case
+    /// of the receiver for a wildcard path which must be an array of String.
+    /// Query parameters may be either scalars or a sequence of scalars.
     fn validate_named_parameters(
         &self,
         e: &ApiEndpoint<Context>,
@@ -613,7 +614,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             )?;
                         }
                         Some(SegmentOrWildcard::Wildcard) => {
-                            type_is_string_enum(
+                            type_is_string_seq(
                                 &e.operation_id,
                                 name,
                                 schema,
@@ -633,12 +634,28 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             name
                         ));
                     }
-                    type_is_scalar(
+                    if type_is_scalar(
                         &e.operation_id,
                         name,
                         schema,
                         dependencies,
-                    )?;
+                    )
+                    .or_else(|_| {
+                        type_is_string_seq(
+                            &e.operation_id,
+                            name,
+                            schema,
+                            dependencies,
+                        )
+                    })
+                    .is_err()
+                    {
+                        return Err(format!(
+                            "the parameter '{}' must be either a scalar or an \
+                             array of scalars",
+                            name
+                        ));
+                    }
                 }
                 _ => (),
             }

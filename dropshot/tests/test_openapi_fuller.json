@@ -943,6 +943,38 @@
         }
       }
     },
+    "/testing33": {
+      "get": {
+        "tags": [
+          "it"
+        ],
+        "operationId": "handler33",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "multi",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "resource updated"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/thing_with_headers": {
       "get": {
         "tags": [
