@@ -1188,7 +1188,7 @@ mod test {
             *result.endpoint.variables.get("arg").unwrap(),
             VariableValue::String("hello".to_string())
         );
-        assert!(result.endpoint.variables.get("myarg").is_none());
+        assert!(!result.endpoint.variables.contains_key("myarg"));
 
         // Version 2.x uses "myarg".
         let result = router
@@ -1203,7 +1203,7 @@ mod test {
             *result.endpoint.variables.get("myarg").unwrap(),
             VariableValue::String("hello".to_string())
         );
-        assert!(result.endpoint.variables.get("arg").is_none());
+        assert!(!result.endpoint.variables.contains_key("arg"));
     }
 
     /// Different variable names at the same path segment should still be
@@ -1335,7 +1335,7 @@ mod test {
                 "c".to_string(),
             ]))
         );
-        assert!(result.endpoint.variables.get("filepath").is_none());
+        assert!(!result.endpoint.variables.contains_key("filepath"));
 
         let result = router
             .lookup_route(
@@ -1353,7 +1353,7 @@ mod test {
                 "c".to_string(),
             ]))
         );
-        assert!(result.endpoint.variables.get("path").is_none());
+        assert!(!result.endpoint.variables.contains_key("path"));
     }
 
     /// When a version falls in a gap between two non-overlapping version
