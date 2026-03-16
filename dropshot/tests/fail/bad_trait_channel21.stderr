@@ -106,16 +106,12 @@ help: name the argument, or use `_` to continue ignoring it
 error[E0700]: hidden type for `impl Future<Output = Result<(), Box<(dyn StdError + Send + Sync + 'static)>>>` captures lifetime that does not appear in bounds
   --> tests/fail/bad_trait_channel21.rs:46:43
    |
-42 | /      async fn variadic_argument(
-43 | |          _rqctx: RequestContext<()>,
-44 | |          _param1: Query<QueryParams>,
-45 | |          ...
-46 | |      ) -> dropshot::WebsocketChannelResult {
-   | | _________________________________________-_^
-   | ||_________________________________________|
-   |  |                                         opaque type defined here
-47 |  |         Ok(())
-48 |  |     }
-   |  |_____^
+46 |       ) -> dropshot::WebsocketChannelResult {
+   |  __________--------------------------------_^
+   | |          |
+   | |          opaque type defined here
+47 | |         Ok(())
+48 | |     }
+   | |_____^
    |
    = note: hidden type `{async fn body of <MyImpl as MyServer>::variadic_argument()}` captures lifetime `'_`

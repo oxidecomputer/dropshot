@@ -56,14 +56,10 @@ note: required by a bound in `dropshot::Query`
    |                             ^^^^^^^^^^^^^^^^ required by this bound in `Query`
 
 error[E0277]: the trait bound `QueryParams: schemars::JsonSchema` is not satisfied
-  --> tests/fail/bad_trait_channel4.rs:39:5
+  --> tests/fail/bad_trait_channel4.rs:43:10
    |
-39 | /     async fn bad_channel(
-40 | |         _rqctx: RequestContext<()>,
-41 | |         _params: Query<QueryParams>,
-42 | |         _upgraded: WebsocketConnection,
-43 | |     ) -> dropshot::WebsocketChannelResult {
-   | |_________________________________________^ unsatisfied trait bound
+43 |     ) -> dropshot::WebsocketChannelResult {
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `schemars::JsonSchema` is not implemented for `QueryParams`
   --> tests/fail/bad_trait_channel4.rs:11:1
@@ -87,14 +83,10 @@ note: required by a bound in `dropshot::Query`
    |                                                ^^^^^^^^^^ required by this bound in `Query`
 
 error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
-  --> tests/fail/bad_trait_channel4.rs:39:5
+  --> tests/fail/bad_trait_channel4.rs:43:10
    |
-39 | /     async fn bad_channel(
-40 | |         _rqctx: RequestContext<()>,
-41 | |         _params: Query<QueryParams>,
-42 | |         _upgraded: WebsocketConnection,
-43 | |     ) -> dropshot::WebsocketChannelResult {
-   | |_________________________________________^ unsatisfied trait bound
+43 |     ) -> dropshot::WebsocketChannelResult {
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
   --> tests/fail/bad_trait_channel4.rs:11:1
