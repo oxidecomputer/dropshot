@@ -159,7 +159,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
 
     fn new_internal(
         config: &ConfigDropshot,
-        api: ApiDescription<C>,
+        router: HttpRouter<C>,
         private: C,
         log: &Logger,
         tls: Option<ConfigTls>,
@@ -207,7 +207,6 @@ impl<C: ServerContext> HttpServerStarter<C> {
             .transpose()?;
         let handler_waitgroup = WaitGroup::new();
 
-        let router = api.into_router();
         if let VersionPolicy::Unversioned = version_policy {
             if router.has_versioned_routes() {
                 return Err(BuildError::UnversionedServerHasVersionedRoutes);
@@ -1141,7 +1140,7 @@ pub struct ServerBuilder<C: ServerContext> {
     // required caller-provided values
     private: C,
     log: Logger,
-    api: DebugIgnore<ApiDescription<C>>,
+    router: HttpRouter<C>,
 
     // optional caller-provided values
     config: ConfigDropshot,
@@ -1164,11 +1163,36 @@ impl<C: ServerContext> ServerBuilder<C> {
         ServerBuilder {
             private,
             log,
-            api: DebugIgnore(api),
+            router: api.into_router(),
             config: Default::default(),
             version_policy: VersionPolicy::Unversioned,
             tls: Default::default(),
         }
+    }
+
+    /// Create an empty Dropshot server
+    ///
+    /// The server will have no routes. You can add routes with
+    /// [`ServerBuilder::routes`].
+    pub fn empty(private: C, log: Logger) -> ServerBuilder<C> {
+        ServerBuilder {
+            private,
+            log,
+            router: HttpRouter::new(),
+            config: Default::default(),
+            version_policy: VersionPolicy::Unversioned,
+            tls: Default::default(),
+        }
+    }
+
+    /// Add routes from an [ApiDescription]
+    ///
+    /// # Panics
+    ///
+    /// Panics if the added routes conflict with previously-added routes.
+    pub fn description(mut self, api: ApiDescription<C>) -> Self {
+        self.router.extend(api.into_router());
+        self
     }
 
     /// Specify the server configuration
@@ -1223,7 +1247,7 @@ impl<C: ServerContext> ServerBuilder<C> {
     pub fn build_starter(self) -> Result<HttpServerStarter<C>, BuildError> {
         HttpServerStarter::new_internal(
             &self.config,
-            self.api.0,
+            self.router,
             self.private,
             &self.log,
             self.tls,
