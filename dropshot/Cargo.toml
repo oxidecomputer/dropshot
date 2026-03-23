@@ -28,7 +28,7 @@ http = "1.4.0"
 http-body-util = "0.1.3"
 indexmap = "2.13.0"
 multer = "3.1.0"
-paste = "1.0.15"
+pastey = "0.2.1"
 percent-encoding = "2.3.2"
 rustls = "0.22.4"
 rustls-pemfile = "2.2.0"
@@ -51,7 +51,7 @@ waitgroup = "0.1.2"
 
 [dependencies.chrono]
 version = "0.4.44"
-features = [ "serde", "std", "clock" ]
+features = ["serde", "std", "clock"]
 default-features = false
 
 [dependencies.dropshot_endpoint]
@@ -60,27 +60,27 @@ path = "../dropshot_endpoint"
 
 [dependencies.hyper]
 version = "1.8.1"
-features = [ "full" ]
+features = ["full"]
 
 [dependencies.hyper-util]
 version = "0.1.20"
-features = [ "full" ]
+features = ["full"]
 
 [dependencies.openapiv3]
 version = "2.2.0"
-features = [ "skip_serializing_defaults" ]
+features = ["skip_serializing_defaults"]
 
 [dependencies.serde]
 version = "1.0.228"
-features = [ "derive" ]
+features = ["derive"]
 
 [dependencies.tokio]
 version = "1.50"
-features = [ "full" ]
+features = ["full"]
 
 [dependencies.tokio-util]
 version = "0.7"
-features = [ "io" ]
+features = ["io"]
 
 [dependencies.usdt]
 version = "0.6.0"
@@ -89,13 +89,13 @@ default-features = false
 
 [dependencies.uuid]
 version = "1.22.0"
-features = [ "serde", "v4" ]
+features = ["serde", "v4"]
 
 [dependencies.schemars]
 # While newer versions of schemars are available, they are not trivial for us to update to.
 # See oxidecomputer/dropshot#1375 for more information.
 version = "0.8.22"
-features = [ "uuid1" ]
+features = ["uuid1"]
 
 [dev-dependencies]
 anyhow = "1.0.102"
@@ -121,7 +121,7 @@ tokio-tungstenite = "0.24.0"
 version = "0.12.28"
 # Using rustls-tls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
-features = [ "json", "rustls-tls" ]
+features = ["json", "rustls-tls"]
 
 [dev-dependencies.rustls-pki-types]
 version = "1.14.0"
@@ -130,11 +130,11 @@ features = ["alloc"]
 
 [dev-dependencies.schemars]
 version = "0.8.22"
-features = [ "chrono", "uuid1" ]
+features = ["chrono", "uuid1"]
 
 [dev-dependencies.slog]
 version = "2.8.2"
-features = [ "max_level_trace", "release_max_level_debug" ]
+features = ["max_level_trace", "release_max_level_debug"]
 
 # This is required for the build.rs script to check for an appropriate compiler
 # version so that `usdt` can be built on stable rust.

@@ -1,6 +1,6 @@
 // Copyright 2025 Oxide Computer Company
 
-use paste::paste;
+use pastey::paste;
 use serde::de::DeserializeSeed;
 use serde::de::EnumAccess;
 use serde::de::MapAccess;

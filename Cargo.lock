@@ -435,7 +435,7 @@ dependencies = [
  "mime_guess",
  "multer",
  "openapiv3",
- "paste",
+ "pastey",
  "pem",
  "percent-encoding",
  "rcgen",
@@ -1567,6 +1567,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pastey"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b867cad97c0791bbd3aaa6472142568c6c9e8f71937e98379f584cfb0cf35bec"
 
 [[package]]
 name = "pem"
