@@ -910,7 +910,6 @@ pub use body::Body;
 pub use compression::NoCompression;
 pub use config::CompressionConfig;
 // TypeSpec generation is currently experimental.
-pub use typespec::api_to_typespec;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use config::HandlerTaskMode;
@@ -974,6 +973,7 @@ pub use server::ServerBuilder;
 pub use server::ServerContext;
 pub use server::ShutdownWaitFuture;
 pub use server::{HttpServer, HttpServerStarter};
+pub use typespec::api_to_typespec;
 pub use versioning::ClientSpecifiesVersionInHeader;
 pub use versioning::DynamicVersionPolicy;
 pub use versioning::VersionPolicy;

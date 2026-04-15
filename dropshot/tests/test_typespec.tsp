@@ -65,6 +65,30 @@ model DeviceAuthRequest {
   client_id: string;
 }
 
+model Disk {
+  name: string;
+}
+
+@discriminator("type")
+model DiskSource {
+  type: string;
+}
+
+@doc("Create a disk from a disk snapshot")
+model DiskSourceSnapshot extends DiskSource {
+  type: "snapshot";
+  @doc("If true, the disk will be read-only.")
+  read_only?: boolean = false;
+  snapshot_id: uuid;
+}
+
+@doc("Create a blank disk")
+model DiskSourceBlank extends DiskSource {
+  type: "blank";
+  @minValue(0)
+  block_size: uint32;
+}
+
 @discriminator("state")
 model DiskState {
   state: string;
@@ -83,12 +107,14 @@ model DiskStateDetached extends DiskState {
 @doc("Disk is being attached to an instance")
 model DiskStateAttaching extends DiskState {
   state: "attaching";
+  @doc("The instance this disk is being attached to")
   instance: uuid;
 }
 
 @doc("Disk is attached to an instance")
 model DiskStateAttached extends DiskState {
   state: "attached";
+  @doc("The instance this disk is attached to")
   instance: uuid;
 }
 
@@ -130,9 +156,32 @@ enum InstanceState {
   destroying
 }
 
+model InterfaceNumUnknown {
+  unknown: uint32;
+}
+
+model InterfaceNumIfIndex {
+  if_index: uint32;
+}
+
+model InterfaceNumPortNumber {
+  port_number: uint32;
+}
+
+union InterfaceNum {
+  InterfaceNumUnknown,
+  InterfaceNumIfIndex,
+  InterfaceNumPortNumber,
+}
+
 model LookupResult {
   id: uuid;
   target: NameOrId;
+}
+
+model MeasurementBatch {
+  @doc("Measured values; null entries are missing samples.")
+  values: (int64 | null)[];
 }
 
 @doc("A name unique within the parent collection")
@@ -146,9 +195,18 @@ union NameOrId {
   Name,
 }
 
+model NetworkInfo {
+  interface_num: InterfaceNum;
+}
+
 model PaintJob {
   color: Color;
   shape: Shape;
+}
+
+model PhysicalDisk {
+  model_number: string;
+  name: string;
 }
 
 @discriminator("kind")
@@ -223,6 +281,21 @@ op device_auth(@header contentType: "application/x-www-form-urlencoded", @body b
 @post
 op device_token(): FreeformResponse | Error;
 
+@doc("Get disk source")
+@route("/disk-source")
+@get
+op disk_source_get(): DiskSource | Error;
+
+@doc("List disks")
+@extension("x-dropshot-pagination", #{required: #[]})
+@route("/disks")
+@get
+op disk_list(
+  @query limit?: uint32 | null,
+  @query name?: string | null,
+  @query page_token?: string | null
+): ResultsPage<Disk> | Error;
+
 @doc("Get disk state")
 @route("/disks/{id}/state")
 @get
@@ -248,6 +321,16 @@ op login_redirect(): {
 @get
 op lookup(): LookupResult | Error;
 
+@doc("Get measurements")
+@route("/measurements")
+@get
+op measurement_get(): MeasurementBatch | Error;
+
+@doc("Get network info")
+@route("/network-info")
+@get
+op network_info_get(): NetworkInfo | Error;
+
 @doc("Old endpoint")
 #deprecated "deprecated"
 @route("/old")
@@ -258,6 +341,16 @@ op old_get(): void | Error;
 @route("/paint")
 @get
 op paint_get(): PaintJob | Error;
+
+@doc("List physical disks")
+@extension("x-dropshot-pagination", #{required: #[]})
+@route("/physical-disks")
+@get
+op physical_disk_list(
+  @query limit?: uint32 | null,
+  @query name?: string | null,
+  @query page_token?: string | null
+): ResultsPage<PhysicalDisk> | Error;
 
 @doc("Health check")
 @route("/ping")
