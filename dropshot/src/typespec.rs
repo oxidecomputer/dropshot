@@ -659,15 +659,15 @@ impl TypeSpecContext {
 
     fn emit_op(&mut self, op: &OpInfo) {
         // Doc comment.
-        if let Some(summary) = &op.summary {
-            writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(summary))
+        let doc = match (&op.summary, &op.description) {
+            (Some(s), Some(d)) => Some(format!("{}\n\n{}", s, d)),
+            (Some(s), None) => Some(s.clone()),
+            (None, Some(d)) => Some(d.clone()),
+            (None, None) => None,
+        };
+        if let Some(doc) = doc {
+            writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(&doc))
                 .unwrap();
-        }
-        if let Some(desc) = &op.description {
-            if op.summary.is_none() {
-                writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(desc))
-                    .unwrap();
-            }
         }
 
         // Tags.
@@ -708,7 +708,8 @@ impl TypeSpecContext {
         // Operation signature.
         write!(self.out, "op {}(", op.operation_id).unwrap();
 
-        let mut params_parts = Vec::new();
+        // Each param part is (optional @doc string, param line).
+        let mut params_parts: Vec<(Option<&str>, String)> = Vec::new();
 
         // Path, query, header params.
         for p in &op.params {
@@ -718,12 +719,15 @@ impl TypeSpecContext {
                 ParamLocation::Header => "@header",
             };
             let optional = if p.required { "" } else { "?" };
-            params_parts.push(format!(
-                "{} {}{}: {}",
-                decorator,
-                escape_property_name(&p.name),
-                optional,
-                p.ts_type,
+            params_parts.push((
+                p.description.as_deref(),
+                format!(
+                    "{} {}{}: {}",
+                    decorator,
+                    escape_property_name(&p.name),
+                    optional,
+                    p.ts_type,
+                ),
             ));
         }
 
@@ -731,41 +735,60 @@ impl TypeSpecContext {
         if let Some(body) = &op.body {
             match body.content_type {
                 ApiEndpointBodyContentType::Json => {
-                    params_parts.push(format!("@body body: {}", body.ts_type));
+                    params_parts
+                        .push((None, format!("@body body: {}", body.ts_type)));
                 }
                 ApiEndpointBodyContentType::Bytes => {
-                    params_parts.push(format!(
-                        "@header contentType: \"application/octet-stream\", \
-                         @body body: {}",
-                        body.ts_type
+                    params_parts.push((
+                        None,
+                        format!(
+                            "@header contentType: \
+                             \"application/octet-stream\", \
+                             @body body: {}",
+                            body.ts_type
+                        ),
                     ));
                 }
                 ApiEndpointBodyContentType::UrlEncoded => {
-                    params_parts.push(format!(
-                        "@header contentType: \
-                         \"application/x-www-form-urlencoded\", \
-                         @body body: {}",
-                        body.ts_type
+                    params_parts.push((
+                        None,
+                        format!(
+                            "@header contentType: \
+                             \"application/x-www-form-urlencoded\", \
+                             @body body: {}",
+                            body.ts_type
+                        ),
                     ));
                 }
                 ApiEndpointBodyContentType::MultipartFormData => {
-                    params_parts.push(format!(
-                        "@header contentType: \"multipart/form-data\", \
-                         @body body: {}",
-                        body.ts_type
+                    params_parts.push((
+                        None,
+                        format!(
+                            "@header contentType: \
+                             \"multipart/form-data\", \
+                             @body body: {}",
+                            body.ts_type
+                        ),
                     ));
                 }
             }
         }
 
-        if params_parts.len() <= 2 {
+        let has_descriptions = params_parts.iter().any(|(d, _)| d.is_some());
+        if params_parts.len() <= 2 && !has_descriptions {
             // Inline params.
-            write!(self.out, "{}", params_parts.join(", ")).unwrap();
+            let parts: Vec<&str> =
+                params_parts.iter().map(|(_, s)| s.as_str()).collect();
+            write!(self.out, "{}", parts.join(", ")).unwrap();
             write!(self.out, ")").unwrap();
         } else {
             // Multi-line params.
             writeln!(self.out).unwrap();
-            for (i, part) in params_parts.iter().enumerate() {
+            for (i, (desc, part)) in params_parts.iter().enumerate() {
+                if let Some(d) = desc {
+                    writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d),)
+                        .unwrap();
+                }
                 let comma = if i + 1 < params_parts.len() { "," } else { "" };
                 writeln!(self.out, "  {}{}", part, comma).unwrap();
             }
@@ -919,7 +942,6 @@ struct ParamInfo {
     name: String,
     ts_type: String,
     required: bool,
-    #[allow(dead_code)] // will be used for @doc on params in Phase 2
     description: Option<String>,
 }
 
@@ -1122,6 +1144,7 @@ fn instance_type_to_typespec(
             Some("int16") => "int16".to_string(),
             Some("int32") => "int32".to_string(),
             Some("int64") => "int64".to_string(),
+            Some("uint") => "uint32".to_string(),
             Some("uint8") => "uint8".to_string(),
             Some("uint16") => "uint16".to_string(),
             Some("uint32") => "uint32".to_string(),
@@ -1150,6 +1173,30 @@ fn instance_type_to_typespec(
                     // Map type.
                     let value_type = schemars_to_typespec(ap);
                     return format!("Record<{}>", value_type);
+                }
+                // Inline object with named properties.
+                if !obj_val.properties.is_empty() {
+                    let required: std::collections::HashSet<&str> =
+                        obj_val.required.iter().map(|s| s.as_str()).collect();
+                    let fields: Vec<String> = obj_val
+                        .properties
+                        .iter()
+                        .map(|(name, schema)| {
+                            let ts_type = schemars_to_typespec(schema);
+                            let optional = if required.contains(name.as_str()) {
+                                ""
+                            } else {
+                                "?"
+                            };
+                            format!(
+                                "{}{}: {}",
+                                escape_property_name(name),
+                                optional,
+                                ts_type,
+                            )
+                        })
+                        .collect();
+                    return format!("{{ {} }}", fields.join("; "));
                 }
             }
             "Record<unknown>".to_string()
@@ -2610,6 +2657,270 @@ mod tests {
     }
 
     // -- Complex object defaults on discriminated unions --
+
+    // -- Bug: Inline nested objects in union variants → Record<unknown> --
+
+    #[test]
+    fn test_inline_object_with_properties_not_record_unknown() {
+        // An inline object with named properties (no additional_properties)
+        // must produce an inline model type, not Record<unknown>.
+        let obj_val = schemars::schema::ObjectValidation {
+            properties: {
+                let mut p = schemars::Map::new();
+                p.insert("id".to_string(), string_schema_with_format("uuid"));
+                p.insert("name".to_string(), ref_schema("Name"));
+                p
+            },
+            required: {
+                let mut r = std::collections::BTreeSet::new();
+                r.insert("id".to_string());
+                r.insert("name".to_string());
+                r
+            },
+            ..Default::default()
+        };
+
+        let result = instance_type_to_typespec(
+            &InstanceType::Object,
+            &None,
+            &None,
+            &Some(Box::new(obj_val)),
+        );
+
+        assert!(
+            !result.contains("Record<unknown>"),
+            "inline object with properties should not be Record<unknown>: {}",
+            result,
+        );
+        assert!(
+            result.contains("id") && result.contains("uuid"),
+            "should contain 'id: uuid': {}",
+            result,
+        );
+        assert!(
+            result.contains("name") && result.contains("Name"),
+            "should contain 'name: Name': {}",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_discriminated_variant_inline_object_property() {
+        // A discriminated union variant with a property whose schema is
+        // an inline object (properties, not a $ref). Must not produce
+        // Record<unknown>.
+        let variants = vec![Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "type".to_string(),
+                        single_enum_schema("instance"),
+                    );
+                    p.insert(
+                        "value".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::Object,
+                            ))),
+                            object: Some(Box::new(
+                                schemars::schema::ObjectValidation {
+                                    properties: {
+                                        let mut ip = schemars::Map::new();
+                                        ip.insert(
+                                            "id".to_string(),
+                                            string_schema_with_format("uuid"),
+                                        );
+                                        ip.insert(
+                                            "name".to_string(),
+                                            ref_schema("Name"),
+                                        );
+                                        ip.insert(
+                                            "run_state".to_string(),
+                                            ref_schema("InstanceState"),
+                                        );
+                                        ip
+                                    },
+                                    required: {
+                                        let mut r =
+                                            std::collections::BTreeSet::new();
+                                        r.insert("id".to_string());
+                                        r.insert("name".to_string());
+                                        r.insert("run_state".to_string());
+                                        r
+                                    },
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("type".to_string());
+                    r.insert("value".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        })];
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(variants),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("AffinityGroupMember", &obj);
+        let output = ctx.out;
+
+        assert!(
+            !output.contains("Record<unknown>"),
+            "inline object should not become Record<unknown>:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("id") && output.contains("uuid"),
+            "inline object should reference id/uuid:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("run_state") && output.contains("InstanceState"),
+            "inline object should reference run_state/InstanceState:\n{}",
+            output,
+        );
+    }
+
+    // -- Bug: Operation descriptions dropped --
+
+    #[test]
+    fn test_op_summary_and_description_concatenated() {
+        let op = OpInfo {
+            method: "post".to_string(),
+            path: "/v1/floating-ips".to_string(),
+            operation_id: "floating_ip_create".to_string(),
+            summary: Some("Create floating IP".to_string()),
+            description: Some(
+                "A specific IP address can be reserved.".to_string(),
+            ),
+            tags: vec![],
+            deprecated: false,
+            params: vec![],
+            body: None,
+            response: ResponseInfo::default(),
+            error_type: None,
+            extension_mode: ExtensionMode::None,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_op(&op);
+        let output = ctx.out;
+
+        // Both summary and description should appear in a single @doc,
+        // separated by \n\n.
+        assert!(
+            output.contains(
+                r#"Create floating IP\n\nA specific IP address can be reserved."#
+            ),
+            "should concatenate summary and description:\n{}",
+            output,
+        );
+        assert_eq!(
+            output.matches("@doc(").count(),
+            1,
+            "should have exactly one @doc:\n{}",
+            output,
+        );
+    }
+
+    // -- Bug: Parameter descriptions dropped --
+
+    #[test]
+    fn test_op_param_descriptions_emitted() {
+        let op = OpInfo {
+            method: "delete".to_string(),
+            path: "/v1/internet-gateways/{gateway}".to_string(),
+            operation_id: "internet_gateway_delete".to_string(),
+            summary: None,
+            description: None,
+            tags: vec![],
+            deprecated: false,
+            params: vec![
+                ParamInfo {
+                    location: ParamLocation::Path,
+                    name: "gateway".to_string(),
+                    ts_type: "NameOrId".to_string(),
+                    required: true,
+                    description: None,
+                },
+                ParamInfo {
+                    location: ParamLocation::Query,
+                    name: "cascade".to_string(),
+                    ts_type: "boolean".to_string(),
+                    required: false,
+                    description: Some(
+                        "Also delete routes targeting this gateway."
+                            .to_string(),
+                    ),
+                },
+                ParamInfo {
+                    location: ParamLocation::Query,
+                    name: "project".to_string(),
+                    ts_type: "NameOrId".to_string(),
+                    required: false,
+                    description: None,
+                },
+            ],
+            body: None,
+            response: ResponseInfo::default(),
+            error_type: None,
+            extension_mode: ExtensionMode::None,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_op(&op);
+        let output = ctx.out;
+
+        assert!(
+            output.contains(
+                r#"@doc("Also delete routes targeting this gateway.")"#
+            ),
+            "parameter description should be emitted as @doc:\n{}",
+            output,
+        );
+        // @doc should appear before the @query decorator for cascade.
+        let doc_pos = output
+            .find(r#"@doc("Also delete routes targeting this gateway.")"#)
+            .unwrap();
+        let query_cascade_pos = output.find("@query cascade").unwrap();
+        assert!(
+            doc_pos < query_cascade_pos,
+            "@doc should appear before @query:\n{}",
+            output,
+        );
+    }
+
+    // -- Bug: format "uint" maps to integer instead of uint32 --
+
+    #[test]
+    fn test_uint_format_maps_to_uint32() {
+        let result = instance_type_to_typespec(
+            &InstanceType::Integer,
+            &Some("uint".to_string()),
+            &None,
+            &None,
+        );
+        assert_eq!(result, "uint32", "format 'uint' should map to uint32",);
+    }
 
     #[test]
     fn test_object_default_skipped_for_discriminated_union() {
