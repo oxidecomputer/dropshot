@@ -291,8 +291,10 @@ op disk_source_get(): DiskSource | Error;
 @route("/disks")
 @get
 op disk_list(
+  @doc("Maximum number of items returned by a single call")
   @query limit?: uint32 | null,
   @query name?: string | null,
+  @doc("Token returned by previous call to retrieve the subsequent page")
   @query page_token?: string | null
 ): ResultsPage<Disk> | Error;
 
@@ -347,8 +349,10 @@ op paint_get(): PaintJob | Error;
 @route("/physical-disks")
 @get
 op physical_disk_list(
+  @doc("Maximum number of items returned by a single call")
   @query limit?: uint32 | null,
   @query name?: string | null,
+  @doc("Token returned by previous call to retrieve the subsequent page")
   @query page_token?: string | null
 ): ResultsPage<PhysicalDisk> | Error;
 
@@ -362,8 +366,10 @@ op ping(): void | Error;
 @route("/projects")
 @get
 op project_list(
+  @doc("Maximum number of items returned by a single call")
   @query limit?: uint32 | null,
   @query name_or_id?: string | null,
+  @doc("Token returned by previous call to retrieve the subsequent page")
   @query page_token?: string | null
 ): ResultsPage<Widget> | Error;
 
@@ -408,6 +414,7 @@ op widget_get(@path id: string): Widget | Error;
 @put
 op widget_update(
   @path id: string,
+  @doc("Force the update?")
   @query force?: boolean | null,
   @body body: WidgetCreate
 ): void | Error;
