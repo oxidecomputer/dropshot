@@ -131,9 +131,6 @@ pub fn api_to_typespec<C: ServerContext>(
         if let Some(code) = &endpoint.response.success {
             op.response.status_code = Some(code.as_u16());
         }
-        if let Some(desc) = &endpoint.response.description {
-            op.response.description = Some(desc.clone());
-        }
         // When both schema and status code are None, the endpoint returns
         // a hand-rolled Response<Body> (freeform).
         if endpoint.response.schema.is_none()
@@ -357,63 +354,39 @@ impl TypeSpecContext {
 
         // Object type → model with properties.
         if let Some(object) = &obj.object {
+            let is_error = self.error_types.contains(name);
             self.emit_doc_from_metadata(obj.metadata.as_deref());
-            if self.error_types.contains(name) {
+            if is_error {
                 writeln!(self.out, "@error").unwrap();
             }
             writeln!(self.out, "model {} {{", name).unwrap();
 
             // Error models get a synthetic @statusCode field so TypeSpec
             // knows which HTTP status codes this error covers.
-            if self.error_types.contains(name) {
+            if is_error {
                 writeln!(self.out, "  @minValue(400)").unwrap();
                 writeln!(self.out, "  @maxValue(599)").unwrap();
                 writeln!(self.out, "  @statusCode statusCode: int32;").unwrap();
             }
 
-            let required_set: std::collections::HashSet<&str> =
-                object.required.iter().map(|s| s.as_str()).collect();
-
             for (prop_name, prop_schema) in &object.properties {
                 let ts_type = schemars_to_typespec(prop_schema);
-                let optional = if required_set.contains(prop_name.as_str()) {
-                    ""
-                } else {
-                    "?"
-                };
+                let required = object.required.contains(prop_name);
                 let desc = schema_description(prop_schema);
-                if let Some(d) = &desc {
-                    writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d))
-                        .unwrap();
-                }
-                emit_validation_decorators(&mut self.out, prop_schema, "  ");
-                let default_suffix = schema_default(prop_schema)
-                    .and_then(|d| self.refine_default(&ts_type, d))
-                    .map(|d| format!(" = {}", d))
-                    .unwrap_or_default();
-                writeln!(
-                    self.out,
-                    "  {}{}: {}{};",
-                    escape_property_name(prop_name),
-                    optional,
-                    ts_type,
-                    default_suffix,
-                )
-                .unwrap();
+                self.emit_property(
+                    prop_name,
+                    &ts_type,
+                    required,
+                    desc.as_deref(),
+                    prop_schema,
+                );
             }
 
             // additional_properties → spread Record<T>
             if let Some(ap) = &object.additional_properties {
-                match ap.as_ref() {
-                    Schema::Bool(true) => {
-                        writeln!(self.out, "  ...Record<unknown>;").unwrap();
-                    }
-                    Schema::Object(_) => {
-                        let ts_type = schemars_to_typespec(ap);
-                        writeln!(self.out, "  ...Record<{}>;", ts_type)
-                            .unwrap();
-                    }
-                    _ => {}
+                if !matches!(ap.as_ref(), Schema::Bool(false)) {
+                    let ts_type = schemars_to_typespec(ap);
+                    writeln!(self.out, "  ...Record<{}>;", ts_type).unwrap();
                 }
             }
 
@@ -564,32 +537,13 @@ impl TypeSpecContext {
                 )
                 .unwrap();
                 for prop in &variant.properties {
-                    if let Some(d) = &prop.description {
-                        writeln!(
-                            self.out,
-                            "  @doc(\"{}\")",
-                            escape_tsp_string(d),
-                        )
-                        .unwrap();
-                    }
-                    emit_validation_decorators(
-                        &mut self.out,
+                    self.emit_property(
+                        &prop.name,
+                        &prop.ts_type,
+                        prop.required,
+                        prop.description.as_deref(),
                         &prop.schema,
-                        "  ",
                     );
-                    let default_suffix = schema_default(&prop.schema)
-                        .and_then(|d| self.refine_default(&prop.ts_type, d))
-                        .map(|d| format!(" = {}", d))
-                        .unwrap_or_default();
-                    writeln!(
-                        self.out,
-                        "  {}{}: {}{};",
-                        escape_property_name(&prop.name),
-                        if prop.required { "" } else { "?" },
-                        prop.ts_type,
-                        default_suffix,
-                    )
-                    .unwrap();
                 }
                 writeln!(self.out, "}}").unwrap();
                 writeln!(self.out).unwrap();
@@ -892,6 +846,35 @@ impl TypeSpecContext {
         Some(default_literal)
     }
 
+    /// Emit a single model property line with its decorators.
+    fn emit_property(
+        &mut self,
+        name: &str,
+        ts_type: &str,
+        required: bool,
+        description: Option<&str>,
+        schema: &Schema,
+    ) {
+        if let Some(d) = description {
+            writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d)).unwrap();
+        }
+        emit_validation_decorators(&mut self.out, schema, "  ");
+        let default_suffix = schema_default(schema)
+            .and_then(|d| self.refine_default(ts_type, d))
+            .map(|d| format!(" = {}", d))
+            .unwrap_or_default();
+        let optional = if required { "" } else { "?" };
+        writeln!(
+            self.out,
+            "  {}{}: {}{};",
+            escape_property_name(name),
+            optional,
+            ts_type,
+            default_suffix,
+        )
+        .unwrap();
+    }
+
     fn emit_doc_from_metadata(
         &mut self,
         metadata: Option<&schemars::schema::Metadata>,
@@ -909,7 +892,6 @@ impl TypeSpecContext {
 struct ResponseInfo {
     ts_type: Option<String>,
     status_code: Option<u16>,
-    description: Option<String>,
     headers: Vec<HeaderInfo>,
     /// True when the endpoint returns a hand-rolled `Response<Body>` — both
     /// schema and status code are unknown. Rendered as `FreeformResponse`.
@@ -1075,43 +1057,37 @@ fn schemars_obj_to_typespec_inner(obj: &SchemaObject) -> String {
         }
     }
 
-    let instance_type = match &obj.instance_type {
-        Some(SingleOrVec::Single(t)) => Some(t.as_ref()),
+    match &obj.instance_type {
+        Some(SingleOrVec::Single(t)) => {
+            instance_type_to_typespec(t, &obj.format, &obj.array, &obj.object)
+        }
         Some(SingleOrVec::Vec(types)) => {
             // Nullable pattern: [Type, "null"]
             let non_null: Vec<&InstanceType> =
                 types.iter().filter(|t| **t != InstanceType::Null).collect();
             if non_null.len() == 1 {
-                // Reconstruct a simpler object for the non-null type and
-                // append "| null".
                 let inner = instance_type_to_typespec(
                     non_null[0],
                     &obj.format,
                     &obj.array,
                     &obj.object,
                 );
-                return format!("{} | null", inner);
+                format!("{} | null", inner)
+            } else {
+                // Multiple types → union.
+                types
+                    .iter()
+                    .map(|t| {
+                        instance_type_to_typespec(
+                            t,
+                            &obj.format,
+                            &obj.array,
+                            &obj.object,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" | ")
             }
-            // Multiple types → union.
-            let parts: Vec<String> = types
-                .iter()
-                .map(|t| {
-                    instance_type_to_typespec(
-                        t,
-                        &obj.format,
-                        &obj.array,
-                        &obj.object,
-                    )
-                })
-                .collect();
-            return parts.join(" | ");
-        }
-        None => None,
-    };
-
-    match instance_type {
-        Some(it) => {
-            instance_type_to_typespec(it, &obj.format, &obj.array, &obj.object)
         }
         None => "unknown".to_string(),
     }
@@ -1130,14 +1106,12 @@ fn instance_type_to_typespec(
             Some("date") => "plainDate".to_string(),
             Some("date-time") => "utcDateTime".to_string(),
             Some("uuid") => "uuid".to_string(),
-            Some("ip") | Some("ipv4") | Some("ipv6") => "string".to_string(),
             Some("uri") => "url".to_string(),
             _ => "string".to_string(),
         },
         InstanceType::Number => match format.as_deref() {
             Some("float") => "float32".to_string(),
-            Some("double") | None => "float64".to_string(),
-            Some(_) => "float64".to_string(),
+            _ => "float64".to_string(),
         },
         InstanceType::Integer => match format.as_deref() {
             Some("int8") => "int8".to_string(),
@@ -1149,8 +1123,7 @@ fn instance_type_to_typespec(
             Some("uint16") => "uint16".to_string(),
             Some("uint32") => "uint32".to_string(),
             Some("uint64") => "uint64".to_string(),
-            None => "integer".to_string(),
-            Some(_) => "integer".to_string(),
+            _ => "integer".to_string(),
         },
         InstanceType::Array => {
             if let Some(arr) = array {
@@ -1176,14 +1149,12 @@ fn instance_type_to_typespec(
                 }
                 // Inline object with named properties.
                 if !obj_val.properties.is_empty() {
-                    let required: std::collections::HashSet<&str> =
-                        obj_val.required.iter().map(|s| s.as_str()).collect();
                     let fields: Vec<String> = obj_val
                         .properties
                         .iter()
                         .map(|(name, schema)| {
                             let ts_type = schemars_to_typespec(schema);
-                            let optional = if required.contains(name.as_str()) {
+                            let optional = if obj_val.required.contains(name) {
                                 ""
                             } else {
                                 "?"
@@ -1205,19 +1176,9 @@ fn instance_type_to_typespec(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // ResultsPage detection
 // ---------------------------------------------------------------------------
 
-/// Detect definitions that are ResultsPage instantiations.
-///
-/// Returns a map from concrete name (e.g. "WidgetResultsPage") to the item
-/// type name (e.g. "Widget"). Detection is heuristic: the name must end in
-/// "ResultsPage" and the schema must have `items` (array) and `next_page`
-/// (nullable string) properties.
 /// Returns true if a schema uses format: "uuid" anywhere within it.
 /// We need to recurse because uuid can appear inside inline property schemas
 /// or anyOf/oneOf variants, not just at the top level. Cross-type references
@@ -1263,6 +1224,12 @@ fn schema_uses_uuid_format(schema: &Schema) -> bool {
     }
 }
 
+/// Detect definitions that are ResultsPage instantiations.
+///
+/// Returns a map from concrete name (e.g. "WidgetResultsPage") to the item
+/// type name (e.g. "Widget"). Detection is heuristic: the name must end in
+/// "ResultsPage" and the schema must have `items` (array) and `next_page`
+/// (nullable string) properties.
 fn detect_results_pages(
     definitions: &IndexMap<String, Schema>,
 ) -> std::collections::HashMap<String, String> {
@@ -1505,8 +1472,6 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
             _ => return None,
         };
         let object = obj.object.as_ref()?;
-        let required: std::collections::HashSet<&str> =
-            object.required.iter().map(|s| s.as_str()).collect();
 
         // Extract the tag value.
         let tag_schema = object.properties.get(&tag)?;
@@ -1520,7 +1485,7 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
             .map(|(name, schema)| VariantProperty {
                 name: name.clone(),
                 ts_type: schemars_to_typespec(schema),
-                required: required.contains(name.as_str()),
+                required: object.required.contains(name),
                 description: schema_description(schema),
                 schema: schema.clone(),
             })
@@ -2968,6 +2933,694 @@ mod tests {
             !output.contains("= #"),
             "object default on discriminated union type should be \
              skipped:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: numeric enum --
+
+    #[test]
+    fn test_numeric_enum() {
+        // Integer enum values should produce `valueN: NNN` members.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Integer,
+            ))),
+            enum_values: Some(vec![
+                serde_json::Value::Number(512.into()),
+                serde_json::Value::Number(2048.into()),
+                serde_json::Value::Number(4096.into()),
+            ]),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("BlockSize", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("value0: 512,"),
+            "missing numeric member 'value0: 512':\n{}",
+            output,
+        );
+        assert!(
+            output.contains("value1: 2048,"),
+            "missing numeric member 'value1: 2048':\n{}",
+            output,
+        );
+        assert!(
+            output.contains("value2: 4096"),
+            "missing numeric member 'value2: 4096':\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: Record<T> as a property type --
+
+    #[test]
+    fn test_record_property_type() {
+        // A model property with additionalProperties should produce
+        // Record<ValueType>.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "history".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::Object,
+                            ))),
+                            object: Some(Box::new(
+                                schemars::schema::ObjectValidation {
+                                    additional_properties: Some(Box::new(
+                                        ref_schema("BgpMessageHistory"),
+                                    )),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    // Record<FleetRole[]>
+                    p.insert(
+                        "mapped_roles".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(
+                                Box::new(InstanceType::Object),
+                            )),
+                            object: Some(Box::new(
+                                schemars::schema::ObjectValidation {
+                                    additional_properties: Some(Box::new(
+                                        Schema::Object(SchemaObject {
+                                            instance_type: Some(
+                                                SingleOrVec::Single(Box::new(
+                                                    InstanceType::Array,
+                                                )),
+                                            ),
+                                            array: Some(Box::new(
+                                                schemars::schema::ArrayValidation {
+                                                    items: Some(
+                                                        SingleOrVec::Single(
+                                                            Box::new(ref_schema(
+                                                                "FleetRole",
+                                                            )),
+                                                        ),
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            )),
+                                            ..Default::default()
+                                        }),
+                                    )),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("history".to_string());
+                    r.insert("mapped_roles".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("MyModel", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("history: Record<BgpMessageHistory>"),
+            "missing Record<BgpMessageHistory>:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("mapped_roles: Record<FleetRole[]>"),
+            "missing Record<FleetRole[]>:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: Record<T> with empty-object default --
+
+    #[test]
+    fn test_record_property_with_empty_default() {
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "mapped_fleet_roles".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(
+                                Box::new(InstanceType::Object),
+                            )),
+                            metadata: Some(Box::new(
+                                schemars::schema::Metadata {
+                                    default: Some(serde_json::json!({})),
+                                    ..Default::default()
+                                },
+                            )),
+                            object: Some(Box::new(
+                                schemars::schema::ObjectValidation {
+                                    additional_properties: Some(Box::new(
+                                        Schema::Object(SchemaObject {
+                                            instance_type: Some(
+                                                SingleOrVec::Single(Box::new(
+                                                    InstanceType::Array,
+                                                )),
+                                            ),
+                                            array: Some(Box::new(
+                                                schemars::schema::ArrayValidation {
+                                                    items: Some(
+                                                        SingleOrVec::Single(
+                                                            Box::new(ref_schema(
+                                                                "FleetRole",
+                                                            )),
+                                                        ),
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            )),
+                                            ..Default::default()
+                                        }),
+                                    )),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("SiloCreate", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("mapped_fleet_roles?: Record<FleetRole[]> = #{}"),
+            "missing optional Record with empty default:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: alias X = unknown --
+
+    #[test]
+    fn test_alias_unknown() {
+        // A schema with no type info produces `alias X = unknown;`.
+        let schema = SchemaObject {
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                description: Some("Opaque message history.".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("BgpMessageHistory", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("alias BgpMessageHistory = unknown;"),
+            "should emit alias for unknown type:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@doc(\"Opaque message history.\")"),
+            "should emit @doc before alias:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: @error model end-to-end --
+
+    #[test]
+    fn test_error_model() {
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert("message".to_string(), string_schema());
+                    p.insert("error_code".to_string(), string_schema());
+                    p.insert("request_id".to_string(), string_schema());
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("message".to_string());
+                    r.insert("request_id".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.error_types.insert("Error".to_string());
+        ctx.emit_model_from_object("Error", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("@error"),
+            "should have @error decorator:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@minValue(400)"),
+            "should have @minValue(400):\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@maxValue(599)"),
+            "should have @maxValue(599):\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@statusCode statusCode: int32;"),
+            "should have synthetic statusCode field:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("message: string;"),
+            "should have message property:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: scalar extends integer types --
+
+    #[test]
+    fn test_scalar_extends_integer() {
+        // A named integer type (e.g. ByteCount) should produce
+        // `scalar ByteCount extends uint64;`.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Integer,
+            ))),
+            format: Some("uint64".to_string()),
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                description: Some("A byte count.".to_string()),
+                ..Default::default()
+            })),
+            number: Some(Box::new(schemars::schema::NumberValidation {
+                minimum: Some(0.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("ByteCount", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("scalar ByteCount extends uint64;"),
+            "should emit scalar extends uint64:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@doc(\"A byte count.\")"),
+            "should emit @doc:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@minValue(0)"),
+            "should emit @minValue:\n{}",
+            output,
+        );
+    }
+
+    #[test]
+    fn test_scalar_extends_uint16() {
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Integer,
+            ))),
+            format: Some("uint16".to_string()),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("InstanceCpuCount", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("scalar InstanceCpuCount extends uint16;"),
+            "should emit scalar extends uint16:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: response block with @statusCode and @header --
+
+    #[test]
+    fn test_response_with_status_code_and_header() {
+        // 303 See Other with a Location header.
+        let op = OpInfo {
+            method: "post".to_string(),
+            path: "/v1/login/saml".to_string(),
+            operation_id: "login_saml".to_string(),
+            summary: None,
+            description: None,
+            tags: vec![],
+            deprecated: false,
+            params: vec![],
+            body: None,
+            response: ResponseInfo {
+                ts_type: None,
+                status_code: Some(303),
+                headers: vec![HeaderInfo {
+                    name: "location".to_string(),
+                    ts_type: "string".to_string(),
+                    required: true,
+                }],
+                freeform: false,
+            },
+            error_type: Some("Error".to_string()),
+            extension_mode: ExtensionMode::None,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_op(&op);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("@statusCode _: 303;"),
+            "missing @statusCode 303:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@header location: string;"),
+            "missing @header location:\n{}",
+            output,
+        );
+        assert!(output.contains("| Error"), "missing error union:\n{}", output,);
+    }
+
+    // -- Coverage: websocket operation --
+
+    #[test]
+    fn test_websocket_operation() {
+        let op = OpInfo {
+            method: "get".to_string(),
+            path: "/v1/instances/{instance}/serial-console/stream".to_string(),
+            operation_id: "instance_serial_console_stream".to_string(),
+            summary: None,
+            description: None,
+            tags: vec![],
+            deprecated: false,
+            params: vec![ParamInfo {
+                location: ParamLocation::Path,
+                name: "instance".to_string(),
+                ts_type: "NameOrId".to_string(),
+                required: true,
+                description: None,
+            }],
+            body: None,
+            response: ResponseInfo {
+                ts_type: None,
+                status_code: Some(101),
+                headers: Vec::new(),
+                freeform: false,
+            },
+            error_type: Some("Error".to_string()),
+            extension_mode: ExtensionMode::Websocket,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_op(&op);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("@extension(\"x-dropshot-websocket\", #{})"),
+            "missing websocket extension:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@statusCode _: 101;"),
+            "missing @statusCode 101:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: @head HTTP method --
+
+    #[test]
+    fn test_head_method() {
+        let op = OpInfo {
+            method: "head".to_string(),
+            path: "/v1/bundles/{id}".to_string(),
+            operation_id: "support_bundle_head".to_string(),
+            summary: None,
+            description: None,
+            tags: vec![],
+            deprecated: false,
+            params: vec![ParamInfo {
+                location: ParamLocation::Path,
+                name: "id".to_string(),
+                ts_type: "uuid".to_string(),
+                required: true,
+                description: None,
+            }],
+            body: None,
+            response: ResponseInfo::default(),
+            error_type: None,
+            extension_mode: ExtensionMode::None,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_op(&op);
+        let output = ctx.out;
+
+        assert!(output.contains("@head"), "missing @head method:\n{}", output,);
+        assert!(
+            output.contains("op support_bundle_head("),
+            "missing operation name:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: union with unnamed members --
+
+    #[test]
+    fn test_union_unnamed_members() {
+        // A oneOf where variants are plain $ref schemas with no title.
+        // Should produce unnamed members (bare type references).
+        let variants = vec![
+            ref_schema("AlertDeliveryAttemptsWebhook"),
+            ref_schema("AlertDeliveryAttemptsEmail"),
+        ];
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(variants),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("AlertDeliveryAttempts", &obj);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("union AlertDeliveryAttempts {"),
+            "missing union declaration:\n{}",
+            output,
+        );
+        // Unnamed members are bare type references with trailing comma.
+        assert!(
+            output.contains("  AlertDeliveryAttemptsWebhook,"),
+            "missing unnamed member:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("  AlertDeliveryAttemptsEmail,"),
+            "missing unnamed member:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: freeform response in operation return type --
+
+    #[test]
+    fn test_freeform_response_return_type() {
+        let op = OpInfo {
+            method: "get".to_string(),
+            path: "/v1/download".to_string(),
+            operation_id: "download_blob".to_string(),
+            summary: None,
+            description: None,
+            tags: vec![],
+            deprecated: false,
+            params: vec![],
+            body: None,
+            response: ResponseInfo {
+                ts_type: None,
+                status_code: None,
+                headers: Vec::new(),
+                freeform: true,
+            },
+            error_type: Some("Error".to_string()),
+            extension_mode: ExtensionMode::None,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_op(&op);
+        let output = ctx.out;
+
+        assert!(
+            output.contains(": FreeformResponse | Error;"),
+            "missing FreeformResponse return type:\n{}",
+            output,
+        );
+    }
+
+    // -- Coverage: float type mappings --
+
+    #[test]
+    fn test_float32_type() {
+        let result = instance_type_to_typespec(
+            &InstanceType::Number,
+            &Some("float".to_string()),
+            &None,
+            &None,
+        );
+        assert_eq!(result, "float32");
+    }
+
+    #[test]
+    fn test_float64_type() {
+        let result = instance_type_to_typespec(
+            &InstanceType::Number,
+            &Some("double".to_string()),
+            &None,
+            &None,
+        );
+        assert_eq!(result, "float64");
+    }
+
+    #[test]
+    fn test_float64_default_for_number() {
+        let result = instance_type_to_typespec(
+            &InstanceType::Number,
+            &None,
+            &None,
+            &None,
+        );
+        assert_eq!(
+            result, "float64",
+            "number with no format should be float64"
+        );
+    }
+
+    // -- Coverage: url type from uri format --
+
+    #[test]
+    fn test_uri_format_maps_to_url() {
+        let result = instance_type_to_typespec(
+            &InstanceType::String,
+            &Some("uri".to_string()),
+            &None,
+            &None,
+        );
+        assert_eq!(result, "url");
+    }
+
+    // -- Coverage: utcDateTime from date-time format --
+
+    #[test]
+    fn test_date_time_format_maps_to_utc_date_time() {
+        let result = instance_type_to_typespec(
+            &InstanceType::String,
+            &Some("date-time".to_string()),
+            &None,
+            &None,
+        );
+        assert_eq!(result, "utcDateTime");
+    }
+
+    // -- Coverage: uint8 type --
+
+    #[test]
+    fn test_uint8_format() {
+        let result = instance_type_to_typespec(
+            &InstanceType::Integer,
+            &Some("uint8".to_string()),
+            &None,
+            &None,
+        );
+        assert_eq!(result, "uint8");
+    }
+
+    // -- Coverage: @format("byte") on string fields --
+
+    #[test]
+    fn test_format_byte_on_string_field() {
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "user_data".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::String,
+                            ))),
+                            format: Some("byte".to_string()),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("user_data".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("Payload", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("@format(\"byte\")"),
+            "missing @format(\"byte\") on string field:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("user_data: string;"),
+            "string type should not change for byte format:\n{}",
             output,
         );
     }
