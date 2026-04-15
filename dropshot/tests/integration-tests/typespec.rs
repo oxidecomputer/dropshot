@@ -1,12 +1,11 @@
 // Copyright 2026 Oxide Computer Company
 
 use dropshot::{
-    api_to_typespec, endpoint, http_response_see_other, ApiDescription,
-    Body, FreeformBody, Header, HttpError, HttpResponseAccepted,
-    HttpResponseCreated, HttpResponseDeleted, HttpResponseHeaders,
-    HttpResponseOk, HttpResponseSeeOther, HttpResponseUpdatedNoContent,
-    PaginationParams, Path, Query, RequestContext, ResultsPage, TypedBody,
-    UntypedBody,
+    api_to_typespec, endpoint, http_response_see_other, ApiDescription, Body,
+    FreeformBody, Header, HttpError, HttpResponseAccepted, HttpResponseCreated,
+    HttpResponseDeleted, HttpResponseHeaders, HttpResponseOk,
+    HttpResponseSeeOther, HttpResponseUpdatedNoContent, PaginationParams, Path,
+    Query, RequestContext, ResultsPage, TypedBody, UntypedBody,
 };
 use http::Response;
 use schemars::JsonSchema;
@@ -181,10 +180,8 @@ struct EtagHeader {
 /// Get with etag
 async fn with_etag(
     _rqctx: RequestContext<()>,
-) -> Result<
-    HttpResponseHeaders<HttpResponseOk<Widget>, EtagHeader>,
-    HttpError,
-> {
+) -> Result<HttpResponseHeaders<HttpResponseOk<Widget>, EtagHeader>, HttpError>
+{
     unimplemented!();
 }
 
@@ -356,7 +353,10 @@ async fn login_redirect(
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[schemars(rename = "Name")]
 struct Name(
-    #[schemars(length(min = 1, max = 63), regex(pattern = r"^[a-z]([a-zA-Z0-9-]*[a-zA-Z0-9]+)?$"))]
+    #[schemars(
+        length(min = 1, max = 63),
+        regex(pattern = r"^[a-z]([a-zA-Z0-9-]*[a-zA-Z0-9]+)?$")
+    )]
     String,
 );
 
@@ -529,6 +529,129 @@ async fn composite_create(
     unimplemented!();
 }
 
+// -- Bug 1: ResultsPage name collisions --
+// Two types where one name is a suffix of the other. "DiskResultsPage"
+// appears as a substring of "PhysicalDiskResultsPage", which broke the
+// naive string replacement.
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct Disk {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct PhysicalDisk {
+    name: String,
+    model_number: String,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct DiskScanParams {
+    #[serde(default)]
+    name: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema, Serialize)]
+struct DiskPageSelector {
+    last_seen: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/disks",
+}]
+/// List disks
+async fn disk_list(
+    _rqctx: RequestContext<()>,
+    _query: Query<PaginationParams<DiskScanParams, DiskPageSelector>>,
+) -> Result<HttpResponseOk<ResultsPage<Disk>>, HttpError> {
+    unimplemented!();
+}
+
+#[endpoint {
+    method = GET,
+    path = "/physical-disks",
+}]
+/// List physical disks
+async fn physical_disk_list(
+    _rqctx: RequestContext<()>,
+    _query: Query<PaginationParams<DiskScanParams, DiskPageSelector>>,
+) -> Result<HttpResponseOk<ResultsPage<PhysicalDisk>>, HttpError> {
+    unimplemented!();
+}
+
+// -- Bug 2: Externally-tagged unions --
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum InterfaceNum {
+    Unknown(u32),
+    IfIndex(u32),
+    PortNumber(u32),
+}
+
+#[derive(Serialize, JsonSchema)]
+struct NetworkInfo {
+    interface_num: InterfaceNum,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/network-info",
+}]
+/// Get network info
+async fn network_info_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<NetworkInfo>, HttpError> {
+    unimplemented!();
+}
+
+// -- Bug 3: Nullable array items --
+
+#[derive(Serialize, JsonSchema)]
+struct MeasurementBatch {
+    /// Measured values; null entries are missing samples.
+    values: Vec<Option<i64>>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/measurements",
+}]
+/// Get measurements
+async fn measurement_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<MeasurementBatch>, HttpError> {
+    unimplemented!();
+}
+
+// -- Bug 4+6: Discriminated union with format/description/defaults --
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum DiskSource {
+    /// Create a disk from a disk snapshot
+    Snapshot {
+        /// If true, the disk will be read-only.
+        #[serde(default)]
+        read_only: bool,
+        snapshot_id: uuid::Uuid,
+    },
+    /// Create a blank disk
+    Blank { block_size: u32 },
+}
+
+#[endpoint {
+    method = GET,
+    path = "/disk-source",
+}]
+/// Get disk source
+async fn disk_source_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<DiskSource>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(ping).unwrap();
@@ -554,6 +677,11 @@ fn make_api() -> ApiDescription<()> {
     api.register(device_token).unwrap();
     api.register(disk_state_get).unwrap();
     api.register(composite_create).unwrap();
+    api.register(disk_list).unwrap();
+    api.register(physical_disk_list).unwrap();
+    api.register(network_info_get).unwrap();
+    api.register(measurement_get).unwrap();
+    api.register(disk_source_get).unwrap();
     api
 }
 

@@ -74,10 +74,8 @@ pub fn api_to_typespec<C: ServerContext>(
                             &mut definitions,
                         ),
                     };
-                    op.body = Some(BodyInfo {
-                        ts_type,
-                        content_type: ct.clone(),
-                    });
+                    op.body =
+                        Some(BodyInfo { ts_type, content_type: ct.clone() });
                 }
                 ApiEndpointParameterMetadata::Path(name) => {
                     let ts_type = schema_to_typespec_inline(
@@ -191,9 +189,8 @@ pub fn api_to_typespec<C: ServerContext>(
     }
 
     // Check if any schema uses format: "uuid" so we emit the uuid scalar.
-    ctx.needs_uuid_scalar = definitions
-        .values()
-        .any(|schema| schema_uses_uuid_format(schema));
+    ctx.needs_uuid_scalar =
+        definitions.values().any(|schema| schema_uses_uuid_format(schema));
 
     // Emit preamble.
     ctx.emit_preamble(title, version);
@@ -201,11 +198,8 @@ pub fn api_to_typespec<C: ServerContext>(
     // Emit the generic ResultsPage model if any instantiations were found.
     if !ctx.results_page_rewrites.is_empty() {
         writeln!(ctx.out, "model ResultsPage<T> {{").unwrap();
-        writeln!(
-            ctx.out,
-            "  @doc(\"list of items on this page of results\")"
-        )
-        .unwrap();
+        writeln!(ctx.out, "  @doc(\"list of items on this page of results\")")
+            .unwrap();
         writeln!(ctx.out, "  items: T[];").unwrap();
         writeln!(
             ctx.out,
@@ -228,11 +222,7 @@ pub fn api_to_typespec<C: ServerContext>(
     // @defaultResponse tells TypeSpec/OpenAPI this is the catch-all response
     // (rendered as `default` in OpenAPI, matching dropshot's behavior).
     if ctx.needs_freeform_response {
-        writeln!(
-            ctx.out,
-            "@doc(\"Response with untyped body\")"
-        )
-        .unwrap();
+        writeln!(ctx.out, "@doc(\"Response with untyped body\")").unwrap();
         writeln!(ctx.out, "@defaultResponse").unwrap();
         writeln!(ctx.out, "model FreeformResponse {{").unwrap();
         writeln!(ctx.out, "  @body body: bytes;").unwrap();
@@ -261,7 +251,12 @@ pub fn api_to_typespec<C: ServerContext>(
     }
 
     // Rewrite concrete ResultsPage names to generic form.
-    for (concrete, item_type) in &ctx.results_page_rewrites {
+    // Sort by name length descending so longer names are replaced first,
+    // preventing shorter names from matching as substrings within longer
+    // ones (e.g. "DiskResultsPage" within "PhysicalDiskResultsPage").
+    let mut rewrites: Vec<_> = ctx.results_page_rewrites.iter().collect();
+    rewrites.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    for (concrete, item_type) in rewrites {
         let generic = format!("ResultsPage<{}>", item_type);
         ctx.out = ctx.out.replace(concrete.as_str(), &generic);
     }
@@ -359,8 +354,7 @@ impl TypeSpecContext {
             if self.error_types.contains(name) {
                 writeln!(self.out, "  @minValue(400)").unwrap();
                 writeln!(self.out, "  @maxValue(599)").unwrap();
-                writeln!(self.out, "  @statusCode statusCode: int32;")
-                    .unwrap();
+                writeln!(self.out, "  @statusCode statusCode: int32;").unwrap();
             }
 
             let required_set: std::collections::HashSet<&str> =
@@ -368,8 +362,11 @@ impl TypeSpecContext {
 
             for (prop_name, prop_schema) in &object.properties {
                 let ts_type = schemars_to_typespec(prop_schema);
-                let optional =
-                    if required_set.contains(prop_name.as_str()) { "" } else { "?" };
+                let optional = if required_set.contains(prop_name.as_str()) {
+                    ""
+                } else {
+                    "?"
+                };
                 let desc = schema_description(prop_schema);
                 if let Some(d) = &desc {
                     writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d))
@@ -429,8 +426,7 @@ impl TypeSpecContext {
                 &Schema::Object(obj.clone()),
                 "",
             );
-            writeln!(self.out, "scalar {} extends {};", name, ts_type)
-                .unwrap();
+            writeln!(self.out, "scalar {} extends {};", name, ts_type).unwrap();
         }
         writeln!(self.out).unwrap();
     }
@@ -462,8 +458,7 @@ impl TypeSpecContext {
                     }
                 }
                 serde_json::Value::Number(n) => {
-                    writeln!(self.out, "  value{}: {}{}", i, n, comma)
-                        .unwrap();
+                    writeln!(self.out, "  value{}: {}{}", i, n, comma).unwrap();
                 }
                 _ => {
                     writeln!(self.out, "  // unsupported enum value: {}", val)
@@ -498,8 +493,7 @@ impl TypeSpecContext {
                     .unwrap();
                 }
                 if is_valid_tsp_ident(&member.value) {
-                    writeln!(self.out, "  {}{}", member.value, comma)
-                        .unwrap();
+                    writeln!(self.out, "  {}{}", member.value, comma).unwrap();
                 } else {
                     writeln!(
                         self.out,
@@ -535,12 +529,8 @@ impl TypeSpecContext {
             // Emit variant models that extend the base.
             for variant in &disc.variants {
                 if let Some(desc) = &variant.description {
-                    writeln!(
-                        self.out,
-                        "@doc(\"{}\")",
-                        escape_tsp_string(desc)
-                    )
-                    .unwrap();
+                    writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(desc))
+                        .unwrap();
                 }
                 writeln!(
                     self.out,
@@ -555,12 +545,29 @@ impl TypeSpecContext {
                 )
                 .unwrap();
                 for prop in &variant.properties {
+                    if let Some(d) = &prop.description {
+                        writeln!(
+                            self.out,
+                            "  @doc(\"{}\")",
+                            escape_tsp_string(d),
+                        )
+                        .unwrap();
+                    }
+                    emit_validation_decorators(
+                        &mut self.out,
+                        &prop.schema,
+                        "  ",
+                    );
+                    let default_suffix = schema_default(&prop.schema)
+                        .map(|d| format!(" = {}", d))
+                        .unwrap_or_default();
                     writeln!(
                         self.out,
-                        "  {}{}: {};",
+                        "  {}{}: {}{};",
                         escape_property_name(&prop.name),
                         if prop.required { "" } else { "?" },
                         prop.ts_type,
+                        default_suffix,
                     )
                     .unwrap();
                 }
@@ -570,13 +577,61 @@ impl TypeSpecContext {
             return;
         }
 
+        // Externally-tagged unions: each variant is an object with a
+        // single required property (the variant key).
+        if let Some(mut ext) = detect_externally_tagged_union(variants) {
+            for v in &mut ext.variants {
+                v.model_name = format!("{}{}", name, to_pascal_case(&v.key));
+            }
+
+            // Emit variant models.
+            for v in &ext.variants {
+                writeln!(self.out, "model {} {{", v.model_name).unwrap();
+                writeln!(
+                    self.out,
+                    "  {}: {};",
+                    escape_property_name(&v.key),
+                    v.value_type,
+                )
+                .unwrap();
+                writeln!(self.out, "}}").unwrap();
+                writeln!(self.out).unwrap();
+            }
+
+            // Emit union referencing variant models.
+            self.emit_doc_from_metadata(obj.metadata.as_deref());
+            writeln!(self.out, "union {} {{", name).unwrap();
+            for v in &ext.variants {
+                writeln!(self.out, "  {},", v.model_name).unwrap();
+            }
+            writeln!(self.out, "}}").unwrap();
+            writeln!(self.out).unwrap();
+            return;
+        }
+
         // Non-discriminated union: emit as TypeSpec union with inline types.
+        // Preserve `title` from variant metadata as named union members.
         self.emit_doc_from_metadata(obj.metadata.as_deref());
-        let variant_types: Vec<String> =
-            variants.iter().map(|s| schemars_to_typespec(s)).collect();
         writeln!(self.out, "union {} {{", name).unwrap();
-        for vt in &variant_types {
-            writeln!(self.out, "  {},", vt).unwrap();
+        for variant in variants {
+            let ts_type = schemars_to_typespec(variant);
+            let title = match variant {
+                Schema::Object(v) => {
+                    v.metadata.as_ref().and_then(|m| m.title.clone())
+                }
+                _ => None,
+            };
+            if let Some(title) = title {
+                writeln!(
+                    self.out,
+                    "  {}: {},",
+                    escape_property_name(&title),
+                    ts_type,
+                )
+                .unwrap();
+            } else {
+                writeln!(self.out, "  {},", ts_type).unwrap();
+            }
         }
         writeln!(self.out, "}}").unwrap();
         writeln!(self.out).unwrap();
@@ -597,8 +652,7 @@ impl TypeSpecContext {
 
         // Tags.
         for tag in &op.tags {
-            writeln!(self.out, "@tag(\"{}\")", escape_tsp_string(tag))
-                .unwrap();
+            writeln!(self.out, "@tag(\"{}\")", escape_tsp_string(tag)).unwrap();
         }
 
         // Dropshot extensions.
@@ -654,8 +708,7 @@ impl TypeSpecContext {
         if let Some(body) = &op.body {
             match body.content_type {
                 ApiEndpointBodyContentType::Json => {
-                    params_parts
-                        .push(format!("@body body: {}", body.ts_type));
+                    params_parts.push(format!("@body body: {}", body.ts_type));
                 }
                 ApiEndpointBodyContentType::Bytes => {
                     params_parts.push(format!(
@@ -690,8 +743,7 @@ impl TypeSpecContext {
             // Multi-line params.
             writeln!(self.out).unwrap();
             for (i, part) in params_parts.iter().enumerate() {
-                let comma =
-                    if i + 1 < params_parts.len() { "," } else { "" };
+                let comma = if i + 1 < params_parts.len() { "," } else { "" };
                 writeln!(self.out, "  {}{}", part, comma).unwrap();
             }
             write!(self.out, ")").unwrap();
@@ -947,10 +999,8 @@ fn schemars_obj_to_typespec_inner(obj: &SchemaObject) -> String {
         Some(SingleOrVec::Single(t)) => Some(t.as_ref()),
         Some(SingleOrVec::Vec(types)) => {
             // Nullable pattern: [Type, "null"]
-            let non_null: Vec<&InstanceType> = types
-                .iter()
-                .filter(|t| **t != InstanceType::Null)
-                .collect();
+            let non_null: Vec<&InstanceType> =
+                types.iter().filter(|t| **t != InstanceType::Null).collect();
             if non_null.len() == 1 {
                 // Reconstruct a simpler object for the non-null type and
                 // append "| null".
@@ -996,18 +1046,14 @@ fn instance_type_to_typespec(
     match it {
         InstanceType::Null => "null".to_string(),
         InstanceType::Boolean => "boolean".to_string(),
-        InstanceType::String => {
-            match format.as_deref() {
-                Some("date") => "plainDate".to_string(),
-                Some("date-time") => "utcDateTime".to_string(),
-                Some("uuid") => "uuid".to_string(),
-                Some("ip") | Some("ipv4") | Some("ipv6") => {
-                    "string".to_string()
-                }
-                Some("uri") => "url".to_string(),
-                _ => "string".to_string(),
-            }
-        }
+        InstanceType::String => match format.as_deref() {
+            Some("date") => "plainDate".to_string(),
+            Some("date-time") => "utcDateTime".to_string(),
+            Some("uuid") => "uuid".to_string(),
+            Some("ip") | Some("ipv4") | Some("ipv6") => "string".to_string(),
+            Some("uri") => "url".to_string(),
+            _ => "string".to_string(),
+        },
         InstanceType::Number => match format.as_deref() {
             Some("float") => "float32".to_string(),
             Some("double") | None => "float64".to_string(),
@@ -1029,6 +1075,12 @@ fn instance_type_to_typespec(
             if let Some(arr) = array {
                 if let Some(SingleOrVec::Single(item_schema)) = &arr.items {
                     let inner = schemars_to_typespec(item_schema);
+                    // Parenthesize union types so that
+                    // `(int64 | null)[]` isn't mis-parsed as
+                    // `int64 | Array<null>`.
+                    if inner.contains(" | ") {
+                        return format!("({})[]", inner);
+                    }
                     return format!("{}[]", inner);
                 }
             }
@@ -1115,28 +1167,48 @@ fn detect_results_pages(
         if !name.ends_with("ResultsPage") {
             continue;
         }
-        let prefix = &name[..name.len() - "ResultsPage".len()];
-        if prefix.is_empty() {
-            continue;
-        }
 
-        // Verify the schema shape: object with `items` array and `next_page`.
-        let has_expected_shape = match schema {
-            Schema::Object(SchemaObject {
-                object: Some(obj), ..
-            }) => {
-                obj.properties.contains_key("items")
-                    && obj.properties.contains_key("next_page")
+        // Verify the schema shape and extract the item type from the
+        // `items` array property's $ref.
+        let item_type = match schema {
+            Schema::Object(SchemaObject { object: Some(obj), .. })
+                if obj.properties.contains_key("items")
+                    && obj.properties.contains_key("next_page") =>
+            {
+                extract_results_page_item_type(
+                    obj.properties.get("items").unwrap(),
+                )
             }
-            _ => false,
+            _ => None,
         };
 
-        if has_expected_shape {
-            results.insert(name.clone(), prefix.to_string());
+        if let Some(item_type) = item_type {
+            results.insert(name.clone(), item_type);
         }
     }
 
     results
+}
+
+/// Extract the item type name from a ResultsPage `items` property schema.
+/// The schema should be `{type: "array", items: {$ref: "..."}}`; we pull
+/// the type name from the $ref.
+fn extract_results_page_item_type(items_schema: &Schema) -> Option<String> {
+    let obj = match items_schema {
+        Schema::Object(obj) => obj,
+        _ => return None,
+    };
+    let arr = obj.array.as_ref()?;
+    let item = match &arr.items {
+        Some(SingleOrVec::Single(item)) => item.as_ref(),
+        _ => return None,
+    };
+    match item {
+        Schema::Object(item_obj) => {
+            item_obj.reference.as_ref().map(|r| ref_to_type_name(r))
+        }
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1159,21 +1231,32 @@ fn detect_described_string_enum(
         match variant {
             Schema::Object(SchemaObject {
                 metadata,
-                instance_type:
-                    Some(SingleOrVec::Single(instance_type)),
+                instance_type: Some(SingleOrVec::Single(instance_type)),
                 enum_values: Some(values),
                 ..
             }) if **instance_type == InstanceType::String
-                && values.len() == 1 =>
+                && !values.is_empty() =>
             {
-                let value = match &values[0] {
-                    serde_json::Value::String(s) => s.clone(),
-                    _ => return None,
-                };
-                let description = metadata
-                    .as_ref()
-                    .and_then(|m| m.description.clone());
-                members.push(DescribedEnumMember { value, description });
+                let description =
+                    metadata.as_ref().and_then(|m| m.description.clone());
+                for val in values {
+                    let value = match val {
+                        serde_json::Value::String(s) => s.clone(),
+                        _ => return None,
+                    };
+                    // Only attach description to single-value variants;
+                    // multi-value variants are bulk-encoded with no
+                    // per-value descriptions.
+                    let member_desc = if values.len() == 1 {
+                        description.clone()
+                    } else {
+                        None
+                    };
+                    members.push(DescribedEnumMember {
+                        value,
+                        description: member_desc,
+                    });
+                }
             }
             _ => return None,
         }
@@ -1205,6 +1288,8 @@ struct VariantProperty {
     name: String,
     ts_type: String,
     required: bool,
+    description: Option<String>,
+    schema: Schema,
 }
 
 /// Detect whether a oneOf schema represents a discriminated union.
@@ -1244,7 +1329,7 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
         } else {
             // Subsequent variants must have the same tag property.
             let tag = candidate_tag.as_ref()?;
-            if !tag_props.iter().any(|p| *p == tag) {
+            if !tag_props.contains(&tag) {
                 return None;
             }
         }
@@ -1275,13 +1360,13 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
                 name: name.clone(),
                 ts_type: schemars_to_typespec(schema),
                 required: required.contains(name.as_str()),
+                description: schema_description(schema),
+                schema: schema.clone(),
             })
             .collect();
 
-        let description = obj
-            .metadata
-            .as_deref()
-            .and_then(|m| m.description.clone());
+        let description =
+            obj.metadata.as_deref().and_then(|m| m.description.clone());
 
         result_variants.push(DiscriminatedVariant {
             tag_value,
@@ -1297,19 +1382,80 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
     Some(DiscriminatedUnion { tag, variants: result_variants })
 }
 
+// ---------------------------------------------------------------------------
+// Externally-tagged union detection
+// ---------------------------------------------------------------------------
+
+struct ExternallyTaggedUnion {
+    variants: Vec<ExternallyTaggedVariant>,
+}
+
+struct ExternallyTaggedVariant {
+    key: String,
+    model_name: String,
+    value_type: String,
+}
+
+/// Detect whether a oneOf schema represents an externally-tagged union
+/// (Rust's default enum encoding). Each variant is an object with exactly
+/// one required property and `additionalProperties: false`.
+fn detect_externally_tagged_union(
+    variants: &[Schema],
+) -> Option<ExternallyTaggedUnion> {
+    if variants.is_empty() {
+        return None;
+    }
+
+    let mut result_variants = Vec::new();
+
+    for variant in variants {
+        let obj = match variant {
+            Schema::Object(obj) => obj,
+            _ => return None,
+        };
+        let object = obj.object.as_ref()?;
+
+        // Must have exactly one property that is also required.
+        if object.properties.len() != 1 || object.required.len() != 1 {
+            return None;
+        }
+
+        // additionalProperties must be false (or absent).
+        if let Some(ap) = &object.additional_properties {
+            if !matches!(ap.as_ref(), Schema::Bool(false)) {
+                return None;
+            }
+        }
+
+        let (key, schema) = object.properties.iter().next().unwrap();
+        if !object.required.contains(key) {
+            return None;
+        }
+
+        result_variants.push(ExternallyTaggedVariant {
+            key: key.clone(),
+            model_name: String::new(), // filled by caller
+            value_type: schemars_to_typespec(schema),
+        });
+    }
+
+    Some(ExternallyTaggedUnion { variants: result_variants })
+}
+
 fn is_single_value_string_enum(schema: &Schema) -> bool {
     extract_single_enum_value(schema).is_some()
 }
 
 fn extract_single_enum_value(schema: &Schema) -> Option<String> {
     match schema {
-        Schema::Object(SchemaObject {
-            enum_values: Some(values),
-            ..
-        }) if values.len() == 1 => match &values[0] {
-            serde_json::Value::String(s) => Some(s.clone()),
-            _ => None,
-        },
+        Schema::Object(SchemaObject { enum_values: Some(values), .. })
+            if values.len() == 1 =>
+        {
+            match &values[0] {
+                serde_json::Value::String(s) => Some(s.clone()),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -1319,11 +1465,7 @@ fn extract_single_enum_value(schema: &Schema) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 /// Emit TypeSpec validation decorators for a schema's constraints.
-fn emit_validation_decorators(
-    out: &mut String,
-    schema: &Schema,
-    indent: &str,
-) {
+fn emit_validation_decorators(out: &mut String, schema: &Schema, indent: &str) {
     let obj = match schema {
         Schema::Object(obj) => obj,
         _ => return,
@@ -1335,8 +1477,8 @@ fn emit_validation_decorators(
     if let Some(fmt) = &obj.format {
         match fmt.as_str() {
             "date-time" | "date" | "uri" | "uuid" | "int8" | "int16"
-            | "int32" | "int64" | "uint8" | "uint16" | "uint32"
-            | "uint64" | "float" | "double" => {}
+            | "int32" | "int64" | "uint8" | "uint16" | "uint32" | "uint64"
+            | "float" | "double" => {}
             f => {
                 writeln!(out, "{}@format(\"{}\")", indent, f).unwrap();
             }
@@ -1370,13 +1512,8 @@ fn emit_validation_decorators(
             writeln!(out, "{}@maxLength({})", indent, max).unwrap();
         }
         if let Some(pat) = &string.pattern {
-            writeln!(
-                out,
-                "{}@pattern(\"{}\")",
-                indent,
-                escape_tsp_string(pat)
-            )
-            .unwrap();
+            writeln!(out, "{}@pattern(\"{}\")", indent, escape_tsp_string(pat))
+                .unwrap();
         }
     }
 
@@ -1414,10 +1551,7 @@ fn ref_to_type_name(reference: &str) -> String {
 }
 
 fn is_ref_schema(schema: &Schema) -> bool {
-    matches!(
-        schema,
-        Schema::Object(SchemaObject { reference: Some(_), .. })
-    )
+    matches!(schema, Schema::Object(SchemaObject { reference: Some(_), .. }))
 }
 
 fn is_empty_schema(schema: &Schema) -> bool {
@@ -1476,9 +1610,7 @@ fn json_to_tsp_literal(val: &serde_json::Value) -> String {
             } else {
                 let fields: Vec<String> = obj
                     .iter()
-                    .map(|(k, v)| {
-                        format!("{}: {}", k, json_to_tsp_literal(v))
-                    })
+                    .map(|(k, v)| format!("{}: {}", k, json_to_tsp_literal(v)))
                     .collect();
                 format!("#{{{}}}", fields.join(", "))
             }
@@ -1488,10 +1620,9 @@ fn json_to_tsp_literal(val: &serde_json::Value) -> String {
 
 fn schema_description(schema: &Schema) -> Option<String> {
     match schema {
-        Schema::Object(obj) => obj
-            .metadata
-            .as_ref()
-            .and_then(|m| m.description.clone()),
+        Schema::Object(obj) => {
+            obj.metadata.as_ref().and_then(|m| m.description.clone())
+        }
         _ => None,
     }
 }
@@ -1562,4 +1693,541 @@ mod tests {
         assert!(!is_valid_tsp_ident("foo-bar"));
     }
 
+    // -- Helper functions for constructing test schemas --
+
+    fn string_schema() -> Schema {
+        Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            ..Default::default()
+        })
+    }
+
+    fn string_schema_with_format(fmt: &str) -> Schema {
+        Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            format: Some(fmt.to_string()),
+            ..Default::default()
+        })
+    }
+
+    fn uint32_schema() -> Schema {
+        Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Integer,
+            ))),
+            format: Some("uint32".to_string()),
+            number: Some(Box::new(schemars::schema::NumberValidation {
+                minimum: Some(0.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
+
+    fn ref_schema(name: &str) -> Schema {
+        Schema::Object(SchemaObject {
+            reference: Some(format!("#/definitions/{}", name)),
+            ..Default::default()
+        })
+    }
+
+    fn single_enum_schema(value: &str) -> Schema {
+        Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            enum_values: Some(vec![serde_json::Value::String(
+                value.to_string(),
+            )]),
+            ..Default::default()
+        })
+    }
+
+    fn results_page_schema(item_ref: &str) -> Schema {
+        Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut props = schemars::Map::new();
+                    props.insert(
+                        "items".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::Array,
+                            ))),
+                            array: Some(Box::new(
+                                schemars::schema::ArrayValidation {
+                                    items: Some(SingleOrVec::Single(Box::new(
+                                        ref_schema(item_ref),
+                                    ))),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    props.insert(
+                        "next_page".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::String,
+                            ))),
+                            extensions: {
+                                let mut m = schemars::Map::new();
+                                m.insert(
+                                    "nullable".to_string(),
+                                    serde_json::Value::Bool(true),
+                                );
+                                m
+                            },
+                            ..Default::default()
+                        }),
+                    );
+                    props
+                },
+                required: {
+                    let mut req = std::collections::BTreeSet::new();
+                    req.insert("items".to_string());
+                    req
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
+
+    // -- Bug 1: ResultsPage name collisions --
+
+    #[test]
+    fn test_results_page_item_type_from_ref() {
+        // detect_results_pages must extract the item type from the $ref
+        // in the items array schema, not by parsing the definition name.
+        let mut defs = IndexMap::new();
+        defs.insert(
+            "Disk".to_string(),
+            string_schema(), // placeholder
+        );
+        defs.insert(
+            "PhysicalDisk".to_string(),
+            string_schema(), // placeholder
+        );
+        defs.insert("DiskResultsPage".to_string(), results_page_schema("Disk"));
+        defs.insert(
+            "PhysicalDiskResultsPage".to_string(),
+            results_page_schema("PhysicalDisk"),
+        );
+
+        let pages = detect_results_pages(&defs);
+        assert_eq!(pages.get("DiskResultsPage").unwrap(), "Disk");
+        assert_eq!(
+            pages.get("PhysicalDiskResultsPage").unwrap(),
+            "PhysicalDisk",
+        );
+    }
+
+    // -- Bug 2: Externally-tagged unions rendered as Record<never> --
+
+    #[test]
+    fn test_externally_tagged_union() {
+        // An externally-tagged enum like Rust's default enum encoding:
+        //   { "oneOf": [
+        //     { "type": "object", "properties": { "unknown": uint32 },
+        //       "required": ["unknown"], "additionalProperties": false },
+        //     ...
+        //   ] }
+        // Must NOT produce Record<never> for each variant.
+        let variants: Vec<Schema> = vec![
+            ("unknown", uint32_schema()),
+            ("if_index", uint32_schema()),
+            ("port_number", uint32_schema()),
+        ]
+        .into_iter()
+        .map(|(key, val)| {
+            Schema::Object(SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(
+                    InstanceType::Object,
+                ))),
+                object: Some(Box::new(schemars::schema::ObjectValidation {
+                    properties: {
+                        let mut p = schemars::Map::new();
+                        p.insert(key.to_string(), val);
+                        p
+                    },
+                    required: {
+                        let mut r = std::collections::BTreeSet::new();
+                        r.insert(key.to_string());
+                        r
+                    },
+                    additional_properties: Some(Box::new(Schema::Bool(false))),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })
+        })
+        .collect();
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(variants),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("InterfaceNum", &obj);
+        let output = ctx.out;
+
+        // Must contain named variant models, not Record<never>.
+        assert!(
+            !output.contains("Record<never>"),
+            "externally-tagged union produced Record<never>:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("unknown: uint32"),
+            "missing variant property 'unknown: uint32':\n{}",
+            output,
+        );
+        assert!(
+            output.contains("if_index: uint32"),
+            "missing variant property 'if_index: uint32':\n{}",
+            output,
+        );
+        assert!(
+            output.contains("union InterfaceNum"),
+            "missing union declaration:\n{}",
+            output,
+        );
+    }
+
+    // -- Bug 3: Nullable array items operator precedence --
+
+    #[test]
+    fn test_nullable_array_items_precedence() {
+        // { "type": "array", "items": { "nullable": true, "type":
+        //   "integer", "format": "int64" } }
+        // Must produce "(int64 | null)[]", NOT "int64 | null[]".
+        let schema = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Array,
+            ))),
+            array: Some(Box::new(schemars::schema::ArrayValidation {
+                items: Some(SingleOrVec::Single(Box::new(Schema::Object(
+                    SchemaObject {
+                        instance_type: Some(SingleOrVec::Single(Box::new(
+                            InstanceType::Integer,
+                        ))),
+                        format: Some("int64".to_string()),
+                        extensions: {
+                            let mut m = schemars::Map::new();
+                            m.insert(
+                                "nullable".to_string(),
+                                serde_json::Value::Bool(true),
+                            );
+                            m
+                        },
+                        ..Default::default()
+                    },
+                )))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+
+        let ts = schemars_to_typespec(&schema);
+        assert_eq!(ts, "(int64 | null)[]");
+    }
+
+    // -- Bug 4: Missing @format("ip") on discriminated union variant
+    //    fields --
+
+    #[test]
+    fn test_discriminated_variant_format_and_doc() {
+        // A discriminated union variant with a property that has
+        // format: "ip" and a description. Both must appear in output.
+        let variants = vec![Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert("kind".to_string(), single_enum_schema("snat"));
+                    p.insert(
+                        "ip".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::String,
+                            ))),
+                            format: Some("ip".to_string()),
+                            metadata: Some(Box::new(
+                                schemars::schema::Metadata {
+                                    description: Some(
+                                        "The IP address.".to_string(),
+                                    ),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("kind".to_string());
+                    r.insert("ip".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        })];
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(variants),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("ExternalIp", &obj);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("@format(\"ip\")"),
+            "missing @format(\"ip\") on variant property:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@doc(\"The IP address.\")"),
+            "missing @doc on variant property:\n{}",
+            output,
+        );
+    }
+
+    // -- Bug 5: Multi-value described string enum --
+
+    #[test]
+    fn test_described_string_enum_multi_value() {
+        // oneOf where the first variant has multiple enum values
+        // (undocumented) and later variants have single values with
+        // descriptions. All values must be extracted individually.
+        let variants = vec![
+            // Multi-value variant, no description
+            Schema::Object(SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(
+                    InstanceType::String,
+                ))),
+                enum_values: Some(vec![
+                    serde_json::Value::String("count".to_string()),
+                    serde_json::Value::String("bytes".to_string()),
+                    serde_json::Value::String("seconds".to_string()),
+                ]),
+                ..Default::default()
+            }),
+            // Single-value variant with description
+            Schema::Object(SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(
+                    InstanceType::String,
+                ))),
+                enum_values: Some(vec![serde_json::Value::String(
+                    "none".to_string(),
+                )]),
+                metadata: Some(Box::new(schemars::schema::Metadata {
+                    description: Some("No meaningful units.".to_string()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }),
+            // Single-value variant with description
+            Schema::Object(SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(
+                    InstanceType::String,
+                ))),
+                enum_values: Some(vec![serde_json::Value::String(
+                    "rpm".to_string(),
+                )]),
+                metadata: Some(Box::new(schemars::schema::Metadata {
+                    description: Some("Rotations per minute.".to_string()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }),
+        ];
+
+        let members = detect_described_string_enum(&variants);
+        let members = members.expect(
+            "should detect as described string enum with multi-value \
+             variants",
+        );
+        assert_eq!(members.len(), 5);
+        assert_eq!(members[0].value, "count");
+        assert!(members[0].description.is_none());
+        assert_eq!(members[1].value, "bytes");
+        assert!(members[1].description.is_none());
+        assert_eq!(members[2].value, "seconds");
+        assert!(members[2].description.is_none());
+        assert_eq!(members[3].value, "none");
+        assert_eq!(
+            members[3].description.as_deref(),
+            Some("No meaningful units."),
+        );
+        assert_eq!(members[4].value, "rpm");
+        assert_eq!(
+            members[4].description.as_deref(),
+            Some("Rotations per minute."),
+        );
+    }
+
+    // -- Bug 6: Missing default values on discriminated union variant
+    //    properties --
+
+    #[test]
+    fn test_discriminated_variant_default_values() {
+        // A discriminated union variant with an optional property that
+        // has a default value. The default must appear in the output.
+        let variants = vec![Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                description: Some("Create a disk from a snapshot".to_string()),
+                ..Default::default()
+            })),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "type".to_string(),
+                        single_enum_schema("snapshot"),
+                    );
+                    p.insert(
+                        "read_only".to_string(),
+                        Schema::Object(SchemaObject {
+                            instance_type: Some(SingleOrVec::Single(Box::new(
+                                InstanceType::Boolean,
+                            ))),
+                            metadata: Some(Box::new(
+                                schemars::schema::Metadata {
+                                    description: Some(
+                                        "If true, read-only.".to_string(),
+                                    ),
+                                    default: Some(serde_json::Value::Bool(
+                                        false,
+                                    )),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p.insert(
+                        "snapshot_id".to_string(),
+                        string_schema_with_format("uuid"),
+                    );
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("type".to_string());
+                    r.insert("snapshot_id".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        })];
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(variants),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("DiskSource", &obj);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("read_only?: boolean = false"),
+            "missing default value on variant property:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@doc(\"If true, read-only.\")"),
+            "missing @doc on variant property:\n{}",
+            output,
+        );
+    }
+
+    // -- Bug 7: Union member titles lost --
+
+    #[test]
+    fn test_union_member_titles() {
+        // An untagged union where each oneOf member has a title.
+        // The title must become a named union member.
+        let variants = vec![
+            Schema::Object(SchemaObject {
+                metadata: Some(Box::new(schemars::schema::Metadata {
+                    title: Some("v4".to_string()),
+                    ..Default::default()
+                })),
+                subschemas: Some(Box::new(
+                    schemars::schema::SubschemaValidation {
+                        all_of: Some(vec![ref_schema("Ipv4Range")]),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            }),
+            Schema::Object(SchemaObject {
+                metadata: Some(Box::new(schemars::schema::Metadata {
+                    title: Some("v6".to_string()),
+                    ..Default::default()
+                })),
+                subschemas: Some(Box::new(
+                    schemars::schema::SubschemaValidation {
+                        all_of: Some(vec![ref_schema("Ipv6Range")]),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            }),
+        ];
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(variants),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("IpRange", &obj);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("v4: Ipv4Range"),
+            "missing named union member 'v4: Ipv4Range':\n{}",
+            output,
+        );
+        assert!(
+            output.contains("v6: Ipv6Range"),
+            "missing named union member 'v6: Ipv6Range':\n{}",
+            output,
+        );
+    }
 }
