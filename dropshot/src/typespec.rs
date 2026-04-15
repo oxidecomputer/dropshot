@@ -192,6 +192,11 @@ pub fn api_to_typespec<C: ServerContext>(
     ctx.needs_uuid_scalar =
         definitions.values().any(|schema| schema_uses_uuid_format(schema));
 
+    // Pre-scan definitions to identify enums and discriminated unions.
+    // This context is used when emitting default values.
+    ctx.known_enums = detect_enum_types(&definitions);
+    ctx.discriminated_unions = detect_discriminated_union_types(&definitions);
+
     // Emit preamble.
     ctx.emit_preamble(title, version);
 
@@ -280,6 +285,13 @@ struct TypeSpecContext {
     needs_freeform_response: bool,
     /// Whether any type references `uuid` (needs scalar definition).
     needs_uuid_scalar: bool,
+    /// Map from enum type name to its member values. Used to emit enum
+    /// defaults as `EnumName.member` instead of `"member"`.
+    known_enums: std::collections::HashMap<String, Vec<String>>,
+    /// Set of type names that are discriminated unions. Object defaults
+    /// on these types are skipped because they reference variant-specific
+    /// fields not present on the base model.
+    discriminated_unions: std::collections::HashSet<String>,
 }
 
 impl TypeSpecContext {
@@ -290,6 +302,8 @@ impl TypeSpecContext {
             error_types: std::collections::HashSet::new(),
             needs_freeform_response: false,
             needs_uuid_scalar: false,
+            known_enums: std::collections::HashMap::new(),
+            discriminated_unions: std::collections::HashSet::new(),
         }
     }
 
@@ -374,6 +388,7 @@ impl TypeSpecContext {
                 }
                 emit_validation_decorators(&mut self.out, prop_schema, "  ");
                 let default_suffix = schema_default(prop_schema)
+                    .and_then(|d| self.refine_default(&ts_type, d))
                     .map(|d| format!(" = {}", d))
                     .unwrap_or_default();
                 writeln!(
@@ -420,6 +435,10 @@ impl TypeSpecContext {
                 writeln!(self.out, "  {},", variant).unwrap();
             }
             writeln!(self.out, "}}").unwrap();
+        } else if ts_type == "unknown" {
+            // `unknown` is a TypeSpec keyword; can't use it as a
+            // scalar base. Emit a type alias instead.
+            writeln!(self.out, "alias {} = unknown;", name).unwrap();
         } else {
             emit_validation_decorators(
                 &mut self.out,
@@ -559,6 +578,7 @@ impl TypeSpecContext {
                         "  ",
                     );
                     let default_suffix = schema_default(&prop.schema)
+                        .and_then(|d| self.refine_default(&prop.ts_type, d))
                         .map(|d| format!(" = {}", d))
                         .unwrap_or_default();
                     writeln!(
@@ -700,7 +720,10 @@ impl TypeSpecContext {
             let optional = if p.required { "" } else { "?" };
             params_parts.push(format!(
                 "{} {}{}: {}",
-                decorator, p.name, optional, p.ts_type
+                decorator,
+                escape_property_name(&p.name),
+                optional,
+                p.ts_type,
             ));
         }
 
@@ -809,6 +832,41 @@ impl TypeSpecContext {
             Some(e) => format!("{} | {}", success_type, e),
             None => success_type,
         }
+    }
+
+    /// Refine a default value literal using type context.
+    ///
+    /// - String defaults on enum types → `EnumName.member`
+    /// - Object defaults on discriminated union types → dropped (returns
+    ///   `None`) because they reference variant-specific fields
+    fn refine_default(
+        &self,
+        ts_type: &str,
+        default_literal: String,
+    ) -> Option<String> {
+        // Enum member defaults: "v4" → IpVersion.v4
+        if let Some(members) = self.known_enums.get(ts_type) {
+            // default_literal is e.g. `"v4"` — strip quotes to get the
+            // member name.
+            if default_literal.starts_with('"')
+                && default_literal.ends_with('"')
+            {
+                let inner = &default_literal[1..default_literal.len() - 1];
+                if members.iter().any(|m| m == inner) {
+                    return Some(format!("{}.{}", ts_type, inner));
+                }
+            }
+        }
+
+        // Object defaults on discriminated unions are invalid because
+        // they reference variant-specific fields not on the base model.
+        if self.discriminated_unions.contains(ts_type)
+            && default_literal.starts_with("#{")
+        {
+            return None;
+        }
+
+        Some(default_literal)
     }
 
     fn emit_doc_from_metadata(
@@ -1211,6 +1269,62 @@ fn extract_results_page_item_type(items_schema: &Schema) -> Option<String> {
     }
 }
 
+/// Scan definitions for string enum types.
+/// Returns a map from enum name to its member values.
+fn detect_enum_types(
+    definitions: &IndexMap<String, Schema>,
+) -> std::collections::HashMap<String, Vec<String>> {
+    let mut enums = std::collections::HashMap::new();
+    for (name, schema) in definitions {
+        if let Schema::Object(obj) = schema {
+            if let Some(values) = &obj.enum_values {
+                let members: Vec<String> = values
+                    .iter()
+                    .filter_map(|v| match v {
+                        serde_json::Value::String(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                if !members.is_empty() {
+                    enums.insert(name.clone(), members);
+                }
+            }
+            // Also detect described string enums (oneOf of single-value
+            // string enums).
+            if let Some(sub) = &obj.subschemas {
+                if let Some(one_of) = &sub.one_of {
+                    if let Some(members) = detect_described_string_enum(one_of)
+                    {
+                        let vals =
+                            members.iter().map(|m| m.value.clone()).collect();
+                        enums.insert(name.clone(), vals);
+                    }
+                }
+            }
+        }
+    }
+    enums
+}
+
+/// Scan definitions for discriminated union types.
+fn detect_discriminated_union_types(
+    definitions: &IndexMap<String, Schema>,
+) -> std::collections::HashSet<String> {
+    let mut unions = std::collections::HashSet::new();
+    for (name, schema) in definitions {
+        if let Schema::Object(obj) = schema {
+            if let Some(sub) = &obj.subschemas {
+                if let Some(one_of) = &sub.one_of {
+                    if detect_discriminator(one_of).is_some() {
+                        unions.insert(name.clone());
+                    }
+                }
+            }
+        }
+    }
+    unions
+}
+
 // ---------------------------------------------------------------------------
 // Described string enum detection
 // ---------------------------------------------------------------------------
@@ -1474,13 +1588,18 @@ fn emit_validation_decorators(out: &mut String, schema: &Schema, indent: &str) {
     // String format hints (uuid, ip, etc.) that aren't captured by the
     // type mapping. Integer/float formats (int32, uint64, float, double)
     // and date-time/uri are already reflected in the TypeSpec type.
-    if let Some(fmt) = &obj.format {
-        match fmt.as_str() {
-            "date-time" | "date" | "uri" | "uuid" | "int8" | "int16"
-            | "int32" | "int64" | "uint8" | "uint16" | "uint32" | "uint64"
-            | "float" | "double" => {}
-            f => {
-                writeln!(out, "{}@format(\"{}\")", indent, f).unwrap();
+    // Only emit @format for string types — TypeSpec rejects it on others.
+    let is_string_type = matches!(
+        &obj.instance_type,
+        Some(SingleOrVec::Single(t)) if **t == InstanceType::String
+    );
+    if is_string_type {
+        if let Some(fmt) = &obj.format {
+            match fmt.as_str() {
+                "date-time" | "date" | "uri" | "uuid" => {}
+                f => {
+                    writeln!(out, "{}@format(\"{}\")", indent, f).unwrap();
+                }
             }
         }
     }
@@ -1606,7 +1725,7 @@ fn json_to_tsp_literal(val: &serde_json::Value) -> String {
         }
         serde_json::Value::Object(obj) => {
             if obj.is_empty() {
-                "#{{}}".to_string()
+                "#{}".to_string()
             } else {
                 let fields: Vec<String> = obj
                     .iter()
@@ -1642,7 +1761,43 @@ fn escape_property_name(name: &str) -> String {
     }
 }
 
+/// TypeSpec reserved keywords that cannot be used as bare identifiers.
+const TYPESPEC_KEYWORDS: &[&str] = &[
+    "alias",
+    "const",
+    "dec",
+    "else",
+    "enum",
+    "extends",
+    "extern",
+    "false",
+    "fn",
+    "if",
+    "import",
+    "init",
+    "interface",
+    "is",
+    "model",
+    "namespace",
+    "never",
+    "null",
+    "op",
+    "projection",
+    "return",
+    "scalar",
+    "true",
+    "typeof",
+    "union",
+    "unknown",
+    "using",
+    "valueof",
+    "void",
+];
+
 fn is_valid_tsp_ident(s: &str) -> bool {
+    if TYPESPEC_KEYWORDS.contains(&s) {
+        return false;
+    }
     let mut chars = s.chars();
     match chars.next() {
         Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
@@ -1891,8 +2046,8 @@ mod tests {
             output,
         );
         assert!(
-            output.contains("unknown: uint32"),
-            "missing variant property 'unknown: uint32':\n{}",
+            output.contains("`unknown`: uint32"),
+            "missing variant property '`unknown`: uint32':\n{}",
             output,
         );
         assert!(
@@ -2227,6 +2382,281 @@ mod tests {
         assert!(
             output.contains("v6: Ipv6Range"),
             "missing named union member 'v6: Ipv6Range':\n{}",
+            output,
+        );
+    }
+
+    // -- TypeSpec keyword escaping --
+
+    #[test]
+    fn test_keyword_property_names_escaped() {
+        // Property names that are TypeSpec keywords must be
+        // backtick-escaped.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert("model".to_string(), string_schema());
+                    p.insert("interface".to_string(), string_schema());
+                    p.insert("unknown".to_string(), uint32_schema());
+                    p.insert("name".to_string(), string_schema());
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("model".to_string());
+                    r.insert("interface".to_string());
+                    r.insert("unknown".to_string());
+                    r.insert("name".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("PhysicalDisk", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("`model`: string"),
+            "'model' must be backtick-escaped:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("`interface`: string"),
+            "'interface' must be backtick-escaped:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("`unknown`: uint32"),
+            "'unknown' must be backtick-escaped:\n{}",
+            output,
+        );
+        // "name" is not a keyword, should NOT be escaped.
+        assert!(
+            output.contains("  name: string"),
+            "'name' should not be escaped:\n{}",
+            output,
+        );
+    }
+
+    #[test]
+    fn test_keyword_enum_members_escaped() {
+        // Enum members that are TypeSpec keywords must be
+        // backtick-escaped.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            enum_values: Some(vec![
+                serde_json::Value::String("init".to_string()),
+                serde_json::Value::String("never".to_string()),
+                serde_json::Value::String("up".to_string()),
+            ]),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("BgpPeerState", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("`init`: \"init\""),
+            "'init' must be backtick-escaped:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("`never`: \"never\""),
+            "'never' must be backtick-escaped:\n{}",
+            output,
+        );
+        // "up" is not a keyword, should not be escaped.
+        assert!(
+            output.contains("\n  up"),
+            "'up' should not be escaped:\n{}",
+            output,
+        );
+    }
+
+    // -- scalar extends unknown --
+
+    #[test]
+    fn test_unknown_type_not_scalar_extends() {
+        // A schema with no type info should not produce
+        // `scalar X extends unknown` since `unknown` is a keyword.
+        let schema = SchemaObject::default();
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("BgpMessageHistory", &schema);
+        let output = ctx.out;
+
+        assert!(
+            !output.contains("scalar"),
+            "should not emit 'scalar ... extends unknown':\n{}",
+            output,
+        );
+        assert!(
+            output.contains("BgpMessageHistory"),
+            "should still define the type:\n{}",
+            output,
+        );
+    }
+
+    // -- @format on non-string types --
+
+    #[test]
+    fn test_format_not_emitted_for_non_string() {
+        // @format("uint") on an integer type should not be emitted
+        // since TypeSpec's @format only applies to strings.
+        let schema = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Integer,
+            ))),
+            format: Some("uint".to_string()),
+            number: Some(Box::new(schemars::schema::NumberValidation {
+                minimum: Some(0.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+
+        let mut out = String::new();
+        emit_validation_decorators(&mut out, &schema, "");
+        assert!(
+            !out.contains("@format"),
+            "@format should not be emitted for integers:\n{}",
+            out,
+        );
+        // @minValue should still be emitted.
+        assert!(
+            out.contains("@minValue(0)"),
+            "@minValue should still be emitted:\n{}",
+            out,
+        );
+    }
+
+    // -- Empty object literal --
+
+    #[test]
+    fn test_empty_object_literal() {
+        let val = serde_json::Value::Object(serde_json::Map::new());
+        assert_eq!(
+            json_to_tsp_literal(&val),
+            "#{}",
+            "empty object must be '#{{}}' not '#{{}}{{}}'",
+        );
+    }
+
+    // -- Enum defaults --
+
+    #[test]
+    fn test_enum_default_uses_member_syntax() {
+        // A property with type IpVersion (an enum) and default "v4"
+        // should emit `IpVersion.v4`, not `"v4"`.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "ip_version".to_string(),
+                        Schema::Object(SchemaObject {
+                            reference: Some(
+                                "#/definitions/IpVersion".to_string(),
+                            ),
+                            metadata: Some(Box::new(
+                                schemars::schema::Metadata {
+                                    default: Some(serde_json::Value::String(
+                                        "v4".to_string(),
+                                    )),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.known_enums.insert(
+            "IpVersion".to_string(),
+            vec!["v4".to_string(), "v6".to_string()],
+        );
+        ctx.emit_model_from_object("IpPoolCreate", &schema);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("IpVersion.v4"),
+            "enum default should use member syntax:\n{}",
+            output,
+        );
+        assert!(
+            !output.contains("\"v4\""),
+            "enum default should not be a string literal:\n{}",
+            output,
+        );
+    }
+
+    // -- Complex object defaults on discriminated unions --
+
+    #[test]
+    fn test_object_default_skipped_for_discriminated_union() {
+        // A property whose type is a discriminated union should not
+        // have an object default emitted, because the default
+        // references variant-specific fields not present on the base.
+        let schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert(
+                        "pool_selector".to_string(),
+                        Schema::Object(SchemaObject {
+                            reference: Some(
+                                "#/definitions/PoolSelector".to_string(),
+                            ),
+                            metadata: Some(Box::new(
+                                schemars::schema::Metadata {
+                                    default: Some(serde_json::json!({
+                                        "ip_version": null,
+                                        "type": "auto",
+                                    })),
+                                    ..Default::default()
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                    );
+                    p
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.discriminated_unions.insert("PoolSelector".to_string());
+        ctx.emit_model_from_object("SomeCreate", &schema);
+        let output = ctx.out;
+
+        assert!(
+            !output.contains("= #"),
+            "object default on discriminated union type should be \
+             skipped:\n{}",
             output,
         );
     }

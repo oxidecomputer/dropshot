@@ -157,7 +157,7 @@ enum InstanceState {
 }
 
 model InterfaceNumUnknown {
-  unknown: uint32;
+  `unknown`: uint32;
 }
 
 model InterfaceNumIfIndex {
