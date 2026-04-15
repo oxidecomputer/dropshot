@@ -35,6 +35,8 @@ model CompositeCreate {
   color?: Color | null;
   @doc("The widget's name")
   name: string;
+  @doc("Preferred color for new composites")
+  preferred_color?: Color | null = null;
   @doc("Desired shape (if any)")
   shape?: Shape | null;
   @doc("Whether to start immediately")
@@ -390,6 +392,11 @@ op task_start(@body body: WidgetCreate): {
 @route("/upload")
 @post
 op upload_bytes(@header contentType: "application/octet-stream", @body body: bytes): void | Error;
+
+@doc("Upload multipart")
+@route("/upload-multipart")
+@post
+op upload_multipart(@header contentType: "multipart/form-data", @body body: bytes): void | Error;
 
 @doc("Create a widget")
 @route("/widgets")

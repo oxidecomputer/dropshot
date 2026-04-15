@@ -443,6 +443,20 @@ async fn device_auth(
     unimplemented!();
 }
 
+// -- Multipart form data request body --
+
+#[endpoint {
+    method = POST,
+    path = "/upload-multipart",
+}]
+/// Upload multipart
+async fn upload_multipart(
+    _rqctx: RequestContext<()>,
+    _body: dropshot::MultipartBody,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    unimplemented!();
+}
+
 // -- Freeform response (hand-rolled Response<Body>) --
 
 #[endpoint {
@@ -505,6 +519,9 @@ struct CompositeCreate {
     color: Option<Color>,
     /// Desired shape (if any)
     shape: Option<Shape>,
+    /// Preferred color for new composites
+    #[serde(default)]
+    preferred_color: Option<Color>,
     /// Initial set of widgets
     #[serde(default)]
     widgets: Vec<Widget>,
@@ -673,6 +690,7 @@ fn make_api() -> ApiDescription<()> {
     api.register(lookup).unwrap();
     api.register(project_list).unwrap();
     api.register(upload_bytes).unwrap();
+    api.register(upload_multipart).unwrap();
     api.register(device_auth).unwrap();
     api.register(device_token).unwrap();
     api.register(disk_state_get).unwrap();
