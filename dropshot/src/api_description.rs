@@ -1492,6 +1492,16 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
         OpenApiDefinition { api, info, version }
     }
 
+    /// Read-only access to the API metadata configured on this builder.
+    pub fn info(&self) -> &openapiv3::Info {
+        &self.info
+    }
+
+    /// The API version this builder was constructed with.
+    pub fn version(&self) -> &semver::Version {
+        &self.version
+    }
+
     /// Provide a short description of the API.  CommonMark syntax may be
     /// used for rich text representation.
     ///
