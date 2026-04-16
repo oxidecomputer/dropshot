@@ -709,8 +709,21 @@ fn make_api() -> ApiDescription<()> {
 #[test]
 fn test_typespec_generation() {
     let api = make_api();
-    let output =
-        api_to_typespec(&api, "Widget Service", &semver::Version::new(1, 0, 0));
+    let info = openapiv3::Info {
+        title: "Widget Service".to_string(),
+        version: "1.0.0".to_string(),
+        description: Some(
+            "API for managing widgets and their component parts".to_string(),
+        ),
+        contact: Some(openapiv3::Contact {
+            name: Some("Widget Co".to_string()),
+            url: Some("https://widgets.example.com".to_string()),
+            email: Some("api@widgets.example.com".to_string()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let output = api_to_typespec(&api, &info, &semver::Version::new(1, 0, 0));
 
     expectorate::assert_contents("tests/test_typespec.tsp", &output);
 }

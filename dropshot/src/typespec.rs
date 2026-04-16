@@ -22,9 +22,14 @@ use schemars::schema::SingleOrVec;
 use std::fmt::Write as _;
 
 /// Generate TypeSpec source text from an `ApiDescription`.
+///
+/// `info` supplies the API metadata. TypeSpec reads title, description, and
+/// contact; `terms_of_service` and `license` are ignored (no TypeSpec
+/// equivalent). `info.version` is ignored in favor of the typed `version`
+/// argument.
 pub fn api_to_typespec<C: ServerContext>(
     api: &ApiDescription<C>,
-    title: &str,
+    info: &openapiv3::Info,
     version: &semver::Version,
 ) -> String {
     let mut ctx = TypeSpecContext::new();
@@ -201,7 +206,7 @@ pub fn api_to_typespec<C: ServerContext>(
     ctx.discriminated_unions = detect_discriminated_union_types(&definitions);
 
     // Emit preamble.
-    ctx.emit_preamble(title, version, api.get_tag_config());
+    ctx.emit_preamble(info, version, api.get_tag_config());
 
     // Emit the generic ResultsPage model if any instantiations were found.
     if !ctx.results_page_rewrites.is_empty() {
@@ -312,7 +317,7 @@ impl TypeSpecContext {
 
     fn emit_preamble(
         &mut self,
-        title: &str,
+        info: &openapiv3::Info,
         version: &semver::Version,
         tag_config: &crate::api_description::TagConfig,
     ) {
@@ -324,11 +329,28 @@ impl TypeSpecContext {
         writeln!(self.out).unwrap();
         writeln!(
             self.out,
-            "@service(#{{ title: \"{}\" }})",
-            escape_tsp_string(title)
+            "@service({})",
+            tsp_object(&[("title", Some(tsp_str(&info.title)))])
         )
         .unwrap();
-        writeln!(self.out, "@info(#{{ version: \"{}\" }})", version).unwrap();
+
+        let contact = info.contact.as_ref().map(|c| {
+            tsp_object(&[
+                ("name", c.name.as_deref().map(tsp_str)),
+                ("url", c.url.as_deref().map(tsp_str)),
+                ("email", c.email.as_deref().map(tsp_str)),
+            ])
+        });
+        writeln!(
+            self.out,
+            "@info({})",
+            tsp_object(&[
+                ("version", Some(tsp_str(&version.to_string()))),
+                ("description", info.description.as_deref().map(tsp_str)),
+                ("contact", contact),
+            ])
+        )
+        .unwrap();
 
         // Tag metadata: emit one @tagMetadata decorator per configured tag
         // that has description or externalDocs. Sort by name for stable output.
@@ -341,46 +363,27 @@ impl TypeSpecContext {
             .collect();
         tags.sort_by(|a, b| a.0.cmp(b.0));
         for (name, details) in tags {
-            write!(
+            let ext = details.external_docs.as_ref().map(|e| {
+                tsp_object(&[
+                    ("url", Some(tsp_str(&e.url))),
+                    ("description", e.description.as_deref().map(tsp_str)),
+                ])
+            });
+            let meta = tsp_object(&[
+                ("description", details.description.as_deref().map(tsp_str)),
+                ("externalDocs", ext),
+            ]);
+            writeln!(
                 self.out,
-                "@tagMetadata(\"{}\", #{{",
-                escape_tsp_string(name)
+                "@tagMetadata(\"{}\", {})",
+                escape_tsp_string(name),
+                meta,
             )
             .unwrap();
-            let mut first = true;
-            if let Some(desc) = &details.description {
-                write!(
-                    self.out,
-                    " description: \"{}\"",
-                    escape_tsp_string(desc)
-                )
-                .unwrap();
-                first = false;
-            }
-            if let Some(ext) = &details.external_docs {
-                if !first {
-                    write!(self.out, ",").unwrap();
-                }
-                write!(
-                    self.out,
-                    " externalDocs: #{{ url: \"{}\"",
-                    escape_tsp_string(&ext.url)
-                )
-                .unwrap();
-                if let Some(d) = &ext.description {
-                    write!(
-                        self.out,
-                        ", description: \"{}\"",
-                        escape_tsp_string(d)
-                    )
-                    .unwrap();
-                }
-                write!(self.out, " }}").unwrap();
-            }
-            writeln!(self.out, " }})").unwrap();
         }
 
-        writeln!(self.out, "namespace {};", to_namespace_id(title)).unwrap();
+        writeln!(self.out, "namespace {};", to_namespace_id(&info.title))
+            .unwrap();
         writeln!(self.out).unwrap();
     }
 
@@ -1852,6 +1855,26 @@ fn escape_tsp_string(s: &str) -> String {
         .replace('\r', "\\r")
 }
 
+/// Quote and escape `s` as a TypeSpec string literal.
+fn tsp_str(s: &str) -> String {
+    format!("\"{}\"", escape_tsp_string(s))
+}
+
+/// Emit a TypeSpec value-typed object literal (`#{ k: v, ... }`). Fields with
+/// `None` values are skipped. Values are written verbatim, so callers pass
+/// pre-formatted literals (e.g. `tsp_str("foo")` or a nested `tsp_object`).
+fn tsp_object(fields: &[(&str, Option<String>)]) -> String {
+    let parts: Vec<String> = fields
+        .iter()
+        .filter_map(|(k, v)| v.as_ref().map(|v| format!("{}: {}", k, v)))
+        .collect();
+    if parts.is_empty() {
+        "#{}".to_string()
+    } else {
+        format!("#{{ {} }}", parts.join(", "))
+    }
+}
+
 fn escape_property_name(name: &str) -> String {
     if is_valid_tsp_ident(name) {
         name.to_string()
@@ -1957,7 +1980,12 @@ mod tests {
         };
 
         let mut ctx = TypeSpecContext::new();
-        ctx.emit_preamble("Svc", &semver::Version::new(1, 0, 0), &tag_config);
+        let info = openapiv3::Info {
+            title: "Svc".to_string(),
+            version: "1.0.0".to_string(),
+            ..Default::default()
+        };
+        ctx.emit_preamble(&info, &semver::Version::new(1, 0, 0), &tag_config);
         let output = ctx.out;
 
         assert!(
