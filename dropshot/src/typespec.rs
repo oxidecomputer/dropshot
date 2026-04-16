@@ -82,12 +82,14 @@ pub fn api_to_typespec<C: ServerContext>(
                         &param.schema,
                         &mut definitions,
                     );
+                    let validators = collect_inline_validators(&param.schema);
                     op.params.push(ParamInfo {
                         location: ParamLocation::Path,
                         name: name.clone(),
                         ts_type,
                         required: param.required,
                         description: param.description.clone(),
+                        validators,
                     });
                 }
                 ApiEndpointParameterMetadata::Query(name) => {
@@ -95,12 +97,14 @@ pub fn api_to_typespec<C: ServerContext>(
                         &param.schema,
                         &mut definitions,
                     );
+                    let validators = collect_inline_validators(&param.schema);
                     op.params.push(ParamInfo {
                         location: ParamLocation::Query,
                         name: name.clone(),
                         ts_type,
                         required: param.required,
                         description: param.description.clone(),
+                        validators,
                     });
                 }
                 ApiEndpointParameterMetadata::Header(name) => {
@@ -108,12 +112,14 @@ pub fn api_to_typespec<C: ServerContext>(
                         &param.schema,
                         &mut definitions,
                     );
+                    let validators = collect_inline_validators(&param.schema);
                     op.params.push(ParamInfo {
                         location: ParamLocation::Header,
                         name: name.clone(),
                         ts_type,
                         required: param.required,
                         description: param.description.clone(),
+                        validators,
                     });
                 }
             }
@@ -195,7 +201,7 @@ pub fn api_to_typespec<C: ServerContext>(
     ctx.discriminated_unions = detect_discriminated_union_types(&definitions);
 
     // Emit preamble.
-    ctx.emit_preamble(title, version);
+    ctx.emit_preamble(title, version, api.get_tag_config());
 
     // Emit the generic ResultsPage model if any instantiations were found.
     if !ctx.results_page_rewrites.is_empty() {
@@ -304,7 +310,12 @@ impl TypeSpecContext {
         }
     }
 
-    fn emit_preamble(&mut self, title: &str, version: &semver::Version) {
+    fn emit_preamble(
+        &mut self,
+        title: &str,
+        version: &semver::Version,
+        tag_config: &crate::api_description::TagConfig,
+    ) {
         writeln!(self.out, "import \"@typespec/http\";").unwrap();
         writeln!(self.out, "import \"@typespec/openapi\";").unwrap();
         writeln!(self.out).unwrap();
@@ -318,6 +329,57 @@ impl TypeSpecContext {
         )
         .unwrap();
         writeln!(self.out, "@info(#{{ version: \"{}\" }})", version).unwrap();
+
+        // Tag metadata: emit one @tagMetadata decorator per configured tag
+        // that has description or externalDocs. Sort by name for stable output.
+        let mut tags: Vec<_> = tag_config
+            .tags
+            .iter()
+            .filter(|(_, d)| {
+                d.description.is_some() || d.external_docs.is_some()
+            })
+            .collect();
+        tags.sort_by(|a, b| a.0.cmp(b.0));
+        for (name, details) in tags {
+            write!(
+                self.out,
+                "@tagMetadata(\"{}\", #{{",
+                escape_tsp_string(name)
+            )
+            .unwrap();
+            let mut first = true;
+            if let Some(desc) = &details.description {
+                write!(
+                    self.out,
+                    " description: \"{}\"",
+                    escape_tsp_string(desc)
+                )
+                .unwrap();
+                first = false;
+            }
+            if let Some(ext) = &details.external_docs {
+                if !first {
+                    write!(self.out, ",").unwrap();
+                }
+                write!(
+                    self.out,
+                    " externalDocs: #{{ url: \"{}\"",
+                    escape_tsp_string(&ext.url)
+                )
+                .unwrap();
+                if let Some(d) = &ext.description {
+                    write!(
+                        self.out,
+                        ", description: \"{}\"",
+                        escape_tsp_string(d)
+                    )
+                    .unwrap();
+                }
+                write!(self.out, " }}").unwrap();
+            }
+            writeln!(self.out, " }})").unwrap();
+        }
+
         writeln!(self.out, "namespace {};", to_namespace_id(title)).unwrap();
         writeln!(self.out).unwrap();
     }
@@ -612,16 +674,12 @@ impl TypeSpecContext {
     }
 
     fn emit_op(&mut self, op: &OpInfo) {
-        // Doc comment.
-        let doc = match (&op.summary, &op.description) {
-            (Some(s), Some(d)) => Some(format!("{}\n\n{}", s, d)),
-            (Some(s), None) => Some(s.clone()),
-            (None, Some(d)) => Some(d.clone()),
-            (None, None) => None,
-        };
-        if let Some(doc) = doc {
-            writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(&doc))
+        if let Some(s) = &op.summary {
+            writeln!(self.out, "@summary(\"{}\")", escape_tsp_string(s))
                 .unwrap();
+        }
+        if let Some(d) = &op.description {
+            writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(d)).unwrap();
         }
 
         // Tags.
@@ -673,10 +731,16 @@ impl TypeSpecContext {
                 ParamLocation::Header => "@header",
             };
             let optional = if p.required { "" } else { "?" };
+            let validators = if p.validators.is_empty() {
+                String::new()
+            } else {
+                format!("{} ", p.validators.join(" "))
+            };
             params_parts.push((
                 p.description.as_deref(),
                 format!(
-                    "{} {}{}: {}",
+                    "{}{} {}{}: {}",
+                    validators,
                     decorator,
                     escape_property_name(&p.name),
                     optional,
@@ -880,6 +944,14 @@ impl TypeSpecContext {
         metadata: Option<&schemars::schema::Metadata>,
     ) {
         if let Some(meta) = metadata {
+            if let Some(title) = &meta.title {
+                writeln!(
+                    self.out,
+                    "@summary(\"{}\")",
+                    escape_tsp_string(title)
+                )
+                .unwrap();
+            }
             if let Some(desc) = &meta.description {
                 writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(desc))
                     .unwrap();
@@ -925,6 +997,8 @@ struct ParamInfo {
     ts_type: String,
     required: bool,
     description: Option<String>,
+    /// Inline decorators like `@minValue(1)` derived from the param's schema.
+    validators: Vec<String>,
 }
 
 struct BodyInfo {
@@ -1590,6 +1664,19 @@ fn extract_single_enum_value(schema: &Schema) -> Option<String> {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Collect TypeSpec validation decorators from an `ApiSchemaGenerator`, for
+/// use inline on operation parameters (e.g. `@minValue(1)` on a query limit).
+/// Returns decorators as strings without trailing whitespace.
+fn collect_inline_validators(gen: &ApiSchemaGenerator) -> Vec<String> {
+    let schema = match gen {
+        ApiSchemaGenerator::Static { schema, .. } => schema.as_ref(),
+        ApiSchemaGenerator::Gen { .. } => return Vec::new(),
+    };
+    let mut buf = String::new();
+    emit_validation_decorators(&mut buf, schema, "");
+    buf.lines().map(|l| l.to_string()).collect()
+}
+
 /// Emit TypeSpec validation decorators for a schema's constraints.
 fn emit_validation_decorators(out: &mut String, schema: &Schema, indent: &str) {
     let obj = match schema {
@@ -1843,6 +1930,78 @@ mod tests {
         assert_eq!(to_namespace_id("my cool api"), "MyCoolApi");
         assert_eq!(to_namespace_id("test"), "Test");
         assert_eq!(to_namespace_id("hello-world"), "HelloWorld");
+    }
+
+    #[test]
+    fn test_tag_metadata_emitted() {
+        use crate::api_description::{TagDetails, TagExternalDocs};
+        let mut tags = std::collections::HashMap::new();
+        tags.insert(
+            "disks".to_string(),
+            TagDetails {
+                description: Some("Disk operations.".to_string()),
+                external_docs: Some(TagExternalDocs {
+                    description: None,
+                    url: "https://docs.example.com/disks".to_string(),
+                }),
+            },
+        );
+        tags.insert(
+            "bare".to_string(),
+            TagDetails { description: None, external_docs: None },
+        );
+        let tag_config = crate::api_description::TagConfig {
+            allow_other_tags: true,
+            policy: crate::api_description::EndpointTagPolicy::Any,
+            tags,
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_preamble("Svc", &semver::Version::new(1, 0, 0), &tag_config);
+        let output = ctx.out;
+
+        assert!(
+            output.contains(
+                "@tagMetadata(\"disks\", #{ description: \"Disk operations.\", externalDocs: #{ url: \"https://docs.example.com/disks\" } })"
+            ),
+            "missing @tagMetadata for disks:\n{}",
+            output,
+        );
+        // Tags without description or externalDocs should not be emitted.
+        assert!(
+            !output.contains("@tagMetadata(\"bare\""),
+            "should not emit @tagMetadata for bare tag:\n{}",
+            output,
+        );
+    }
+
+    #[test]
+    fn test_schema_title_emitted_as_summary() {
+        // A scalar with a title in its metadata should emit @summary.
+        let obj = SchemaObject {
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                title: Some(
+                    "A name unique within the parent collection".to_string(),
+                ),
+                ..Default::default()
+            })),
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("Name", &obj);
+        let output = ctx.out;
+
+        assert!(
+            output.contains(
+                "@summary(\"A name unique within the parent collection\")"
+            ),
+            "title should emit as @summary:\n{}",
+            output,
+        );
     }
 
     #[test]
@@ -2765,10 +2924,10 @@ mod tests {
         );
     }
 
-    // -- Bug: Operation descriptions dropped --
+    // -- Operation summary and description --
 
     #[test]
-    fn test_op_summary_and_description_concatenated() {
+    fn test_op_summary_and_description_emitted_separately() {
         let op = OpInfo {
             method: "post".to_string(),
             path: "/v1/floating-ips".to_string(),
@@ -2790,19 +2949,15 @@ mod tests {
         ctx.emit_op(&op);
         let output = ctx.out;
 
-        // Both summary and description should appear in a single @doc,
-        // separated by \n\n.
         assert!(
-            output.contains(
-                r#"Create floating IP\n\nA specific IP address can be reserved."#
-            ),
-            "should concatenate summary and description:\n{}",
+            output.contains(r#"@summary("Create floating IP")"#),
+            "should emit @summary:\n{}",
             output,
         );
-        assert_eq!(
-            output.matches("@doc(").count(),
-            1,
-            "should have exactly one @doc:\n{}",
+        assert!(
+            output
+                .contains(r#"@doc("A specific IP address can be reserved.")"#),
+            "should emit @doc with description:\n{}",
             output,
         );
     }
@@ -2826,6 +2981,7 @@ mod tests {
                     ts_type: "NameOrId".to_string(),
                     required: true,
                     description: None,
+                    validators: vec![],
                 },
                 ParamInfo {
                     location: ParamLocation::Query,
@@ -2836,6 +2992,7 @@ mod tests {
                         "Also delete routes targeting this gateway."
                             .to_string(),
                     ),
+                    validators: vec![],
                 },
                 ParamInfo {
                     location: ParamLocation::Query,
@@ -2843,6 +3000,7 @@ mod tests {
                     ts_type: "NameOrId".to_string(),
                     required: false,
                     description: None,
+                    validators: vec![],
                 },
             ],
             body: None,
@@ -3358,6 +3516,7 @@ mod tests {
                 ts_type: "NameOrId".to_string(),
                 required: true,
                 description: None,
+                validators: vec![],
             }],
             body: None,
             response: ResponseInfo {
@@ -3404,6 +3563,7 @@ mod tests {
                 ts_type: "uuid".to_string(),
                 required: true,
                 description: None,
+                validators: vec![],
             }],
             body: None,
             response: ResponseInfo::default(),
