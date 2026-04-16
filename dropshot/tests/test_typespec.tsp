@@ -261,7 +261,7 @@ model WithDefaults {
 @get
 op authed_get(@header authorization: string, @header x_request_id?: string): Widget | Error;
 
-@doc("Create a composite")
+@summary("Create a composite")
 @route("/composites")
 @post
 op composite_create(@body body: CompositeCreate): {
@@ -273,34 +273,35 @@ op composite_create(@body body: CompositeCreate): {
 @get
 op constrained_get(): Constrained | Error;
 
-@doc("Start device auth")
+@summary("Start device auth")
 @route("/device/auth")
 @post
 op device_auth(@header contentType: "application/x-www-form-urlencoded", @body body: DeviceAuthRequest): void | Error;
 
-@doc("Get device token")
+@summary("Get device token")
 @route("/device/token")
 @post
 op device_token(): FreeformResponse | Error;
 
-@doc("Get disk source")
+@summary("Get disk source")
 @route("/disk-source")
 @get
 op disk_source_get(): DiskSource | Error;
 
-@doc("List disks")
+@summary("List disks")
+@doc("Returns a paginated list of all disks the caller can see. Use the `limit` and `page_token` query parameters to iterate through results.")
 @extension("x-dropshot-pagination", #{required: #[]})
 @route("/disks")
 @get
 op disk_list(
   @doc("Maximum number of items returned by a single call")
-  @query limit?: uint32 | null,
+  @minValue(1) @query limit?: uint32 | null,
   @query name?: string | null,
   @doc("Token returned by previous call to retrieve the subsequent page")
   @query page_token?: string | null
 ): ResultsPage<Disk> | Error;
 
-@doc("Get disk state")
+@summary("Get disk state")
 @route("/disks/{id}/state")
 @get
 op disk_state_get(@path id: string): DiskState | Error;
@@ -313,7 +314,7 @@ op flexible_get(): Flexible | Error;
 @get
 op instance_state_get(): InstanceState | Error;
 
-@doc("Redirect to login")
+@summary("Redirect to login")
 @route("/login")
 @get
 op login_redirect(): {
@@ -325,62 +326,62 @@ op login_redirect(): {
 @get
 op lookup(): LookupResult | Error;
 
-@doc("Get measurements")
+@summary("Get measurements")
 @route("/measurements")
 @get
 op measurement_get(): MeasurementBatch | Error;
 
-@doc("Get network info")
+@summary("Get network info")
 @route("/network-info")
 @get
 op network_info_get(): NetworkInfo | Error;
 
-@doc("Old endpoint")
+@summary("Old endpoint")
 #deprecated "deprecated"
 @route("/old")
 @get
 op old_get(): void | Error;
 
-@doc("Get paint job")
+@summary("Get paint job")
 @route("/paint")
 @get
 op paint_get(): PaintJob | Error;
 
-@doc("List physical disks")
+@summary("List physical disks")
 @extension("x-dropshot-pagination", #{required: #[]})
 @route("/physical-disks")
 @get
 op physical_disk_list(
   @doc("Maximum number of items returned by a single call")
-  @query limit?: uint32 | null,
+  @minValue(1) @query limit?: uint32 | null,
   @query name?: string | null,
   @doc("Token returned by previous call to retrieve the subsequent page")
   @query page_token?: string | null
 ): ResultsPage<PhysicalDisk> | Error;
 
-@doc("Health check")
+@summary("Health check")
 @route("/ping")
 @get
 op ping(): void | Error;
 
-@doc("List projects")
+@summary("List projects")
 @extension("x-dropshot-pagination", #{required: #[]})
 @route("/projects")
 @get
 op project_list(
   @doc("Maximum number of items returned by a single call")
-  @query limit?: uint32 | null,
+  @minValue(1) @query limit?: uint32 | null,
   @query name_or_id?: string | null,
   @doc("Token returned by previous call to retrieve the subsequent page")
   @query page_token?: string | null
 ): ResultsPage<Widget> | Error;
 
-@doc("Raw bytes")
+@summary("Raw bytes")
 @route("/raw")
 @get
 op raw_get(): void | Error;
 
-@doc("Start a task")
+@summary("Start a task")
 @route("/tasks")
 @post
 op task_start(@body body: WidgetCreate): {
@@ -388,17 +389,17 @@ op task_start(@body body: WidgetCreate): {
   @body body: Widget;
 } | Error;
 
-@doc("Upload raw bytes")
+@summary("Upload raw bytes")
 @route("/upload")
 @post
 op upload_bytes(@header contentType: "application/octet-stream", @body body: bytes): void | Error;
 
-@doc("Upload multipart")
+@summary("Upload multipart")
 @route("/upload-multipart")
 @post
 op upload_multipart(@header contentType: "multipart/form-data", @body body: bytes): void | Error;
 
-@doc("Create a widget")
+@summary("Create a widget")
 @route("/widgets")
 @post
 op widget_create(@body body: WidgetCreate): {
@@ -406,13 +407,13 @@ op widget_create(@body body: WidgetCreate): {
   @body body: Widget;
 } | Error;
 
-@doc("Delete a widget")
+@summary("Delete a widget")
 @tag("widgets")
 @route("/widgets/{id}")
 @delete
 op widget_delete(@path id: string): void | Error;
 
-@doc("Get a widget")
+@summary("Get a widget")
 @route("/widgets/{id}")
 @get
 op widget_get(@path id: string): Widget | Error;
@@ -433,7 +434,7 @@ op with_defaults_create(@body body: WithDefaults): {
   @body body: WithDefaults;
 } | Error;
 
-@doc("Get with etag")
+@summary("Get with etag")
 @route("/with-etag")
 @get
 op with_etag(): {

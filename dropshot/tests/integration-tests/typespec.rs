@@ -578,6 +578,9 @@ struct DiskPageSelector {
     path = "/disks",
 }]
 /// List disks
+///
+/// Returns a paginated list of all disks the caller can see. Use the `limit`
+/// and `page_token` query parameters to iterate through results.
 async fn disk_list(
     _rqctx: RequestContext<()>,
     _query: Query<PaginationParams<DiskScanParams, DiskPageSelector>>,
