@@ -5,7 +5,8 @@ using Http;
 using OpenAPI;
 
 @service(#{ title: "Widget Service" })
-@info(#{ version: "1.0.0", description: "API for managing widgets and their component parts", contact: #{ name: "Widget Co", url: "https://widgets.example.com", email: "api@widgets.example.com" } })
+@info(#{ version: "1.0.0", contact: #{ name: "Widget Co", url: "https://widgets.example.com", email: "api@widgets.example.com" } })
+@doc("API for managing widgets and their component parts")
 namespace WidgetService;
 
 model ResultsPage<T> {

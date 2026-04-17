@@ -346,7 +346,6 @@ impl TypeSpecContext {
             "@info({})",
             tsp_object(&[
                 ("version", Some(tsp_str(&version.to_string()))),
-                ("description", info.description.as_deref().map(tsp_str)),
                 ("contact", contact),
             ])
         )
@@ -382,6 +381,9 @@ impl TypeSpecContext {
             .unwrap();
         }
 
+        if let Some(desc) = info.description.as_deref() {
+            writeln!(self.out, "@doc({})", tsp_str(desc)).unwrap();
+        }
         writeln!(self.out, "namespace {};", to_namespace_id(&info.title))
             .unwrap();
         writeln!(self.out).unwrap();

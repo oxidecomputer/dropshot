@@ -37,40 +37,11 @@ inlines `{type: string, format: uuid}` and has no `uuid` in
 4XX/5XX responses. Existing puts `Error` in `components/responses` and uses
 `$ref`. The `@error` model has all the needed info.
 
-**`summary` vs `description` on operations.** The emitter puts `@doc` text
-into `description`. Existing puts the short text into `summary` (no
-`description` for one-liners). TypeSpec supports `@summary` but the tsp
-generator doesn't emit it (see missing info below).
-
 **Other emitter defaults:**
 - 200 response description: "The request has succeeded." vs "successful operation"
 - `explode: false` on all query params (absent in existing)
 - OpenAPI version 3.0.0 vs 3.0.3
 - 577 schemas (variants broken out) vs 457 (variants inlined)
-
-## Information missing from the tsp
-
-These are gaps where the tsp generator doesn't emit metadata that exists in the
-Rust/dropshot layer. A custom emitter can't compensate for missing input.
-
-**`info.description` and `info.contact`.** The `@service`/`@info` decorators
-only have title and version. Existing has description ("API for interacting
-with the Oxide control plane") and contact (oxide.computer, api@oxide.computer).
-
-**Tag descriptions and externalDocs.** Tags are emitted as bare `@tag("disks")`
-with no description or URL. Existing has descriptions and `externalDocs` URLs
-for every tag.
-
-**`minimum: 1` on limit params.** `@query limit?: uint32 | null` has no
-`@minValue(1)`. Dropshot's pagination layer adds this constraint.
-
-**Schema `title` fields.** e.g., `Name` is missing
-`title: "A name unique within the parent collection"`. These come from
-`#[schemars(title = "...")]` in Rust.
-
-**`@summary` on operations.** Only `@doc` is emitted (which maps to
-`description`). The existing schema uses `summary` for the short operation
-label. TypeSpec supports `@summary` — the tsp generator just doesn't emit it.
 
 ## Verdict
 
@@ -84,11 +55,6 @@ handle discriminator inlining, ResultsPage monomorphization, uuid inlining, etc.
 But since the goal is for tsp to be the canonical format and OpenAPI to be a
 legacy derived artifact, the official `@typespec/openapi3` emitter is likely good
 enough.
-
-The tsp generator gaps (info.contact, tag descriptions, limit minimum, schema
-titles, @summary) are all straightforward additions to the Rust tsp generation
-code and should be addressed regardless, since SDK generators will need that
-metadata.
 
 ## Broader considerations: what role should the tsp play?
 
@@ -141,18 +107,26 @@ generated independently.
 
 ### End state
 
-The goal is for tsp to be the canonical API description format. All SDK
-generation (Rust and other languages) would consume the tsp directly. OpenAPI
-becomes a derived artifact for backward compatibility — anyone who wants a
-standard OpenAPI doc can get one, but no codegen depends on its specific shape.
+If the goal is for tsp to be the canonical API description format — with all
+SDK generation (Rust and other languages) consuming the tsp directly, and
+OpenAPI reduced to a derived artifact for backward compatibility — then a few
+things follow:
 
-This means the emitter-artifact differences cataloged above (discriminator
-style, ResultsPage naming, uuid inlining, etc.) don't need to be fixed. The
-official `@typespec/openapi3` emitter is probably fine for producing the legacy
-OpenAPI as-is — it just needs to be a valid document describing the same API, not
-a byte-for-byte match with today's output.
+- The tsp generator has to be complete and precise enough to be the sole input
+  for SDK generation. Gaps should be addressed as SDK generator work surfaces
+  them.
+- OpenAPI needs to be derived *from* the tsp rather than generated
+  independently, so the two can't drift. The official `@typespec/openapi3`
+  emitter is probably fine for this — it just needs to produce a valid document
+  describing the same API, not a byte-for-byte match with today's output.
+- Given the above, the emitter-artifact differences cataloged earlier
+  (discriminator style, ResultsPage naming, uuid inlining, etc.) don't need to
+  be fixed.
+- SDK generators need a path from tsp to code: either via TypeSpec's own client
+  emitter infra, or via a Rust tsp parser if we want to keep the Rust SDK
+  generator in-tree and Rust-only.
 
-The real priority is the tsp generator: making sure the tsp is complete and
-precise enough to be the sole input for SDK generation. The missing-info gaps
-(tag descriptions, schema titles, limit constraints, summary vs description)
-matter because SDK generators will need that metadata.
+If instead the goal is more modest — tsp as an additional output for
+interoperability, with the dropshot-generated OpenAPI remaining canonical —
+then none of the above is required, and the existing independent generation is
+fine.
