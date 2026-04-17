@@ -14,6 +14,8 @@ use crate::server::ServerContext;
 use crate::ApiDescription;
 
 use indexmap::IndexMap;
+use schemars::r#gen::SchemaGenerator;
+use schemars::r#gen::SchemaSettings;
 use schemars::schema::InstanceType;
 use schemars::schema::Schema;
 use schemars::schema::SchemaObject;
@@ -35,8 +37,8 @@ pub fn api_to_typespec<C: ServerContext>(
     let mut ctx = TypeSpecContext::new();
 
     // Collect endpoints and schemas.
-    let settings = schemars::gen::SchemaSettings::openapi3();
-    let mut generator = schemars::gen::SchemaGenerator::new(settings);
+    let settings = SchemaSettings::openapi3();
+    let mut generator = SchemaGenerator::new(settings);
     let mut definitions = IndexMap::<String, Schema>::new();
 
     let mut ops = Vec::new();
@@ -1024,11 +1026,11 @@ enum ParamLocation {
 /// Convert an `ApiSchemaGenerator` to a TypeSpec type string, using the
 /// schemars generator for dynamic schemas.
 fn schema_gen_to_typespec(
-    gen: &ApiSchemaGenerator,
-    generator: &mut schemars::gen::SchemaGenerator,
+    api_gen: &ApiSchemaGenerator,
+    generator: &mut SchemaGenerator,
     definitions: &mut IndexMap<String, Schema>,
 ) -> String {
-    match gen {
+    match api_gen {
         ApiSchemaGenerator::Gen { name, schema } => {
             let name_str = name();
             let js = schema(generator);
@@ -1053,10 +1055,10 @@ fn schema_gen_to_typespec(
 /// Convert a static `ApiSchemaGenerator` to a TypeSpec type string (for
 /// parameters which are always Static).
 fn schema_to_typespec_inline(
-    gen: &ApiSchemaGenerator,
+    api_gen: &ApiSchemaGenerator,
     definitions: &mut IndexMap<String, Schema>,
 ) -> String {
-    match gen {
+    match api_gen {
         ApiSchemaGenerator::Static { schema, dependencies } => {
             definitions.extend(dependencies.clone());
             schemars_to_typespec(schema)
@@ -1672,8 +1674,8 @@ fn extract_single_enum_value(schema: &Schema) -> Option<String> {
 /// Collect TypeSpec validation decorators from an `ApiSchemaGenerator`, for
 /// use inline on operation parameters (e.g. `@minValue(1)` on a query limit).
 /// Returns decorators as strings without trailing whitespace.
-fn collect_inline_validators(gen: &ApiSchemaGenerator) -> Vec<String> {
-    let schema = match gen {
+fn collect_inline_validators(api_gen: &ApiSchemaGenerator) -> Vec<String> {
+    let schema = match api_gen {
         ApiSchemaGenerator::Static { schema, .. } => schema.as_ref(),
         ApiSchemaGenerator::Gen { .. } => return Vec::new(),
     };
