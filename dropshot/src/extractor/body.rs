@@ -20,8 +20,7 @@ use bytes::BytesMut;
 use futures::Stream;
 use futures::TryStreamExt;
 use http_body_util::BodyExt;
-use schemars::schema::InstanceType;
-use schemars::schema::SchemaObject;
+use schemars::json_schema;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
@@ -127,14 +126,10 @@ impl ExclusiveExtractor for MultipartBody {
             ApiEndpointBodyContentType::MultipartFormData,
             true,
             ApiSchemaGenerator::Static {
-                schema: Box::new(
-                    SchemaObject {
-                        instance_type: Some(InstanceType::String.into()),
-                        format: Some(String::from("binary")),
-                        ..Default::default()
-                    }
-                    .into(),
-                ),
+                schema: Box::new(json_schema!({
+                    "type": "string",
+                    "format": "binary",
+                })),
                 dependencies: indexmap::IndexMap::default(),
             },
             vec![],
@@ -480,14 +475,10 @@ fn untyped_metadata() -> ExtractorMetadata {
             ApiEndpointBodyContentType::Bytes,
             true,
             ApiSchemaGenerator::Static {
-                schema: Box::new(
-                    SchemaObject {
-                        instance_type: Some(InstanceType::String.into()),
-                        format: Some(String::from("binary")),
-                        ..Default::default()
-                    }
-                    .into(),
-                ),
+                schema: Box::new(json_schema!({
+                    "type": "string",
+                    "format": "binary",
+                })),
                 dependencies: indexmap::IndexMap::default(),
             },
             vec![],

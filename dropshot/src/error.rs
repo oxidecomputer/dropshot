@@ -141,45 +141,28 @@ pub struct HttpErrorResponseBody {
 
 // We hand-roll our JSON schema to avoid `error_code` being "nullable".
 impl JsonSchema for HttpErrorResponseBody {
-    fn schema_name() -> String {
-        "Error".to_string()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Error".into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        concat!(module_path!(), "::HttpErrorResponseBody").into()
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        let str_schema = String::json_schema(gen);
-
-        schemars::schema::SchemaObject {
-            metadata: Some(
-                schemars::schema::Metadata {
-                    description: Some(
-                        "Error information from a response.".into(),
-                    ),
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            instance_type: Some(schemars::schema::InstanceType::Object.into()),
-            object: Some(
-                schemars::schema::ObjectValidation {
-                    required: ["message".into(), "request_id".into()]
-                        .into_iter()
-                        .collect(),
-                    properties: [
-                        ("error_code".into(), str_schema.clone()),
-                        ("message".into(), str_schema.clone()),
-                        ("request_id".into(), str_schema.clone()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            ..Default::default()
-        }
-        .into()
+        generator: &mut schemars::SchemaGenerator,
+    ) -> schemars::Schema {
+        let str_schema = String::json_schema(generator);
+        schemars::json_schema!({
+            "description": "Error information from a response.",
+            "type": "object",
+            "properties": {
+                "error_code": str_schema,
+                "message": str_schema,
+                "request_id": str_schema,
+            },
+            "required": ["message", "request_id"],
+        })
     }
 }
 

@@ -14,7 +14,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Null",
+                  "title": "null",
                   "type": "string",
                   "enum": [
                     null
@@ -51,7 +51,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Null",
+                  "title": "null",
                   "type": "string",
                   "enum": [
                     null
@@ -88,7 +88,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Null",
+                  "title": "null",
                   "type": "string",
                   "enum": [
                     null
@@ -212,8 +212,8 @@
           }
         },
         "required": [
-          "kind",
-          "message"
+          "message",
+          "kind"
         ]
       }
     },

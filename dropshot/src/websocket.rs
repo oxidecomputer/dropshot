@@ -68,7 +68,7 @@ impl HttpResponse for SwitchingToWebsocket {
             "Negotiating protocol upgrade from HTTP/1.1 to WebSocket";
         ApiEndpointResponse {
             schema: Some(ApiSchemaGenerator::Static {
-                schema: Box::new(schemars::schema::Schema::Bool(false)),
+                schema: Box::new(schemars::Schema::from(false)),
                 dependencies: Default::default(),
             }),
             headers: vec![],
@@ -313,18 +313,22 @@ pub(crate) const WEBSOCKET_EXTENSION: &str = "x-dropshot-websocket";
 pub(crate) const WEBSOCKET_PARAM_SENTINEL: &str = "x-dropshot-websocket-param";
 
 impl JsonSchema for WebsocketUpgrade {
-    fn schema_name() -> String {
-        "WebsocketUpgrade".to_string()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "WebsocketUpgrade".into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        concat!(module_path!(), "::WebsocketUpgrade").into()
     }
 
     fn json_schema(
-        _gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        let mut schema = schemars::schema::SchemaObject::default();
+        _generator: &mut schemars::SchemaGenerator,
+    ) -> schemars::Schema {
+        let mut schema = schemars::Schema::default();
         schema
-            .extensions
+            .ensure_object()
             .insert(WEBSOCKET_PARAM_SENTINEL.to_string(), json!(true));
-        schemars::schema::Schema::Object(schema)
+        schema
     }
 }
 

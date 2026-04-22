@@ -270,9 +270,11 @@
             "in": "query",
             "name": "a_number",
             "schema": {
+              "default": 0,
               "type": "integer",
               "format": "uint16",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 65535
             }
           },
           {
@@ -598,7 +600,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Null",
+                  "title": "null",
                   "type": "string",
                   "enum": [
                     null
@@ -670,7 +672,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Null",
+                  "title": "null",
                   "type": "string",
                   "enum": [
                     null
@@ -1001,7 +1003,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Null",
+                  "title": "null",
                   "type": "string",
                   "enum": [
                     null
@@ -1067,7 +1069,14 @@
                 "description": "this is a foo that is non-required",
                 "style": "simple",
                 "schema": {
-                  "$ref": "#/components/schemas/Foo"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Foo"
+                    },
+                    {
+                      "nullable": true
+                    }
+                  ]
                 }
               }
             }
@@ -1121,8 +1130,8 @@
           }
         },
         "required": [
-          "any",
-          "x"
+          "x",
+          "any"
         ]
       },
       "BodyParamNested": {
@@ -1140,7 +1149,8 @@
           "another_thing": {
             "type": "integer",
             "format": "uint16",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 65535
           }
         },
         "required": [
@@ -1161,8 +1171,8 @@
               }
             },
             "required": [
-              "thing_one",
-              "type"
+              "type",
+              "thing_one"
             ]
           },
           {
@@ -1182,9 +1192,9 @@
               }
             },
             "required": [
+              "type",
               "thing_one",
-              "thing_two",
-              "type"
+              "thing_two"
             ]
           }
         ]

@@ -20,24 +20,17 @@ pub(crate) fn get_metadata<ParamType>(
 where
     ParamType: JsonSchema,
 {
-    let mut settings = schemars::gen::SchemaSettings::openapi3();
-
-    // Headers can't be null.
-    if let ApiEndpointParameterLocation::Header = loc {
-        settings.option_nullable = false;
-    }
+    let settings = schemars::generate::SchemaSettings::openapi3();
 
     // Generate the type for `ParamType` then pluck out each member of
     // the structure to encode as an individual parameter.
-    let mut generator = schemars::gen::SchemaGenerator::new(settings);
-    let schema = generator.root_schema_for::<ParamType>().schema.into();
+    let mut generator = schemars::generate::SchemaGenerator::new(settings);
+    let schema = generator.root_schema_for::<ParamType>();
 
     let extension_mode = match schema_extensions(&schema) {
         Some(extensions) => {
-            let paginated =
-                extensions.get(&PAGINATION_PARAM_SENTINEL.to_string());
-            let websocket =
-                extensions.get(&WEBSOCKET_PARAM_SENTINEL.to_string());
+            let paginated = extensions.get(PAGINATION_PARAM_SENTINEL);
+            let websocket = extensions.get(WEBSOCKET_PARAM_SENTINEL);
             match (paginated, websocket) {
                 (None, None) => ExtensionMode::None,
                 (None, Some(_)) => ExtensionMode::Websocket,
@@ -52,6 +45,20 @@ where
         None => ExtensionMode::None,
     };
 
+    let is_header = matches!(loc, ApiEndpointParameterLocation::Header);
+    let dependencies: indexmap::IndexMap<String, schemars::Schema> = generator
+        .definitions()
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                v.clone()
+                    .try_into()
+                    .expect("schemars definition must be an object or bool"),
+            )
+        })
+        .collect();
+
     // Convert our collection of struct members list of parameters.
     let parameters = schema2struct(
         &ParamType::schema_name(),
@@ -61,7 +68,17 @@ where
         true,
     )
     .into_iter()
-    .map(|StructMember { name, description, schema, required }| {
+    .map(|StructMember { name, description, mut schema, required }| {
+        // Header values can never be null; schemars' OpenAPI 3.0 output
+        // attaches `"nullable": true` to `Option<T>` fields, but that's wrong
+        // for headers, where an absent value is represented by the absence
+        // of the header rather than a null value. Strip it here so the
+        // emitted OpenAPI matches the 0.8 behavior of `option_nullable=false`.
+        if is_header {
+            if let Some(obj) = schema.as_object_mut() {
+                obj.remove("nullable");
+            }
+        }
         ApiEndpointParameter::new_named(
             loc,
             name,
@@ -69,11 +86,7 @@ where
             required,
             ApiSchemaGenerator::Static {
                 schema: Box::new(schema),
-                dependencies: generator
-                    .definitions()
-                    .clone()
-                    .into_iter()
-                    .collect(),
+                dependencies: dependencies.clone(),
             },
             Vec::new(),
         )
@@ -200,7 +213,7 @@ mod test {
             params,
             ExtensionMode::Paginated(serde_json::json!(
                 {
-                    "required": ["bar", "foo"]
+                    "required": ["foo", "bar"]
                 }
             )),
             expected,

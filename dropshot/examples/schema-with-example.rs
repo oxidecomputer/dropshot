@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 // }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
-#[schemars(example = "foo_example")]
+#[schemars(example = foo_example())]
 /// # Foo Object
 struct Foo {
     /// Foo ID
@@ -30,7 +30,7 @@ struct Foo {
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
-#[schemars(example = "bar_example")]
+#[schemars(example = bar_example())]
 /// # Bar Object
 struct Bar {
     /// Bar ID

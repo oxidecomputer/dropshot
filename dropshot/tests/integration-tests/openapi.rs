@@ -367,7 +367,7 @@ async fn handler18(
 }
 
 #[derive(Serialize, JsonSchema)]
-#[schemars(example = "example_object_with_example")]
+#[schemars(example = example_object_with_example())]
 struct ObjectWithExample {
     id: u32,
     name: String,
@@ -375,7 +375,7 @@ struct ObjectWithExample {
 }
 
 #[derive(Serialize, JsonSchema)]
-#[schemars(example = "example_nested_object_with_example")]
+#[schemars(example = example_nested_object_with_example())]
 struct NestedObjectWithExample {
     nick_name: String,
 }
@@ -562,36 +562,30 @@ struct WithXRustType<T> {
 }
 
 impl<T: JsonSchema> JsonSchema for WithXRustType<T> {
-    fn schema_name() -> String {
-        format!("WithXRustTypeFor{}", T::schema_name())
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        format!("WithXRustTypeFor{}", T::schema_name()).into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        format!("{}::WithXRustType<{}>", module_path!(), T::schema_id()).into()
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        use schemars::schema::*;
-
-        let mut schema = SchemaObject {
-            instance_type: Some(SingleOrVec::Single(Box::new(
-                InstanceType::String,
-            ))),
-            ..Default::default()
-        };
-
-        // Add the x-rust-type extension.
-        let mut extensions = schemars::Map::new();
+        generator: &mut schemars::SchemaGenerator,
+    ) -> schemars::Schema {
+        let subschema = generator.subschema_for::<T>();
         let rust_type = serde_json::json!({
             "crate": "foo",
             "version": "*",
             "path": "foo",
             "parameters": [
-                gen.subschema_for::<T>(),
+                subschema,
             ],
         });
-        extensions.insert("x-rust-type".to_string(), rust_type);
-        schema.extensions = extensions;
-
-        Schema::Object(schema)
+        schemars::json_schema!({
+            "type": "string",
+            "x-rust-type": rust_type,
+        })
     }
 }
 

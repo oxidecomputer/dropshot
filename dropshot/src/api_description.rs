@@ -389,13 +389,12 @@ impl ApiEndpointErrorResponse {
 /// Wrapper for both dynamically generated and pre-generated schemas.
 pub enum ApiSchemaGenerator {
     Gen {
-        name: fn() -> String,
-        schema:
-            fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
+        name: fn() -> std::borrow::Cow<'static, str>,
+        schema: fn(&mut schemars::SchemaGenerator) -> schemars::Schema,
     },
     Static {
-        schema: Box<schemars::schema::Schema>,
-        dependencies: indexmap::IndexMap<String, schemars::schema::Schema>,
+        schema: Box<schemars::Schema>,
+        dependencies: indexmap::IndexMap<String, schemars::Schema>,
     },
 }
 
@@ -715,10 +714,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // Sort the tags for stability
         openapi.tags.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::generate::SchemaSettings::openapi3();
+        let mut generator = schemars::generate::SchemaGenerator::new(settings);
         let mut definitions =
-            indexmap::IndexMap::<String, schemars::schema::Schema>::new();
+            indexmap::IndexMap::<String, schemars::Schema>::new();
 
         // A response object generated for an endpoint's error response.  These
         // are emitted in the top-level `components.responses` map in the
@@ -864,7 +863,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             (None, schema.as_ref().clone())
                         }
                     };
-                    let schema = j2oas_schema(name.as_ref(), &js);
+                    let schema = j2oas_schema(name.as_deref(), &js);
 
                     let mut content = indexmap::IndexMap::new();
                     content.insert(
@@ -914,7 +913,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     content.insert(
                         CONTENT_TYPE_JSON.to_string(),
                         openapiv3::MediaType {
-                            schema: Some(j2oas_schema(name.as_ref(), &js)),
+                            schema: Some(j2oas_schema(name.as_deref(), &js)),
                             ..Default::default()
                         },
                     );
@@ -1035,14 +1034,15 @@ impl<Context: ServerContext> ApiDescription<Context> {
                                 ref name,
                                 ref schema,
                             } => {
+                                let name_cow = name();
                                 let schema = j2oas_schema(
-                                Some(&name()),
-                                &schema(&mut generator),
-                            );
-                            // If there's a schema name, reuse that rather than
-                            // the Rust type name.
-                            (schema, name())
-                        }
+                                    Some(name_cow.as_ref()),
+                                    &schema(&mut generator),
+                                );
+                                // If there's a schema name, reuse that rather
+                                // than the Rust type name.
+                                (schema, name_cow.into_owned())
+                            }
                             ApiSchemaGenerator::Static {
                                 ref schema,
                                 ref dependencies,
@@ -1123,10 +1123,13 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // Add the schemas for which we generated references.
         let schemas = &mut components.schemas;
 
-        let root_schema = generator.into_root_schema_for::<()>();
-        root_schema.definitions.iter().for_each(|(key, schema)| {
-            schemas.insert(key.clone(), j2oas_schema(None, schema));
-        });
+        let generated_definitions = generator.take_definitions(true);
+        for (key, value) in generated_definitions {
+            let schema: schemars::Schema = value
+                .try_into()
+                .expect("schemars definition must be an object or bool");
+            schemas.insert(key, j2oas_schema(None, &schema));
+        }
 
         definitions.into_iter().for_each(|(key, schema)| {
             if !schemas.contains_key(&key) {
@@ -1412,59 +1415,29 @@ impl slog::Value for ApiEndpointVersions {
 }
 
 /// Returns true iff the schema represents the void schema that matches no data.
-fn is_empty(schema: &schemars::schema::Schema) -> bool {
-    if let schemars::schema::Schema::Bool(false) = schema {
+fn is_empty(schema: &schemars::Schema) -> bool {
+    if schema.as_bool() == Some(false) {
         return true;
     }
-    if let schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-        metadata: _,
-        instance_type: None,
-        format: None,
-        enum_values: None,
-        const_value: None,
-        subschemas: Some(subschemas),
-        number: None,
-        string: None,
-        array: None,
-        object: None,
-        reference: None,
-        extensions: _,
-    }) = schema
-    {
-        if let schemars::schema::SubschemaValidation {
-            all_of: None,
-            any_of: None,
-            one_of: None,
-            not: Some(not),
-            if_schema: None,
-            then_schema: None,
-            else_schema: None,
-        } = subschemas.as_ref()
-        {
-            match not.as_ref() {
-                schemars::schema::Schema::Bool(true) => return true,
-                schemars::schema::Schema::Object(
-                    schemars::schema::SchemaObject {
-                        metadata: _,
-                        instance_type: None,
-                        format: None,
-                        enum_values: None,
-                        const_value: None,
-                        subschemas: None,
-                        number: None,
-                        string: None,
-                        array: None,
-                        object: None,
-                        reference: None,
-                        extensions: _,
-                    },
-                ) => return true,
-                _ => {}
-            }
-        }
-    }
+    let Some(obj) = schema.as_object() else {
+        return false;
+    };
 
-    false
+    // The "void" schema we emit for endpoints without a response body is
+    // `{ "not": {} }` (equivalent to `{ "not": true }` since `{}` matches
+    // anything). Recognize both forms, and require that `not` is the only
+    // body field.
+    if obj.len() != 1 {
+        return false;
+    }
+    let Some(not_value) = obj.get("not") else {
+        return false;
+    };
+    match not_value {
+        serde_json::Value::Bool(true) => true,
+        serde_json::Value::Object(m) => m.is_empty(),
+        _ => false,
+    }
 }
 
 /// This object is used to specify configuration for building an OpenAPI

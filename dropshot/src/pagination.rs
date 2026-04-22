@@ -126,14 +126,19 @@ impl<ItemType> JsonSchema for ResultsPage<ItemType>
 where
     ItemType: JsonSchema,
 {
-    fn schema_name() -> String {
-        format!("{}ResultsPage", ItemType::schema_name())
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        format!("{}ResultsPage", ItemType::schema_name()).into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        format!("{}::ResultsPage<{}>", module_path!(), ItemType::schema_id())
+            .into()
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
-        ResultsPageSchema::<ItemType>::json_schema(gen)
+        generator: &mut schemars::SchemaGenerator,
+    ) -> schemars::Schema {
+        ResultsPageSchema::<ItemType>::json_schema(generator)
     }
 }
 
@@ -260,7 +265,7 @@ pub(crate) const PAGINATION_EXTENSION: &str = "x-dropshot-pagination";
 
 #[derive(Serialize)]
 struct PaginationParamSentinelValue {
-    required: schemars::Set<String>,
+    required: Vec<String>,
 }
 
 impl<ScanParams, PageSelector> JsonSchema
@@ -269,13 +274,22 @@ where
     ScanParams: DeserializeOwned + JsonSchema,
     PageSelector: DeserializeOwned + Serialize,
 {
-    fn schema_name() -> String {
-        "PaginationParams".to_string()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "PaginationParams".into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        format!(
+            "{}::PaginationParams<{}>",
+            module_path!(),
+            ScanParams::schema_id()
+        )
+        .into()
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
+        generator: &mut schemars::SchemaGenerator,
+    ) -> schemars::Schema {
         // We use `SchemaPaginationParams` to generate an intuitive schema and
         // we use the JSON schema extensions mechanism to communicate the fact
         // that this is a pagination parameter. We'll later use this to tag
@@ -287,23 +301,32 @@ where
         //
         // TODO we would ideally like to verify that both parameters *and*
         // response structure are properly configured for pagination.
-        let mut schema = SchemaPaginationParams::<ScanParams>::json_schema(gen)
-            .into_object();
-        let first_page_schema = ScanParams::json_schema(gen);
-        let Some(first_page_object) = first_page_schema.into_object().object
-        else {
+        let mut schema =
+            SchemaPaginationParams::<ScanParams>::json_schema(generator);
+
+        // Read the "required" array from ScanParams's schema so we can record
+        // which fields are required in the first-page form.
+        let first_page_schema = ScanParams::json_schema(generator);
+        let Some(first_page_obj) = first_page_schema.as_object() else {
             panic!("ScanParams must be an object");
         };
+        let required: Vec<String> = first_page_obj
+            .get("required")
+            .and_then(serde_json::Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
 
-        let value = PaginationParamSentinelValue {
-            required: first_page_object.required,
-        };
-
-        schema.extensions.insert(
+        let value = PaginationParamSentinelValue { required };
+        schema.ensure_object().insert(
             PAGINATION_PARAM_SENTINEL.to_string(),
             serde_json::to_value(value).unwrap(),
         );
-        schemars::schema::Schema::Object(schema)
+        schema
     }
 }
 
@@ -830,14 +853,17 @@ mod test {
 
     #[test]
     fn test_pagination_schema() {
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::generate::SchemaSettings::openapi3();
+        let mut generator = schemars::generate::SchemaGenerator::new(settings);
         let schema =
-            PaginationParams::<Name, Name>::json_schema(&mut generator)
-                .into_object();
+            PaginationParams::<Name, Name>::json_schema(&mut generator);
 
         assert_eq!(
-            *schema.extensions.get(PAGINATION_PARAM_SENTINEL).unwrap(),
+            *schema
+                .as_object()
+                .unwrap()
+                .get(PAGINATION_PARAM_SENTINEL)
+                .unwrap(),
             json!({
                 "required": [
                     "name"

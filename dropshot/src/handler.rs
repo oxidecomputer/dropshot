@@ -960,7 +960,7 @@ impl HttpResponseContent for Empty {
 
     fn content_metadata() -> Option<ApiSchemaGenerator> {
         Some(ApiSchemaGenerator::Static {
-            schema: Box::new(schemars::schema::Schema::Bool(false)),
+            schema: Box::new(schemars::Schema::from(false)),
             dependencies: indexmap::IndexMap::default(),
         })
     }
@@ -1498,10 +1498,24 @@ impl<
     fn response_metadata() -> ApiEndpointResponse {
         let mut metadata = T::response_metadata();
 
-        let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
+        let mut generator = schemars::generate::SchemaGenerator::new(
+            schemars::generate::SchemaSettings::openapi3(),
         );
-        let schema = generator.root_schema_for::<H>().schema.into();
+        let schema = generator.root_schema_for::<H>();
+
+        let dependencies: indexmap::IndexMap<String, schemars::Schema> =
+            generator
+                .definitions()
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        v.clone().try_into().expect(
+                            "schemars definition must be an object or bool",
+                        ),
+                    )
+                })
+                .collect();
 
         let headers = schema2struct(
             &H::schema_name(),
@@ -1517,11 +1531,7 @@ impl<
                 description,
                 schema: ApiSchemaGenerator::Static {
                     schema: Box::new(schema),
-                    dependencies: generator
-                        .definitions()
-                        .clone()
-                        .into_iter()
-                        .collect(),
+                    dependencies: dependencies.clone(),
                 },
                 required,
             }
