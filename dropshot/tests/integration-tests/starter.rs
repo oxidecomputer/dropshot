@@ -63,7 +63,7 @@ async fn test_with_tls() {
         certs.into_iter().next_back().expect("at least one certificate");
     let client = reqwest::Client::builder()
         .use_rustls_tls()
-        .add_root_certificate(my_ca_root)
+        .tls_certs_only([my_ca_root])
         .build()
         .unwrap();
     let api = demo_api();
