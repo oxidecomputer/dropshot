@@ -69,8 +69,13 @@ fn http_request_load_query<QueryType>(
 where
     QueryType: DeserializeOwned + JsonSchema + Send + Sync,
 {
+    // We do allow duplicate keys for sequence-type parameters (e.g. a Vec),
+    // but don't want duplicate keys ignored for scalar parameters.
+    const QS_CONFIG: serde_qs::Config = serde_qs::Config::new()
+        .duplicate_key_behavior(serde_qs::DuplicateKeyBehavior::Error);
+
     let raw_query_string = request.uri().query().unwrap_or("");
-    match serde_qs::from_str(raw_query_string) {
+    match QS_CONFIG.deserialize_str(raw_query_string) {
         Ok(q) => Ok(Query { inner: q }),
         Err(e) => Err(HttpError::for_bad_request(
             None,
