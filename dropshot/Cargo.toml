@@ -26,14 +26,14 @@ futures = "0.3.32"
 hostname = "0.4.2"
 http = "1.4.0"
 http-body-util = "0.1.3"
-indexmap = "2.13.0"
+indexmap = "2.14.0"
 multer = "3.1.0"
 paste = "1.0.15"
 percent-encoding = "2.3.2"
-rustls = "0.22.4"
+rustls = { version = "0.23.38", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
 rustls-pemfile = "2.2.0"
 scopeguard = "1.2.0"
-semver = "1.0.27"
+semver = "1.0.28"
 serde_json = "1.0.149"
 serde_path_to_error = "0.1.20"
 serde_urlencoded = "0.7.1"
@@ -45,8 +45,8 @@ slog-bunyan = "2.5.0"
 slog-json = "2.6.1"
 slog-term = "2.9.2"
 thiserror = "2.0.18"
-tokio-rustls = "0.25.0"
-toml = "1.0.7"
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["aws_lc_rs", "logging", "tls12"] }
+toml = "1.1.2"
 waitgroup = "0.1.2"
 
 [dependencies.chrono]
@@ -59,7 +59,7 @@ version = "^0.17.0"
 path = "../dropshot_endpoint"
 
 [dependencies.hyper]
-version = "1.8.1"
+version = "1.9.0"
 features = [ "full" ]
 
 [dependencies.hyper-util]
@@ -75,7 +75,7 @@ version = "1.0.228"
 features = [ "derive" ]
 
 [dependencies.tokio]
-version = "1.50"
+version = "1.52"
 features = [ "full" ]
 
 [dependencies.tokio-util]
@@ -88,7 +88,7 @@ optional = true
 default-features = false
 
 [dependencies.uuid]
-version = "1.23.0"
+version = "1.23.1"
 features = [ "serde", "v4" ]
 
 [dependencies.schemars]
@@ -103,28 +103,28 @@ async-channel = "2.5.0"
 buf-list = "1.1.2"
 expectorate = "1.2.0"
 flate2 = "1.0"
-hyper-rustls = "0.26.0"
+hyper-rustls = "0.27.9"
 hyper-staticfile = "0.10"
 lazy_static = "1.5.0"
-libc = "0.2.183"
+libc = "0.2.186"
 mime_guess = "2.0.5"
 subprocess = "1.0.3"
 tempfile = "3.27"
 trybuild = "1.0.116"
 # Used by the https examples and tests
 pem = "3.0"
-rcgen = "0.14.7"
+rcgen = { version = "0.14.7", default-features = false, features = ["aws_lc_rs", "pem"] }
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.29.0"
 
 [dev-dependencies.reqwest]
-version = "0.12.28"
-# Using rustls-tls because it appears the rcgen-generated certificates are not
+version = "0.13.2"
+# Using rustls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
-features = [ "json", "rustls-tls" ]
+features = [ "json", "rustls" ]
 
 [dev-dependencies.rustls-pki-types]
-version = "1.14.0"
+version = "1.14.1"
 # Needed for CertificateDer::into_owned
 features = ["alloc"]
 
