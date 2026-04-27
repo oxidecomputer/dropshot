@@ -201,19 +201,21 @@ async fn test_demo2query() {
         string \"bar\", expected u32"
     );
 
-    // Test case: duplicated field name (we take the last one)
-    let mut response = testctx
+    // Test case: duplicated field name
+    let error = testctx
         .client_testctx
         .make_request(
             Method::GET,
-            "/testing/demo2query?test1=overwritten&test1=foo",
+            "/testing/demo2query?test1=foo&test1=bar",
             None as Option<()>,
-            StatusCode::OK,
+            StatusCode::BAD_REQUEST,
         )
         .await
-        .expect("expected success");
-    let json: DemoJsonBody = read_json(&mut response).await;
-    assert_eq!(json.test1, "foo");
+        .expect_err("expected failure");
+    assert_eq!(
+        error.message,
+        "unable to parse query string: multiple values provided for non-sequence field"
+    );
 
     // Test case: multiple value for a query parameter sequence
     let mut response = testctx
