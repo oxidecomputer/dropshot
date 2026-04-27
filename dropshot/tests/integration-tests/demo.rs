@@ -1547,7 +1547,10 @@ async fn demo_handler_websocket(
         None,
     )
     .await;
-    ws_stream.send(Message::Text("hello client".to_string().into())).await.unwrap();
+    ws_stream
+        .send(Message::Text("hello client".to_string().into()))
+        .await
+        .unwrap();
     let msg = ws_stream.next().await.unwrap().unwrap();
     slog::info!(rqctx.log, "{}", msg);
     Ok(())
