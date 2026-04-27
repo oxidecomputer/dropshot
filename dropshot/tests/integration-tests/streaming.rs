@@ -4,9 +4,11 @@
 
 use dropshot::Body;
 use dropshot::{endpoint, ApiDescription, HttpError, RequestContext};
+use futures::TryStreamExt as _;
 use http::{Method, Response, StatusCode};
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, StreamBody};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
+use tokio_util::io::ReaderStream;
 
 use crate::common;
 
@@ -46,9 +48,8 @@ async fn api_streaming(
     }
     file.seek(std::io::SeekFrom::Start(0)).await.unwrap();
 
-    let file_access = hyper_staticfile::vfs::TokioFileAccess::new(file);
-    let file_stream = hyper_staticfile::util::FileBytesStream::new(file_access);
-    let body = Body::wrap(hyper_staticfile::Body::Full(file_stream));
+    let stream = ReaderStream::new(file).map_ok(hyper::body::Frame::data);
+    let body = Body::wrap(StreamBody::new(stream));
     Ok(Response::builder().status(StatusCode::OK).body(body)?)
 }
 
