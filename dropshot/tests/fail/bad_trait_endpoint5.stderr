@@ -1,11 +1,8 @@
 error[E0277]: the trait bound `QueryParams: serde::Deserialize<'de>` is not satisfied
-  --> tests/fail/bad_trait_endpoint5.rs:39:5
+  --> tests/fail/bad_trait_endpoint5.rs:42:10
    |
-39 | /     async fn bad_endpoint(
-40 | |         _rqctx: RequestContext<()>,
-41 | |         _params: Query<QueryParams>,
-42 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | |________________________________________________________^ unsatisfied trait bound
+42 |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `for<'de> serde_core::de::Deserialize<'de>` is not implemented for `QueryParams`
   --> tests/fail/bad_trait_endpoint5.rs:13:1

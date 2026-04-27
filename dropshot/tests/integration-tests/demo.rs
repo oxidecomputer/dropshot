@@ -1148,9 +1148,9 @@ async fn test_demo_websocket() {
     );
     let (mut ws, _resp) = tokio_tungstenite::connect_async(path).await.unwrap();
 
-    ws.send(Message::Text("hello server".to_string())).await.unwrap();
+    ws.send(Message::Text("hello server".to_string().into())).await.unwrap();
     let msg = ws.next().await.unwrap().unwrap();
-    assert_eq!(msg, Message::Text("hello client".to_string()));
+    assert_eq!(msg, Message::Text("hello client".to_string().into()));
 
     testctx.teardown().await;
 }
@@ -1594,7 +1594,10 @@ async fn demo_handler_websocket(
         None,
     )
     .await;
-    ws_stream.send(Message::Text("hello client".to_string())).await.unwrap();
+    ws_stream
+        .send(Message::Text("hello client".to_string().into()))
+        .await
+        .unwrap();
     let msg = ws_stream.next().await.unwrap().unwrap();
     slog::info!(rqctx.log, "{}", msg);
     Ok(())

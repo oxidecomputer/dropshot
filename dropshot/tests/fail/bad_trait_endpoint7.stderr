@@ -89,12 +89,10 @@ note: required by a bound in `dropshot::HttpResponseOk`
    |                              ^^^^^^^^^^^^^^^^^^^ required by this bound in `HttpResponseOk`
 
 error[E0277]: the trait bound `Ret: serde::Serialize` is not satisfied
-  --> tests/fail/bad_trait_endpoint7.rs:38:5
+  --> tests/fail/bad_trait_endpoint7.rs:40:10
    |
-38 | /     async fn bad_endpoint(
-39 | |         _rqctx: RequestContext<()>,
-40 | |     ) -> Result<HttpResponseOk<Ret>, HttpError> {
-   | |_______________________________________________^ unsatisfied trait bound
+40 |     ) -> Result<HttpResponseOk<Ret>, HttpError> {
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `serde_core::ser::Serialize` is not implemented for `Ret`
   --> tests/fail/bad_trait_endpoint7.rs:13:1

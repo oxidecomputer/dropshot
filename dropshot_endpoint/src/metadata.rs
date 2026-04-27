@@ -1,4 +1,4 @@
-// Copyright 2025 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Code to handle metadata associated with an endpoint.
 
@@ -339,6 +339,7 @@ pub(crate) enum VersionRange {
 
 impl syn::parse::Parse for VersionRange {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let span = input.cursor().token_stream();
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Token![..]) {
             let _ = input.parse::<syn::Token![..]>()?;
@@ -350,7 +351,7 @@ impl syn::parse::Parse for VersionRange {
             }
         } else {
             let earliest = input.parse::<VersionSpecifier>()?;
-            let dotdot = input.parse::<syn::Token![..]>()?;
+            let _dotdot = input.parse::<syn::Token![..]>()?;
             let lookahead = input.lookahead1();
             if lookahead.peek(syn::LitStr) || lookahead.peek(syn::Ident) {
                 let latest = input.parse::<VersionSpecifier>()?;
@@ -361,7 +362,7 @@ impl syn::parse::Parse for VersionRange {
                     VersionSpecifier::Literal(latest_semver),
                 ) = (&earliest, &latest)
                 {
-                    let span = dotdot.to_token_stream();
+                    // let span = dotdot.to_token_stream();
                     if latest_semver < earliest_semver {
                         return Err(syn::Error::new_spanned(
                             span,

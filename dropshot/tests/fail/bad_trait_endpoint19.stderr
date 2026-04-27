@@ -5,6 +5,12 @@ error[E0277]: the trait bound `std::string::String: SharedExtractor` is not sati
    |     ^ the trait `SharedExtractor` is not implemented for `std::string::String`
    |
 help: the following other types implement trait `SharedExtractor`
+  --> src/extractor/query.rs
+   |
+   | / impl<QueryType> SharedExtractor for Query<QueryType>
+   | | where
+   | |     QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
+   | |_____________________________________________________________________^ `dropshot::Query<QueryType>`
    |
   ::: src/extractor/path.rs
    |
@@ -12,12 +18,6 @@ help: the following other types implement trait `SharedExtractor`
    | | where
    | |     PathType: DeserializeOwned + JsonSchema + Send + Sync + 'static,
    | |____________________________________________________________________^ `dropshot::Path<PathType>`
-  --> src/extractor/query.rs
-   |
-   | / impl<QueryType> SharedExtractor for Query<QueryType>
-   | | where
-   | |     QueryType: JsonSchema + DeserializeOwned + Send + Sync + 'static,
-   | |_____________________________________________________________________^ `dropshot::Query<QueryType>`
    |
   ::: src/extractor/header.rs
    |

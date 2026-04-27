@@ -872,6 +872,7 @@ mod dtrace;
 
 mod api_description;
 mod body;
+mod compression;
 mod config;
 mod error;
 mod error_status_code;
@@ -911,6 +912,8 @@ pub use api_description::TagConfig;
 pub use api_description::TagDetails;
 pub use api_description::TagExternalDocs;
 pub use body::Body;
+pub use compression::NoCompression;
+pub use config::CompressionConfig;
 pub use config::ConfigDropshot;
 pub use config::ConfigTls;
 pub use config::HandlerTaskMode;
