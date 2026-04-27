@@ -59,7 +59,7 @@ async fn example_api_websocket_counter(
     )
     .await;
     let mut count = qp.into_inner().start.unwrap_or(0);
-    while ws.send(Message::Binary(vec![count])).await.is_ok() {
+    while ws.send(Message::Binary(vec![count].into())).await.is_ok() {
         count = count.wrapping_add(1);
     }
     Ok(())

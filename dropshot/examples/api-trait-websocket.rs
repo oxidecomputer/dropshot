@@ -124,7 +124,7 @@ mod imp {
             )
             .await;
             let mut count = rqctx.context().counter.load(Ordering::Relaxed);
-            while ws.send(Message::Binary(vec![count])).await.is_ok() {
+            while ws.send(Message::Binary(vec![count].into())).await.is_ok() {
                 count = count.wrapping_add(1);
             }
             Ok(())
