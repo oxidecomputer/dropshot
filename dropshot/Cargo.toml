@@ -118,7 +118,7 @@ rcgen = { version = "0.14.7", default-features = false, features = ["aws_lc_rs",
 tokio-tungstenite = "0.29.0"
 
 [dev-dependencies.reqwest]
-version = "0.13.2"
+version = "0.13.3"
 # Using rustls because it appears the rcgen-generated certificates are not
 # supported by the native Windows APIs.
 features = [ "json", "rustls" ]
