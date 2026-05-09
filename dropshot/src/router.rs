@@ -52,8 +52,11 @@ use std::sync::Arc;
 ///   `"/projects/default"`.
 ///
 /// * If a given resource has an edge with a variable name, all routes through
-///   this node must use the same name for that variable.  That is, you can't
-///   define routes for `"/projects/{id}"` and `"/projects/{project_id}/info"`.
+///   this node for the same API version must use the same name for that
+///   variable.  That is, within a single version you can't define routes for
+///   `"/projects/{id}"` and `"/projects/{project_id}/info"`.  However,
+///   different API versions may use different variable names at the same
+///   position (e.g., version 1 uses `{arg}` and version 2 uses `{myarg}`).
 ///
 /// * A given path cannot use the same variable name twice.  For example, you
 ///   can't register path `"/projects/{id}/instances/{id}"`.
@@ -97,9 +100,71 @@ enum HttpRouterEdges<Context: ServerContext> {
     /// Outgoing edges for literal paths.
     Literals(BTreeMap<String, Box<HttpRouterNode<Context>>>),
     /// Outgoing edge for variable-named paths.
-    VariableSingle(String, Box<HttpRouterNode<Context>>),
+    VariableSingle(VersionedVariableNames, Box<HttpRouterNode<Context>>),
     /// Outgoing edge that consumes all remaining components.
-    VariableRest(String, Box<HttpRouterNode<Context>>),
+    VariableRest(VersionedVariableNames, Box<HttpRouterNode<Context>>),
+}
+
+/// Tracks variable names used at a particular path segment, potentially
+/// different across API versions.
+///
+/// Within a single API version, the variable name for a path segment must be
+/// consistent. Across versions, different names are allowed: e.g., version 1.x
+/// might use `{project_id}` while version 2.x uses `{id}` at the same
+/// position.
+#[derive(Debug)]
+struct VersionedVariableNames {
+    /// Each entry associates a variable name with the version range of the
+    /// endpoint that registered it. Multiple entries may share the same name
+    /// (when multiple endpoints use the same variable name at this position).
+    /// Entries with *different* names must have non-overlapping version ranges.
+    entries: Vec<(String, ApiEndpointVersions)>,
+}
+
+impl VersionedVariableNames {
+    /// Create an empty `VersionedVariableNames`.
+    fn empty() -> Self {
+        VersionedVariableNames { entries: Vec::new() }
+    }
+
+    /// Record a variable name and its associated version range. Panics if the
+    /// new name has an overlapping version range with an existing name. (We
+    /// allow variable renames _across_ versions, but not across endpoint types
+    /// like GET or PUT within the same version.)
+    fn add(&mut self, path: &str, name: &str, versions: &ApiEndpointVersions) {
+        for (existing_name, existing_versions) in &self.entries {
+            if existing_name == name && existing_versions == versions {
+                // Exact duplicate (e.g., GET and POST at the same path with
+                // the same variable name and version range).  Nothing new to
+                // record.
+                return;
+            }
+            if existing_name != name
+                && existing_versions.overlaps_with(versions)
+            {
+                panic!(
+                    "URI path \"{}\": attempted to use variable name \
+                     \"{}\", but a different name (\"{}\") is already \
+                     used for the same path segment in an overlapping \
+                     API version range",
+                    path, name, existing_name
+                );
+            }
+        }
+        self.entries.push((name.to_string(), versions.clone()));
+    }
+
+    /// Look up the variable name for a given version.
+    ///
+    /// When `version` is `Some(v)`, returns the name associated with a version
+    /// range that includes `v`. When `version` is `None`, returns the first
+    /// name (for unversioned/test usage, where any name is acceptable).
+    fn name_for_version(&self, version: Option<&Version>) -> Option<&str> {
+        self.entries
+            .iter()
+            .find(|(_, versions)| versions.matches(version))
+            .map(|(name, _)| name.as_str())
+    }
 }
 
 /// `PathSegment` represents a segment in a URI path when the router is being
@@ -258,14 +323,13 @@ impl<Context: ServerContext> HttpRouter<Context> {
                         // the same node.  This could be supported (with some
                         // caveats about how matching would work), but it seems
                         // more likely to be a mistake.
-                        HttpRouterEdges::VariableSingle(varname, _)
-                        | HttpRouterEdges::VariableRest(varname, _) => {
+                        HttpRouterEdges::VariableSingle(_, _)
+                        | HttpRouterEdges::VariableRest(_, _) => {
                             panic!(
                                 "URI path \"{}\": attempted to register route \
                                  for literal path segment \"{}\" when a route \
-                                 exists for variable path segment (variable \
-                                 name: \"{}\")",
-                                path, lit, varname
+                                 exists for a variable path segment",
+                                path, lit,
                             );
                         }
                         HttpRouterEdges::Literals(ref mut literals) => literals
@@ -279,7 +343,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
 
                     let edges = node.edges.get_or_insert(
                         HttpRouterEdges::VariableSingle(
-                            new_varname.clone(),
+                            VersionedVariableNames::empty(),
                             Box::new(HttpRouterNode::new()),
                         ),
                     );
@@ -294,32 +358,26 @@ impl<Context: ServerContext> HttpRouter<Context> {
                             path, new_varname
                         ),
 
-                        HttpRouterEdges::VariableRest(varname, _) => panic!(
+                        HttpRouterEdges::VariableRest(_, _) => panic!(
                             "URI path \"{}\": attempted to register route for \
                              variable path segment (variable name: \"{}\") \
-                             when a route already exists for the remainder of \
-                             the path as {}",
-                            path, new_varname, varname,
+                             when a route already exists for a wildcard path \
+                             segment",
+                            path, new_varname,
                         ),
 
                         HttpRouterEdges::VariableSingle(
-                            varname,
+                            varnames,
                             ref mut node,
                         ) => {
-                            if *new_varname != *varname {
-                                // Don't allow people to use different names for
-                                // the same part of the path.  Again, this could
-                                // be supported, but it seems likely to be
-                                // confusing and probably a mistake.
-                                panic!(
-                                    "URI path \"{}\": attempted to use \
-                                     variable name \"{}\", but a different \
-                                     name (\"{}\") has already been used for \
-                                     this",
-                                    path, new_varname, varname
-                                );
-                            }
-
+                            // Record the variable name for this endpoint's
+                            // version range. This validates that no conflicting
+                            // name exists for overlapping versions.
+                            varnames.add(
+                                &path,
+                                &new_varname,
+                                &endpoint.versions,
+                            );
                             node
                         }
                     }
@@ -340,7 +398,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
 
                     let edges = node.edges.get_or_insert(
                         HttpRouterEdges::VariableRest(
-                            new_varname.clone(),
+                            VersionedVariableNames::empty(),
                             Box::new(HttpRouterNode::new()),
                         ),
                     );
@@ -356,33 +414,28 @@ impl<Context: ServerContext> HttpRouter<Context> {
                             path, new_varname
                         ),
 
-                        HttpRouterEdges::VariableSingle(varname, _) => panic!(
-                            "URI path \"{}\": attempted to register route for \
-                             variable path regex (variable name: \"{}\") when \
-                             a route already exists for a segment {}",
-                            path, new_varname, varname,
-                        ),
+                        HttpRouterEdges::VariableSingle(_, _) => {
+                            panic!(
+                                "URI path \"{}\": attempted to register route \
+                                 for wildcard path segment (variable name: \
+                                 \"{}\") when a route already exists for a \
+                                 variable path segment",
+                                path, new_varname,
+                            )
+                        }
 
                         HttpRouterEdges::VariableRest(
-                            varname,
+                            versioned_names,
                             ref mut node,
                         ) => {
-                            if *new_varname != *varname {
-                                /*
-                                 * Don't allow people to use different names for
-                                 * the same part of the path.  Again, this could
-                                 * be supported, but it seems likely to be
-                                 * confusing and probably a mistake.
-                                 */
-                                panic!(
-                                    "URI path \"{}\": attempted to use \
-                                     variable name \"{}\", but a different \
-                                     name (\"{}\") has already been used for \
-                                     this",
-                                    path, new_varname, varname
-                                );
-                            }
-
+                            // Record the variable name for this endpoint's
+                            // version range. This validates that no conflicting
+                            // name exists for overlapping versions.
+                            versioned_names.add(
+                                &path,
+                                &new_varname,
+                                &endpoint.versions,
+                            );
                             node
                         }
                     }
@@ -466,26 +519,38 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 Some(HttpRouterEdges::Literals(edges)) => {
                     edges.get(&segment_string)
                 }
-                Some(HttpRouterEdges::VariableSingle(varname, ref node)) => {
-                    variables.insert(
-                        varname.clone(),
-                        VariableValue::String(segment_string),
-                    );
-                    Some(node)
-                }
-                Some(HttpRouterEdges::VariableRest(varname, node)) => {
-                    let mut rest = vec![segment];
-                    while let Some(segment) = all_segments.next() {
-                        rest.push(segment);
+                Some(HttpRouterEdges::VariableSingle(varnames, ref node)) => {
+                    match varnames.name_for_version(version) {
+                        Some(varname) => {
+                            variables.insert(
+                                varname.to_string(),
+                                VariableValue::String(segment_string),
+                            );
+                            Some(node)
+                        }
+                        // No variable name matches this version, so no route
+                        // exists through this edge for this version.
+                        None => None,
                     }
-                    variables.insert(
-                        varname.clone(),
-                        VariableValue::Components(rest),
-                    );
-                    // There should be no outgoing edges since this is by
-                    // definition a terminal node
-                    assert!(node.edges.is_none());
-                    Some(node)
+                }
+                Some(HttpRouterEdges::VariableRest(varnames, node)) => {
+                    match varnames.name_for_version(version) {
+                        Some(varname) => {
+                            let mut rest = vec![segment];
+                            while let Some(segment) = all_segments.next() {
+                                rest.push(segment);
+                            }
+                            variables.insert(
+                                varname.to_string(),
+                                VariableValue::Components(rest),
+                            );
+                            // There should be no outgoing edges since this is
+                            // by definition a terminal node.
+                            assert!(node.edges.is_none());
+                            Some(node)
+                        }
+                        None => None,
+                    }
                 }
             }
             .ok_or_else(|| {
@@ -496,16 +561,51 @@ impl<Context: ServerContext> HttpRouter<Context> {
             })?
         }
 
-        // The wildcard match consumes the implicit, empty path segment
+        // The wildcard match consumes the implicit, empty path segment.
+        // We must always advance to the wildcard's terminal node so that
+        // handler lookup happens on the correct node (where wildcard handlers
+        // are registered), not on the parent (which may have unrelated
+        // handlers for other methods/paths).
         match &node.edges {
-            Some(HttpRouterEdges::VariableRest(varname, new_node)) => {
-                variables
-                    .insert(varname.clone(), VariableValue::Components(vec![]));
-                // There should be no outgoing edges
+            Some(HttpRouterEdges::VariableRest(varnames, new_node)) => {
+                if let Some(varname) = varnames.name_for_version(version) {
+                    variables.insert(
+                        varname.to_string(),
+                        VariableValue::Components(vec![]),
+                    );
+                } else {
+                    // The wildcard edge exists but doesn't cover the requested
+                    // version. A wildcard can be version-scoped, so a request
+                    // may reach this node (via literal edges, which are
+                    // version-agnostic) for a version the wildcard doesn't
+                    // cover.
+                    //
+                    // We still advance to the terminal node below. The in-loop
+                    // VariableRest handler (above) returns None in this
+                    // situation, producing a 404, but here the path segments
+                    // are already exhausted. If we stayed on the parent node,
+                    // the handler lookup would see the parent's handlers (which
+                    // belong to a different path, e.g. POST /files vs GET
+                    // /files/{path:.*}) and could return a spurious 405.
+                }
+                // Registration rejects path segments after a `.*` wildcard,
+                // so the wildcard's terminal node can never have children.
                 assert!(new_node.edges.is_none());
                 node = new_node;
             }
-            _ => {}
+            Some(HttpRouterEdges::Literals(_)) => {
+                // Literal edges don't implicitly consume a trailing segment the
+                // way wildcards do, so there's nothing to advance past.
+            }
+            Some(HttpRouterEdges::VariableSingle(_, _)) => {
+                // A single-segment variable edge requires a non-empty segment
+                // to match. Since we've exhausted all path segments, there's
+                // nothing for it to bind to; the handler lookup below will
+                // operate on the current node, which is correct.
+            }
+            None => {
+                // No outgoing edges at all. This is a leaf node.
+            }
         }
 
         // First, look for a matching implementation.
@@ -652,7 +752,7 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
             method: iter_handlers_from_node(&router.root, version),
             path: vec![(
                 PathSegment::Literal("".to_string()),
-                HttpRouterIter::iter_node(&router.root),
+                HttpRouterIter::iter_node(&router.root, version),
             )],
             version,
         }
@@ -662,25 +762,36 @@ impl<'a, Context: ServerContext> HttpRouterIter<'a, Context> {
     /// iterator if there are no children, a single (once) iterator for a
     /// path parameter variable, and a modified iterator in the case of
     /// literal, explicit path segments.
+    ///
+    /// When the node has a variable edge with versioned names, the `version`
+    /// parameter selects which variable name to use. If no name matches,
+    /// the subtree is skipped (empty iterator).
     fn iter_node(
         node: &'a HttpRouterNode<Context>,
+        version: Option<&'a Version>,
     ) -> Box<PathIter<'a, Context>> {
         match &node.edges {
             Some(HttpRouterEdges::Literals(map)) => Box::new(
                 map.iter()
                     .map(|(s, node)| (PathSegment::Literal(s.clone()), node)),
             ),
-            Some(HttpRouterEdges::VariableSingle(varname, node)) => {
-                Box::new(std::iter::once((
-                    PathSegment::VarnameSegment(varname.clone()),
-                    node,
-                )))
+            Some(HttpRouterEdges::VariableSingle(varnames, node)) => {
+                match varnames.name_for_version(version) {
+                    Some(name) => Box::new(std::iter::once((
+                        PathSegment::VarnameSegment(name.to_string()),
+                        node,
+                    ))),
+                    None => Box::new(std::iter::empty()),
+                }
             }
-            Some(HttpRouterEdges::VariableRest(varname, node)) => {
-                Box::new(std::iter::once((
-                    PathSegment::VarnameSegment(varname.clone()),
-                    node,
-                )))
+            Some(HttpRouterEdges::VariableRest(varnames, node)) => {
+                match varnames.name_for_version(version) {
+                    Some(name) => Box::new(std::iter::once((
+                        PathSegment::VarnameWildcard(name.to_string()),
+                        node,
+                    ))),
+                    None => Box::new(std::iter::empty()),
+                }
             }
             None => Box::new(std::iter::empty()),
         }
@@ -730,7 +841,10 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
                             Some((path_component, node)) => {
                                 self.path.push((
                                     path_component,
-                                    HttpRouterIter::iter_node(node),
+                                    HttpRouterIter::iter_node(
+                                        node,
+                                        self.version,
+                                    ),
                                 ));
                                 self.method = iter_handlers_from_node(
                                     &node,
@@ -1023,8 +1137,9 @@ mod test {
     #[test]
     #[should_panic(expected = "URI path \"/projects/{id}\": attempted to use \
                                variable name \"id\", but a different name \
-                               (\"project_id\") has already been used for \
-                               this")]
+                               (\"project_id\") is already used for the same \
+                               path segment in an overlapping API version \
+                               range")]
     fn test_inconsistent_varname() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(
@@ -1037,6 +1152,425 @@ mod test {
             Method::GET,
             "/projects/{id}",
         ));
+    }
+
+    /// Different variable names at the same path segment are allowed when
+    /// their version ranges don't overlap.
+    #[test]
+    fn test_versioned_varname_allowed() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/thing/{arg}",
+            // Note this is "until", so versions < 2.0.0.
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        // Different variable name for a non-overlapping version range.
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/thing/{myarg}",
+            // Note this is "from", so versions >= 2.0.0.
+            ApiEndpointVersions::from(Version::new(2, 0, 0)),
+        ));
+
+        // Version 1.x uses "arg".
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/hello".into(),
+                Some(&Version::new(1, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h1");
+        assert_eq!(
+            *result.endpoint.variables.get("arg").unwrap(),
+            VariableValue::String("hello".to_string())
+        );
+        assert!(!result.endpoint.variables.contains_key("myarg"));
+
+        // Version 2.x uses "myarg".
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/hello".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h2");
+        assert_eq!(
+            *result.endpoint.variables.get("myarg").unwrap(),
+            VariableValue::String("hello".to_string())
+        );
+        assert!(!result.endpoint.variables.contains_key("arg"));
+    }
+
+    /// Different variable names at the same path segment should still be
+    /// rejected when their version ranges overlap.
+    #[test]
+    #[should_panic(expected = "URI path \"/thing/{myarg}\": attempted to use \
+                               variable name \"myarg\", but a different name \
+                               (\"arg\") is already used for the same path \
+                               segment in an overlapping API version range")]
+    fn test_versioned_varname_conflict() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/thing/{arg}",
+            ApiEndpointVersions::from(Version::new(1, 0, 0)),
+        ));
+        // Overlapping version range with a different variable name.
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/thing/{myarg}",
+            ApiEndpointVersions::from(Version::new(2, 0, 0)),
+        ));
+    }
+
+    /// Multiple endpoints can share a variable name at the same path segment,
+    /// even when a different variable name is used for other versions.
+    #[test]
+    fn test_versioned_varname_shared_subtree() {
+        let mut router = HttpRouter::new();
+        // Two endpoints sharing "arg" in version 1.x, at different sub-paths.
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/thing/{arg}/info",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::POST,
+            "/thing/{arg}/info",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        // Version 2.x uses a different name at the same position.
+        router.insert(new_endpoint_versions(
+            new_handler_named("h3"),
+            Method::GET,
+            "/thing/{myarg}/info",
+            ApiEndpointVersions::from(Version::new(2, 0, 0)),
+        ));
+
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/x/info".into(),
+                Some(&Version::new(1, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h1");
+        assert_eq!(
+            *result.endpoint.variables.get("arg").unwrap(),
+            VariableValue::String("x".to_string())
+        );
+
+        let result = router
+            .lookup_route(
+                &Method::POST,
+                "/thing/x/info".into(),
+                Some(&Version::new(1, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h2");
+
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/x/info".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h3");
+        assert_eq!(
+            *result.endpoint.variables.get("myarg").unwrap(),
+            VariableValue::String("x".to_string())
+        );
+
+        // Version 2.x has no POST handler.
+        let error = router
+            .lookup_route(
+                &Method::POST,
+                "/thing/x/info".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    /// Versioned variable names work for wildcard (rest) path segments too.
+    #[test]
+    fn test_versioned_varname_wildcard() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/files/{path:.*}",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/files/{filepath:.*}",
+            ApiEndpointVersions::from(Version::new(2, 0, 0)),
+        ));
+
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/files/a/b/c".into(),
+                Some(&Version::new(1, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h1");
+        assert_eq!(
+            result.endpoint.variables.get("path"),
+            Some(&VariableValue::Components(vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+            ]))
+        );
+        assert!(!result.endpoint.variables.contains_key("filepath"));
+
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/files/a/b/c".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h2");
+        assert_eq!(
+            result.endpoint.variables.get("filepath"),
+            Some(&VariableValue::Components(vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+            ]))
+        );
+        assert!(!result.endpoint.variables.contains_key("path"));
+    }
+
+    /// When a version falls in a gap between two non-overlapping version
+    /// ranges at a variable edge, lookup should return 404.
+    #[test]
+    fn test_versioned_varname_version_gap() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/thing/{arg}/info",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/thing/{myarg}/info",
+            ApiEndpointVersions::from(Version::new(3, 0, 0)),
+        ));
+
+        // Version 1.x: matches the first endpoint.
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/x/info".into(),
+                Some(&Version::new(1, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h1");
+
+        // Version 3.x: matches the second endpoint.
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/x/info".into(),
+                Some(&Version::new(3, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "h2");
+
+        // Version 2.x: falls in the gap — no variable name matches, so the
+        // variable edge returns None and we get a 404.
+        let error = router
+            .lookup_route(
+                &Method::GET,
+                "/thing/x/info".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+    }
+
+    /// Same as above but for wildcard (rest) path segments, including the
+    /// post-loop empty-path case where the wildcard matches zero segments.
+    #[test]
+    fn test_versioned_varname_wildcard_version_gap() {
+        let mut router = HttpRouter::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/files/{path:.*}",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/files/{filepath:.*}",
+            ApiEndpointVersions::from(Version::new(3, 0, 0)),
+        ));
+
+        // Version 2.5 with path segments: the in-loop VariableRest branch
+        // returns None.
+        let error = router
+            .lookup_route(
+                &Method::GET,
+                "/files/a/b".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+
+        // Version 2.5 with no trailing segments: the post-loop wildcard
+        // rest-match hits the gap.
+        let error = router
+            .lookup_route(
+                &Method::GET,
+                "/files".into(),
+                Some(&Version::new(2, 0, 0)),
+            )
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+    }
+
+    /// The iterator should produce the correct variable name for each version.
+    #[test]
+    fn test_versioned_varname_iter() {
+        let mut router = HttpRouter::<()>::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/thing/{arg}",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/thing/{myarg}",
+            ApiEndpointVersions::from(Version::new(2, 0, 0)),
+        ));
+
+        let v1 = Version::new(1, 0, 0);
+        let v1_endpoints: Vec<_> =
+            router.endpoints(Some(&v1)).map(|x| (x.0, x.1)).collect();
+        assert_eq!(
+            v1_endpoints,
+            vec![("/thing/{arg}".to_string(), "GET".to_string())]
+        );
+
+        let v2 = Version::new(2, 0, 0);
+        let v2_endpoints: Vec<_> =
+            router.endpoints(Some(&v2)).map(|x| (x.0, x.1)).collect();
+        assert_eq!(
+            v2_endpoints,
+            vec![("/thing/{myarg}".to_string(), "GET".to_string())]
+        );
+    }
+
+    /// The iterator should produce the correct variable name for each
+    /// version, including the `:.*` suffix for wildcard path segments.
+    #[test]
+    fn test_versioned_varname_wildcard_iter() {
+        let mut router = HttpRouter::<()>::new();
+        router.insert(new_endpoint_versions(
+            new_handler_named("h1"),
+            Method::GET,
+            "/files/{path:.*}",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+        router.insert(new_endpoint_versions(
+            new_handler_named("h2"),
+            Method::GET,
+            "/files/{filepath:.*}",
+            ApiEndpointVersions::from(Version::new(2, 0, 0)),
+        ));
+
+        let v1 = Version::new(1, 0, 0);
+        let v1_endpoints: Vec<_> =
+            router.endpoints(Some(&v1)).map(|x| (x.0, x.1)).collect();
+        assert_eq!(
+            v1_endpoints,
+            vec![("/files/{path:.*}".to_string(), "GET".to_string())]
+        );
+
+        let v2 = Version::new(2, 0, 0);
+        let v2_endpoints: Vec<_> =
+            router.endpoints(Some(&v2)).map(|x| (x.0, x.1)).collect();
+        assert_eq!(
+            v2_endpoints,
+            vec![("/files/{filepath:.*}".to_string(), "GET".to_string())]
+        );
+    }
+
+    /// Regression test: when the wildcard edge's variable name doesn't match
+    /// the requested version, the router must still advance to the wildcard's
+    /// terminal node.  Otherwise, handler lookup would fall through to the
+    /// parent node (which has a POST handler for all versions), producing a
+    /// spurious 405 instead of 404.
+    #[test]
+    fn test_versioned_wildcard_rest_no_fallthrough() {
+        let mut router = HttpRouter::new();
+
+        // Wildcard GET endpoint, only for version 1.x.
+        router.insert(new_endpoint_versions(
+            new_handler_named("wildcard_get"),
+            Method::GET,
+            "/files/{path:.*}",
+            ApiEndpointVersions::until(Version::new(2, 0, 0)),
+        ));
+
+        // Non-wildcard POST endpoint at /files, all versions.  This handler
+        // lives on the parent node (the "files" literal node), NOT on the
+        // wildcard's terminal node.
+        router.insert(new_endpoint_versions(
+            new_handler_named("files_post"),
+            Method::POST,
+            "/files",
+            ApiEndpointVersions::All,
+        ));
+
+        // Version 1.x: GET /files should match the wildcard with empty path
+        // components.
+        let result = router
+            .lookup_route(
+                &Method::GET,
+                "/files".into(),
+                Some(&Version::new(1, 0, 0)),
+            )
+            .unwrap();
+        assert_eq!(result.handler.label(), "wildcard_get");
+        assert_eq!(
+            result.endpoint.variables.get("path"),
+            Some(&VariableValue::Components(vec![]))
+        );
+
+        // Version 3.x: GET /files should be 404 (Not Found).  The wildcard
+        // GET endpoint only covers versions < 2.0.0, and there is no
+        // GET /files endpoint.  Without the unconditional advance to the
+        // wildcard's terminal node, the router would stay on the parent
+        // (which has the POST handler) and return 405 instead.
+        let error = router
+            .lookup_route(
+                &Method::GET,
+                "/files".into(),
+                Some(&Version::new(3, 0, 0)),
+            )
+            .unwrap_err();
+        assert_eq!(error.status_code, StatusCode::NOT_FOUND);
     }
 
     #[test]
@@ -1061,8 +1595,8 @@ mod test {
     #[test]
     #[should_panic(expected = "URI path \"/projects/default\": attempted to \
                                register route for literal path segment \
-                               \"default\" when a route exists for variable \
-                               path segment (variable name: \"id\")")]
+                               \"default\" when a route exists for a variable \
+                               path segment")]
     fn test_literal_after_variable() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(
@@ -1080,8 +1614,8 @@ mod test {
     #[test]
     #[should_panic(expected = "URI path \"/projects/default\": attempted to \
                                register route for literal path segment \
-                               \"default\" when a route exists for variable \
-                               path segment (variable name: \"rest\")")]
+                               \"default\" when a route exists for a variable \
+                               path segment")]
     fn test_literal_after_regex() {
         let mut router = HttpRouter::new();
         router.insert(new_endpoint(

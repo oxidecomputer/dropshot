@@ -5,9 +5,19 @@
     "version": "1.0.0"
   },
   "paths": {
-    "/demo": {
+    "/demo/{item_id}": {
       "get": {
         "operationId": "the_operation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "successful operation",
