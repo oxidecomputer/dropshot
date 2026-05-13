@@ -3,4 +3,5 @@
 # ---------------------------------------------------------------------------
 max_width = 80
 use_small_heuristics = "max"
-edition = "2018"
+style_edition = "2015"
+edition = "2024"

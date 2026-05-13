@@ -131,9 +131,9 @@ where
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
+        r#gen: &mut schemars::r#gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
-        ResultsPageSchema::<ItemType>::json_schema(gen)
+        ResultsPageSchema::<ItemType>::json_schema(r#gen)
     }
 }
 
@@ -274,7 +274,7 @@ where
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
+        r#gen: &mut schemars::r#gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
         // We use `SchemaPaginationParams` to generate an intuitive schema and
         // we use the JSON schema extensions mechanism to communicate the fact
@@ -287,9 +287,9 @@ where
         //
         // TODO we would ideally like to verify that both parameters *and*
         // response structure are properly configured for pagination.
-        let mut schema = SchemaPaginationParams::<ScanParams>::json_schema(gen)
+        let mut schema = SchemaPaginationParams::<ScanParams>::json_schema(r#gen)
             .into_object();
-        let first_page_schema = ScanParams::json_schema(gen);
+        let first_page_schema = ScanParams::json_schema(r#gen);
         let Some(first_page_object) = first_page_schema.into_object().object
         else {
             panic!("ScanParams must be an object");
@@ -830,8 +830,8 @@ mod test {
 
     #[test]
     fn test_pagination_schema() {
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
         let schema =
             PaginationParams::<Name, Name>::json_schema(&mut generator)
                 .into_object();

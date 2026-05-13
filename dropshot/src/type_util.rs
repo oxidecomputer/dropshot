@@ -322,8 +322,8 @@ mod tests {
             thing: Things,
         }
 
-        let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
+        let mut generator = schemars::r#gen::SchemaGenerator::new(
+            schemars::r#gen::SchemaSettings::openapi3(),
         );
         let schema: schemars::schema::Schema =
             generator.root_schema_for::<ThingHolder>().schema.into();

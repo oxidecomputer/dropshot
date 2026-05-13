@@ -134,7 +134,7 @@ where
         F: FnOnce(&Z) -> Result<VV, MapError>,
     {
         match self {
-            MapDeserializer::Value(ref raw_value) => deserialize(raw_value),
+            MapDeserializer::Value(raw_value) => deserialize(raw_value),
             MapDeserializer::Map(..) => Err(MapError(
                 "must be applied to a flattened struct rather than a raw type"
                     .to_string(),
