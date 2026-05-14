@@ -146,9 +146,9 @@ impl JsonSchema for HttpErrorResponseBody {
     }
 
     fn json_schema(
-        gen: &mut schemars::gen::SchemaGenerator,
+        r#gen: &mut schemars::r#gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
-        let str_schema = String::json_schema(gen);
+        let str_schema = String::json_schema(r#gen);
 
         schemars::schema::SchemaObject {
             metadata: Some(

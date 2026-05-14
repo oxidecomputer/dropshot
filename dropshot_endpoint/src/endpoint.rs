@@ -296,7 +296,7 @@ impl<'ast> EndpointParams<'ast> {
         // have errored out.
         if errors.has_errors() {
             None
-        } else if let (Some(rqctx_ty), Some(ret_ty)) = (rqctx_ty, ret_ty) {
+        } else { match (rqctx_ty, ret_ty) { (Some(rqctx_ty), Some(ret_ty)) => {
             Some(Self {
                 dropshot: dropshot.clone(),
                 rqctx_ty,
@@ -304,9 +304,9 @@ impl<'ast> EndpointParams<'ast> {
                 exclusive_extractor,
                 ret_ty,
             })
-        } else {
+        } _ => {
             unreachable!("no param errors, but rqctx_ty or ret_ty is None");
-        }
+        }}}
     }
 
     /// Returns a token stream that obtains the rqctx context type.

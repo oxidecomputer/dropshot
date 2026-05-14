@@ -131,7 +131,7 @@ fn make_server(
 
 fn make_pki_verifier(
     certs: &Vec<rustls::pki_types::CertificateDer>,
-) -> Arc<impl rustls::client::danger::ServerCertVerifier> {
+) -> Arc<impl rustls::client::danger::ServerCertVerifier + use<>> {
     let mut root_store = rustls::RootCertStore { roots: vec![] };
     root_store.add(certs[certs.len() - 1].clone()).expect("adding root cert");
     rustls::client::WebPkiServerVerifier::builder(Arc::new(root_store))
