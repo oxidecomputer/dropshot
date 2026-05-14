@@ -261,8 +261,8 @@ fn type_resolve<'a>(
 mod tests {
     use indexmap::IndexMap;
     use schemars::{
-        schema::{Schema, SchemaObject},
         JsonSchema,
+        schema::{Schema, SchemaObject},
     };
 
     use crate::schema_util::schema2struct;

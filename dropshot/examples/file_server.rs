@@ -9,7 +9,7 @@ use dropshot::ConfigLoggingLevel;
 use dropshot::HttpError;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
-use dropshot::{endpoint, Path};
+use dropshot::{Path, endpoint};
 use futures::TryStreamExt as _;
 use http::{Response, StatusCode};
 use http_body_util::StreamBody;

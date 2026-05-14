@@ -1,15 +1,15 @@
 // Copyright 2023 Oxide Computer Company
 
-use crate::api_description::ApiSchemaGenerator;
-use crate::pagination::PAGINATION_PARAM_SENTINEL;
-use crate::schema_util::schema2struct;
-use crate::schema_util::schema_extensions;
-use crate::schema_util::StructMember;
-use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 use crate::ApiEndpointParameter;
 use crate::ApiEndpointParameterLocation;
 use crate::ExtensionMode;
 use crate::ExtractorMetadata;
+use crate::api_description::ApiSchemaGenerator;
+use crate::pagination::PAGINATION_PARAM_SENTINEL;
+use crate::schema_util::StructMember;
+use crate::schema_util::schema_extensions;
+use crate::schema_util::schema2struct;
+use crate::websocket::WEBSOCKET_PARAM_SENTINEL;
 use schemars::JsonSchema;
 
 /// Convenience function to generate parameter metadata from types implementing
@@ -87,14 +87,14 @@ where
 mod test {
     use crate::api_description::ExtensionMode;
     use crate::{
-        api_description::ApiEndpointParameterMetadata, ApiEndpointParameter,
-        ApiEndpointParameterLocation, PaginationParams,
+        ApiEndpointParameter, ApiEndpointParameterLocation, PaginationParams,
+        api_description::ApiEndpointParameterMetadata,
     };
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
-    use super::get_metadata;
     use super::ExtractorMetadata;
+    use super::get_metadata;
 
     #[derive(Deserialize, Serialize, JsonSchema)]
     #[allow(dead_code)]

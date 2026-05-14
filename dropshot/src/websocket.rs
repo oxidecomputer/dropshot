@@ -16,9 +16,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::Engine;
-use http::header;
 use http::Response;
 use http::StatusCode;
+use http::header;
 use hyper::upgrade::OnUpgrade;
 use schemars::JsonSchema;
 use serde_json::json;

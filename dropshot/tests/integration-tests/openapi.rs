@@ -1,14 +1,14 @@
 // Copyright 2025 Oxide Computer Company
 
 use dropshot::{
-    channel, endpoint, http_response_found, http_response_see_other,
-    http_response_temporary_redirect, ApiDescription,
-    ApiDescriptionRegisterError, FreeformBody, Header, HttpError,
-    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
+    ApiDescription, ApiDescriptionRegisterError, FreeformBody, Header,
+    HttpError, HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
     HttpResponseFound, HttpResponseHeaders, HttpResponseOk,
     HttpResponseSeeOther, HttpResponseTemporaryRedirect,
     HttpResponseUpdatedNoContent, MultipartBody, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TagConfig, TagDetails, TypedBody, UntypedBody,
+    channel, endpoint, http_response_found, http_response_see_other,
+    http_response_temporary_redirect,
 };
 use dropshot::{Body, WebsocketConnection};
 use schemars::JsonSchema;

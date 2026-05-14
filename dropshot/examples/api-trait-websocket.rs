@@ -67,7 +67,7 @@ mod imp {
         WebsocketConnection,
     };
     use futures::SinkExt;
-    use tokio_tungstenite::tungstenite::{protocol::Role, Message};
+    use tokio_tungstenite::tungstenite::{Message, protocol::Role};
 
     use crate::api::{CounterApi, CounterValue};
 

@@ -2,8 +2,8 @@
 
 //! schemars helper functions
 
-use schemars::schema::SchemaObject;
 use schemars::JsonSchema;
+use schemars::schema::SchemaObject;
 
 use std::fmt;
 
@@ -152,7 +152,7 @@ fn schema2struct_impl(
                             Schema2StructError::InvalidSubschema(
                                 invalid.clone(),
                             ),
-                        ))
+                        ));
                     }
                 }
             }

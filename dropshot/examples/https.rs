@@ -2,7 +2,6 @@
 
 //! Example use of Dropshot with TLS enabled
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -13,6 +12,7 @@ use dropshot::HttpResponseUpdatedNoContent;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::TypedBody;
+use dropshot::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

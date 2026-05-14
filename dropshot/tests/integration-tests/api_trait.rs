@@ -1,8 +1,9 @@
 // Copyright 2024 Oxide Computer Company
 
 use dropshot::{
-    test_util::read_json, EndpointTagPolicy, HandlerTaskMode, HttpError,
-    HttpResponseOk, HttpResponseUpdatedNoContent, RequestContext, UntypedBody,
+    EndpointTagPolicy, HandlerTaskMode, HttpError, HttpResponseOk,
+    HttpResponseUpdatedNoContent, RequestContext, UntypedBody,
+    test_util::read_json,
 };
 use http::{Method, StatusCode};
 use schemars::JsonSchema;

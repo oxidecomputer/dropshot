@@ -3,13 +3,13 @@
 //! Test cases for gzip response compression.
 
 use bytes::Bytes;
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
+use dropshot::endpoint;
 use futures::stream;
-use http::{header, Method, StatusCode};
+use http::{Method, StatusCode, header};
 use http_body_util::StreamBody;
 use hyper::body::Frame;
 use hyper::{Request, Response};
@@ -132,8 +132,8 @@ fn streaming_payload() -> Vec<u8> {
     STREAMING_TEXT_CHUNK.repeat(STREAMING_TEXT_CHUNK_COUNT).into_bytes()
 }
 
-fn streaming_body_stream(
-) -> impl futures::Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send {
+fn streaming_body_stream()
+-> impl futures::Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send {
     stream::iter((0..STREAMING_TEXT_CHUNK_COUNT).map(|_| {
         Result::<Frame<Bytes>, std::io::Error>::Ok(Frame::data(
             Bytes::from_static(STREAMING_TEXT_CHUNK.as_bytes()),
