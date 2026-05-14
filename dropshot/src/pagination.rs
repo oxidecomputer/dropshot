@@ -99,13 +99,13 @@
 
 use crate::error::HttpError;
 use crate::from_map::from_map;
-use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE;
 use schemars::JsonSchema;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::num::NonZeroU32;
@@ -287,8 +287,9 @@ where
         //
         // TODO we would ideally like to verify that both parameters *and*
         // response structure are properly configured for pagination.
-        let mut schema = SchemaPaginationParams::<ScanParams>::json_schema(r#gen)
-            .into_object();
+        let mut schema =
+            SchemaPaginationParams::<ScanParams>::json_schema(r#gen)
+                .into_object();
         let first_page_schema = ScanParams::json_schema(r#gen);
         let Some(first_page_object) = first_page_schema.into_object().object
         else {
@@ -514,18 +515,18 @@ fn deserialize_page_token<PageSelector: DeserializeOwned>(
 
 #[cfg(test)]
 mod test {
-    use super::deserialize_page_token;
-    use super::serialize_page_token;
+    use super::PAGINATION_PARAM_SENTINEL;
     use super::PaginationParams;
     use super::ResultsPage;
     use super::WhichPage;
-    use super::PAGINATION_PARAM_SENTINEL;
-    use base64::engine::general_purpose::URL_SAFE;
+    use super::deserialize_page_token;
+    use super::serialize_page_token;
     use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE;
     use schemars::JsonSchema;
-    use serde::de::DeserializeOwned;
     use serde::Deserialize;
     use serde::Serialize;
+    use serde::de::DeserializeOwned;
     use serde_json::json;
     use std::{fmt::Debug, num::NonZeroU32};
 
@@ -576,9 +577,9 @@ mod test {
         let error = serialize_page_token(&input).unwrap_err();
         assert_eq!(error.status_code, http::StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(error.external_message, "Internal Server Error");
-        assert!(error
-            .internal_message
-            .contains("serialized token is too large"));
+        assert!(
+            error.internal_message.contains("serialized token is too large")
+        );
 
         // Non-base64
         let error =
