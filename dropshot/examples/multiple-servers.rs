@@ -186,7 +186,9 @@ impl SharedMultiServerContext {
         let mut servers = self.servers.lock().await;
         let slot = match servers.entry(name.to_string()) {
             Entry::Occupied(_) => {
-                return Err(format!("already running a server named {name:?}",));
+                return Err(
+                    format!("already running a server named {name:?}",),
+                );
             }
             Entry::Vacant(slot) => slot,
         };
