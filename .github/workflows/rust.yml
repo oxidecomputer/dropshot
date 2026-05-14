@@ -34,6 +34,8 @@ jobs:
       - name: Report Clippy version
         run: cargo clippy -- --version
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-bin: false # See Swatinem/rust-cache#341.
       - name: Run Clippy Lints
         run: cargo clippy --all-targets -- --deny warnings
 
@@ -44,6 +46,8 @@ jobs:
       - name: Report cargo version
         run: cargo --version
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-bin: false # See Swatinem/rust-cache#341.
       - name: Check Docs
         run: cargo doc --no-deps --lib --bins --examples
 
@@ -67,6 +71,7 @@ jobs:
         with:
           # Matrix instances other than OS need to be added to this explicitly
           key: ${{ matrix.features }}
+          cache-bin: false # See Swatinem/rust-cache#341.
       - name: Build
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
