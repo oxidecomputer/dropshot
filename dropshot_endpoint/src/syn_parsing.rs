@@ -5,11 +5,11 @@
 
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
-    braced, bracketed,
-    parse::{discouraged::Speculative, Parse, ParseStream},
+    Abi, AttrStyle, Attribute, Generics, Ident, ImplRestriction, Result,
+    Signature, Token, TraitItem, TypeParamBound, Visibility, braced, bracketed,
+    parse::{Parse, ParseStream, discouraged::Speculative},
     punctuated::Punctuated,
-    token, Abi, AttrStyle, Attribute, Generics, Ident, ImplRestriction, Result,
-    Signature, Token, TraitItem, TypeParamBound, Visibility,
+    token,
 };
 
 /// Represent an item without concern for its body which may (or may not)

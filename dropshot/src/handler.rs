@@ -46,9 +46,9 @@ use crate::api_description::StubContext;
 use crate::body::Body;
 use crate::pagination::PaginationParams;
 use crate::router::VariableSet;
+use crate::schema_util::StructMember;
 use crate::schema_util::make_subschema_for;
 use crate::schema_util::schema2struct;
-use crate::schema_util::StructMember;
 use crate::to_map::to_map;
 
 use async_trait::async_trait;
@@ -56,8 +56,8 @@ use http::HeaderMap;
 use http::StatusCode;
 use hyper::Response;
 use schemars::JsonSchema;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use slog::Logger;
 use std::cmp::min;
 use std::convert::TryFrom;
@@ -924,7 +924,7 @@ pub struct Empty;
 /// object.
 pub trait HttpResponseContent {
     fn to_response(self, builder: http::response::Builder)
-        -> HttpHandlerResult;
+    -> HttpHandlerResult;
 
     // TODO the return type here could be something more elegant that is able
     // to produce the map of mime type -> openapiv3::MediaType that's needed in
@@ -1417,10 +1417,8 @@ impl<T: HttpCodedResponse> HttpResponseHeaders<T, NoHeaders> {
         }
     }
 }
-impl<
-        T: HttpCodedResponse,
-        H: JsonSchema + Serialize + Send + Sync + 'static,
-    > HttpResponseHeaders<T, H>
+impl<T: HttpCodedResponse, H: JsonSchema + Serialize + Send + Sync + 'static>
+    HttpResponseHeaders<T, H>
 {
     pub fn new(body: T, headers: H) -> Self {
         Self {
@@ -1463,10 +1461,8 @@ impl<
         })
     }
 }
-impl<
-        T: HttpCodedResponse,
-        H: JsonSchema + Serialize + Send + Sync + 'static,
-    > HttpResponse for HttpResponseHeaders<T, H>
+impl<T: HttpCodedResponse, H: JsonSchema + Serialize + Send + Sync + 'static>
+    HttpResponse for HttpResponseHeaders<T, H>
 {
     fn to_result(self) -> HttpHandlerResult {
         let HttpResponseHeaders { body, structured_headers, other_headers } =

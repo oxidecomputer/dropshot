@@ -88,10 +88,9 @@
 //! be relied upon.  We mention it here just to help explain how the pagination
 //! mechanism works.
 
-use chrono::offset::TimeZone;
 use chrono::DateTime;
 use chrono::Utc;
-use dropshot::endpoint;
+use chrono::offset::TimeZone;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -107,6 +106,7 @@ use dropshot::RequestContext;
 use dropshot::ResultsPage;
 use dropshot::ServerBuilder;
 use dropshot::WhichPage;
+use dropshot::endpoint;
 use hyper::Uri;
 use schemars::JsonSchema;
 use serde::Deserialize;

@@ -2,6 +2,10 @@
 
 //! Describes the endpoints and handler functions in your API
 
+use crate::CONTENT_TYPE_JSON;
+use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
+use crate::CONTENT_TYPE_OCTET_STREAM;
+use crate::CONTENT_TYPE_URL_ENCODED;
 use crate::extractor::RequestExtractor;
 use crate::handler::HttpHandlerFunc;
 use crate::handler::HttpResponse;
@@ -9,23 +13,19 @@ use crate::handler::HttpResponseError;
 use crate::handler::HttpRouteHandler;
 use crate::handler::RouteHandler;
 use crate::handler::StubRouteHandler;
-use crate::router::route_path_to_segments;
 use crate::router::HttpRouter;
 use crate::router::PathSegment;
+use crate::router::route_path_to_segments;
 use crate::schema_util::j2oas_schema;
 use crate::server::ServerContext;
 use crate::type_util::type_is_scalar;
 use crate::type_util::type_is_string_enum;
-use crate::CONTENT_TYPE_JSON;
-use crate::CONTENT_TYPE_MULTIPART_FORM_DATA;
-use crate::CONTENT_TYPE_OCTET_STREAM;
-use crate::CONTENT_TYPE_URL_ENCODED;
 
 use http::Method;
 use http::StatusCode;
-use serde::de::Error;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::Error;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -390,8 +390,9 @@ impl ApiEndpointErrorResponse {
 pub enum ApiSchemaGenerator {
     Gen {
         name: fn() -> String,
-        schema:
-            fn(&mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema,
+        schema: fn(
+            &mut schemars::r#gen::SchemaGenerator,
+        ) -> schemars::schema::Schema,
     },
     Static {
         schema: Box<schemars::schema::Schema>,
@@ -482,10 +483,10 @@ impl<Context: ServerContext> ApiDescription<Context> {
 
         match (&self.tag_config.policy, e.tags.len()) {
             (EndpointTagPolicy::AtLeastOne, 0) => {
-                return Err("At least one tag is required".to_string())
+                return Err("At least one tag is required".to_string());
             }
             (EndpointTagPolicy::ExactlyOne, n) if n != 1 => {
-                return Err("Exactly one tag is required".to_string())
+                return Err("Exactly one tag is required".to_string());
             }
             _ => (),
         }
@@ -1665,18 +1666,18 @@ pub enum ExtensionMode {
 
 #[cfg(test)]
 mod test {
-    use crate::endpoint;
-    use crate::error::HttpError;
-    use crate::handler::RequestContext;
     use crate::ApiDescription;
     use crate::ApiEndpoint;
     use crate::Body;
+    use crate::CONTENT_TYPE_JSON;
     use crate::EndpointTagPolicy;
     use crate::Path;
     use crate::Query;
     use crate::TagConfig;
     use crate::TagDetails;
-    use crate::CONTENT_TYPE_JSON;
+    use crate::endpoint;
+    use crate::error::HttpError;
+    use crate::handler::RequestContext;
     use http::Method;
     use hyper::Response;
     use openapiv3::OpenAPI;

@@ -3,7 +3,6 @@
 //! An example demonstrating how to return user-defined error types from
 //! endpoint handlers.
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -14,6 +13,7 @@ use dropshot::HttpResponseOk;
 use dropshot::Path;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
+use dropshot::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

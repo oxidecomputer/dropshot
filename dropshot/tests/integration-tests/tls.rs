@@ -7,11 +7,11 @@ use dropshot::{
     CompressionConfig, ConfigDropshot, ConfigTls, HandlerTaskMode,
     HttpResponseOk, HttpServer, ServerBuilder,
 };
-use slog::{o, Logger};
+use slog::{Logger, o};
 use std::convert::TryFrom;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::common::{self, create_log_context, generate_tls_key};
 

@@ -2,8 +2,6 @@
 
 //! Common facilities for automated testing.
 
-use dropshot::test_util::LogContext;
-use dropshot::test_util::TestContext;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigLogging;
@@ -11,6 +9,8 @@ use dropshot::ConfigLoggingIfExists;
 use dropshot::ConfigLoggingLevel;
 use dropshot::HandlerTaskMode;
 use dropshot::ServerContext;
+use dropshot::test_util::LogContext;
+use dropshot::test_util::TestContext;
 use slog::o;
 use std::io::Write;
 use tempfile::NamedTempFile;
