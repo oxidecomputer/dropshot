@@ -318,7 +318,7 @@ impl JsonSchema for WebsocketUpgrade {
     }
 
     fn json_schema(
-        _gen: &mut schemars::gen::SchemaGenerator,
+        _gen: &mut schemars::r#gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
         let mut schema = schemars::schema::SchemaObject::default();
         schema

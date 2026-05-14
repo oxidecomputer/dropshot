@@ -391,7 +391,7 @@ pub enum ApiSchemaGenerator {
     Gen {
         name: fn() -> String,
         schema:
-            fn(&mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema,
+            fn(&mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema,
     },
     Static {
         schema: Box<schemars::schema::Schema>,
@@ -602,7 +602,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             };
 
             match &param.metadata {
-                ApiEndpointParameterMetadata::Path(ref name) => {
+                ApiEndpointParameterMetadata::Path(name) => {
                     match path_segments.get(name) {
                         Some(SegmentOrWildcard::Segment) => {
                             type_is_scalar(
@@ -625,7 +625,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
                         }
                     }
                 }
-                ApiEndpointParameterMetadata::Query(ref name) => {
+                ApiEndpointParameterMetadata::Query(name) => {
                     if path_segments.contains_key(name) {
                         return Err(format!(
                             "the parameter '{}' is specified for both query \
@@ -715,8 +715,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
         // Sort the tags for stability
         openapi.tags.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let settings = schemars::gen::SchemaSettings::openapi3();
-        let mut generator = schemars::gen::SchemaGenerator::new(settings);
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
         let mut definitions =
             indexmap::IndexMap::<String, schemars::schema::Schema>::new();
 
@@ -751,7 +751,7 @@ impl<Context: ServerContext> ApiDescription<Context> {
             );
 
             let pathitem = match path {
-                openapiv3::ReferenceOr::Item(ref mut item) => item,
+                openapiv3::ReferenceOr::Item(item) => item,
                 _ => panic!("reference not expected"),
             };
 
@@ -1032,8 +1032,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
                     error_responses.entry(type_name).or_insert_with(|| {
                         let (error_schema, name) = match schema {
                             ApiSchemaGenerator::Gen {
-                                ref name,
-                                ref schema,
+                                name,
+                                schema,
                             } => {
                                 let schema = j2oas_schema(
                                 Some(&name()),
@@ -1044,8 +1044,8 @@ impl<Context: ServerContext> ApiDescription<Context> {
                             (schema, name())
                         }
                             ApiSchemaGenerator::Static {
-                                ref schema,
-                                ref dependencies,
+                                schema,
+                                dependencies,
                             } => {
                                 definitions.extend(dependencies.clone());
                                 let schema = j2oas_schema(None, &schema);

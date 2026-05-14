@@ -268,7 +268,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                                 path, lit, varname
                             );
                         }
-                        HttpRouterEdges::Literals(ref mut literals) => literals
+                        HttpRouterEdges::Literals(literals) => literals
                             .entry(lit)
                             .or_insert_with(|| Box::new(HttpRouterNode::new())),
                     }
@@ -304,7 +304,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
 
                         HttpRouterEdges::VariableSingle(
                             varname,
-                            ref mut node,
+                            node,
                         ) => {
                             if *new_varname != *varname {
                                 // Don't allow people to use different names for
@@ -365,7 +365,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
 
                         HttpRouterEdges::VariableRest(
                             varname,
-                            ref mut node,
+                            node,
                         ) => {
                             if *new_varname != *varname {
                                 /*
@@ -466,7 +466,7 @@ impl<Context: ServerContext> HttpRouter<Context> {
                 Some(HttpRouterEdges::Literals(edges)) => {
                     edges.get(&segment_string)
                 }
-                Some(HttpRouterEdges::VariableSingle(varname, ref node)) => {
+                Some(HttpRouterEdges::VariableSingle(varname, node)) => {
                     variables.insert(
                         varname.clone(),
                         VariableValue::String(segment_string),
@@ -722,7 +722,7 @@ impl<'a, Context: ServerContext> Iterator for HttpRouterIter<'a, Context> {
                     // it's time to find the next node.
                     match self.path.last_mut() {
                         None => break None,
-                        Some((_, ref mut last)) => match last.next() {
+                        Some((_, last)) => match last.next() {
                             None => {
                                 self.path.pop();
                                 assert!(self.method.next().is_none());

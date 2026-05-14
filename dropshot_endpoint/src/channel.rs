@@ -305,9 +305,8 @@ impl<'ast> ChannelParams<'ast> {
         // errored out.
         if errors.has_errors() {
             None
-        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) =
-            (rqctx_ty, websocket_conn, ret_ty)
-        {
+        } else { match (rqctx_ty, websocket_conn, ret_ty)
+        { (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) => {
             Some(Self {
                 dropshot: dropshot.clone(),
                 sig,
@@ -319,12 +318,12 @@ impl<'ast> ChannelParams<'ast> {
                 websocket_upgrade_ty,
                 endpoint_result_ty,
             })
-        } else {
+        } _ => {
             unreachable!(
                 "no param errors, but rqctx_ty, \
                  websocket_upgrade or ret_ty is None"
             );
-        }
+        }}}
     }
 
     fn to_type_checks(&self) -> TokenStream {

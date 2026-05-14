@@ -311,22 +311,22 @@ pub enum HandlerError {
 impl HandlerError {
     pub(crate) fn status_code(&self) -> StatusCode {
         match self {
-            Self::Handler { ref rsp, .. } => rsp.status(),
-            Self::Dropshot(ref e) => e.status_code.as_status(),
+            Self::Handler { rsp, .. } => rsp.status(),
+            Self::Dropshot(e) => e.status_code.as_status(),
         }
     }
 
     pub(crate) fn internal_message(&self) -> &String {
         match self {
-            Self::Handler { ref message, .. } => message,
-            Self::Dropshot(ref e) => &e.internal_message,
+            Self::Handler { message, .. } => message,
+            Self::Dropshot(e) => &e.internal_message,
         }
     }
 
     pub(crate) fn external_message(&self) -> Option<&String> {
         match self {
             Self::Handler { .. } => None,
-            Self::Dropshot(ref e) => Some(&e.external_message),
+            Self::Dropshot(e) => Some(&e.external_message),
         }
     }
 
@@ -1498,8 +1498,8 @@ impl<
     fn response_metadata() -> ApiEndpointResponse {
         let mut metadata = T::response_metadata();
 
-        let mut generator = schemars::gen::SchemaGenerator::new(
-            schemars::gen::SchemaSettings::openapi3(),
+        let mut generator = schemars::r#gen::SchemaGenerator::new(
+            schemars::r#gen::SchemaSettings::openapi3(),
         );
         let schema = generator.root_schema_for::<H>().schema.into();
 
