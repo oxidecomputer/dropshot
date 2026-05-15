@@ -2,17 +2,17 @@
 
 //! Body-related extractor(s)
 
+use crate::ExclusiveExtractor;
+use crate::ExtractorMetadata;
+use crate::RequestContext;
 use crate::api_description::ApiEndpointParameter;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::{ApiEndpointBodyContentType, ExtensionMode};
 use crate::error::HttpError;
-use crate::http_util::http_dump_body;
 use crate::http_util::CONTENT_TYPE_JSON;
+use crate::http_util::http_dump_body;
 use crate::schema_util::make_subschema_for;
 use crate::server::ServerContext;
-use crate::ExclusiveExtractor;
-use crate::ExtractorMetadata;
-use crate::RequestContext;
 use async_trait::async_trait;
 use bytes::BufMut;
 use bytes::Bytes;
@@ -20,9 +20,9 @@ use bytes::BytesMut;
 use futures::Stream;
 use futures::TryStreamExt;
 use http_body_util::BodyExt;
+use schemars::JsonSchema;
 use schemars::schema::InstanceType;
 use schemars::schema::SchemaObject;
-use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 

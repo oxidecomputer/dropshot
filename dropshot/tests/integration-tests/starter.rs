@@ -3,9 +3,6 @@
 //! Quick check that the "legacy" HttpServerStarter::new() and
 //! HttpServerStarter::new_with_tls() interfaces work.
 
-use dropshot::endpoint;
-use dropshot::test_util::read_json;
-use dropshot::test_util::ClientTestContext;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigTls;
@@ -13,6 +10,9 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+use dropshot::endpoint;
+use dropshot::test_util::ClientTestContext;
+use dropshot::test_util::read_json;
 
 use crate::common;
 use crate::common::create_log_context;

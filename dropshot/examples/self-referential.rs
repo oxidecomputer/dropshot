@@ -2,7 +2,6 @@
 
 //! An example that demonstrates server shutdown (and waiting for shutdown).
 
-use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -10,12 +9,13 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
+use dropshot::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

@@ -3,8 +3,8 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{
-    ser::{Impossible, SerializeStruct},
     Serialize, Serializer,
+    ser::{Impossible, SerializeStruct},
 };
 
 /// Serialize an instance of T into a `BTreeMap<String, String>`.
@@ -325,7 +325,7 @@ impl Serializer for &mut ValueSerializer<'_> {
 mod test {
     use serde::Serialize;
 
-    use crate::to_map::{to_map, MapError};
+    use crate::to_map::{MapError, to_map};
 
     #[test]
     fn test_to_map_valid() {
