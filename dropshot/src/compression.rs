@@ -294,11 +294,11 @@ pub fn add_vary_header(headers: &mut HeaderMap<HeaderValue>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http::Extensions;
     use http::header::{
         ACCEPT_ENCODING, ACCEPT_RANGES, CONTENT_ENCODING, CONTENT_LENGTH,
         CONTENT_RANGE, CONTENT_TYPE, VARY,
     };
-    use http::Extensions;
 
     fn v(s: &'static str) -> HeaderValue {
         HeaderValue::from_static(s)
@@ -380,9 +380,11 @@ mod tests {
             .iter()
             .map(|value| value.to_str().unwrap().to_string())
             .collect();
-        assert!(vary_values
-            .iter()
-            .any(|value| value.eq_ignore_ascii_case("accept-encoding")));
+        assert!(
+            vary_values
+                .iter()
+                .any(|value| value.eq_ignore_ascii_case("accept-encoding"))
+        );
     }
 
     #[test]

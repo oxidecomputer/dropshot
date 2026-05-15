@@ -7,10 +7,10 @@ use crate::error_store::ErrorSink;
 use crate::error_store::ErrorStore;
 use crate::metadata::ApiEndpointKind;
 use crate::metadata::ChannelMetadata;
-use crate::params::validate_fn_ast;
 use crate::params::ParamValidator;
 use crate::params::RqctxKind;
 use crate::params::RqctxTy;
+use crate::params::validate_fn_ast;
 use crate::syn_parsing::ItemFnForSignature;
 use crate::syn_parsing::TraitItemFnForSignature;
 use crate::util::MacroKind;
@@ -18,8 +18,8 @@ use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
-use serde_tokenstream::from_tokenstream;
 use serde_tokenstream::Error;
+use serde_tokenstream::from_tokenstream;
 use syn::parse_quote;
 use syn::spanned::Spanned;
 
@@ -305,25 +305,28 @@ impl<'ast> ChannelParams<'ast> {
         // errored out.
         if errors.has_errors() {
             None
-        } else if let (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) =
-            (rqctx_ty, websocket_conn, ret_ty)
-        {
-            Some(Self {
-                dropshot: dropshot.clone(),
-                sig,
-                rqctx_ty,
-                ret_ty,
-                shared_extractors,
-                websocket_conn,
-                adapter_name,
-                websocket_upgrade_ty,
-                endpoint_result_ty,
-            })
         } else {
-            unreachable!(
-                "no param errors, but rqctx_ty, \
+            match (rqctx_ty, websocket_conn, ret_ty) {
+                (Some(rqctx_ty), Some(websocket_conn), Some(ret_ty)) => {
+                    Some(Self {
+                        dropshot: dropshot.clone(),
+                        sig,
+                        rqctx_ty,
+                        ret_ty,
+                        shared_extractors,
+                        websocket_conn,
+                        adapter_name,
+                        websocket_upgrade_ty,
+                        endpoint_result_ty,
+                    })
+                }
+                _ => {
+                    unreachable!(
+                        "no param errors, but rqctx_ty, \
                  websocket_upgrade or ret_ty is None"
-            );
+                    );
+                }
+            }
         }
     }
 
