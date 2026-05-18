@@ -113,7 +113,7 @@ tempfile = "3.27"
 trybuild = "1.0.116"
 # Used by the https examples and tests
 pem = "3.0"
-rcgen = { version = "0.14.7", default-features = false, features = ["aws_lc_rs", "pem"] }
+rcgen = { version = "0.14.8", default-features = false, features = ["aws_lc_rs", "pem"] }
 # Used in a doc-test demonstrating the WebsocketUpgrade extractor.
 tokio-tungstenite = "0.29.0"
 
