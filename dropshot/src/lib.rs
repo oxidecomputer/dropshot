@@ -677,14 +677,20 @@
 //! ```
 //!
 //! You might expect that instead of doing this, you could define your own
-//! structure that includes a `PaginationParams` using `#[serde(flatten)]`, and
-//! this ought to work, but it currently doesn't due to serde_urlencoded#33,
-//! which is really serde#1183.
+//! structure that includes a `PaginationParams` using `#[serde(flatten)]`,
+//! however--due to design limitation of `serde`--this does not work.
+//! (Proximately, this is because the `limit` parameter is a number, but a
+//! deserializer for the "outer" type lacks that type information so it is
+//! stored in an intermediate structure as a string; when then deserializing
+//! into `PaginationParams` there is a type mismatch. See serde#1183 for more
+//! details.)
 //!
 //! Note that any parameters defined by `MyScanParams` are effectively encoded
 //! into the page token and need not be supplied with invocations when `page_token`
 //! is specified. That is not the case for required parameters defined by
-//! `MyExtraQueryParams`--those must be supplied on each invocation.
+//! `MyExtraQueryParams`--those must be supplied on each invocation. Therefore,
+//! you should carefully consider how implied versus required parameters
+//! interact.
 //!
 //! ### OpenAPI extension
 //!
