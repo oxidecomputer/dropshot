@@ -149,27 +149,27 @@ where
     T: slog::Drain + Send + 'static,
     <T as slog::Drain>::Err: std::fmt::Debug,
 {
-    let level_drain = slog::LevelFilter(drain, Level::from(level))
+    let level_drain = slog::LevelFilter(drain, Level::from(level)).ignore_res();
+    let async_drain = slog_async::Async::new(level_drain)
+        .chan_size(1024)
+        .build()
+        // Use `ignore_res()` here rather than `fuse`, to ensure that we do
+        // not panic in the event of a potentially-transient I/O error, such
+        // as a full disk.  Although it is quite sad to silently eat a log
+        // message, it is much sadder to crash the entire process,
+        // particularly when the process is what is ultimately responsible
+        // for remediating the circumstances that cause logging to fail.
+        //
+        // In an ideal world, we might like some way of tracking a count of
+        // how many log messages have been dropped, and for what reason.
+        //
+        // We may also wish to configure slog to panic if it attempts to log
+        // something that it cannot serialize, but not to panic if it
+        // encounters an I/O error.  Sadly, slog's interfaces for error
+        // handling make this difficult, as everything is getting coerced to
+        // `std::io::Error` anyway, even if it is actually a serialization
+        // error. Sigh.
         .ignore_res();
-    let async_drain =
-        slog_async::Async::new(level_drain).chan_size(1024).build()
-            // Use `ignore_res()` here rather than `fuse`, to ensure that we do
-            // not panic in the event of a potentially-transient I/O error, such
-            // as a full disk.  Although it is quite sad to silently eat a log
-            // message, it is much sadder to crash the entire process,
-            // particularly when the process is what is ultimately responsible
-            // for remediating the circumstances that cause logging to fail.
-            //
-            // In an ideal world, we might like some way of tracking a count of
-            // how many log messages have been dropped, and for what reason.
-            //
-            // We may also wish to configure slog to panic if it attempts to log
-            // something that it cannot serialize, but not to panic if it
-            // encounters an I/O error.  Sadly, slog's interfaces for error
-            // handling make this difficult, as everything is getting coerced to
-            // `std::io::Error` anyway, even if it is actually a serialization
-            // error. Sigh.
-            .ignore_res();
     slog::Logger::root(async_drain, o!())
 }
 
@@ -177,7 +177,10 @@ fn log_drain_for_file(
     open_options: &OpenOptions,
     path: &Path,
     log_name: String,
-) -> Result<slog::IgnoreResult<slog_json::Json<LineWriter<std::fs::File>>>, io::Error> {
+) -> Result<
+    slog::IgnoreResult<slog_json::Json<LineWriter<std::fs::File>>>,
+    io::Error,
+> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -192,7 +195,8 @@ fn log_drain_for_file(
     // TODO-cleanup
     let log_name_box = Box::new(log_name);
     let log_name_leaked = Box::leak(log_name_box);
-    Ok(slog_bunyan::with_name(log_name_leaked, file).build()
+    Ok(slog_bunyan::with_name(log_name_leaked, file)
+        .build()
         // As I discussed above, we wish to avoid panicking in the event of an
         // error whilst writing a log message to the file.
         .ignore_res())
