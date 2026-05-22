@@ -158,13 +158,13 @@ where
             // as a full disk.  Although it is quite sad to silently eat a log
             // message, it is much sadder to crash the entire process,
             // particularly when the process is what is ultimately responsible
-            // for remediating the circumstances that causes logging to fail.
+            // for remediating the circumstances that cause logging to fail.
             //
             // In an ideal world, we might like some way of tracking a count of
             // how many log messages have been dropped, and for what reason.
             //
             // We may also wish to configure slog to panic if it attempts to log
-            // something that it cannot serialze, but not to panic if it
+            // something that it cannot serialize, but not to panic if it
             // encounters an I/O error.  Sadly, slog's interfaces for error
             // handling make this difficult, as everything is getting coerced to
             // `std::io::Error` anyway, even if it is actually a serialization
