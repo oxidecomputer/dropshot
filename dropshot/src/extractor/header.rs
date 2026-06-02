@@ -23,14 +23,14 @@ use super::{ExtractorMetadata, SharedExtractor, metadata::get_metadata};
 /// documented in OpenAPI output.
 /// See the top-level crate documentation for more information.
 ///
-/// Note that (unlike the [`Query`] and [`Path`] extractors) headers are case-
-/// insensitive. You may rename fields with mixed casing (e.g. by using
-/// #[serde(rename = "X-Header-Foo")]) and that casing will appear in the
-/// OpenAPI document output. Name conflicts (including names differentiated by
-/// casing since headers are case-insensitive) may lead to unexpected behavior,
-/// and should be avoided. For example, only one of the conflicting fields may
-/// be deserialized, and therefore deserialization may fail if any conflicting
-/// field is required (i.e. not an `Option<T>` type)
+/// Note that (unlike the [`Query`](crate::Query) and [`Path`](crate::Path)
+/// extractors) headers are case- insensitive. You may rename fields with mixed
+/// casing (e.g. by using #[serde(rename = "X-Header-Foo")]) and that casing
+/// will appear in the OpenAPI document output. Name conflicts (including names
+/// differentiated by casing since headers are case-insensitive) may lead to
+/// unexpected behavior, and should be avoided. For example, only one of the
+/// conflicting fields may be deserialized, and therefore deserialization may
+/// fail if any conflicting field is required (i.e. not an `Option<T>` type)
 #[derive(Debug)]
 pub struct Header<HeaderType: DeserializeOwned + JsonSchema + Send + Sync> {
     inner: HeaderType,
