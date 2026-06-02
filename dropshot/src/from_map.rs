@@ -1,14 +1,14 @@
 // Copyright 2025 Oxide Computer Company
 
 use paste::paste;
+use serde::Deserialize;
+use serde::Deserializer;
 use serde::de::DeserializeSeed;
 use serde::de::EnumAccess;
 use serde::de::MapAccess;
 use serde::de::SeqAccess;
 use serde::de::VariantAccess;
 use serde::de::Visitor;
-use serde::Deserialize;
-use serde::Deserializer;
 use std::any::type_name;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -134,7 +134,7 @@ where
         F: FnOnce(&Z) -> Result<VV, MapError>,
     {
         match self {
-            MapDeserializer::Value(ref raw_value) => deserialize(raw_value),
+            MapDeserializer::Value(raw_value) => deserialize(raw_value),
             MapDeserializer::Map(..) => Err(MapError(
                 "must be applied to a flattened struct rather than a raw type"
                     .to_string(),

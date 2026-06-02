@@ -4,14 +4,14 @@
 //! mode, including certificate loading and supported modes.
 
 use dropshot::{
-    ConfigDropshot, ConfigTls, HandlerTaskMode, HttpResponseOk, HttpServer,
-    ServerBuilder,
+    CompressionConfig, ConfigDropshot, ConfigTls, HandlerTaskMode,
+    HttpResponseOk, HttpServer, ServerBuilder,
 };
-use slog::{o, Logger};
+use slog::{Logger, o};
 use std::convert::TryFrom;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::common::{self, create_log_context, generate_tls_key};
 
@@ -116,6 +116,7 @@ fn make_server(
         default_request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         log_headers: Default::default(),
+        compression: CompressionConfig::Gzip,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.to_path_buf(),
@@ -130,7 +131,7 @@ fn make_server(
 
 fn make_pki_verifier(
     certs: &Vec<rustls::pki_types::CertificateDer>,
-) -> Arc<impl rustls::client::danger::ServerCertVerifier> {
+) -> Arc<impl rustls::client::danger::ServerCertVerifier + use<>> {
     let mut root_store = rustls::RootCertStore { roots: vec![] };
     root_store.add(certs[certs.len() - 1].clone()).expect("adding root cert");
     rustls::client::WebPkiServerVerifier::builder(Arc::new(root_store))
@@ -430,6 +431,7 @@ async fn test_server_is_https() {
         default_request_body_max_bytes: 1024,
         default_handler_task_mode: HandlerTaskMode::CancelOnDisconnect,
         log_headers: Default::default(),
+        compression: CompressionConfig::Gzip,
     };
     let config_tls = Some(ConfigTls::AsFile {
         cert_file: cert_file.path().to_path_buf(),

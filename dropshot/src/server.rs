@@ -1,9 +1,14 @@
 // Copyright 2024 Oxide Computer Company
 //! Generic server-wide state and facilities
 
+use super::ProbeRegistration;
 use super::api_description::ApiDescription;
 use super::body::Body;
-use super::config::{ConfigDropshot, ConfigTls};
+use super::compression::add_vary_header;
+use super::compression::apply_gzip_compression;
+use super::compression::is_compressible_content_type;
+use super::compression::should_compress_response;
+use super::config::{CompressionConfig, ConfigDropshot, ConfigTls};
 #[cfg(feature = "usdt-probes")]
 use super::dtrace::probes;
 use super::handler::HandlerError;
@@ -11,7 +16,6 @@ use super::handler::RequestContext;
 use super::http_util::HEADER_REQUEST_ID;
 use super::router::HttpRouter;
 use super::versioning::VersionPolicy;
-use super::ProbeRegistration;
 
 use async_stream::stream;
 use debug_ignore::DebugIgnore;
@@ -20,11 +24,11 @@ use futures::future::{
 };
 use futures::lock::Mutex;
 use futures::stream::{Stream, StreamExt};
-use hyper::service::Service;
 use hyper::Request;
 use hyper::Response;
+use hyper::service::Service;
 use rustls;
-use scopeguard::{guard, ScopeGuard};
+use scopeguard::{ScopeGuard, guard};
 use std::convert::TryFrom;
 use std::future::Future;
 use std::mem;
@@ -37,12 +41,12 @@ use std::task::{Context, Poll};
 use tokio::io::ReadBuf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
-use tokio_rustls::{server::TlsStream, TlsAcceptor};
+use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use uuid::Uuid;
 use waitgroup::WaitGroup;
 
-use crate::config::HandlerTaskMode;
 use crate::RequestInfo;
+use crate::config::HandlerTaskMode;
 use slog::Logger;
 use thiserror::Error;
 
@@ -105,6 +109,8 @@ pub struct ServerConfig {
     /// is made to deal with headers that appear multiple times in a single
     /// request.
     pub log_headers: Vec<String>,
+    /// Configuration for response compression.
+    pub compression: CompressionConfig,
 }
 
 /// See [`ServerBuilder`] instead.
@@ -188,6 +194,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
             log_headers: config.log_headers.clone(),
+            compression: config.compression,
         };
 
         let tls_acceptor = tls
@@ -901,7 +908,7 @@ async fn http_request_handle<C: ServerContext>(
     // this to take forever.
     // TODO-correctness: Do we need to dump the body on errors?
     let request = request.map(crate::Body::wrap);
-    let method = request.method();
+    let method = request.method().clone();
     let uri = request.uri();
     let found_version =
         server.version_policy.request_version(&request, &request_log)?;
@@ -915,8 +922,9 @@ async fn http_request_handle<C: ServerContext>(
         request: RequestInfo::new(&request, remote_addr),
         endpoint: lookup_result.endpoint,
         request_id: request_id.to_string(),
-        log: request_log,
+        log: request_log.clone(),
     };
+    let request_headers = rqctx.request.headers().clone();
     let handler = lookup_result.handler;
 
     let mut response = match server.config.default_handler_task_mode {
@@ -930,7 +938,7 @@ async fn http_request_handle<C: ServerContext>(
             // Spawn the handler so if we're cancelled, the handler still runs
             // to completion.
             let (tx, rx) = oneshot::channel();
-            let request_log = rqctx.log.clone();
+            let request_log = request_log.clone();
             let worker = server.handler_waitgroup_worker.clone();
             let handler_task = tokio::spawn(async move {
                 let request_log = rqctx.log.clone();
@@ -948,7 +956,7 @@ async fn http_request_handle<C: ServerContext>(
                             warn!(request_log, "request completed after handler was already cancelled";
                                 "response_code" => error.status_code().as_u16(),
                                 "error_message_internal" => error.internal_message(),
-                                "error_message_external" => error.external_message(),,
+                                "error_message_external" => error.external_message(),
                             );
                         }
                     }
@@ -981,6 +989,30 @@ async fn http_request_handle<C: ServerContext>(
             }
         }
     };
+
+    if matches!(server.config.compression, CompressionConfig::Gzip)
+        && is_compressible_content_type(response.headers())
+    {
+        // Add Vary: Accept-Encoding header for all compressible content
+        // types. This needs to be there even if the response ends up not being
+        // compressed because it tells caches (like browsers and CDNs) that the
+        // response content depends on the value of the Accept-Encoding header.
+        // Without this, a cache might mistakenly serve a compressed response to
+        // a client that cannot decompress it, or serve an uncompressed response
+        // to a client that could have benefited from compression.
+        add_vary_header(response.headers_mut());
+
+        if should_compress_response(
+            &method,
+            &request_headers,
+            response.status(),
+            response.headers(),
+            response.extensions(),
+        ) {
+            response = apply_gzip_compression(response);
+        }
+    }
+
     response.headers_mut().insert(
         HEADER_REQUEST_ID,
         http::header::HeaderValue::from_str(&request_id).unwrap(),
@@ -1079,9 +1111,7 @@ pub enum BuildError {
         #[source]
         error: std::io::Error,
     },
-    #[error(
-        "unversioned servers cannot have endpoints with specific versions"
-    )]
+    #[error("unversioned servers cannot have endpoints with specific versions")]
     UnversionedServerHasVersionedRoutes,
 }
 
@@ -1206,14 +1236,14 @@ mod test {
     // Referring to the current crate as "dropshot::" instead of "crate::"
     // helps the endpoint macro with module lookup.
     use crate as dropshot;
-    use dropshot::endpoint;
-    use dropshot::test_util::ClientTestContext;
-    use dropshot::test_util::LogContext;
     use dropshot::ConfigLogging;
     use dropshot::ConfigLoggingLevel;
     use dropshot::HttpError;
     use dropshot::HttpResponseOk;
     use dropshot::RequestContext;
+    use dropshot::endpoint;
+    use dropshot::test_util::ClientTestContext;
+    use dropshot::test_util::LogContext;
     use http::StatusCode;
     use hyper::Method;
 

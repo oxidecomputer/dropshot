@@ -67,7 +67,7 @@ mod imp {
         WebsocketConnection,
     };
     use futures::SinkExt;
-    use tokio_tungstenite::tungstenite::{protocol::Role, Message};
+    use tokio_tungstenite::tungstenite::{Message, protocol::Role};
 
     use crate::api::{CounterApi, CounterValue};
 
@@ -124,7 +124,7 @@ mod imp {
             )
             .await;
             let mut count = rqctx.context().counter.load(Ordering::Relaxed);
-            while ws.send(Message::Binary(vec![count])).await.is_ok() {
+            while ws.send(Message::Binary(vec![count].into())).await.is_ok() {
                 count = count.wrapping_add(1);
             }
             Ok(())

@@ -109,16 +109,12 @@ help: name the argument, or use `_` to continue ignoring it
 error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseUpdatedNoContent, HttpError>>` captures lifetime that does not appear in bounds
   --> tests/fail/bad_trait_endpoint21.rs:47:58
    |
-43 | /      async fn variadic_argument(
-44 | |          _rqctx: RequestContext<Self::Context>,
-45 | |          _param1: Query<QueryParams>,
-46 | |          ...
-47 | |      ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   | | ________________________________________________________-_^
-   | ||________________________________________________________|
-   |  |                                                        opaque type defined here
-48 |  |         unreachable!()
-49 |  |     }
-   |  |_____^
+47 |       ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   |  __________-----------------------------------------------_^
+   | |          |
+   | |          opaque type defined here
+48 | |         unreachable!()
+49 | |     }
+   | |_____^
    |
    = note: hidden type `{async fn body of <MyImpl as MyApi>::variadic_argument()}` captures lifetime `'_`

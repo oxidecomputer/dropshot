@@ -11,10 +11,10 @@ use hyper::Request;
 use hyper::Response;
 use hyper::StatusCode;
 use hyper::Uri;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
-use serde::de::DeserializeOwned;
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use slog::Logger;
 use std::convert::TryFrom;
 use std::fmt::Debug;
@@ -56,11 +56,13 @@ pub const TEST_HEADER_2: &str = "x-dropshot-test-header-2";
 
 // List of allowed HTTP headers in responses.
 // Used to make sure we don't leak headers unexpectedly.
-const ALLOWED_HEADERS: [AllowedHeader<'static>; 8] = [
+const ALLOWED_HEADERS: [AllowedHeader<'static>; 10] = [
+    AllowedHeader::new("content-encoding"),
     AllowedHeader::new("content-length"),
     AllowedHeader::new("content-type"),
     AllowedHeader::new("date"),
     AllowedHeader::new("location"),
+    AllowedHeader::new("vary"),
     AllowedHeader::new("x-request-id"),
     AllowedHeader {
         name: "transfer-encoding",
@@ -959,10 +961,10 @@ mod test {
     const T1_STR: &str = "2020-03-24T00:00:00Z";
     const T2_STR: &str = "2020-03-25T00:00:00Z";
 
-    use super::verify_bunyan_records;
-    use super::verify_bunyan_records_sequential;
     use super::BunyanLogRecord;
     use super::BunyanLogRecordSpec;
+    use super::verify_bunyan_records;
+    use super::verify_bunyan_records_sequential;
     use chrono::DateTime;
     use chrono::Utc;
 

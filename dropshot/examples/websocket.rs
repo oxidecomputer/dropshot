@@ -1,7 +1,6 @@
 // Copyright 2022 Oxide Computer Company
 //! Example use of Dropshot with a websocket endpoint.
 
-use dropshot::channel;
 use dropshot::ApiDescription;
 use dropshot::ConfigLogging;
 use dropshot::ConfigLoggingLevel;
@@ -9,11 +8,12 @@ use dropshot::Query;
 use dropshot::RequestContext;
 use dropshot::ServerBuilder;
 use dropshot::WebsocketConnection;
+use dropshot::channel;
 use futures::SinkExt;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::Role;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -59,7 +59,7 @@ async fn example_api_websocket_counter(
     )
     .await;
     let mut count = qp.into_inner().start.unwrap_or(0);
-    while ws.send(Message::Binary(vec![count])).await.is_ok() {
+    while ws.send(Message::Binary(vec![count].into())).await.is_ok() {
         count = count.wrapping_add(1);
     }
     Ok(())

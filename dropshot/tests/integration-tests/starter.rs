@@ -3,9 +3,6 @@
 //! Quick check that the "legacy" HttpServerStarter::new() and
 //! HttpServerStarter::new_with_tls() interfaces work.
 
-use dropshot::endpoint;
-use dropshot::test_util::read_json;
-use dropshot::test_util::ClientTestContext;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
 use dropshot::ConfigTls;
@@ -13,6 +10,9 @@ use dropshot::HttpError;
 use dropshot::HttpResponseOk;
 use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
+use dropshot::endpoint;
+use dropshot::test_util::ClientTestContext;
+use dropshot::test_util::read_json;
 
 use crate::common;
 use crate::common::create_log_context;
@@ -63,7 +63,7 @@ async fn test_with_tls() {
         certs.into_iter().next_back().expect("at least one certificate");
     let client = reqwest::Client::builder()
         .use_rustls_tls()
-        .add_root_certificate(my_ca_root)
+        .tls_certs_only([my_ca_root])
         .build()
         .unwrap();
     let api = demo_api();
