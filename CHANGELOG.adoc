@@ -13,7 +13,11 @@
 
 == Unreleased changes (release date TBD)
 
-https://github.com/oxidecomputer/dropshot/compare/v0.17.0\...HEAD[Full list of commits]
+https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
+
+== 0.17.1 (released 2026-06-02)
+
+https://github.com/oxidecomputer/dropshot/compare/v0.17.0\...v0.17.1[Full list of commits]
 
 * https://github.com/oxidecomputer/dropshot/pull/1590[#1590] Switched TLS backend from `ring` to `aws-lc-rs`; this follows the direction of rustls and reqwest and eliminates the need to build both crates when other dependencies already use `aws-lc-rs`. Note that `aws-lc-sys` has more complex build requirements (CMake) and cross-compilation support may vary by platform.
 * https://github.com/oxidecomputer/dropshot/pull/1605[#1605] https://github.com/oxidecomputer/dropshot/pull/1608[#1608] Updated to Rust edition 2024, raising the minimum supported Rust version to 1.85
