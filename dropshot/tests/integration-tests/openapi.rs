@@ -688,6 +688,24 @@ async fn handler32(
     todo!();
 }
 
+#[derive(Deserialize, JsonSchema)]
+struct Query33 {
+    #[allow(unused)]
+    multi: Vec<String>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/testing33",
+    tags = ["it"]
+}]
+async fn handler33(
+    _: RequestContext<()>,
+    _: Query<Query33>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    todo!();
+}
+
 fn make_api(
     maybe_tag_config: Option<TagConfig>,
 ) -> Result<ApiDescription<()>, ApiDescriptionRegisterError> {
@@ -729,6 +747,7 @@ fn make_api(
     api.register(handler30)?;
     api.register(handler31)?;
     api.register(handler32)?;
+    api.register(handler33)?;
     Ok(api)
 }
 

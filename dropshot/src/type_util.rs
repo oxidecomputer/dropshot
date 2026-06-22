@@ -166,7 +166,7 @@ fn type_is_scalar_subschemas(
     }
 }
 
-pub fn type_is_string_enum(
+pub fn type_is_string_seq(
     operation_id: &str,
     name: &str,
     schema: &Schema,
@@ -209,9 +209,11 @@ pub fn type_is_string_enum(
                         name
                     )
                 }),
-                _ => {
-                    panic!("the parameter '{}' has an invalid array type", name)
-                }
+
+                _ => Err(format!(
+                    "the parameter '{}' has an invalid array type",
+                    name
+                )),
             }
         }
         _ => {
