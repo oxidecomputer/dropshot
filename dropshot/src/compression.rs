@@ -811,4 +811,33 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_no_compression_extension_returns_false_for_should_compress() {
+        // When a handler sets NoCompression, should_compress_response must
+        // return false so that callers can suppress Vary: Accept-Encoding.
+        // A response that will never be compressed regardless of
+        // Accept-Encoding must not carry Vary: Accept-Encoding, as that
+        // would cause caches to split unnecessarily.
+        let method = http::Method::GET;
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(ACCEPT_ENCODING, v("gzip"));
+        let status = http::StatusCode::OK;
+        let mut response_headers = HeaderMap::new();
+        response_headers.insert(CONTENT_TYPE, v("application/json"));
+        let mut extensions = http::Extensions::new();
+        extensions.insert(NoCompression);
+
+        assert!(
+            !should_compress_response(
+                &method,
+                &request_headers,
+                status,
+                &response_headers,
+                &extensions,
+            ),
+            "should_compress_response must return false when NoCompression \
+             is set so callers can omit Vary: Accept-Encoding"
+        );
+    }
 }
