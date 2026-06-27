@@ -1,8 +1,7 @@
 // Copyright 2024 Oxide Computer Company
 //! Generic server-wide state and facilities
 
-use crate::compression::NoCompression;
-use super::ProbeRegistration;
+use super::compression::NoCompression;
 use super::api_description::ApiDescription;
 use super::body::Body;
 use super::compression::add_vary_header;
