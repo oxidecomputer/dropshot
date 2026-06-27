@@ -988,37 +988,37 @@ async fn http_request_handle<C: ServerContext>(
                 }
             }
         }
-};
+    };
 
-if matches!(server.config.compression, CompressionConfig::Gzip)
-    && is_compressible_content_type(response.headers())
-{
-    if should_compress_response(
-        &method,
-        &request_headers,
-        response.status(),
-        response.headers(),
-        response.extensions(),
-    ) {
-        // Add Vary: Accept-Encoding and compress. The Vary header is added
-        // here so caches know they must not serve a compressed response to
-        // a client that didn't accept it.
-        add_vary_header(response.headers_mut());
-        response = apply_gzip_compression(response);
-    } else if response.extensions().get::<NoCompression>().is_none() {
-        // Add Vary: Accept-Encoding for compressible responses that are
-        // skipped this time (e.g. body too small, wrong method, partial
-        // content) but that could be compressed for a different request.
-        // Omit Vary when NoCompression is set because that response will
-        // never be compressed regardless of Accept-Encoding.
-        add_vary_header(response.headers_mut());
+    if matches!(server.config.compression, CompressionConfig::Gzip)
+        && is_compressible_content_type(response.headers())
+    {
+        if should_compress_response(
+            &method,
+            &request_headers,
+            response.status(),
+            response.headers(),
+            response.extensions(),
+        ) {
+            // Add Vary: Accept-Encoding and compress. The Vary header is added
+            // here so caches know they must not serve a compressed response to
+            // a client that didn't accept it.
+            add_vary_header(response.headers_mut());
+            response = apply_gzip_compression(response);
+        } else if response.extensions().get::<NoCompression>().is_none() {
+            // Add Vary: Accept-Encoding for compressible responses that are
+            // skipped this time (e.g. body too small, wrong method, partial
+            // content) but that could be compressed for a different request.
+            // Omit Vary when NoCompression is set because that response will
+            // never be compressed regardless of Accept-Encoding.
+            add_vary_header(response.headers_mut());
+        }
     }
-}
 
-response.headers_mut().insert(
-    HEADER_REQUEST_ID,
-    http::header::HeaderValue::from_str(&request_id).unwrap(),
-);
+    response.headers_mut().insert(
+        HEADER_REQUEST_ID,
+        http::header::HeaderValue::from_str(&request_id).unwrap(),
+    );
     Ok(response)
 }
 
