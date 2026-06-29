@@ -2,9 +2,9 @@
 //! Generic server-wide state and facilities
 
 use super::ProbeRegistration;
-use super::compression::NoCompression;
 use super::api_description::ApiDescription;
 use super::body::Body;
+use super::compression::NoCompression;
 use super::compression::add_vary_header;
 use super::compression::apply_gzip_compression;
 use super::compression::is_compressible_content_type;
