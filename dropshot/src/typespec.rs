@@ -207,6 +207,7 @@ pub fn api_to_typespec<C: ServerContext>(
     ctx.known_enums = detect_enum_types(&definitions);
     ctx.discriminated_unions = detect_discriminated_union_types(&definitions);
     ctx.inline_pattern_scalars = collect_inline_pattern_scalars(&definitions);
+    ctx.item_format_scalars = collect_item_format_scalars(&definitions);
 
     // Emit preamble.
     ctx.emit_preamble(info, version, api.get_tag_config());
@@ -231,6 +232,16 @@ pub fn api_to_typespec<C: ServerContext>(
     if ctx.needs_uuid_scalar {
         writeln!(ctx.out, "@format(\"uuid\")").unwrap();
         writeln!(ctx.out, "scalar uuid extends string;").unwrap();
+        writeln!(ctx.out).unwrap();
+    }
+
+    // Emit scalars synthesized to carry a `format` on string array elements.
+    // Referencing a named scalar (e.g. `ipAddr[]`) is the only way to keep the
+    // element format, since TypeSpec has no syntax to decorate `string[]`
+    // element types inline.
+    for (name, fmt) in ctx.item_format_scalars.clone() {
+        writeln!(ctx.out, "@format(\"{}\")", escape_tsp_string(&fmt)).unwrap();
+        writeln!(ctx.out, "scalar {} extends string;", name).unwrap();
         writeln!(ctx.out).unwrap();
     }
 
@@ -326,8 +337,13 @@ struct TypeSpecContext {
     /// Set of type names that are discriminated unions.
     discriminated_unions: std::collections::HashSet<String>,
     /// Named scalar definitions synthesized from inline string schemas that
-    /// carry both a `title` and a `pattern`.
+    /// carry a `pattern`. Named from a `title` when one is a valid identifier,
+    /// otherwise from the enclosing model + property name.
     inline_pattern_scalars: IndexMap<String, SchemaObject>,
+    /// Named scalars synthesized to carry a `format` on string array elements
+    /// (TypeSpec cannot decorate array element types inline). Maps the scalar
+    /// name (e.g. `ipAddr`) to the format string (e.g. `ip`).
+    item_format_scalars: IndexMap<String, String>,
 }
 
 impl TypeSpecContext {
@@ -341,6 +357,7 @@ impl TypeSpecContext {
             known_enums: std::collections::HashMap::new(),
             discriminated_unions: std::collections::HashSet::new(),
             inline_pattern_scalars: IndexMap::new(),
+            item_format_scalars: IndexMap::new(),
         }
     }
 
@@ -422,8 +439,10 @@ impl TypeSpecContext {
         match schema {
             Schema::Object(obj) => self.emit_model_from_object(name, obj),
             Schema::Bool(true) => {
-                writeln!(self.out, "model {} is Record<unknown>;", name)
-                    .unwrap();
+                // `true` (any JSON value) round-trips to `{}` only via a
+                // baseless scalar; see the `unknown` case in
+                // `emit_model_from_object`.
+                writeln!(self.out, "scalar {};", name).unwrap();
                 writeln!(self.out).unwrap();
             }
             Schema::Bool(false) => {
@@ -469,7 +488,11 @@ impl TypeSpecContext {
             }
 
             for (prop_name, prop_schema) in &object.properties {
-                let ts_type = self.property_schema_to_typespec(prop_schema);
+                let ts_type = self.property_schema_to_typespec(
+                    name,
+                    prop_name,
+                    prop_schema,
+                );
                 let required = object.required.contains(prop_name);
                 let desc = schema_description(prop_schema);
                 self.emit_property(
@@ -510,9 +533,13 @@ impl TypeSpecContext {
             }
             writeln!(self.out, "}}").unwrap();
         } else if ts_type == "unknown" {
-            // TypeSpec aliases are transparent in the compiler, so `alias X =
-            // unknown` erases the schema name for downstream generators.
-            writeln!(self.out, "model {} is Record<unknown>;", name).unwrap();
+            // The source schema is `{}` (any JSON value). A baseless scalar is
+            // the only TypeSpec construct the @typespec/openapi3 emitter renders
+            // back as an empty schema `{}`. `model X is Record<unknown>` would
+            // narrow it to `{"type": "object", "additionalProperties": {}}`, and
+            // a transparent `alias X = unknown` erases the name for downstream
+            // generators.
+            writeln!(self.out, "scalar {};", name).unwrap();
         } else if !is_scalar_base_type(&ts_type) {
             emit_validation_decorators(
                 &mut self.out,
@@ -683,6 +710,14 @@ impl TypeSpecContext {
             // Emit variant models.
             for v in &ext.variants {
                 writeln!(self.out, "model {} {{", v.model_name).unwrap();
+                // Preserve validation decorators (e.g. @format("ip")) that live
+                // on the wrapped value schema; the newtype wrapper would
+                // otherwise drop them.
+                emit_validation_decorators(
+                    &mut self.out,
+                    &v.value_schema,
+                    "  ",
+                );
                 writeln!(
                     self.out,
                     "  {}: {};",
@@ -956,11 +991,58 @@ impl TypeSpecContext {
         default_literal
     }
 
-    fn property_schema_to_typespec(&self, schema: &Schema) -> String {
-        inline_pattern_scalar_name(schema)
-            .filter(|name| self.inline_pattern_scalars.contains_key(*name))
-            .map(str::to_string)
-            .unwrap_or_else(|| schemars_to_typespec(schema))
+    fn property_schema_to_typespec(
+        &self,
+        model_name: &str,
+        prop_name: &str,
+        schema: &Schema,
+    ) -> String {
+        // Inline pattern string hoisted to a named scalar (titled, or named
+        // from the enclosing model + property).
+        if let Some(name) =
+            context_pattern_scalar_name(schema, model_name, prop_name)
+        {
+            if self.inline_pattern_scalars.contains_key(&name) {
+                return name;
+            }
+        }
+        // Array of format-carrying string elements → synthesized scalar element
+        // type (e.g. `ipAddr[]`).
+        if let Some(ts_type) = self.array_item_scalar_type(schema) {
+            return ts_type;
+        }
+        schemars_to_typespec(schema)
+    }
+
+    /// If `schema` is an array (optionally nullable) whose string elements
+    /// carry a `format` for which a scalar has been synthesized, return the
+    /// TypeSpec type referencing that scalar (e.g. `ipAddr[]` or
+    /// `ipAddr[] | null`).
+    fn array_item_scalar_type(&self, schema: &Schema) -> Option<String> {
+        let Schema::Object(obj) = schema else {
+            return None;
+        };
+        if !matches!(
+            &obj.instance_type,
+            Some(SingleOrVec::Single(t)) if **t == InstanceType::Array
+        ) {
+            return None;
+        }
+        let SingleOrVec::Single(item) = obj.array.as_ref()?.items.as_ref()?
+        else {
+            return None;
+        };
+        let (name, _fmt) = item_format_scalar(item)?;
+        if !self.item_format_scalars.contains_key(&name) {
+            return None;
+        }
+        let nullable = obj
+            .extensions
+            .get("nullable")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let base = format!("{}[]", name);
+        Some(if nullable { format!("{} | null", base) } else { base })
     }
 
     /// Emit a single model property line with its decorators.
@@ -978,7 +1060,10 @@ impl TypeSpecContext {
             writeln!(self.out, "{}@doc(\"{}\")", indent, escape_tsp_string(d))
                 .unwrap();
         }
-        if inline_pattern_scalar_name(schema) != Some(ts_type) {
+        // When the property references a hoisted pattern scalar, the validation
+        // decorators (e.g. `@pattern`) live on the scalar definition, so don't
+        // repeat them inline here.
+        if !self.inline_pattern_scalars.contains_key(ts_type) {
             emit_validation_decorators(&mut self.out, schema, indent);
         }
         let default_suffix = schema_default(schema)
@@ -1641,6 +1726,9 @@ struct ExternallyTaggedVariant {
     key: String,
     model_name: String,
     value_type: String,
+    /// The wrapped value's schema, used to re-emit validation decorators (e.g.
+    /// `@format`) that the newtype wrapper would otherwise drop.
+    value_schema: Schema,
 }
 
 /// Detect whether a oneOf schema represents an externally-tagged union
@@ -1683,6 +1771,7 @@ fn detect_externally_tagged_union(
             key: key.clone(),
             model_name: String::new(), // filled by caller
             value_type: schemars_to_typespec(schema),
+            value_schema: schema.clone(),
         });
     }
 
@@ -1824,6 +1913,8 @@ fn collect_inline_pattern_scalars(
     definitions: &IndexMap<String, Schema>,
 ) -> IndexMap<String, SchemaObject> {
     let mut scalars = IndexMap::new();
+    // Titled inline pattern strings, found at any depth (the title names the
+    // scalar). This is the original behavior.
     for schema in definitions.values() {
         collect_inline_pattern_scalars_from_schema(
             schema,
@@ -1831,7 +1922,161 @@ fn collect_inline_pattern_scalars(
             definitions,
         );
     }
+    // Untitled inline pattern strings that appear as direct properties of a
+    // model definition. These can't be named from a title, so derive the name
+    // from the enclosing model + PascalCase(property). This mirrors what
+    // progenitor/typify does when hoisting inline pattern strings to newtypes.
+    // One scalar is emitted per site (identical patterns are not deduped).
+    for (def_name, schema) in definitions {
+        let Schema::Object(obj) = schema else {
+            continue;
+        };
+        let Some(object) = &obj.object else {
+            continue;
+        };
+        for (prop_name, prop) in &object.properties {
+            let Some(name) =
+                context_pattern_scalar_name(prop, def_name, prop_name)
+            else {
+                continue;
+            };
+            // Collision safety: skip if the derived name already names a real
+            // definition or an already-collected scalar (a titled one takes
+            // precedence).
+            if definitions.contains_key(&name) || scalars.contains_key(&name) {
+                continue;
+            }
+            if let Schema::Object(o) = prop {
+                // Store the pattern carrier without metadata: the name comes
+                // from context, and any @doc stays on the referencing property.
+                let mut scalar_obj = o.clone();
+                scalar_obj.metadata = None;
+                scalars.insert(name, scalar_obj);
+            }
+        }
+    }
     scalars
+}
+
+/// Name for a hoisted inline pattern scalar referenced by a model property.
+/// Uses the schema's `title` when it is a valid identifier (matching a titled
+/// newtype), otherwise derives `ParentModel + PascalCase(property)`. Returns
+/// `None` if the schema isn't an inline string with a `pattern`.
+fn context_pattern_scalar_name(
+    schema: &Schema,
+    model_name: &str,
+    prop_name: &str,
+) -> Option<String> {
+    let Schema::Object(obj) = schema else {
+        return None;
+    };
+    if !matches!(
+        &obj.instance_type,
+        Some(SingleOrVec::Single(t)) if **t == InstanceType::String
+    ) {
+        return None;
+    }
+    obj.string.as_ref()?.pattern.as_ref()?;
+    if let Some(title) = obj.metadata.as_ref().and_then(|m| m.title.as_deref())
+    {
+        if is_valid_tsp_ident(title) {
+            return Some(title.to_string());
+        }
+    }
+    Some(format!("{}{}", model_name, to_pascal_case(prop_name)))
+}
+
+/// Collect scalars needed to carry a `format` on string array elements. Walks
+/// all definitions; for every array whose string items carry a format that maps
+/// to a usable identifier, registers `name -> format`. Skips names that collide
+/// with real definitions (the array falls back to plain `string[]`).
+fn collect_item_format_scalars(
+    definitions: &IndexMap<String, Schema>,
+) -> IndexMap<String, String> {
+    let mut scalars = IndexMap::new();
+    for schema in definitions.values() {
+        collect_item_format_scalars_from_schema(
+            schema,
+            &mut scalars,
+            definitions,
+        );
+    }
+    scalars
+}
+
+fn collect_item_format_scalars_from_schema(
+    schema: &Schema,
+    scalars: &mut IndexMap<String, String>,
+    definitions: &IndexMap<String, Schema>,
+) {
+    let Schema::Object(obj) = schema else {
+        return;
+    };
+
+    if let Some(array) = &obj.array {
+        if let Some(SingleOrVec::Single(item)) = &array.items {
+            if let Some((name, fmt)) = item_format_scalar(item) {
+                if !definitions.contains_key(&name)
+                    && !scalars.contains_key(&name)
+                {
+                    scalars.insert(name, fmt);
+                }
+            }
+            collect_item_format_scalars_from_schema(item, scalars, definitions);
+        }
+    }
+    if let Some(object) = &obj.object {
+        for prop in object.properties.values() {
+            collect_item_format_scalars_from_schema(prop, scalars, definitions);
+        }
+        if let Some(ap) = &object.additional_properties {
+            collect_item_format_scalars_from_schema(ap, scalars, definitions);
+        }
+    }
+    if let Some(subschemas) = &obj.subschemas {
+        for list in [&subschemas.one_of, &subschemas.any_of, &subschemas.all_of]
+            .into_iter()
+            .flatten()
+        {
+            for schema in list {
+                collect_item_format_scalars_from_schema(
+                    schema,
+                    scalars,
+                    definitions,
+                );
+            }
+        }
+    }
+}
+
+/// If `item` is a plain string with a `format` (one that isn't already mapped
+/// to a dedicated TypeSpec type like `uuid`/`utcDateTime`), and the format
+/// yields a usable identifier, return `(scalar_name, format)`.
+fn item_format_scalar(item: &Schema) -> Option<(String, String)> {
+    let Schema::Object(obj) = item else {
+        return None;
+    };
+    // Only plain strings need a synthesized scalar; formats like uuid/date-time
+    // already map to a distinct TypeSpec type, so their arrays keep the format.
+    if schemars_to_typespec(item) != "string" {
+        return None;
+    }
+    let fmt = obj.format.as_deref()?;
+    let name = array_item_format_scalar_name(fmt)?;
+    Some((name, fmt.to_string()))
+}
+
+/// Derive a TypeSpec scalar identifier for a string `format` used on array
+/// elements. Returns `None` when no reasonable identifier can be derived (the
+/// caller falls back to plain `string[]`).
+fn array_item_format_scalar_name(fmt: &str) -> Option<String> {
+    match fmt {
+        "ip" => Some("ipAddr".to_string()),
+        "ipv4" => Some("ipv4Addr".to_string()),
+        "ipv6" => Some("ipv6Addr".to_string()),
+        other if is_valid_tsp_ident(other) => Some(other.to_string()),
+        _ => None,
+    }
 }
 
 fn collect_inline_pattern_scalars_from_schema(
@@ -2857,7 +3102,8 @@ mod tests {
     #[test]
     fn test_unknown_type_not_scalar_extends() {
         // A schema with no type info should not produce
-        // `scalar X extends unknown` since `unknown` is a keyword.
+        // `scalar X extends unknown` since `unknown` is a keyword. It should
+        // emit a baseless `scalar X;` instead.
         let schema = SchemaObject::default();
 
         let mut ctx = TypeSpecContext::new();
@@ -2865,13 +3111,13 @@ mod tests {
         let output = ctx.out;
 
         assert!(
-            !output.contains("scalar"),
+            !output.contains("extends unknown"),
             "should not emit 'scalar ... extends unknown':\n{}",
             output,
         );
         assert!(
-            output.contains("BgpMessageHistory"),
-            "should still define the type:\n{}",
+            output.contains("scalar BgpMessageHistory;"),
+            "should emit baseless scalar:\n{}",
             output,
         );
     }
@@ -3516,14 +3762,22 @@ mod tests {
         ctx.emit_model_from_object("BgpMessageHistory", &schema);
         let output = ctx.out;
 
+        // The source schema is `{}` (any JSON value). A baseless scalar is the
+        // only construct that round-trips to `{}`; `model X is Record<unknown>`
+        // would narrow it to an object type.
         assert!(
-            output.contains("model BgpMessageHistory is Record<unknown>;"),
-            "should emit named model for unknown type:\n{}",
+            output.contains("scalar BgpMessageHistory;"),
+            "should emit baseless scalar for unknown type:\n{}",
+            output,
+        );
+        assert!(
+            !output.contains("Record<unknown>"),
+            "should not narrow `{{}}` to Record<unknown>:\n{}",
             output,
         );
         assert!(
             output.contains("@doc(\"Opaque message history.\")"),
-            "should emit @doc before model:\n{}",
+            "should emit @doc before scalar:\n{}",
             output,
         );
     }
@@ -3933,6 +4187,207 @@ mod tests {
             &None,
         );
         assert_eq!(result, "uint8");
+    }
+
+    // -- Fix 1: @format preserved on externally-tagged union newtype variant --
+
+    #[test]
+    fn test_externally_tagged_variant_preserves_format() {
+        // NetworkAddress is an externally-tagged enum with an IpAddr variant:
+        //   { oneOf: [ { properties: { ip_addr: {string, format: ip} },
+        //               required: [ip_addr], additionalProperties: false }, ] }
+        // The synthesized newtype model must keep @format("ip").
+        let ip_schema = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            format: Some("ip".to_string()),
+            ..Default::default()
+        });
+        let variant = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert("ip_addr".to_string(), ip_schema);
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("ip_addr".to_string());
+                    r
+                },
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+
+        let obj = SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(vec![variant]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.emit_model_from_object("NetworkAddress", &obj);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("model NetworkAddressIpAddr {"),
+            "missing synthesized variant model:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("@format(\"ip\")"),
+            "externally-tagged variant dropped @format(\"ip\"):\n{}",
+            output,
+        );
+    }
+
+    // -- Fix 1: @format preserved on string array elements via named scalar --
+
+    #[test]
+    fn test_array_item_format_scalar() {
+        // A property `source_ips: Vec<IpAddr>` is
+        //   {type: array, items: {type: string, format: ip}}
+        // Since TypeSpec can't decorate `string[]` elements, the property type
+        // becomes `ipAddr[]` referencing a synthesized `@format("ip")` scalar.
+        let item = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            format: Some("ip".to_string()),
+            ..Default::default()
+        });
+        let array_prop = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Array,
+            ))),
+            array: Some(Box::new(schemars::schema::ArrayValidation {
+                items: Some(SingleOrVec::Single(Box::new(item))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+        let model = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert("source_ips".to_string(), array_prop);
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("source_ips".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+
+        let mut defs = IndexMap::new();
+        defs.insert("MulticastGroup".to_string(), model);
+
+        let scalars = collect_item_format_scalars(&defs);
+        assert_eq!(scalars.get("ipAddr").map(String::as_str), Some("ip"));
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.item_format_scalars = scalars;
+        ctx.emit_model("MulticastGroup", &defs["MulticastGroup"]);
+        let output = ctx.out;
+
+        assert!(
+            output.contains("source_ips: ipAddr[];"),
+            "array element format should reference the ipAddr scalar:\n{}",
+            output,
+        );
+    }
+
+    // -- Fix 2: untitled inline pattern string hoisted to context-named scalar
+
+    #[test]
+    fn test_untitled_pattern_hoisted_with_context_name() {
+        // An untitled inline pattern string that is a direct model property is
+        // hoisted to a scalar named ParentModel + PascalCase(property), e.g.
+        // TufRepo.system_version -> TufRepoSystemVersion.
+        let version = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            string: Some(Box::new(schemars::schema::StringValidation {
+                pattern: Some(r"^\d+\.\d+\.\d+$".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+        let model = Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Object,
+            ))),
+            object: Some(Box::new(schemars::schema::ObjectValidation {
+                properties: {
+                    let mut p = schemars::Map::new();
+                    p.insert("system_version".to_string(), version);
+                    p
+                },
+                required: {
+                    let mut r = std::collections::BTreeSet::new();
+                    r.insert("system_version".to_string());
+                    r
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        });
+
+        let mut defs = IndexMap::new();
+        defs.insert("TufRepo".to_string(), model);
+
+        let scalars = collect_inline_pattern_scalars(&defs);
+        assert!(
+            scalars.contains_key("TufRepoSystemVersion"),
+            "untitled pattern should be hoisted under a context name: {:?}",
+            scalars.keys().collect::<Vec<_>>(),
+        );
+
+        let mut ctx = TypeSpecContext::new();
+        ctx.inline_pattern_scalars = scalars;
+        // Emit the scalar as the preamble would.
+        for (name, obj) in ctx.inline_pattern_scalars.clone() {
+            ctx.emit_model_from_object(&name, &obj);
+        }
+        ctx.emit_model("TufRepo", &defs["TufRepo"]);
+        let output = ctx.out;
+
+        assert!(
+            output.contains(
+                "@pattern(\"^\\\\d+\\\\.\\\\d+\\\\.\\\\d+$\")\nscalar \
+                 TufRepoSystemVersion extends string;"
+            ),
+            "should emit hoisted scalar with pattern:\n{}",
+            output,
+        );
+        assert!(
+            output.contains("system_version: TufRepoSystemVersion;"),
+            "property should reference the hoisted scalar:\n{}",
+            output,
+        );
+        // The @pattern must not be repeated inline on the property.
+        assert_eq!(
+            output.matches("@pattern").count(),
+            1,
+            "@pattern should appear once (on the scalar only):\n{}",
+            output,
+        );
     }
 
     // -- Coverage: @format("byte") on string fields --

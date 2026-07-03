@@ -19,15 +19,26 @@ model ResultsPage<T> {
 @format("uuid")
 scalar uuid extends string;
 
+@format("ip")
+scalar ipAddr extends string;
+
 @summary("TargetReleaseVersion")
 @pattern("^\\d+\\.\\d+\\.\\d+$")
 scalar TargetReleaseVersion extends string;
+
+@pattern("^[a-z][a-z0-9-]*$")
+scalar ConstrainedSlug extends string;
+
+@pattern("^\\d+\\.\\d+\\.\\d+$")
+scalar TufRepoSystemVersion extends string;
 
 @doc("Response with untyped body")
 @defaultResponse
 model FreeformResponse {
   @body body: bytes;
 }
+
+scalar BgpMessageHistory;
 
 enum Color {
   Red,
@@ -64,8 +75,7 @@ model Constrained {
   @maxLength(63)
   name: string;
   @doc("DNS-style name")
-  @pattern("^[a-z][a-z0-9-]*$")
-  slug: string;
+  slug: ConstrainedSlug;
 }
 
 model DeviceAuthRequest {
@@ -159,14 +169,17 @@ enum InstanceState {
 }
 
 model InterfaceNumUnknown {
+  @minValue(0)
   `unknown`: uint32;
 }
 
 model InterfaceNumIfIndex {
+  @minValue(0)
   if_index: uint32;
 }
 
 model InterfaceNumPortNumber {
+  @minValue(0)
   port_number: uint32;
 }
 
@@ -186,6 +199,13 @@ model MeasurementBatch {
   values: (int64 | null)[];
 }
 
+model MulticastGroup {
+  @doc("Optional source filter.")
+  filter_ips?: ipAddr[] | null;
+  @doc("Source IPs for this group.")
+  source_ips: ipAddr[];
+}
+
 @doc("A name unique within the parent collection")
 @minLength(1)
 @maxLength(63)
@@ -195,6 +215,24 @@ scalar Name extends string;
 union NameOrId {
   uuid,
   Name,
+}
+
+model NetworkAddressIpAddr {
+  @format("ip")
+  ip_addr: string;
+}
+
+model NetworkAddressLabel {
+  label: string;
+}
+
+union NetworkAddress {
+  NetworkAddressIpAddr,
+  NetworkAddressLabel,
+}
+
+model NetworkEntry {
+  addr: NetworkAddress;
 }
 
 model NetworkInfo {
@@ -226,6 +264,14 @@ union Shape {
     height: float64,
     width: float64,
   },
+}
+
+model SwitchState {
+  history: BgpMessageHistory;
+}
+
+model TufRepo {
+  system_version: TufRepoSystemVersion;
 }
 
 model UniqueItemsWrapper {
@@ -346,6 +392,16 @@ op lookup(): LookupResult | Error;
 @get
 op measurement_get(): MeasurementBatch | Error;
 
+@summary("Get multicast group")
+@route("/multicast-group")
+@get
+op multicast_group_get(): MulticastGroup | Error;
+
+@summary("Get network address")
+@route("/network-address")
+@get
+op network_address_get(): NetworkEntry | Error;
+
 @summary("Get network info")
 @route("/network-info")
 @get
@@ -400,6 +456,11 @@ op raw_get(): void | Error;
 @get
 op release_get(): ReleaseInfo | Error;
 
+@summary("Get switch state")
+@route("/switch-state")
+@get
+op switch_state_get(): SwitchState | Error;
+
 @summary("Start a task")
 @route("/tasks")
 @post
@@ -407,6 +468,11 @@ op task_start(@body body: WidgetCreate): {
   @statusCode _: 202;
   @body body: Widget;
 } | Error;
+
+@summary("Get TUF repo")
+@route("/tuf-repo")
+@get
+op tuf_repo_get(): TufRepo | Error;
 
 @route("/unique-items")
 @get

@@ -793,6 +793,116 @@ async fn disk_source_get(
     unimplemented!();
 }
 
+// -- Fix 1a: externally-tagged union preserving element @format --
+// Like nexus's NetworkAddress: an externally-tagged enum with an IpAddr
+// variant. The synthesized newtype model must keep @format("ip").
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
+enum NetworkAddress {
+    IpAddr(std::net::IpAddr),
+    Label(String),
+}
+
+#[derive(Serialize, JsonSchema)]
+struct NetworkEntry {
+    addr: NetworkAddress,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/network-address",
+}]
+/// Get network address
+async fn network_address_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<NetworkEntry>, HttpError> {
+    unimplemented!();
+}
+
+// -- Fix 1b: arrays of format-carrying strings (source_ips) --
+// TypeSpec cannot decorate `string[]` element types, so the emitter
+// synthesizes `@format("ip") scalar ipAddr extends string;` and uses
+// `ipAddr[]`.
+
+#[derive(Serialize, JsonSchema)]
+struct MulticastGroup {
+    /// Source IPs for this group.
+    source_ips: Vec<std::net::IpAddr>,
+    /// Optional source filter.
+    filter_ips: Option<Vec<std::net::IpAddr>>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/multicast-group",
+}]
+/// Get multicast group
+async fn multicast_group_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<MulticastGroup>, HttpError> {
+    unimplemented!();
+}
+
+// -- Fix 2: untitled inline pattern string hoisted by context name --
+// Unlike ReleaseInfo (which carries a `title`), this pattern is untitled, so
+// the scalar is named from the model + property: TufRepoSystemVersion.
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[allow(dead_code)]
+struct TufRepo {
+    #[schemars(regex(pattern = r"^\d+\.\d+\.\d+$"))]
+    system_version: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/tuf-repo",
+}]
+/// Get TUF repo
+async fn tuf_repo_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<TufRepo>, HttpError> {
+    unimplemented!();
+}
+
+// -- Fix 3: opaque `{}` type emitted as a baseless scalar --
+// Like nexus's BgpMessageHistory: the source schema is `{}` (any JSON value).
+// Only a baseless `scalar X;` round-trips back to `{}`; `Record<unknown>`
+// would narrow it to an object type.
+
+#[derive(Serialize)]
+#[allow(dead_code)]
+struct BgpMessageHistory(serde_json::Value);
+
+impl JsonSchema for BgpMessageHistory {
+    fn schema_name() -> String {
+        "BgpMessageHistory".to_string()
+    }
+
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> Schema {
+        // `{}` — accepts any JSON value.
+        Schema::Object(SchemaObject::default())
+    }
+}
+
+#[derive(Serialize, JsonSchema)]
+struct SwitchState {
+    history: BgpMessageHistory,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/switch-state",
+}]
+/// Get switch state
+async fn switch_state_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<SwitchState>, HttpError> {
+    unimplemented!();
+}
+
 fn make_api() -> ApiDescription<()> {
     let mut api = ApiDescription::new();
     api.register(ping).unwrap();
@@ -827,6 +937,10 @@ fn make_api() -> ApiDescription<()> {
     api.register(network_info_get).unwrap();
     api.register(measurement_get).unwrap();
     api.register(disk_source_get).unwrap();
+    api.register(network_address_get).unwrap();
+    api.register(multicast_group_get).unwrap();
+    api.register(tuf_repo_get).unwrap();
+    api.register(switch_state_get).unwrap();
     api
 }
 
