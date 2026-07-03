@@ -1,11 +1,12 @@
 // Copyright 2026 Oxide Computer Company
 
 use dropshot::{
-    api_to_typespec, endpoint, http_response_see_other, ApiDescription, Body,
-    FreeformBody, Header, HttpError, HttpResponseAccepted, HttpResponseCreated,
-    HttpResponseDeleted, HttpResponseHeaders, HttpResponseOk,
-    HttpResponseSeeOther, HttpResponseUpdatedNoContent, PaginationParams, Path,
-    Query, RequestContext, ResultsPage, TypedBody, UntypedBody,
+    ApiDescription, Body, FreeformBody, Header, HttpError,
+    HttpResponseAccepted, HttpResponseCreated, HttpResponseDeleted,
+    HttpResponseHeaders, HttpResponseOk, HttpResponseSeeOther,
+    HttpResponseUpdatedNoContent, PaginationParams, Path, Query,
+    RequestContext, ResultsPage, TypedBody, UntypedBody, api_to_typespec,
+    endpoint, http_response_see_other,
 };
 use http::Response;
 use schemars::JsonSchema;

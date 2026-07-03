@@ -6,12 +6,12 @@
 //! `ApiEndpoint`, `ApiEndpointParameter`, `ApiSchemaGenerator`, and schemars
 //! `Schema` objects — to produce idiomatic TypeSpec output.
 
+use crate::ApiDescription;
 use crate::api_description::ApiEndpointBodyContentType;
 use crate::api_description::ApiEndpointParameterMetadata;
 use crate::api_description::ApiSchemaGenerator;
 use crate::api_description::ExtensionMode;
 use crate::server::ServerContext;
-use crate::ApiDescription;
 
 use indexmap::IndexMap;
 use schemars::r#gen::SchemaGenerator;
@@ -283,6 +283,23 @@ pub fn api_to_typespec<C: ServerContext>(
 // Internal types
 // ---------------------------------------------------------------------------
 
+/// Rendering context for a property line: how deep to indent and which
+/// separator terminates the line. Model properties are indented two spaces
+/// and end with `;`; properties inside an inline union-variant model are
+/// indented four spaces and end with `,`.
+#[derive(Clone, Copy)]
+struct PropertyLayout {
+    indent: &'static str,
+    terminator: &'static str,
+}
+
+impl PropertyLayout {
+    const MODEL: PropertyLayout =
+        PropertyLayout { indent: "  ", terminator: ";" };
+    const UNION_VARIANT: PropertyLayout =
+        PropertyLayout { indent: "    ", terminator: "," };
+}
+
 struct TypeSpecContext {
     out: String,
     /// Map from concrete ResultsPage name (e.g. "WidgetResultsPage") to the
@@ -448,6 +465,7 @@ impl TypeSpecContext {
                     required,
                     desc.as_deref(),
                     prop_schema,
+                    PropertyLayout::MODEL,
                 );
             }
 
@@ -570,39 +588,51 @@ impl TypeSpecContext {
             return;
         }
 
-        // Detect discriminated unions: oneOf where each variant is an
+        // Detect internally-tagged unions: oneOf where each variant is an
         // object with a shared property whose schema is a single-value
-        // string enum (the tag). Emit as model inheritance with
-        // @discriminator on the base model.
-        if let Some(mut disc) = detect_discriminator(variants) {
-            // Qualify variant model names with the parent name.
-            for v in &mut disc.variants {
-                v.model_name =
-                    format!("{}{}", name, to_pascal_case(&v.tag_value));
-            }
-
+        // string enum (the tag). Emit as a TypeSpec `union` whose variants
+        // are inline models carrying the literal tag property plus the
+        // variant's other properties. This keeps the union membership and
+        // structure directly in the type, which every downstream client
+        // generator (TS, Go, Rust) can consume without reassembly.
+        //
+        // The tag stays machine-readable via @discriminated with
+        // `envelope: "none"`, which models an internally-tagged union (the
+        // discriminator lives inside each variant, not in a wrapper object).
+        // The Model-only @discriminator decorator cannot target a union.
+        if let Some(disc) = detect_discriminator(variants) {
             self.emit_doc_from_metadata(obj.metadata.as_deref());
-            writeln!(self.out, "@discriminator(\"{}\")", disc.tag).unwrap();
-            writeln!(self.out, "model {} {{", name).unwrap();
-            writeln!(self.out, "  {}: string;", disc.tag).unwrap();
-            writeln!(self.out, "}}").unwrap();
-            writeln!(self.out).unwrap();
-            // Emit variant models that extend the base.
+            writeln!(
+                self.out,
+                "@discriminated(#{{envelope: \"none\", \
+                 discriminatorPropertyName: \"{}\"}})",
+                escape_tsp_string(&disc.tag),
+            )
+            .unwrap();
+            writeln!(self.out, "union {} {{", name).unwrap();
             for variant in &disc.variants {
                 if let Some(desc) = &variant.description {
-                    writeln!(self.out, "@doc(\"{}\")", escape_tsp_string(desc))
-                        .unwrap();
+                    writeln!(
+                        self.out,
+                        "  @doc(\"{}\")",
+                        escape_tsp_string(desc)
+                    )
+                    .unwrap();
                 }
+                // Variant name is the tag value (a snake_case string).
+                // Backtick-escape it if it isn't a valid TypeSpec identifier.
+                let variant_name = if is_valid_tsp_ident(&variant.tag_value) {
+                    variant.tag_value.clone()
+                } else {
+                    format!("`{}`", variant.tag_value)
+                };
+                writeln!(self.out, "  {}: {{", variant_name).unwrap();
+                // The literal tag property.
                 writeln!(
                     self.out,
-                    "model {} extends {} {{",
-                    variant.model_name, name,
-                )
-                .unwrap();
-                writeln!(
-                    self.out,
-                    "  {}: \"{}\";",
-                    disc.tag, variant.tag_value
+                    "    {}: \"{}\",",
+                    escape_property_name(&disc.tag),
+                    escape_tsp_string(&variant.tag_value),
                 )
                 .unwrap();
                 for prop in &variant.properties {
@@ -612,11 +642,13 @@ impl TypeSpecContext {
                         prop.required,
                         prop.description.as_deref(),
                         &prop.schema,
+                        PropertyLayout::UNION_VARIANT,
                     );
                 }
-                writeln!(self.out, "}}").unwrap();
-                writeln!(self.out).unwrap();
+                writeln!(self.out, "  }},").unwrap();
             }
+            writeln!(self.out, "}}").unwrap();
+            writeln!(self.out).unwrap();
             return;
         }
 
@@ -925,11 +957,14 @@ impl TypeSpecContext {
         required: bool,
         description: Option<&str>,
         schema: &Schema,
+        layout: PropertyLayout,
     ) {
+        let PropertyLayout { indent, terminator } = layout;
         if let Some(d) = description {
-            writeln!(self.out, "  @doc(\"{}\")", escape_tsp_string(d)).unwrap();
+            writeln!(self.out, "{}@doc(\"{}\")", indent, escape_tsp_string(d))
+                .unwrap();
         }
-        emit_validation_decorators(&mut self.out, schema, "  ");
+        emit_validation_decorators(&mut self.out, schema, indent);
         let default_suffix = schema_default(schema)
             .and_then(|d| self.refine_default(ts_type, d))
             .map(|d| format!(" = {}", d))
@@ -937,11 +972,13 @@ impl TypeSpecContext {
         let optional = if required { "" } else { "?" };
         writeln!(
             self.out,
-            "  {}{}: {}{};",
+            "{}{}{}: {}{}{}",
+            indent,
             escape_property_name(name),
             optional,
             ts_type,
             default_suffix,
+            terminator,
         )
         .unwrap();
     }
@@ -1089,11 +1126,7 @@ fn schemars_obj_to_typespec(obj: &SchemaObject) -> String {
 
     let base = schemars_obj_to_typespec_inner(obj);
 
-    if nullable {
-        format!("{} | null", base)
-    } else {
-        base
-    }
+    if nullable { format!("{} | null", base) } else { base }
 }
 
 fn schemars_obj_to_typespec_inner(obj: &SchemaObject) -> String {
@@ -1470,11 +1503,7 @@ fn detect_described_string_enum(
             _ => return None,
         }
     }
-    if members.is_empty() {
-        None
-    } else {
-        Some(members)
-    }
+    if members.is_empty() { None } else { Some(members) }
 }
 
 // ---------------------------------------------------------------------------
@@ -1488,7 +1517,6 @@ struct DiscriminatedUnion {
 
 struct DiscriminatedVariant {
     tag_value: String,
-    model_name: String,
     description: Option<String>,
     properties: Vec<VariantProperty>,
 }
@@ -1577,14 +1605,10 @@ fn detect_discriminator(variants: &[Schema]) -> Option<DiscriminatedUnion> {
 
         result_variants.push(DiscriminatedVariant {
             tag_value,
-            model_name: String::new(), // filled in below
             description,
             properties,
         });
     }
-
-    // Variant model names are not yet known — the parent name is needed
-    // to qualify them. Leave model_name empty; the caller will fill it in.
 
     Some(DiscriminatedUnion { tag, variants: result_variants })
 }

@@ -72,58 +72,49 @@ model Disk {
   name: string;
 }
 
-@discriminator("type")
-model DiskSource {
-  type: string;
+@discriminated(#{envelope: "none", discriminatorPropertyName: "type"})
+union DiskSource {
+  @doc("Create a disk from a disk snapshot")
+  snapshot: {
+    type: "snapshot",
+    @doc("If true, the disk will be read-only.")
+    read_only?: boolean = false,
+    snapshot_id: uuid,
+  },
+  @doc("Create a blank disk")
+  blank: {
+    type: "blank",
+    @minValue(0)
+    block_size: uint32,
+  },
 }
 
-@doc("Create a disk from a disk snapshot")
-model DiskSourceSnapshot extends DiskSource {
-  type: "snapshot";
-  @doc("If true, the disk will be read-only.")
-  read_only?: boolean = false;
-  snapshot_id: uuid;
-}
-
-@doc("Create a blank disk")
-model DiskSourceBlank extends DiskSource {
-  type: "blank";
-  @minValue(0)
-  block_size: uint32;
-}
-
-@discriminator("state")
-model DiskState {
-  state: string;
-}
-
-@doc("Disk is being initialized")
-model DiskStateCreating extends DiskState {
-  state: "creating";
-}
-
-@doc("Disk is detached")
-model DiskStateDetached extends DiskState {
-  state: "detached";
-}
-
-@doc("Disk is being attached to an instance")
-model DiskStateAttaching extends DiskState {
-  state: "attaching";
-  @doc("The instance this disk is being attached to")
-  instance: uuid;
-}
-
-@doc("Disk is attached to an instance")
-model DiskStateAttached extends DiskState {
-  state: "attached";
-  @doc("The instance this disk is attached to")
-  instance: uuid;
-}
-
-@doc("Disk has been destroyed")
-model DiskStateDestroyed extends DiskState {
-  state: "destroyed";
+@discriminated(#{envelope: "none", discriminatorPropertyName: "state"})
+union DiskState {
+  @doc("Disk is being initialized")
+  creating: {
+    state: "creating",
+  },
+  @doc("Disk is detached")
+  detached: {
+    state: "detached",
+  },
+  @doc("Disk is being attached to an instance")
+  attaching: {
+    state: "attaching",
+    @doc("The instance this disk is being attached to")
+    instance: uuid,
+  },
+  @doc("Disk is attached to an instance")
+  attached: {
+    state: "attached",
+    @doc("The instance this disk is attached to")
+    instance: uuid,
+  },
+  @doc("Disk has been destroyed")
+  destroyed: {
+    state: "destroyed",
+  },
 }
 
 @doc("Error information from a response.")
@@ -212,20 +203,17 @@ model PhysicalDisk {
   name: string;
 }
 
-@discriminator("kind")
-model Shape {
-  kind: string;
-}
-
-model ShapeCircle extends Shape {
-  kind: "Circle";
-  radius: float64;
-}
-
-model ShapeRectangle extends Shape {
-  kind: "Rectangle";
-  height: float64;
-  width: float64;
+@discriminated(#{envelope: "none", discriminatorPropertyName: "kind"})
+union Shape {
+  Circle: {
+    kind: "Circle",
+    radius: float64,
+  },
+  Rectangle: {
+    kind: "Rectangle",
+    height: float64,
+    width: float64,
+  },
 }
 
 model Widget {
