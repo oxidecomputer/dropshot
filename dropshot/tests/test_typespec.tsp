@@ -19,6 +19,10 @@ model ResultsPage<T> {
 @format("uuid")
 scalar uuid extends string;
 
+@summary("TargetReleaseVersion")
+@pattern("^\\d+\\.\\d+\\.\\d+$")
+scalar TargetReleaseVersion extends string;
+
 @doc("Response with untyped body")
 @defaultResponse
 model FreeformResponse {
@@ -128,6 +132,10 @@ model Error {
   request_id: string;
 }
 
+model ExtensionWrapper {
+  external: WithXRustTypeForWidget;
+}
+
 model Flexible {
   @doc("Free-form metadata")
   metadata: unknown;
@@ -203,6 +211,10 @@ model PhysicalDisk {
   name: string;
 }
 
+model ReleaseInfo {
+  version: TargetReleaseVersion;
+}
+
 @discriminated(#{envelope: "none", discriminatorPropertyName: "kind"})
 union Shape {
   Circle: {
@@ -215,6 +227,13 @@ union Shape {
     width: float64,
   },
 }
+
+model UniqueItemsWrapper {
+  members: UniqueStrings;
+}
+
+@extension("uniqueItems", true)
+model UniqueStrings is string[];
 
 model Widget {
   @doc("How many we have")
@@ -244,6 +263,9 @@ model WithDefaults {
   @doc("Tags with default empty list")
   tags?: string[] = #[];
 }
+
+@extension("x-rust-type", #{crate: "example", parameters: #[#{`$ref`: "#/components/schemas/Widget"}], path: "example::External", version: "*"})
+scalar WithXRustTypeForWidget extends string;
 
 
 @route("/authed")
@@ -294,6 +316,10 @@ op disk_list(
 @route("/disks/{id}/state")
 @get
 op disk_state_get(@path id: string): DiskState | Error;
+
+@route("/extension-wrapper")
+@get
+op extension_wrapper_get(): ExtensionWrapper | Error;
 
 @route("/flexible")
 @get
@@ -370,6 +396,10 @@ op project_list(
 @get
 op raw_get(): void | Error;
 
+@route("/release")
+@get
+op release_get(): ReleaseInfo | Error;
+
 @summary("Start a task")
 @route("/tasks")
 @post
@@ -377,6 +407,10 @@ op task_start(@body body: WidgetCreate): {
   @statusCode _: 202;
   @body body: Widget;
 } | Error;
+
+@route("/unique-items")
+@get
+op unique_items_get(): UniqueItemsWrapper | Error;
 
 @summary("Upload raw bytes")
 @route("/upload")

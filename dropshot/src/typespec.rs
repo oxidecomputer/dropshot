@@ -206,6 +206,7 @@ pub fn api_to_typespec<C: ServerContext>(
     // This context is used when emitting default values.
     ctx.known_enums = detect_enum_types(&definitions);
     ctx.discriminated_unions = detect_discriminated_union_types(&definitions);
+    ctx.inline_pattern_scalars = collect_inline_pattern_scalars(&definitions);
 
     // Emit preamble.
     ctx.emit_preamble(info, version, api.get_tag_config());
@@ -231,6 +232,13 @@ pub fn api_to_typespec<C: ServerContext>(
         writeln!(ctx.out, "@format(\"uuid\")").unwrap();
         writeln!(ctx.out, "scalar uuid extends string;").unwrap();
         writeln!(ctx.out).unwrap();
+    }
+
+    // Emit scalars synthesized from inline schemas with titles. TypeSpec keeps
+    // these names visible to downstream generators, matching OpenAPI schemas
+    // that use a titled inline string pattern as a named newtype.
+    for (name, obj) in ctx.inline_pattern_scalars.clone() {
+        ctx.emit_model_from_object(&name, &obj);
     }
 
     // Emit the FreeformResponse model if any operation needs it.
@@ -270,7 +278,7 @@ pub fn api_to_typespec<C: ServerContext>(
     // preventing shorter names from matching as substrings within longer
     // ones (e.g. "DiskResultsPage" within "PhysicalDiskResultsPage").
     let mut rewrites: Vec<_> = ctx.results_page_rewrites.iter().collect();
-    rewrites.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    rewrites.sort_by_key(|entry| std::cmp::Reverse(entry.0.len()));
     for (concrete, item_type) in rewrites {
         let generic = format!("ResultsPage<{}>", item_type);
         ctx.out = ctx.out.replace(concrete.as_str(), &generic);
@@ -315,10 +323,11 @@ struct TypeSpecContext {
     /// Map from enum type name to its member values. Used to emit enum
     /// defaults as `EnumName.member` instead of `"member"`.
     known_enums: std::collections::HashMap<String, Vec<String>>,
-    /// Set of type names that are discriminated unions. Object defaults
-    /// on these types are skipped because they reference variant-specific
-    /// fields not present on the base model.
+    /// Set of type names that are discriminated unions.
     discriminated_unions: std::collections::HashSet<String>,
+    /// Named scalar definitions synthesized from inline string schemas that
+    /// carry both a `title` and a `pattern`.
+    inline_pattern_scalars: IndexMap<String, SchemaObject>,
 }
 
 impl TypeSpecContext {
@@ -331,6 +340,7 @@ impl TypeSpecContext {
             needs_uuid_scalar: false,
             known_enums: std::collections::HashMap::new(),
             discriminated_unions: std::collections::HashSet::new(),
+            inline_pattern_scalars: IndexMap::new(),
         }
     }
 
@@ -426,6 +436,7 @@ impl TypeSpecContext {
     fn emit_model_from_object(&mut self, name: &str, obj: &SchemaObject) {
         // String enums → TypeSpec enum.
         if let Some(enum_values) = &obj.enum_values {
+            emit_schema_extension_decorators(&mut self.out, obj, "");
             self.emit_enum(name, obj, enum_values);
             return;
         }
@@ -433,6 +444,7 @@ impl TypeSpecContext {
         // oneOf → TypeSpec union.
         if let Some(subschemas) = &obj.subschemas {
             if let Some(one_of) = &subschemas.one_of {
+                emit_schema_extension_decorators(&mut self.out, obj, "");
                 self.emit_union(name, obj, one_of);
                 return;
             }
@@ -441,6 +453,7 @@ impl TypeSpecContext {
         // Object type → model with properties.
         if let Some(object) = &obj.object {
             let is_error = self.error_types.contains(name);
+            emit_schema_extension_decorators(&mut self.out, obj, "");
             self.emit_doc_from_metadata(obj.metadata.as_deref());
             if is_error {
                 writeln!(self.out, "@error").unwrap();
@@ -456,7 +469,7 @@ impl TypeSpecContext {
             }
 
             for (prop_name, prop_schema) in &object.properties {
-                let ts_type = schemars_to_typespec(prop_schema);
+                let ts_type = self.property_schema_to_typespec(prop_schema);
                 let required = object.required.contains(prop_name);
                 let desc = schema_description(prop_schema);
                 self.emit_property(
@@ -484,6 +497,7 @@ impl TypeSpecContext {
 
         // Non-object type alias (e.g. a named string type).
         let ts_type = schemars_obj_to_typespec(obj);
+        emit_schema_extension_decorators(&mut self.out, obj, "");
         self.emit_doc_from_metadata(obj.metadata.as_deref());
 
         // If the resolved type is a union (e.g. from anyOf/oneOf), emit as
@@ -496,9 +510,16 @@ impl TypeSpecContext {
             }
             writeln!(self.out, "}}").unwrap();
         } else if ts_type == "unknown" {
-            // `unknown` is a TypeSpec keyword; can't use it as a
-            // scalar base. Emit a type alias instead.
-            writeln!(self.out, "alias {} = unknown;", name).unwrap();
+            // TypeSpec aliases are transparent in the compiler, so `alias X =
+            // unknown` erases the schema name for downstream generators.
+            writeln!(self.out, "model {} is Record<unknown>;", name).unwrap();
+        } else if !is_scalar_base_type(&ts_type) {
+            emit_validation_decorators(
+                &mut self.out,
+                &Schema::Object(obj.clone()),
+                "",
+            );
+            writeln!(self.out, "model {} is {};", name, ts_type).unwrap();
         } else {
             emit_validation_decorators(
                 &mut self.out,
@@ -917,13 +938,7 @@ impl TypeSpecContext {
     /// Refine a default value literal using type context.
     ///
     /// - String defaults on enum types → `EnumName.member`
-    /// - Object defaults on discriminated union types → dropped (returns
-    ///   `None`) because they reference variant-specific fields
-    fn refine_default(
-        &self,
-        ts_type: &str,
-        default_literal: String,
-    ) -> Option<String> {
+    fn refine_default(&self, ts_type: &str, default_literal: String) -> String {
         // Enum member defaults: "v4" → IpVersion.v4
         if let Some(members) = self.known_enums.get(ts_type) {
             // default_literal is e.g. `"v4"` — strip quotes to get the
@@ -933,20 +948,19 @@ impl TypeSpecContext {
             {
                 let inner = &default_literal[1..default_literal.len() - 1];
                 if members.iter().any(|m| m == inner) {
-                    return Some(format!("{}.{}", ts_type, inner));
+                    return format!("{}.{}", ts_type, inner);
                 }
             }
         }
 
-        // Object defaults on discriminated unions are invalid because
-        // they reference variant-specific fields not on the base model.
-        if self.discriminated_unions.contains(ts_type)
-            && default_literal.starts_with("#{")
-        {
-            return None;
-        }
+        default_literal
+    }
 
-        Some(default_literal)
+    fn property_schema_to_typespec(&self, schema: &Schema) -> String {
+        inline_pattern_scalar_name(schema)
+            .filter(|name| self.inline_pattern_scalars.contains_key(*name))
+            .map(str::to_string)
+            .unwrap_or_else(|| schemars_to_typespec(schema))
     }
 
     /// Emit a single model property line with its decorators.
@@ -964,9 +978,11 @@ impl TypeSpecContext {
             writeln!(self.out, "{}@doc(\"{}\")", indent, escape_tsp_string(d))
                 .unwrap();
         }
-        emit_validation_decorators(&mut self.out, schema, indent);
+        if inline_pattern_scalar_name(schema) != Some(ts_type) {
+            emit_validation_decorators(&mut self.out, schema, indent);
+        }
         let default_suffix = schema_default(schema)
-            .and_then(|d| self.refine_default(ts_type, d))
+            .map(|d| self.refine_default(ts_type, d))
             .map(|d| format!(" = {}", d))
             .unwrap_or_default();
         let optional = if required { "" } else { "?" };
@@ -1774,7 +1790,127 @@ fn emit_validation_decorators(out: &mut String, schema: &Schema, indent: &str) {
         if let Some(max) = array.max_items {
             writeln!(out, "{}@maxItems({})", indent, max).unwrap();
         }
+        if array.unique_items == Some(true) {
+            writeln!(out, "{}@extension(\"uniqueItems\", true)", indent)
+                .unwrap();
+        }
     }
+}
+
+fn emit_schema_extension_decorators(
+    out: &mut String,
+    obj: &SchemaObject,
+    indent: &str,
+) {
+    let mut extensions: Vec<_> = obj
+        .extensions
+        .iter()
+        .filter(|(key, _)| key.starts_with("x-"))
+        .collect();
+    extensions.sort_by(|a, b| a.0.cmp(b.0));
+    for (key, value) in extensions {
+        writeln!(
+            out,
+            "{}@extension(\"{}\", {})",
+            indent,
+            escape_tsp_string(key),
+            json_to_tsp_literal(value),
+        )
+        .unwrap();
+    }
+}
+
+fn collect_inline_pattern_scalars(
+    definitions: &IndexMap<String, Schema>,
+) -> IndexMap<String, SchemaObject> {
+    let mut scalars = IndexMap::new();
+    for schema in definitions.values() {
+        collect_inline_pattern_scalars_from_schema(
+            schema,
+            &mut scalars,
+            definitions,
+        );
+    }
+    scalars
+}
+
+fn collect_inline_pattern_scalars_from_schema(
+    schema: &Schema,
+    scalars: &mut IndexMap<String, SchemaObject>,
+    definitions: &IndexMap<String, Schema>,
+) {
+    let obj = match schema {
+        Schema::Bool(_) => return,
+        Schema::Object(obj) => obj,
+    };
+
+    if let Some(name) = inline_pattern_scalar_name(schema) {
+        if !definitions.contains_key(name) && !scalars.contains_key(name) {
+            scalars.insert(name.to_string(), obj.clone());
+        }
+    }
+
+    if let Some(object) = &obj.object {
+        for prop in object.properties.values() {
+            collect_inline_pattern_scalars_from_schema(
+                prop,
+                scalars,
+                definitions,
+            );
+        }
+        if let Some(ap) = &object.additional_properties {
+            collect_inline_pattern_scalars_from_schema(
+                ap,
+                scalars,
+                definitions,
+            );
+        }
+    }
+    if let Some(array) = &obj.array {
+        if let Some(SingleOrVec::Single(item)) = &array.items {
+            collect_inline_pattern_scalars_from_schema(
+                item,
+                scalars,
+                definitions,
+            );
+        }
+    }
+    if let Some(subschemas) = &obj.subschemas {
+        for list in [&subschemas.one_of, &subschemas.any_of, &subschemas.all_of]
+            .into_iter()
+            .flatten()
+        {
+            for schema in list {
+                collect_inline_pattern_scalars_from_schema(
+                    schema,
+                    scalars,
+                    definitions,
+                );
+            }
+        }
+    }
+}
+
+fn inline_pattern_scalar_name(schema: &Schema) -> Option<&str> {
+    let Schema::Object(obj) = schema else {
+        return None;
+    };
+    if !matches!(
+        &obj.instance_type,
+        Some(SingleOrVec::Single(t)) if **t == InstanceType::String
+    ) {
+        return None;
+    }
+    obj.string.as_ref()?.pattern.as_ref()?;
+    let title = obj.metadata.as_ref()?.title.as_deref()?;
+    is_valid_tsp_ident(title).then_some(title)
+}
+
+fn is_scalar_base_type(ts_type: &str) -> bool {
+    !ts_type.contains("[]")
+        && !ts_type.starts_with("Record<")
+        && !ts_type.starts_with('{')
+        && !ts_type.contains(" & ")
 }
 
 /// Format an f64 as an integer string if it has no fractional part.
@@ -1859,7 +1995,13 @@ fn json_to_tsp_literal(val: &serde_json::Value) -> String {
             } else {
                 let fields: Vec<String> = obj
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", k, json_to_tsp_literal(v)))
+                    .map(|(k, v)| {
+                        format!(
+                            "{}: {}",
+                            escape_property_name(k),
+                            json_to_tsp_literal(v)
+                        )
+                    })
                     .collect();
                 format!("#{{{}}}", fields.join(", "))
             }
@@ -3102,10 +3244,9 @@ mod tests {
     }
 
     #[test]
-    fn test_object_default_skipped_for_discriminated_union() {
-        // A property whose type is a discriminated union should not
-        // have an object default emitted, because the default
-        // references variant-specific fields not present on the base.
+    fn test_object_default_preserved_for_discriminated_union() {
+        // Object defaults on discriminated unions are part of the source
+        // schema and need to survive in the TypeSpec output.
         let schema = SchemaObject {
             instance_type: Some(SingleOrVec::Single(Box::new(
                 InstanceType::Object,
@@ -3144,9 +3285,10 @@ mod tests {
         let output = ctx.out;
 
         assert!(
-            !output.contains("= #"),
-            "object default on discriminated union type should be \
-             skipped:\n{}",
+            output.contains(
+                "pool_selector?: PoolSelector = #{ip_version: null, type: \"auto\"};"
+            ),
+            "object default on discriminated union type should be preserved:\n{}",
             output,
         );
     }
@@ -3356,11 +3498,12 @@ mod tests {
         );
     }
 
-    // -- Coverage: alias X = unknown --
+    // -- Coverage: opaque named model --
 
     #[test]
-    fn test_alias_unknown() {
-        // A schema with no type info produces `alias X = unknown;`.
+    fn test_unknown_type_emits_named_model() {
+        // A schema with no type info still needs a nominal TypeSpec model.
+        // Transparent aliases disappear from the compiler type graph.
         let schema = SchemaObject {
             metadata: Some(Box::new(schemars::schema::Metadata {
                 description: Some("Opaque message history.".to_string()),
@@ -3374,13 +3517,13 @@ mod tests {
         let output = ctx.out;
 
         assert!(
-            output.contains("alias BgpMessageHistory = unknown;"),
-            "should emit alias for unknown type:\n{}",
+            output.contains("model BgpMessageHistory is Record<unknown>;"),
+            "should emit named model for unknown type:\n{}",
             output,
         );
         assert!(
             output.contains("@doc(\"Opaque message history.\")"),
-            "should emit @doc before alias:\n{}",
+            "should emit @doc before model:\n{}",
             output,
         );
     }

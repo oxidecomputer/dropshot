@@ -10,6 +10,9 @@ use dropshot::{
 };
 use http::Response;
 use schemars::JsonSchema;
+use schemars::schema::{
+    ArrayValidation, InstanceType, Schema, SchemaObject, SingleOrVec,
+};
 use serde::{Deserialize, Serialize};
 
 // A simple GET endpoint with no parameters.
@@ -302,6 +305,123 @@ struct WithDefaults {
     /// Optional name
     #[serde(default = "default_name")]
     label: String,
+}
+
+// -- Schema-level extensions --
+
+#[derive(Serialize)]
+struct WithXRustType<T> {
+    _data: T,
+}
+
+impl<T: JsonSchema> JsonSchema for WithXRustType<T> {
+    fn schema_name() -> String {
+        format!("WithXRustTypeFor{}", T::schema_name())
+    }
+
+    fn json_schema(r#gen: &mut schemars::r#gen::SchemaGenerator) -> Schema {
+        let mut schema = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::String,
+            ))),
+            ..Default::default()
+        };
+        schema.extensions.insert(
+            "x-rust-type".to_string(),
+            serde_json::json!({
+                "crate": "example",
+                "version": "*",
+                "path": "example::External",
+                "parameters": [
+                    r#gen.subschema_for::<T>(),
+                ],
+            }),
+        );
+        Schema::Object(schema)
+    }
+}
+
+#[derive(Serialize, JsonSchema)]
+struct ExtensionWrapper {
+    external: WithXRustType<Widget>,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/extension-wrapper",
+}]
+async fn extension_wrapper_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<ExtensionWrapper>, HttpError> {
+    unimplemented!();
+}
+
+// -- Inline titled pattern scalars --
+
+#[derive(Serialize, JsonSchema)]
+struct ReleaseInfo {
+    #[schemars(
+        title = "TargetReleaseVersion",
+        regex(pattern = r"^\d+\.\d+\.\d+$")
+    )]
+    version: String,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/release",
+}]
+async fn release_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<ReleaseInfo>, HttpError> {
+    unimplemented!();
+}
+
+// -- uniqueItems --
+
+#[derive(Serialize)]
+struct UniqueStrings(Vec<String>);
+
+impl JsonSchema for UniqueStrings {
+    fn schema_name() -> String {
+        "UniqueStrings".to_string()
+    }
+
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> Schema {
+        Schema::Object(SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(
+                InstanceType::Array,
+            ))),
+            array: Some(Box::new(ArrayValidation {
+                items: Some(SingleOrVec::Single(Box::new(Schema::Object(
+                    SchemaObject {
+                        instance_type: Some(SingleOrVec::Single(Box::new(
+                            InstanceType::String,
+                        ))),
+                        ..Default::default()
+                    },
+                )))),
+                unique_items: Some(true),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
+}
+
+#[derive(Serialize, JsonSchema)]
+struct UniqueItemsWrapper {
+    members: UniqueStrings,
+}
+
+#[endpoint {
+    method = GET,
+    path = "/unique-items",
+}]
+async fn unique_items_get(
+    _rqctx: RequestContext<()>,
+) -> Result<HttpResponseOk<UniqueItemsWrapper>, HttpError> {
+    unimplemented!();
 }
 
 fn forty_two() -> u32 {
@@ -689,6 +809,9 @@ fn make_api() -> ApiDescription<()> {
     api.register(instance_state_get).unwrap();
     api.register(constrained_get).unwrap();
     api.register(with_defaults_create).unwrap();
+    api.register(extension_wrapper_get).unwrap();
+    api.register(release_get).unwrap();
+    api.register(unique_items_get).unwrap();
     api.register(task_start).unwrap();
     api.register(login_redirect).unwrap();
     api.register(lookup).unwrap();
