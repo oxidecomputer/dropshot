@@ -524,6 +524,15 @@ async fn test_compression_disabled_with_extension() {
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
 
+    // A NoCompression response will never be compressed regardless of
+    // Accept-Encoding, so it must not carry Vary: Accept-Encoding (which would
+    // cause caches to split entries on a header the body doesn't depend on).
+    assert_eq!(
+        response.headers().get(header::VARY),
+        None,
+        "NoCompression response should omit Vary: Accept-Encoding"
+    );
+
     get_response_bytes(&mut response).await;
 
     testctx.teardown().await;
@@ -539,6 +548,20 @@ async fn test_no_compression_below_size_threshold() {
     let response = get_gzip_response(client, &uri).await;
 
     assert_eq!(response.headers().get(header::CONTENT_ENCODING), None);
+
+    // Unlike the NoCompression case, a compressible response skipped only
+    // because it's below the size threshold must still carry Vary: a different
+    // request to the same resource could be compressed.
+    let vary = response
+        .headers()
+        .get(header::VARY)
+        .expect("compressible-but-skipped response should keep Vary")
+        .to_str()
+        .unwrap();
+    assert!(
+        vary.to_lowercase().contains("accept-encoding"),
+        "Vary should include Accept-Encoding, got: {vary}"
+    );
 
     testctx.teardown().await;
 }
