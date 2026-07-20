@@ -597,14 +597,14 @@ version = "0.17.1"
 dependencies = [
  "expectorate",
  "heck",
- "prettyplease",
+ "prettyplease 0.3.0",
  "proc-macro2",
  "quote",
  "schema",
  "semver",
  "serde",
- "serde_tokenstream",
- "syn 2.0.118",
+ "serde_tokenstream 0.3.0",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -1743,6 +1743,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettyplease"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
+dependencies = [
+ "proc-macro2",
+ "syn 3.0.2",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2085,26 +2095,26 @@ dependencies = [
 
 [[package]]
 name = "schema"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96422023a2fbf8c618a005a24bcbe01d1f3159e5ea7c8881120fa25227e39a2c"
+checksum = "21f4142114556a7e892a6fea8bcbf645f045b319019e1a6208e23a6ae16840a4"
 dependencies = [
  "proc-macro2",
  "quote",
  "schema-derive",
- "syn 2.0.118",
+ "syn 3.0.2",
 ]
 
 [[package]]
 name = "schema-derive"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "325e57fb235cb8b19d922a8d28c5d22d705b8fe41a27cc6c189b851e0d1cba6f"
+checksum = "0d2585666d961bbdf23689b128233baf6a0a3896c357fcb3204c7802a05400ef"
 dependencies = [
  "paste",
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -2272,6 +2282,18 @@ dependencies = [
  "quote",
  "serde",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "serde_tokenstream"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db95b8acf6eca5bc1bc771a7d7fb1a0d1485bdef0c46eec2f573bbaf4b4118f8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -2995,7 +3017,7 @@ dependencies = [
  "dtrace-parser",
  "proc-macro2",
  "quote",
- "serde_tokenstream",
+ "serde_tokenstream 0.2.3",
  "syn 2.0.118",
  "usdt-impl",
 ]
@@ -3028,7 +3050,7 @@ dependencies = [
  "dtrace-parser",
  "proc-macro2",
  "quote",
- "serde_tokenstream",
+ "serde_tokenstream 0.2.3",
  "syn 2.0.118",
  "usdt-impl",
 ]
@@ -3528,7 +3550,7 @@ dependencies = [
  "anyhow",
  "heck",
  "indexmap",
- "prettyplease",
+ "prettyplease 0.2.37",
  "syn 2.0.118",
  "wasm-metadata",
  "wit-bindgen-core",
@@ -3542,7 +3564,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c0f9bfd77e6a48eccf51359e3ae77140a7f50b1e2ebfe62422d8afdaffab17a"
 dependencies = [
  "anyhow",
- "prettyplease",
+ "prettyplease 0.2.37",
  "proc-macro2",
  "quote",
  "syn 2.0.118",

@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Support for the `#[dropshot::api_description]` attribute macro.
 //!
@@ -1552,6 +1552,7 @@ fn transform_signature(f: &mut TraitItemFnForSignature, ret_ty: &syn::Type) {
             ::core::future::Future<Output = #ret_ty> + Send + 'static
         };
         syn::Type::ImplTrait(syn::TypeImplTrait {
+            attrs: Default::default(),
             impl_token: Default::default(),
             bounds,
         })

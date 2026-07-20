@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Code to manage request and response parameters for Dropshot endpoints.
 
@@ -6,7 +6,7 @@ use std::{fmt, iter::Peekable};
 
 use proc_macro2::{TokenStream, extra::DelimSpan};
 use quote::{ToTokens, quote_spanned};
-use syn::{Error, parse_quote, spanned::Spanned, visit::Visit};
+use syn::{Error, Safety, parse_quote, spanned::Spanned, visit::Visit};
 
 use crate::error_store::ErrorSink;
 
@@ -31,11 +31,20 @@ pub(crate) fn validate_fn_ast(
         ));
     }
 
-    if sig.unsafety.is_some() {
-        errors.push(Error::new_spanned(
-            &sig.unsafety,
-            format!("endpoint `{name_str}` must not be unsafe"),
-        ));
+    match sig.safety {
+        Safety::Safe(_) => {
+            errors.push(Error::new_spanned(
+                &sig.safety,
+                format!("endpoint `{name_str}` must not be marked safe"),
+            ));
+        }
+        Safety::Unsafe(_) => {
+            errors.push(Error::new_spanned(
+                &sig.safety,
+                format!("endpoint `{name_str}` must not be unsafe"),
+            ));
+        }
+        Safety::Default => {}
     }
 
     if sig.abi.is_some() {
@@ -694,6 +703,7 @@ mod tests {
         // only supports them via trait bounds. So we have to do this ugly
         // to test that case.
         let paren_generic_type = syn::Type::Path(syn::TypePath {
+            attrs: Default::default(),
             qself: None,
             path: syn::Path {
                 leading_colon: None,
