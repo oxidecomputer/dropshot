@@ -1,4 +1,4 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 
 //! Support for the `#[dropshot::api_description]` attribute macro.
 //!
@@ -231,7 +231,9 @@ impl<'ast> ApiParser<'ast> {
         // that would lose valuable span information.
         let mut context_item = None;
         for item in &item_trait.item.items {
-            if let TraitItemPartParsed::Other(syn::TraitItem::Type(ty)) = item {
+            if let TraitItemPartParsed::Other(other) = item
+                && let syn::TraitItem::Type(ty) = other.as_ref()
+            {
                 if ty.ident == context_name {
                     // This is the context item.
                     context_item = Some(ContextItem::new(ty, &errors));
@@ -266,7 +268,7 @@ impl<'ast> ApiParser<'ast> {
                 // Everything else is permissible -- just ensure that they
                 // aren't marked as `endpoint` or `channel`.
                 TraitItemPartParsed::Other(other) => {
-                    let should_push = match other {
+                    let should_push = match other.as_ref() {
                         syn::TraitItem::Const(c) => {
                             check_endpoint_or_channel_on_non_fn(
                                 "const",
@@ -351,8 +353,10 @@ impl<'ast> ApiParser<'ast> {
 
     fn to_output(&self) -> ApiOutput {
         let context = format!("Self::{}", self.context_item.ident());
-        let context_item =
-            self.make_context_trait_item().map(TraitItemPartParsed::Other);
+        let context_item = self
+            .make_context_trait_item()
+            .map(Box::new)
+            .map(TraitItemPartParsed::Other);
         let other_items =
             self.items.iter().map(|item| item.to_out_trait_item());
         let out_items = context_item.into_iter().chain(other_items);
@@ -1099,7 +1103,9 @@ impl ApiItem<'_> {
 
     fn to_out_trait_item(&self) -> TraitItemPartParsed {
         match self {
-            Self::Fn(f) => TraitItemPartParsed::Fn(f.to_out_trait_item()),
+            Self::Fn(f) => {
+                TraitItemPartParsed::Fn(Box::new(f.to_out_trait_item()))
+            }
             Self::Other(o) => {
                 // Strip recognized attributes, retaining all others.
                 o.clone_and_strip_recognized_attrs()
@@ -1552,6 +1558,7 @@ fn transform_signature(f: &mut TraitItemFnForSignature, ret_ty: &syn::Type) {
             ::core::future::Future<Output = #ret_ty> + Send + 'static
         };
         syn::Type::ImplTrait(syn::TypeImplTrait {
+            attrs: Default::default(),
             impl_token: Default::default(),
             bounds,
         })

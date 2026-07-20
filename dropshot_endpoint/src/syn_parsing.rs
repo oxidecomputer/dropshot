@@ -1,12 +1,12 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
 //
 // Portions of this file are adapted from syn (https://github.com/dtolnay/syn),
 // and are used under the terms of the Apache 2.0 license.
 
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
-    Abi, AttrStyle, Attribute, Generics, Ident, ImplRestriction, Result,
-    Signature, Token, TraitItem, TypeParamBound, Visibility, braced, bracketed,
+    Abi, AttrStyle, Attribute, Generics, Ident, Result, Signature, Token,
+    TraitItem, TypeParamBound, Visibility, braced, bracketed,
     parse::{Parse, ParseStream, discouraged::Speculative},
     punctuated::Punctuated,
     token,
@@ -42,9 +42,6 @@ pub(crate) struct ItemTraitPartParsed {
     pub vis: Visibility,
     pub unsafety: Option<Token![unsafe]>,
     pub auto_token: Option<Token![auto]>,
-    // As of syn 2.0.63, "restriction" is reserved for RFC 3323 restrictions.
-    #[allow(dead_code)]
-    pub restriction: Option<ImplRestriction>,
     pub trait_token: Token![trait],
     pub ident: Ident,
     pub generics: Generics,
@@ -120,7 +117,6 @@ fn parse_rest_of_trait(
         vis,
         unsafety,
         auto_token,
-        restriction: None,
         trait_token,
         ident,
         generics,
@@ -139,7 +135,6 @@ impl ToTokens for ItemTraitPartParsed {
             vis,
             unsafety,
             auto_token,
-            restriction: _,
             trait_token,
             ident,
             generics,
@@ -172,10 +167,10 @@ impl ToTokens for ItemTraitPartParsed {
 #[derive(Clone)]
 pub(crate) enum TraitItemPartParsed {
     /// An associated function within the definition of a trait.
-    Fn(TraitItemFnForSignature),
+    Fn(Box<TraitItemFnForSignature>),
 
     /// Something else.
-    Other(TraitItem),
+    Other(Box<TraitItem>),
 }
 
 impl Parse for TraitItemPartParsed {
@@ -204,7 +199,7 @@ impl Parse for TraitItemPartParsed {
                     let mut fn_item: TraitItemFnForSignature = input.parse()?;
                     attrs.append(&mut fn_item.attrs);
                     fn_item.attrs = attrs;
-                    return Ok(Self::Fn(fn_item));
+                    return Ok(Self::Fn(Box::new(fn_item)));
                 } else {
                     // Restart parsing from the beginning, giving it to syn.
                     begin.parse()?
@@ -235,7 +230,7 @@ impl Parse for TraitItemPartParsed {
         // doesn't apply.
         input.advance_to(&begin);
 
-        Ok(Self::Other(other))
+        Ok(Self::Other(Box::new(other)))
     }
 }
 
