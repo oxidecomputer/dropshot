@@ -325,7 +325,7 @@ async fn test_paginate_basic() {
                 client,
                 &format!(
                     "/intapi?page_token={}&limit={}",
-                    &next_token, expected_max
+                    next_token, expected_max,
                 ),
             )
             .await;
