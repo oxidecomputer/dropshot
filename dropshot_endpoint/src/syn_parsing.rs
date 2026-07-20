@@ -167,10 +167,10 @@ impl ToTokens for ItemTraitPartParsed {
 #[derive(Clone)]
 pub(crate) enum TraitItemPartParsed {
     /// An associated function within the definition of a trait.
-    Fn(TraitItemFnForSignature),
+    Fn(Box<TraitItemFnForSignature>),
 
     /// Something else.
-    Other(TraitItem),
+    Other(Box<TraitItem>),
 }
 
 impl Parse for TraitItemPartParsed {
@@ -199,7 +199,7 @@ impl Parse for TraitItemPartParsed {
                     let mut fn_item: TraitItemFnForSignature = input.parse()?;
                     attrs.append(&mut fn_item.attrs);
                     fn_item.attrs = attrs;
-                    return Ok(Self::Fn(fn_item));
+                    return Ok(Self::Fn(Box::new(fn_item)));
                 } else {
                     // Restart parsing from the beginning, giving it to syn.
                     begin.parse()?
@@ -230,7 +230,7 @@ impl Parse for TraitItemPartParsed {
         // doesn't apply.
         input.advance_to(&begin);
 
-        Ok(Self::Other(other))
+        Ok(Self::Other(Box::new(other)))
     }
 }
 
