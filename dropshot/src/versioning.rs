@@ -5,6 +5,7 @@
 use crate::Body;
 use crate::HttpError;
 use http::HeaderName;
+use http::HeaderValue;
 use hyper::Request;
 use semver::Version;
 use slog::Logger;
@@ -76,6 +77,15 @@ impl VersionPolicy {
             }
         }
     }
+
+    /// Add `Vary` response headers for request fields that affect routing.
+    pub(crate) fn add_vary_headers(&self, headers: &mut http::HeaderMap) {
+        if let VersionPolicy::Dynamic(policy) = self {
+            for header_name in policy.response_vary_on() {
+                add_vary_on_header(headers, header_name);
+            }
+        }
+    }
 }
 
 /// Determines the API version to use for an incoming request
@@ -112,6 +122,14 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
         request: &Request<Body>,
         log: &Logger,
     ) -> Result<Version, HttpError>;
+
+    /// Request header field names that may cause the response to vary.
+    ///
+    /// These are added to the response `Vary` header so that intermediate
+    /// caches store separate entries per value.
+    fn response_vary_on(&self) -> &[HeaderName] {
+        &[]
+    }
 }
 
 /// Implementation of `DynamicVersionPolicy` where the client specifies a
@@ -176,6 +194,10 @@ impl ClientSpecifiesVersionInHeader {
 }
 
 impl DynamicVersionPolicy for ClientSpecifiesVersionInHeader {
+    fn response_vary_on(&self) -> &[HeaderName] {
+        std::slice::from_ref(&self.name)
+    }
+
     fn request_extract_version(
         &self,
         request: &Request<Body>,
@@ -235,4 +257,92 @@ where
     })?;
 
     Ok(Some(v))
+}
+
+fn header_value_contains_field(value: &HeaderValue, field: &str) -> bool {
+    value.to_str().is_ok_and(|vary| {
+        vary.split(',')
+            .any(|v| v.trim().eq_ignore_ascii_case(field))
+    })
+}
+
+/// Adds a request header field name to the response `Vary` header if not
+/// already present.
+fn add_vary_on_header(headers: &mut http::HeaderMap, header_name: &HeaderName) {
+    let vary_values = headers.get_all(http::header::VARY);
+
+    // can't and shouldn't add anything if we already have "*"
+    // https://datatracker.ietf.org/doc/html/rfc7231#section-7.1.4
+    if vary_values.iter().any(|v| v == "*") {
+        return;
+    }
+
+    let field = header_name.as_str();
+    if !vary_values.iter().any(|v| header_value_contains_field(v, field)) {
+        headers.append(
+            http::header::VARY,
+            HeaderValue::from_str(field).expect("header name is valid"),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::header::VARY;
+
+    #[test]
+    fn test_add_vary_on_header() {
+        let header_name: HeaderName = "dropshot-test-version".parse().unwrap();
+        let mut headers = http::HeaderMap::new();
+        add_vary_on_header(&mut headers, &header_name);
+
+        let vary_values: Vec<_> = headers
+            .get_all(VARY)
+            .iter()
+            .map(|value| value.to_str().unwrap().to_string())
+            .collect();
+        assert!(
+            vary_values.iter().any(|value| value
+                .split(',')
+                .any(|v| v.trim().eq_ignore_ascii_case("dropshot-test-version")))
+        );
+    }
+
+    #[test]
+    fn test_add_vary_on_header_avoids_duplicates() {
+        let header_name: HeaderName = "dropshot-test-version".parse().unwrap();
+        let mut headers = http::HeaderMap::new();
+        headers.append(
+            VARY,
+            HeaderValue::from_static("dropshot-test-version, Accept-Language"),
+        );
+
+        add_vary_on_header(&mut headers, &header_name);
+
+        let mut version_header_count = 0;
+        for value in headers.get_all(VARY).iter() {
+            let text = value.to_str().unwrap();
+            version_header_count += text
+                .split(',')
+                .filter(|v| {
+                    v.trim().eq_ignore_ascii_case("dropshot-test-version")
+                })
+                .count();
+        }
+
+        assert_eq!(version_header_count, 1);
+    }
+
+    #[test]
+    fn test_add_vary_on_header_skips_when_vary_is_star() {
+        let header_name: HeaderName = "dropshot-test-version".parse().unwrap();
+        let mut headers = http::HeaderMap::new();
+        headers.append(VARY, HeaderValue::from_static("*"));
+
+        add_vary_on_header(&mut headers, &header_name);
+
+        assert_eq!(headers.get_all(VARY).iter().count(), 1);
+        assert_eq!(headers.get(VARY).unwrap(), "*");
+    }
 }
