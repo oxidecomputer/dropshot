@@ -2124,9 +2124,9 @@ dependencies = [
 
 [[package]]
 name = "schema"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21f4142114556a7e892a6fea8bcbf645f045b319019e1a6208e23a6ae16840a4"
+checksum = "8a5a459e4326ca3d0c3c3af4776ae951398e55242df688afc664e088b23af7d6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2136,9 +2136,9 @@ dependencies = [
 
 [[package]]
 name = "schema-derive"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d2585666d961bbdf23689b128233baf6a0a3896c357fcb3204c7802a05400ef"
+checksum = "99917cb133c90e6c84480e20f2b772c70b4faac3352ae1e5857ee65385b54cad"
 dependencies = [
  "paste",
  "proc-macro2",
