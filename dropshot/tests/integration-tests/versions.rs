@@ -302,6 +302,21 @@ async fn test_versions() {
         let response = request.send().await.unwrap();
         assert_eq!(response.status(), t.expected_status);
 
+        let vary = response
+            .headers()
+            .get_all("vary")
+            .iter()
+            .map(|v| v.to_str().unwrap())
+            .collect::<Vec<_>>()
+            .join(", ");
+        assert!(
+            vary.split(',')
+                .any(|v| v.trim().eq_ignore_ascii_case(VERSION_HEADER_NAME)),
+            "Vary header should include {}, got: {}",
+            VERSION_HEADER_NAME,
+            vary
+        );
+
         if !t.expected_status.is_success() {
             let error: HttpErrorResponseBody = response.json().await.unwrap();
             assert_eq!(error.message, t.body_contents);
