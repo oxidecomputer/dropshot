@@ -21,6 +21,7 @@ mod multipart;
 mod openapi;
 mod pagination;
 mod pagination_schema;
+mod panic_handling;
 mod path_names;
 mod starter;
 mod streaming;

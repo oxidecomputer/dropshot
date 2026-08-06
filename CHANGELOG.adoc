@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
 
+* A handler panic that unwinds through the request task is now reported as a panic ("request handling panicked", with no status code) instead of being misreported as a client disconnection with the non-standard 499 status code.  Panic propagation itself is unchanged.
+
 == 0.17.1 (released 2026-06-02)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.0\...v0.17.1[Full list of commits]

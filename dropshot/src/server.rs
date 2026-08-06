@@ -805,6 +805,18 @@ async fn http_request_handle_wrap<C: ServerContext>(
     let on_disconnect = guard((), |_| {
         let latency_us = start_time.elapsed().as_micros();
 
+        // Besides cancellation, this guard also runs if a panic unwinds out
+        // of the request handler (see `http_request_handle`), dropping the
+        // request future.  That's not a client disconnection, so report the
+        // panic as such -- and report no status code at all, much as a
+        // process terminated by a signal has no exit code.
+        if std::thread::panicking() {
+            error!(request_log, "request handling panicked";
+                "latency_us" => latency_us,
+            );
+            return;
+        }
+
         warn!(request_log, "request handling cancelled (client disconnected)";
             "latency_us" => latency_us,
         );
