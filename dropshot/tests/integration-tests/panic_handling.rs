@@ -37,9 +37,64 @@ async fn handler_ok(
     Ok(HttpResponseOk(1))
 }
 
-/// A panicking handler tears down the connection without sending a response;
-/// the panic is reported as a panic (not as a client disconnect), and the
-/// server remains usable for subsequent connections.
+/// With `catch_handler_panics(true)`, a panicking handler produces a 500
+/// response whose body does not include the panic message, and the server
+/// remains usable afterwards.
+async fn test_panic_returns_500(
+    test_name: &str,
+    default_handler_task_mode: dropshot::HandlerTaskMode,
+) {
+    let logctx = crate::common::create_log_context(test_name);
+    let log = logctx.log.new(slog::o!());
+    let server = ServerBuilder::new(api(), (), log.clone())
+        .config(dropshot::ConfigDropshot {
+            default_handler_task_mode,
+            ..Default::default()
+        })
+        .catch_handler_panics(true)
+        .start()
+        .unwrap();
+    let client = ClientTestContext::new(server.local_addr(), log);
+
+    let error = client
+        .make_request_error(
+            Method::GET,
+            "/panic",
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+        .await;
+    assert_eq!(error.message, "Internal Server Error");
+
+    client
+        .make_request_no_body(Method::GET, "/ok", StatusCode::OK)
+        .await
+        .expect("server should still be usable after a handler panic");
+
+    server.close().await.unwrap();
+    logctx.cleanup_successful();
+}
+
+#[tokio::test]
+async fn test_panic_returns_500_detached() {
+    test_panic_returns_500(
+        "panic_returns_500_detached",
+        dropshot::HandlerTaskMode::Detached,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_panic_returns_500_cancel_on_disconnect() {
+    test_panic_returns_500(
+        "panic_returns_500_cancel_on_disconnect",
+        dropshot::HandlerTaskMode::CancelOnDisconnect,
+    )
+    .await;
+}
+
+/// By default, a panicking handler tears down the connection without sending
+/// a response; the panic is reported as a panic (not as a client disconnect),
+/// and the server remains usable for subsequent connections.
 #[tokio::test]
 async fn test_panic_reported_as_panic() {
     // Log to a file so that we can verify how the panic was reported.

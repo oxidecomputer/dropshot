@@ -412,6 +412,7 @@ mod tests {
                     page_default_nitems: NonZeroU32::new(1).unwrap(),
                     default_handler_task_mode:
                         HandlerTaskMode::CancelOnDisconnect,
+                    catch_handler_panics: false,
                     log_headers: Default::default(),
                     compression: CompressionConfig::Gzip,
                 },

@@ -101,6 +101,10 @@ pub struct ServerConfig {
     /// Default behavior for HTTP handler functions with respect to clients
     /// disconnecting early.
     pub default_handler_task_mode: HandlerTaskMode,
+    /// Whether to catch panics in HTTP handler functions and convert them
+    /// into 500 responses, instead of letting them propagate (the default).
+    /// See [`ServerBuilder::catch_handler_panics()`].
+    pub catch_handler_panics: bool,
     /// A list of header names to include as extra properties in the log
     /// messages emitted by the per-request logger.  Each header will, if
     /// present, be included in the output with a "hdr_"-prefixed property name
@@ -164,6 +168,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
         log: &Logger,
         tls: Option<ConfigTls>,
         version_policy: VersionPolicy,
+        catch_handler_panics: bool,
     ) -> Result<HttpServerStarter<C>, BuildError> {
         let tcp = {
             let std_listener = std::net::TcpListener::bind(
@@ -193,6 +198,7 @@ impl<C: ServerContext> HttpServerStarter<C> {
             page_max_nitems: NonZeroU32::new(10000).unwrap(),
             page_default_nitems: NonZeroU32::new(100).unwrap(),
             default_handler_task_mode: config.default_handler_task_mode,
+            catch_handler_panics,
             log_headers: config.log_headers.clone(),
             compression: config.compression,
         };
@@ -1157,6 +1163,7 @@ pub struct ServerBuilder<C: ServerContext> {
     config: ConfigDropshot,
     version_policy: VersionPolicy,
     tls: Option<ConfigTls>,
+    catch_handler_panics: bool,
 }
 
 impl<C: ServerContext> ServerBuilder<C> {
@@ -1178,6 +1185,7 @@ impl<C: ServerContext> ServerBuilder<C> {
             config: Default::default(),
             version_policy: VersionPolicy::Unversioned,
             tls: Default::default(),
+            catch_handler_panics: false,
         }
     }
 
@@ -1193,6 +1201,30 @@ impl<C: ServerContext> ServerBuilder<C> {
     /// HTTP.
     pub fn tls(mut self, tls: Option<ConfigTls>) -> Self {
         self.tls = tls;
+        self
+    }
+
+    /// Specifies whether panics in HTTP handler functions are caught and
+    /// converted into 500 responses
+    ///
+    /// By default (`false`), a panicking handler behaves as it always has:
+    /// the panic propagates.  The connection is dropped without a response
+    /// being sent, so the client typically observes an aborted connection,
+    /// and dropshot's instrumentation reports that the request handler
+    /// panicked.  Whether the panic then unwinds or aborts the process is up
+    /// to the consumer's panic settings; programs that consider any panic
+    /// grounds for a crash and restart may want `panic = "abort"` in their
+    /// release profile, which makes this option moot.
+    ///
+    /// With `true`, a panic in an endpoint handler function (and only there:
+    /// panics in Dropshot's own request handling still propagate) is caught
+    /// and the client receives a 500 Internal Server Error.  The panic
+    /// message is logged and preserved as the error's internal message, but
+    /// not included in the response body.  Note the risk inherent in
+    /// continuing after an arbitrary panic: the process may be left in a
+    /// degraded state that a crash and restart would have cleared.
+    pub fn catch_handler_panics(mut self, catch: bool) -> Self {
+        self.catch_handler_panics = catch;
         self
     }
 
@@ -1238,6 +1270,7 @@ impl<C: ServerContext> ServerBuilder<C> {
             &self.log,
             self.tls,
             self.version_policy,
+            self.catch_handler_panics,
         )
     }
 }

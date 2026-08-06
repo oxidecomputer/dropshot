@@ -377,6 +377,19 @@ where
     }
 }
 
+/// Extracts a human-readable message from a handler panic payload, for
+/// logging and for the internal message of a 500 response when running with
+/// [`crate::ServerBuilder::catch_handler_panics()`].
+fn panic_message(panic: Box<dyn std::any::Any + Send>) -> String {
+    match panic.downcast::<&'static str>() {
+        Ok(s) => s.to_string(),
+        Err(panic) => match panic.downcast::<String>() {
+            Ok(s) => *s,
+            Err(_) => "handler panicked".to_string(),
+        },
+    }
+}
+
 /// An error type that can be converted into an HTTP response.
 ///
 /// The error types returned by handlers must implement this trait, so that a
@@ -661,7 +674,41 @@ macro_rules! impl_HttpHandlerFunc_for_func_with_params {
             _param_tuple: ($($T,)*),
         ) -> Result<Response<Body>, HandlerError>
         {
-            let response: ResponseType = (self)(rqctx, $(_param_tuple.$i,)*).await?;
+            // Read these before `rqctx` is moved into the handler's future.
+            let catch_panics = rqctx.server.config.catch_handler_panics;
+            let panic_log = catch_panics.then(|| rqctx.log.clone());
+            let handler_future = (self)(rqctx, $(_param_tuple.$i,)*);
+            let result = if catch_panics {
+                // This `catch_unwind` wraps exactly the consumer's endpoint
+                // handler: extraction has already happened and the response
+                // conversion happens below, so a caught panic is known to
+                // have come from consumer code, not Dropshot's.  (This also
+                // means the response could not have begun to be sent yet.)
+                // The future is no less unwind-safe for being polled inside
+                // `catch_unwind`: the panic could otherwise only escape this
+                // frame by unwinding through the caller and executor.
+                match futures::FutureExt::catch_unwind(
+                    std::panic::AssertUnwindSafe(handler_future),
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(panic) => {
+                        let message = panic_message(panic);
+                        slog::error!(
+                            panic_log.unwrap(),
+                            "handler panicked; returning 500 error";
+                            "panic_message" => &message,
+                        );
+                        return Err(HandlerError::from(
+                            HttpError::for_internal_error(message),
+                        ));
+                    }
+                }
+            } else {
+                handler_future.await
+            };
+            let response: ResponseType = result?;
             response.to_result().map_err(|error| {
                 // If turning the endpoint's response into a
                 // `http::Response<Body>` failed, try to convert the `HttpError` into
