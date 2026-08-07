@@ -733,6 +733,17 @@ impl<C: ServerContext> FusedFuture for HttpServer<C> {
     }
 }
 
+/// Extracts a human-readable message from a panic payload.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        s
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s
+    } else {
+        "(non-string panic payload)"
+    }
+}
+
 /// Initial entry point for handling a new request to the HTTP server.  This is
 /// invoked by Hyper when a new request is received.  This function returns a
 /// Result that either represents a valid HTTP response or an error (which will
@@ -801,7 +812,9 @@ async fn http_request_handle_wrap<C: ServerContext>(
     let local_addr = server.local_addr;
 
     // In the case the client disconnects early, the scopeguard allows us
-    // to perform extra housekeeping before this task is dropped.
+    // to perform extra housekeeping before this task is dropped.  The guard
+    // runs only if this future is dropped without completing (a
+    // cancellation).
     let on_disconnect = guard((), |_| {
         let latency_us = start_time.elapsed().as_micros();
 
@@ -824,14 +837,54 @@ async fn http_request_handle_wrap<C: ServerContext>(
         });
     });
 
-    let maybe_response = http_request_handle(
+    // Catch a panic escaping request handling (in either handler task mode)
+    // so that it is reported as a panic rather than by the scopeguard as a
+    // client disconnection.  Unwind safety is not a concern because the
+    // panic is resumed below.
+    let caught = panic::AssertUnwindSafe(http_request_handle(
         server,
         request,
         &request_id,
         request_log.new(o!()),
         remote_addr,
-    )
+    ))
+    .catch_unwind()
     .await;
+    let maybe_response = match caught {
+        Ok(maybe_response) => maybe_response,
+        Err(panic_payload) => {
+            // Defuse the guard before resuming the unwind below; otherwise
+            // the unwind would drop it and misreport this panic as a client
+            // disconnection.
+            let _ = ScopeGuard::into_inner(on_disconnect);
+            let latency_us = start_time.elapsed().as_micros();
+            // `&*` is load-bearing: `&panic_payload` would coerce the `Box`
+            // itself into the `dyn Any` and every downcast would miss.
+            let message = panic_message(&*panic_payload);
+            error!(request_log, "request handling panicked";
+                "latency_us" => latency_us,
+                "panic_message" => message,
+            );
+
+            // Fire request-done so that every request-start is paired with
+            // a request-done even when the request ends in a panic.
+            // TODO: this could instead be a dedicated request-panic probe.
+            #[cfg(feature = "usdt-probes")]
+            probes::request__done!(|| {
+                crate::dtrace::ResponseInfo {
+                    id: request_id.clone(),
+                    local_addr,
+                    remote_addr,
+                    // 0 is not a valid HTTP status code; it conventionally
+                    // means "no response was received".
+                    status_code: 0,
+                    message: format!("request handling panicked: {message}"),
+                }
+            });
+
+            panic::resume_unwind(panic_payload);
+        }
+    };
 
     // If `http_request_handle` completed, it means the request wasn't
     // cancelled and we can safely "defuse" the scopeguard.
@@ -975,7 +1028,7 @@ async fn http_request_handle<C: ServerContext>(
             match rx.await {
                 Ok(result) => result?,
                 Err(_) => {
-                    error!(request_log, "handler panicked; propagating panic");
+                    debug!(request_log, "handler panicked; propagating panic");
 
                     // To get the panic, we now need to await `handler_task`; we
                     // know it is complete _and_ it failed, because it has
@@ -1257,6 +1310,22 @@ mod test {
         _rqctx: RequestContext<i32>,
     ) -> Result<HttpResponseOk<u64>, HttpError> {
         Ok(HttpResponseOk(3))
+    }
+
+    #[test]
+    fn test_panic_message() {
+        // panic!("literal") produces a &'static str payload.
+        let payload: Box<dyn std::any::Any + Send> = Box::new("boom");
+        assert_eq!(panic_message(&*payload), "boom");
+
+        // panic!("{}", ...) produces a String payload.
+        let payload: Box<dyn std::any::Any + Send> =
+            Box::new(String::from("kaboom"));
+        assert_eq!(panic_message(&*payload), "kaboom");
+
+        // panic_any() can produce anything else.
+        let payload: Box<dyn std::any::Any + Send> = Box::new(42_u32);
+        assert_eq!(panic_message(&*payload), "(non-string panic payload)");
     }
 
     struct TestConfig {
