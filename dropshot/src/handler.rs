@@ -306,6 +306,20 @@ pub enum HandlerError {
     /// a structured value, so that the internal and external messages of the
     /// error can both be logged.
     Dropshot(HttpError),
+    /// The handler panicked while executing.
+    ///
+    /// The panic payload is carried as a value so that the server can report
+    /// the panic -- attributed to the handler, with its message -- and then
+    /// resume the unwind, preserving the behavior that a handler panic aborts
+    /// the connection without a response.  In
+    /// [`HandlerTaskMode::Detached`][crate::HandlerTaskMode::Detached], the
+    /// payload comes from tokio's `JoinError` (the panic was already caught
+    /// at the task boundary); in `CancelOnDisconnect`, it is caught around
+    /// the handler call itself.
+    Panicked {
+        message: String,
+        payload: Box<dyn std::any::Any + Send + 'static>,
+    },
 }
 
 impl HandlerError {
@@ -313,6 +327,16 @@ impl HandlerError {
         match self {
             Self::Handler { rsp, .. } => rsp.status(),
             Self::Dropshot(e) => e.status_code.as_status(),
+            // A panic produces no response and therefore has no status code
+            // (the request-done DTrace probe reports the sentinel 0, "no
+            // response was received").  Reporting any real status here would
+            // contradict that.  `http_request_handle_wrap` matches `Panicked`
+            // before any path that asks for a status code.
+            Self::Panicked { message, .. } => {
+                unreachable!(
+                    "a handler panic ({message:?}) has no status code",
+                );
+            }
         }
     }
 
@@ -320,6 +344,7 @@ impl HandlerError {
         match self {
             Self::Handler { message, .. } => message,
             Self::Dropshot(e) => &e.internal_message,
+            Self::Panicked { message, .. } => message,
         }
     }
 
@@ -327,6 +352,7 @@ impl HandlerError {
         match self {
             Self::Handler { .. } => None,
             Self::Dropshot(e) => Some(&e.external_message),
+            Self::Panicked { .. } => None,
         }
     }
 
@@ -359,6 +385,15 @@ impl HandlerError {
                 rsp
             }
             Self::Dropshot(e) => e.into_response(request_id),
+            // A panic is reported and then resumed by
+            // `http_request_handle_wrap`, never converted into a response;
+            // see the `HandlerError::Panicked` match arm there.
+            Self::Panicked { message, .. } => {
+                unreachable!(
+                    "a handler panic ({message:?}) must be resumed, \
+                     not converted into a response",
+                );
+            }
         }
     }
 }
