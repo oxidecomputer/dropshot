@@ -22,6 +22,7 @@ mod openapi;
 mod pagination;
 mod pagination_schema;
 mod path_names;
+mod query_parameters;
 mod starter;
 mod streaming;
 mod tls;
