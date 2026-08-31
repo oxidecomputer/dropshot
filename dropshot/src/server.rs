@@ -1,4 +1,5 @@
-// Copyright 2024 Oxide Computer Company
+// Copyright 2026 Oxide Computer Company
+
 //! Generic server-wide state and facilities
 
 use super::ProbeRegistration;
@@ -894,6 +895,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     Ok(response)
 }
 
+#[allow(clippy::result_large_err)]
 async fn http_request_handle<C: ServerContext>(
     server: Arc<DropshotState<C>>,
     request: Request<hyper::body::Incoming>,
