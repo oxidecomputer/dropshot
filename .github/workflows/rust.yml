@@ -58,8 +58,7 @@ jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     env:
-      # Override rust-toolchain.toml, which otherwise takes precedence over the
-      # toolchain installed below.
+      # Override rust-toolchain.toml using explicit RUSTUP_TOOLCHAIN
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     strategy:
       matrix:
@@ -99,9 +98,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Deliberately no RUSTUP_TOOLCHAIN here: the toolchain is pinned by
-      # rust-toolchain.toml, since the trybuild fixtures assert exact rustc
-      # diagnostics against committed .stderr files.
+      # toolchain is pinned by rust-toolchain.toml which is required as the trybuild
+      # fixtures assert exact rustc diagnostics against committed .stderr files.
       - name: Install Rust toolchain from rust-toolchain.toml
         run: rustup toolchain install
       - name: Report cargo version
