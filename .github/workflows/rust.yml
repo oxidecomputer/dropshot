@@ -57,9 +57,9 @@ jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     env:
-      # override rustup using toolchain specified in rust-toolchain.toml
+      # rust-toolchain.toml overrides the dtolnay/rust-toolchain selection --
+      # set this environment variable, which overrides rust-toolchain.toml.
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
-      CARGO_INCREMENTAL: 0
     strategy:
       matrix:
         # macos-14 for M1 runners
@@ -75,10 +75,10 @@ jobs:
             # Keep this in sync with rust-version in Cargo.toml.
             toolchain: "1.88"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Rust toolchain
-        shell: bash
-        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal --no-self-update
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
@@ -96,12 +96,12 @@ jobs:
 
   trybuild:
     runs-on: ubuntu-24.04
-    env:
-      CARGO_INCREMENTAL: 0
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Deliberately no RUSTUP_TOOLCHAIN here, uses rust-toolchain.toml to pin version.
-      # trybuild fixtures assert exact rustc diagnostics in committed .stderr files.
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+      # rust-toolchain.toml overrides dtolnay/rust-toolchain@stable, so in some
+      # sense using it is pointless. But it does a few other useful things such
+      # as disable incremental compilation, so we use it anyway.
+      - uses: dtolnay/rust-toolchain@stable
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
