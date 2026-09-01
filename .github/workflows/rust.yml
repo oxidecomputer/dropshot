@@ -66,8 +66,8 @@ jobs:
         features: [all, default]
         rust-version:
           - stable
-          # 1.85 is the MSRV
-          - "1.85"
+          # 1.88 is the MSRV
+          - "1.88"
         include:
           - features: all
             feature_flags: --all-features

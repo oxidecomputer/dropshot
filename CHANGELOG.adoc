@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
 
+* Minimum supported rust version (MSRV) is now correctly specified as 1.88.
+
 == 0.17.1 (released 2026-06-02)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.0\...v0.17.1[Full list of commits]
