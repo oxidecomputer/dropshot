@@ -75,8 +75,8 @@ jobs:
             # Keep this in sync with rust-version in Cargo.toml.
             toolchain: "1.88"
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
           toolchain: ${{ matrix.toolchain }}
       - name: Report cargo version
@@ -97,11 +97,11 @@ jobs:
   trybuild:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # rust-toolchain.toml overrides dtolnay/rust-toolchain@stable, so in some
       # sense using it is pointless. But it does a few other useful things such
       # as disable incremental compilation, so we use it anyway.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
