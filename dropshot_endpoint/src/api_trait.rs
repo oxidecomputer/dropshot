@@ -1387,7 +1387,7 @@ impl<'ast> ApiEndpoint<'ast> {
         //
         // Note that there isn't any possible variable name collision here,
         // since all names are prefixed with "endpoint_".
-        let endpoint_name = format_ident!("endpoint_{}", name_str);
+        let endpoint_name = endpoint_var_name(&name_str);
 
         quote_spanned! {self.attr.span()=>
             {
@@ -1398,6 +1398,14 @@ impl<'ast> ApiEndpoint<'ast> {
             }
         }
     }
+}
+
+/// Returns the name of the local variable holding an endpoint's `ApiEndpoint`.
+///
+/// Raw identifiers must have their `r#` prefix stripped (`format_ident!` only
+/// does this for `syn::Ident`, not for strings).
+fn endpoint_var_name(name_str: &str) -> syn::Ident {
+    format_ident!("endpoint_{}", name_str.trim_start_matches("r#"))
 }
 
 fn parse_channel_metadata(
@@ -1550,7 +1558,7 @@ impl<'ast> ApiChannel<'ast> {
         //
         // Note that there isn't any possible variable name collision here,
         // since all names are prefixed with "endpoint_".
-        let endpoint_name = format_ident!("endpoint_{}", name_str);
+        let endpoint_name = endpoint_var_name(&name_str);
 
         quote_spanned! {self.attr.span()=>
             {
@@ -1695,7 +1703,10 @@ impl StripRecognizedAttrs for Vec<syn::Attribute> {
 mod tests {
     use expectorate::assert_contents;
 
-    use crate::{test_util::assert_banned_idents, util::DROPSHOT};
+    use crate::{
+        test_util::{assert_banned_idents, find_idents},
+        util::DROPSHOT,
+    };
 
     use super::*;
 
@@ -1815,6 +1826,32 @@ mod tests {
         assert_contents(
             "tests/output/api_trait_no_endpoints.rs",
             &prettyplease::unparse(&parse_quote! { #item }),
+        );
+    }
+
+    /// Raw identifiers are valid.
+    #[test]
+    fn test_api_trait_raw_idents() {
+        let (item, errors) = do_trait(
+            quote! { context = "r#type", module = "r#mod" },
+            quote! {
+                trait r#trait {
+                    type r#type;
+
+                    #[endpoint { method = GET, path = "/async" }]
+                    async fn r#async(
+                        rqctx: RequestContext<Self::r#type>,
+                    ) -> Result<HttpResponseOk<()>, HttpError>;
+                }
+            },
+        );
+
+        assert!(errors.is_empty(), "no errors: {errors:#?}");
+        let file: syn::File = parse_quote! { #item };
+        let found = find_idents(&file, ["r#mod", "r#type", "endpoint_async"]);
+        assert_eq!(
+            found.into_iter().collect::<Vec<_>>(),
+            ["endpoint_async", "r#mod", "r#type"]
         );
     }
 

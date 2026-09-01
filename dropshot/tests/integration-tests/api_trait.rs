@@ -108,6 +108,56 @@ async fn test_api_trait_basic() {
     testctx.teardown().await;
 }
 
+// The trait is allowed to have raw identifiers.
+#[dropshot::api_description { context = "r#type", module = "r#mod" }]
+#[allow(non_camel_case_types)]
+trait RawIdentApi {
+    type r#type;
+
+    #[endpoint { method = GET, path = "/async" }]
+    async fn r#async(
+        _rqctx: RequestContext<Self::r#type>,
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
+
+    #[channel { protocol = WEBSOCKETS, path = "/await" }]
+    async fn r#await(
+        _rqctx: RequestContext<Self::r#type>,
+        _upgraded: dropshot::WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult;
+}
+
+enum RawIdentImpl {}
+
+impl RawIdentApi for RawIdentImpl {
+    type r#type = ();
+
+    async fn r#async(
+        _rqctx: RequestContext<Self::r#type>,
+    ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+        Ok(HttpResponseUpdatedNoContent())
+    }
+
+    async fn r#await(
+        _rqctx: RequestContext<Self::r#type>,
+        _upgraded: dropshot::WebsocketConnection,
+    ) -> dropshot::WebsocketChannelResult {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_api_trait_raw_idents() {
+    r#mod::stub_api_description().unwrap();
+
+    let api = r#mod::api_description::<RawIdentImpl>().unwrap();
+    let spec = api
+        .openapi("Raw identifiers", semver::Version::new(1, 0, 0))
+        .json()
+        .unwrap();
+    assert!(spec["paths"]["/async"]["get"].is_object(), "{spec:#}");
+    assert!(spec["paths"]["/await"]["get"].is_object(), "{spec:#}");
+}
+
 #[dropshot::api_description {
     tag_config = {
         tags = {},
