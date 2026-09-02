@@ -325,7 +325,7 @@ fn print_example_requests(log: slog::Logger, addr: &SocketAddr) {
     ];
     for mode in all_modes {
         let to_print = ProjectScanParams { sort: mode };
-        let query_string = serde_urlencoded::to_string(to_print).unwrap();
+        let query_string = serde_qs::to_string(&to_print).unwrap();
         let uri = Uri::builder()
             .scheme("http")
             .authority(addr.to_string().as_str())
