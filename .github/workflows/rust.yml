@@ -53,23 +53,29 @@ jobs:
 
   build-and-test:
     runs-on: ${{ matrix.os }}
+    env:
+      # rust-toolchain.toml overrides the dtolnay/rust-toolchain selection --
+      # set this environment variable, which overrides rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     strategy:
       matrix:
         # macos-14 for M1 runners
         os: [ubuntu-22.04, windows-2022, macos-14]
         features: [all, default]
-        rust-version:
-          - stable
-          # 1.85 is the MSRV
-          - "1.85"
+        rust-version: [stable, msrv]
         include:
           - features: all
             feature_flags: --all-features
+          - rust-version: stable
+            toolchain: stable
+          - rust-version: msrv
+            # Keep this in sync with rust-version in Cargo.toml.
+            toolchain: "1.88"
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: ${{ matrix.rust-version }}
+          toolchain: ${{ matrix.toolchain }}
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
