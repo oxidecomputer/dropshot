@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
 
+* https://github.com/oxidecomputer/dropshot/pull/1677[#1677] A panic during request handling is now reported as a panic rather than misreported as a client disconnection: a panic in the handler (or its extractors) is logged as "request handler panicked", and a panic elsewhere in request handling (e.g. a version policy) as "request handling panicked (outside the handler)", each with the panic message; the `request-done` DTrace probe reports status code 0 and the panic message.  Panic propagation itself is unchanged.
+
 == 0.17.1 (released 2026-06-02)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.0\...v0.17.1[Full list of commits]
