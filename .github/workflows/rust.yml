@@ -64,13 +64,14 @@ jobs:
         # macos-14 for M1 runners
         os: [ubuntu-22.04, windows-2022, macos-14]
         features: [all, default]
-        rust-version:
-          - stable
-          # 1.88 is the MSRV
-          - "1.88"
+        toolchain: [stable, msrv]
         include:
           - features: all
             feature_flags: --all-features
+          - toolchain: stable
+            rust-version: stable
+          - toolchain: msrv
+            rust-version: "1.88"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust toolchain
