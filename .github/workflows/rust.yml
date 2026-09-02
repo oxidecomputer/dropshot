@@ -89,5 +89,21 @@ jobs:
         run: cargo build ${{ matrix.feature_flags }} --locked --all-targets --verbose
       - name: Run tests
         run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact --skip fail
+
+  # The trybuild tests assert on exact rustc diagnostics, which change between
+  # releases. Run them only on the toolchain that generated the committed
+  # .stderr expectations -- so, deliberately no RUSTUP_TOOLCHAIN here: this job
+  # uses the revision pinned in rust-toolchain.toml.
+  trybuild:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Report cargo version
+        run: cargo --version
+      - name: Report rustc version
+        run: rustc --version
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-bin: false # See Swatinem/rust-cache#341.
       - name: Run trybuild tests
-        run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact fail
+        run: cargo test --all-features --locked --all-targets --verbose -- --exact fail
