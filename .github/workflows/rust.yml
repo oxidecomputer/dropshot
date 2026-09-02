@@ -9,15 +9,19 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
 
 jobs:
   check-style:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Report cargo version
         run: cargo --version
       - name: Report rustfmt version
@@ -28,12 +32,12 @@ jobs:
   clippy-lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Report cargo version
         run: cargo --version
       - name: Report Clippy version
         run: cargo clippy -- --version
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-bin: false # See Swatinem/rust-cache#341.
       - name: Run Clippy Lints
@@ -42,10 +46,10 @@ jobs:
   check-docs:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Report cargo version
         run: cargo --version
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-bin: false # See Swatinem/rust-cache#341.
       - name: Check Docs
@@ -53,6 +57,8 @@ jobs:
 
   build-and-test:
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust-version }}
     strategy:
       matrix:
         # macos-14 for M1 runners
@@ -66,15 +72,15 @@ jobs:
           - features: all
             feature_flags: --all-features
     steps:
-      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust-version }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust toolchain
+        shell: bash
+        run: rustup toolchain install ${{ matrix.rust-version }} --profile minimal --no-self-update
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
         run: rustc --version
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Matrix instances other than OS need to be added to this explicitly
           key: ${{ matrix.features }}
@@ -85,4 +91,3 @@ jobs:
         run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact --skip fail
       - name: Run trybuild tests
         run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact fail
-
