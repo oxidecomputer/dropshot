@@ -1,3 +1,5 @@
+// Copyright 2026 Oxide Computer Company
+
 //! Example use of dropshot to output OpenAPI compatible JSON.  This program
 //! specifically illustrates how to add examples to each schema using schemars,
 //! and how that will be reflected in the resultant JSON generated when ran.

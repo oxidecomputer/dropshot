@@ -1,3 +1,5 @@
+// Copyright 2026 Oxide Computer Company
+
 use dropshot::{
     ApiDescription, HttpError, HttpResponseOk, PaginationParams, Path, Query,
     RequestContext, ResultsPage, TypedBody, endpoint,

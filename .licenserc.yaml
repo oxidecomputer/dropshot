@@ -1,0 +1,12 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: 'Oxide Computer Company'
+    content: |
+      Copyright [year] [owner]
+
+  paths:
+    - '**/*.rs'
+
+  paths-ignore:
+    - dropshot_endpoint/tests/output
