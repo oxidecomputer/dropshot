@@ -101,11 +101,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Deliberately no RUSTUP_TOOLCHAIN here: the toolchain is pinned by
       # rust-toolchain.toml, since the trybuild fixtures assert exact rustc
-      # diagnostics against committed .stderr files. `rustup toolchain install`
-      # with no argument installs the toolchain named by that file; `rustup
-      # show` no longer installs it implicitly as of rustup 1.28.
+      # diagnostics against committed .stderr files.
       - name: Install Rust toolchain from rust-toolchain.toml
-        run: rustup show active-toolchain || rustup toolchain install
+        run: rustup toolchain install
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
