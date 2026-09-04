@@ -13,6 +13,7 @@ permissions:
   contents: read
 
 env:
+  CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
@@ -57,8 +58,8 @@ jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     env:
-      # rust-toolchain.toml overrides the dtolnay/rust-toolchain selection --
-      # set this environment variable, which overrides rust-toolchain.toml.
+      # Override rust-toolchain.toml, which otherwise takes precedence over the
+      # toolchain installed below.
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     strategy:
       matrix:
@@ -76,9 +77,9 @@ jobs:
             toolchain: "1.88"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
+      - name: Install Rust toolchain
+        shell: bash
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal --no-self-update
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
@@ -98,10 +99,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # rust-toolchain.toml overrides dtolnay/rust-toolchain@stable, so in some
-      # sense using it is pointless. But it does a few other useful things such
-      # as disable incremental compilation, so we use it anyway.
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+      # Deliberately no RUSTUP_TOOLCHAIN here: the toolchain is pinned by
+      # rust-toolchain.toml, since the trybuild fixtures assert exact rustc
+      # diagnostics against committed .stderr files. `rustup toolchain install`
+      # with no argument installs the toolchain named by that file; `rustup
+      # show` no longer installs it implicitly as of rustup 1.28.
+      - name: Install Rust toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
       - name: Report cargo version
         run: cargo --version
       - name: Report rustc version
