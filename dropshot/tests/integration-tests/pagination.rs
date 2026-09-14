@@ -202,18 +202,18 @@ async fn test_paginate_errors() {
         },
         ErrorTestCase {
             path: "/intapi?limit=-3".to_string(),
-            message: "unable to parse query string: invalid digit found in \
-                      string",
+            message: "unable to parse query string: invalid type: \
+            string \"-3\", expected a nonzero u32",
         },
         ErrorTestCase {
             path: "/intapi?limit=seven".to_string(),
-            message: "unable to parse query string: invalid digit found in \
-                      string",
+            message: "unable to parse query string: invalid type: \
+            string \"seven\", expected a nonzero u32",
         },
         ErrorTestCase {
             path: format!("/intapi?limit={}", u128::from(std::u64::MAX) + 1),
-            message: "unable to parse query string: number too large to fit \
-                      in target type",
+            message: "unable to parse query string: invalid type: \
+            string \"18446744073709551616\", expected a nonzero u32",
         },
         ErrorTestCase {
             path: "/intapi?page_token=q".to_string(),
@@ -377,8 +377,8 @@ async fn test_paginate_empty() {
     assert_error(
         client,
         "/empty?limit=0",
-        "unable to parse query string: invalid value: integer `0`, \
-        expected a nonzero u32",
+        "unable to parse query string: invalid value: \
+        integer `0`, expected a nonzero u32",
     )
     .await;
 
