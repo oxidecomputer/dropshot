@@ -15,7 +15,7 @@ env:
 
 jobs:
   check-style:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
       - name: Report cargo version
@@ -26,7 +26,7 @@ jobs:
         run: cargo fmt -- --check
 
   clippy-lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
       - name: Report cargo version
@@ -40,7 +40,7 @@ jobs:
         run: cargo clippy --all-targets -- --deny warnings
 
   check-docs:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
       - name: Report cargo version
@@ -92,7 +92,7 @@ jobs:
         run: cargo test ${{ matrix.feature_flags }} --locked --all-targets --verbose -- --exact --skip fail
 
   trybuild:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
       # rust-toolchain.toml overrides dtolnay/rust-toolchain@stable, so in some
