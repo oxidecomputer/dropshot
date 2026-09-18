@@ -104,7 +104,7 @@ impl EndpointMetadata {
             ));
         }
 
-        if path.contains(":.*}") && !self.unpublished {
+        if is_wildcard_path(&path) && !self.unpublished {
             errors.push(Error::new_spanned(
                 attr,
                 format!(
@@ -459,7 +459,7 @@ impl ChannelMetadata {
         get_crate(self._dropshot_crate.as_deref())
     }
 
-    /// Validates metadata, returning a `ValidatedChannelMetadata` is valid.
+    /// Validates metadata, returning a `ValidatedChannelMetadata` if valid.
     ///
     /// Note: the only reason we pass in attr here is to provide a span for
     /// error reporting. As of Rust 1.76, just passing in `attr.span()` produces
