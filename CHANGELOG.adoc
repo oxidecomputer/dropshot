@@ -16,6 +16,7 @@
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
 
 * The minimum supported Rust version is now 1.88.
+* Endpoint and channel methods within API traits can now have raw identifier names (such as `r#async`). Previously this caused a proc-macro panic.
 
 == 0.17.1 (released 2026-06-02)
 
