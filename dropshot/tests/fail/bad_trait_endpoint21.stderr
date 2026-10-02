@@ -28,6 +28,12 @@ error: functions cannot be both `async` and C-variadic
 33 |         ...
    |         ^^^ C-variadic because of this
 
+error: missing pattern for `...` argument
+  --> tests/fail/bad_trait_endpoint21.rs:33:9
+   |
+33 |         ...
+   |         ^^^ help: add a pattern for this argument: `_: ...`
+
 error: `...` is not supported for non-extern functions
   --> tests/fail/bad_trait_endpoint21.rs:33:9
    |
@@ -45,6 +51,12 @@ error: functions cannot be both `async` and C-variadic
 46 |         ...
    |         ^^^ C-variadic because of this
 
+error: missing pattern for `...` argument
+  --> tests/fail/bad_trait_endpoint21.rs:46:9
+   |
+46 |         ...
+   |         ^^^ help: add a pattern for this argument: `_: ...`
+
 error: `...` is not supported for non-extern functions
   --> tests/fail/bad_trait_endpoint21.rs:46:9
    |
@@ -52,32 +64,6 @@ error: `...` is not supported for non-extern functions
    |         ^^^
    |
    = help: only `extern "C"` and `extern "C-unwind"` functions may have a C variable argument list
-
-error[E0658]: C-variadic functions are unstable
-  --> tests/fail/bad_trait_endpoint21.rs:30:5
-   |
-30 | /     async fn variadic_argument(
-31 | |         _rqctx: RequestContext<Self::Context>,
-32 | |         _param1: Query<QueryParams>,
-33 | |         ...
-34 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError>;
-   | |_________________________________________________________^
-   |
-   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
-
-error[E0658]: C-variadic functions are unstable
-  --> tests/fail/bad_trait_endpoint21.rs:43:5
-   |
-43 | /     async fn variadic_argument(
-44 | |         _rqctx: RequestContext<Self::Context>,
-45 | |         _param1: Query<QueryParams>,
-46 | |         ...
-47 | |     ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-48 | |         unreachable!()
-49 | |     }
-   | |_____^
-   |
-   = note: see issue #44930 <https://github.com/rust-lang/rust/issues/44930> for more information
 
 error: missing pattern for `...` argument
   --> tests/fail/bad_trait_endpoint21.rs:33:9
@@ -109,12 +95,15 @@ help: name the argument, or use `_` to continue ignoring it
 error[E0700]: hidden type for `impl Future<Output = Result<HttpResponseUpdatedNoContent, HttpError>>` captures lifetime that does not appear in bounds
   --> tests/fail/bad_trait_endpoint21.rs:47:58
    |
-47 |       ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-   |  __________-----------------------------------------------_^
-   | |          |
-   | |          opaque type defined here
-48 | |         unreachable!()
-49 | |     }
-   | |_____^
-   |
-   = note: hidden type `{async fn body of <MyImpl as MyApi>::variadic_argument()}` captures lifetime `'_`
+43 | /      async fn variadic_argument(
+44 | |          _rqctx: RequestContext<Self::Context>,
+45 | |          _param1: Query<QueryParams>,
+46 | |          ...
+47 | |      ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+   | | __________-----------------------------------------------_^
+   | ||__________|_____________________________________________|
+   |  |          |                                             hidden type `{async fn body of <MyImpl as MyApi>::variadic_argument()}` captures the anonymous lifetime as defined here
+   |  |          opaque type defined here
+48 |  |         unreachable!()
+49 |  |     }
+   |  |_____^

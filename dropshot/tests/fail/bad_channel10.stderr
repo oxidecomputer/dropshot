@@ -1,4 +1,4 @@
-error[E0271]: expected `{async block@$DIR/tests/fail/bad_channel10.rs:13:1: 13:6}` to be a future that resolves to `Result<(), Box<dyn Error + Send + Sync>>`, but it resolves to `Result<(), String>`
+error[E0271]: expected `{async block@bad_channel10.rs:13:1}` to be a future that resolves to `Result<(), Box<dyn Error + Send + Sync>>`, but it resolves to `Result<(), String>`
   --> tests/fail/bad_channel10.rs:13:1
    |
 13 | async fn bad_channel(

@@ -1,8 +1,8 @@
-error[E0271]: expected `{async block@$DIR/tests/fail/bad_channel12.rs:14:1: 14:6}` to be a future that resolves to `Result<(), Box<dyn Error + Send + Sync>>`, but it resolves to `Result<String, Box<dyn Error + Send + Sync>>`
+error[E0271]: expected `{async block@bad_channel12.rs:14:1}` to be a future that resolves to `Result<(), Box<dyn Error + Send + Sync>>`, but it resolves to `Result<String, Box<dyn Error + Send + Sync>>`
   --> tests/fail/bad_channel12.rs:14:1
    |
 14 | async fn bad_response_type(
-   | ^^^^^ expected `Result<(), Box<dyn Error + Send + Sync>>`, found `Result<String, Box<...>>`
+   | ^^^^^ expected `Result<(), Box<dyn Error + Send + Sync>>`, found `Result<String, Box<_>>`
    |
    = note: expected enum `Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>>`
               found enum `Result<String, Box<dyn std::error::Error + Send + Sync>>`
