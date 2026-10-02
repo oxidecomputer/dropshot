@@ -148,7 +148,7 @@ fn paginate_api() -> ApiDescription<usize> {
 }
 
 fn range_u16(start: u16, limit: u16) -> Vec<u16> {
-    if start < std::u16::MAX {
+    if start < u16::MAX {
         let start = start + 1;
         let end = start.saturating_add(limit);
         (start..end).collect()
@@ -211,7 +211,7 @@ async fn test_paginate_errors() {
                       string",
         },
         ErrorTestCase {
-            path: format!("/intapi?limit={}", u128::from(std::u64::MAX) + 1),
+            path: format!("/intapi?limit={}", u128::from(u64::MAX) + 1),
             message: "unable to parse query string: number too large to fit \
                       in target type",
         },
@@ -313,7 +313,7 @@ async fn test_paginate_basic() {
             if page.items.len() != expected_max as usize {
                 assert!(!page.items.is_empty());
                 assert!(page.items.len() < expected_max as usize);
-                assert_eq!(*page.items.last().unwrap(), std::u16::MAX - 1);
+                assert_eq!(*page.items.last().unwrap(), u16::MAX - 1);
             }
             assert_sequence_from(
                 &page.items,
