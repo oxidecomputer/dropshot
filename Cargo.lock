@@ -570,7 +570,6 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "indexmap",
- "lazy_static",
  "libc",
  "mime_guess",
  "multer",

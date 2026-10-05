@@ -7,8 +7,6 @@
 
 #[macro_use]
 extern crate slog;
-#[macro_use]
-extern crate lazy_static;
 
 mod api_trait;
 mod common;
