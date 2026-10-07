@@ -37,6 +37,7 @@ use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::ops::Bound;
+use std::sync::LazyLock;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -561,9 +562,7 @@ async fn test_paginate_with_required_params() {
 // endpoint will return a list of words, with the marker being the last word
 // seen.
 
-lazy_static! {
-    static ref WORD_LIST: BTreeSet<String> = make_word_list();
-}
+static WORD_LIST: LazyLock<BTreeSet<String>> = LazyLock::new(make_word_list);
 
 fn make_word_list() -> BTreeSet<String> {
     let word_list = include_str!("../wordlist.txt");
