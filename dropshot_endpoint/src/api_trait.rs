@@ -90,41 +90,33 @@ pub(crate) fn do_trait(
         }
         (_, None) => {
             // Can't do anything here, just return errors.
-            ApiOutput {
-                output: quote! {},
-                context: "Self::Context".to_string(),
-                has_endpoint_param_errors: false,
-                has_channel_param_errors: false,
-            }
+            ApiOutput { output: quote! {}, param_errors: None }
         }
     };
 
     let mut errors = error_store.into_inner();
 
-    // If there are any errors, we also want to provide a usage message as an error.
-    if output.has_endpoint_param_errors {
-        let item_trait = item_trait
-            .as_ref()
-            .expect("has_endpoint_param_errors is true => item_fn is Some");
-        errors.insert(
-            0,
-            Error::new_spanned(
-                &item_trait.ident,
-                crate::endpoint::usage_str(&output.context),
-            ),
-        );
-    }
-    if output.has_channel_param_errors {
-        let item_trait = item_trait
-            .as_ref()
-            .expect("has_channel_param_errors is true => item_fn is Some");
-        errors.insert(
-            0,
-            Error::new_spanned(
-                &item_trait.ident,
-                crate::channel::usage_str(&output.context),
-            ),
-        );
+    // If there are any parameter errors, we also want to provide usage
+    // messages as errors.
+    if let Some(param_errors) = &output.param_errors {
+        if param_errors.endpoint {
+            errors.insert(
+                0,
+                Error::new_spanned(
+                    &param_errors.trait_ident,
+                    crate::endpoint::usage_str(&param_errors.context),
+                ),
+            );
+        }
+        if param_errors.channel {
+            errors.insert(
+                0,
+                Error::new_spanned(
+                    &param_errors.trait_ident,
+                    crate::channel::usage_str(&param_errors.context),
+                ),
+            );
+        }
     }
 
     (output.output, errors)
@@ -194,18 +186,38 @@ struct ApiTagExternalDocs {
 }
 
 struct ApiParser<'ast> {
-    dropshot: TokenStream,
     item_trait: ApiItemTrait<'ast>,
     // We want to maintain the order of items in the trait (other than the
     // Context associated type which we're always going to move to the top), so
     // we use a single list to store all of them.
     items: Vec<ApiItem<'ast>>,
+
+    /// Inputs to code generation.
+    ///
+    /// This is present if and only if the `api_description` arguments could be
+    /// parsed. Without it:
+    ///
+    /// * The support module is not generated.
+    /// * Trait items are output as-is (with recognized attributes stripped).
+    metadata: Option<ResolvedApiMetadata<'ast>>,
+}
+
+/// Inputs to code generation, gated on the `api_description` arguments
+/// being parsed successfully.
+struct ResolvedApiMetadata<'ast> {
+    /// The path to the dropshot crate.
+    dropshot: TokenStream,
+    /// Tag configuration, passed through from `ApiMetadata` (without
+    /// validation).
     tag_config: Option<ApiTagConfig>,
-
+    /// The name of the support module.
+    module_ident: syn::Ident,
+    /// The trait's context item, located in the trait body by the name the
+    /// arguments specify.
+    ///
+    /// This is `Missing` (an error) if the trait doesn't declare a context
+    /// item.
     context_item: ContextItem<'ast>,
-
-    // None indicates invalid metadata.
-    module_ident: Option<syn::Ident>,
 }
 
 const ENDPOINT_IDENT: &str = "endpoint";
@@ -314,12 +326,14 @@ impl<'ast> ApiParser<'ast> {
         }
 
         Self {
-            dropshot,
             item_trait,
             items,
-            tag_config: metadata.tag_config,
-            context_item,
-            module_ident: Some(module_ident),
+            metadata: Some(ResolvedApiMetadata {
+                dropshot,
+                tag_config: metadata.tag_config,
+                module_ident,
+                context_item,
+            }),
         }
     }
 
@@ -339,20 +353,10 @@ impl<'ast> ApiParser<'ast> {
         // performed any validation on them.
         let items = item_trait.item.items.iter().map(ApiItem::Other);
 
-        Self {
-            // The "dropshot" token is not available, so the best we can do is
-            // to use the default "dropshot".
-            dropshot: get_crate(None),
-            item_trait,
-            items: items.collect(),
-            tag_config: None,
-            context_item: ContextItem::new_invalid_metadata(),
-            module_ident: None,
-        }
+        Self { item_trait, items: items.collect(), metadata: None }
     }
 
     fn to_output(&self) -> ApiOutput {
-        let context = format!("Self::{}", self.context_item.ident());
         let context_item = self
             .make_context_trait_item()
             .map(Box::new)
@@ -405,35 +409,44 @@ impl<'ast> ApiParser<'ast> {
         };
 
         // Dig through the items to see if any of them have parameter errors.
-        let has_endpoint_param_errors =
-            self.items.iter().any(|item| match item {
-                ApiItem::Fn(ApiFnItem::Invalid {
-                    kind: InvalidApiItemKind::Endpoint(summary),
-                    ..
-                }) => summary.has_param_errors,
-                _ => false,
-            });
-        let has_channel_param_errors =
-            self.items.iter().any(|item| match item {
-                ApiItem::Fn(ApiFnItem::Invalid {
-                    kind: InvalidApiItemKind::Channel(summary),
-                    ..
-                }) => summary.has_param_errors,
-                _ => false,
-            });
+        // Parameter errors can only be recorded for items that were parsed as
+        // endpoints or channels, which requires metadata to be present.
+        let param_errors = self.metadata.as_ref().and_then(|metadata| {
+            let mut endpoint = false;
+            let mut channel = false;
+            for item in &self.items {
+                let ApiItem::Fn(ApiFnItem::Invalid { kind, .. }) = item else {
+                    continue;
+                };
+                match kind {
+                    InvalidApiItemKind::Endpoint(summary) => {
+                        endpoint |= summary.has_param_errors;
+                    }
+                    InvalidApiItemKind::Channel(summary) => {
+                        channel |= summary.has_param_errors;
+                    }
+                    InvalidApiItemKind::Unknown => {}
+                }
+            }
 
-        ApiOutput {
-            output,
-            context,
-            has_endpoint_param_errors,
-            has_channel_param_errors,
-        }
+            (endpoint || channel).then(|| ParamErrorSummary {
+                trait_ident: self.item_trait.item.ident.clone(),
+                context: format!("Self::{}", metadata.context_item.ident()),
+                endpoint,
+                channel,
+            })
+        });
+
+        ApiOutput { output, param_errors }
     }
 
     fn make_context_trait_item(&self) -> Option<syn::TraitItem> {
-        let dropshot = &self.dropshot;
+        // Without metadata there isn't a context item available, so we bail
+        // early with None.
+        let metadata = self.metadata.as_ref()?;
         // In this context, invalid items should be passed through as-is.
-        let item = self.context_item.original_item()?;
+        let item = metadata.context_item.original_item()?;
+        let dropshot = &metadata.dropshot;
         let mut bounds = item.bounds.clone();
         // Generate these bounds for the associated type. We could require that
         // users specify them and error out if they don't, but this is much
@@ -447,28 +460,35 @@ impl<'ast> ApiParser<'ast> {
     /// Generate the support module corresponding to the trait, with ways to
     /// make real servers and stub API descriptions.
     fn make_module(&self) -> TokenStream {
-        let item_trait = self.item_trait.valid_item();
-        let context_item = self.context_item.valid_item();
-        let module_ident = self.module_ident.as_ref();
+        // Can't do anything without metadata.
+        let Some(ResolvedApiMetadata {
+            dropshot,
+            tag_config,
+            module_ident,
+            context_item,
+        }) = &self.metadata
+        else {
+            return quote! {};
+        };
 
-        match (item_trait, context_item, module_ident) {
-            (Some(item_trait), Some(context_item), Some(module_ident)) => {
+        match (self.item_trait.valid_item(), context_item.valid_item()) {
+            (Some(item_trait), Some(context_item)) => {
                 let module_gen = SupportModuleGenerator {
-                    dropshot: &self.dropshot,
+                    dropshot,
                     module_ident,
                     item_trait,
                     context_item,
                     items: &self.items,
-                    tag_config: self.tag_config.as_ref(),
+                    tag_config: tag_config.as_ref(),
                 };
                 module_gen.to_token_stream()
             }
-            (_, _, Some(module_ident)) => {
-                // If the module ident is known but one of the other parts is
-                // invalid, generate an empty support module. (We can't generate
-                // the API description functions, even ones that immediately
-                // panic, because those depend on the trait and context items
-                // being valid.)
+            _ => {
+                // The module name is known, but the trait or context item is
+                // invalid, so generate an empty support module. (We can't
+                // generate the API description functions, even ones that
+                // immediately panic, because those depend on the trait and
+                // context items being valid.)
                 let doc = ModuleDocComments::generate_invalid(
                     &self.item_trait.item.ident,
                 );
@@ -480,10 +500,6 @@ impl<'ast> ApiParser<'ast> {
                     #vis mod #module_ident {}
                 }
             }
-            _ => {
-                // Can't do anything if the module name is missing.
-                quote! {}
-            }
         }
     }
 }
@@ -493,18 +509,28 @@ struct ApiOutput {
     /// The actual output.
     output: TokenStream,
 
+    /// Parameter-related errors on endpoint or channel methods, for which
+    /// usage messages are provided.
+    param_errors: Option<ParamErrorSummary>,
+}
+
+/// A summary of parameter-related errors on endpoint and channel methods.
+struct ParamErrorSummary {
+    /// The trait's identifier, used as the span for the usage messages.
+    trait_ident: syn::Ident,
+
     /// The context type (typically `Self::Context`), provided as a string.
     context: String,
 
     /// Whether there were any endpoint parameter-related errors.
     ///
     /// If there were, then we provide a usage message.
-    has_endpoint_param_errors: bool,
+    endpoint: bool,
 
     /// Whether there were any channel parameter-related errors.
     ///
     /// If there were, then we provide a usage message.
-    has_channel_param_errors: bool,
+    channel: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -614,12 +640,6 @@ impl<'ast> ContextItem<'ast> {
         ));
 
         Self::Missing { ident: format_ident!("{context_name}") }
-    }
-
-    fn new_invalid_metadata() -> Self {
-        Self::Missing {
-            ident: format_ident!("{}", ApiMetadata::DEFAULT_CONTEXT_NAME),
-        }
     }
 
     fn ident(&self) -> &syn::Ident {
@@ -946,7 +966,7 @@ impl ModuleDocComments {
 "Given an implementation of [`{trait_ident}`], generate an API description.
 
 This function accepts a single type argument `ServerImpl`, turning it into a
-Dropshot [`ApiDescription`]`<ServerImpl::`[`{context_ident}`]`>`. 
+Dropshot [`ApiDescription`]`<ServerImpl::`[`{context_ident}`]`>`.
 The returned `ApiDescription` can then be turned into a Dropshot server that
 accepts a concrete `{context_ident}`.
 
@@ -954,7 +974,7 @@ accepts a concrete `{context_ident}`.
 
 ```rust,ignore
 /// A type used to define the concrete implementation for `{trait_ident}`.
-/// 
+///
 /// This type is never constructed -- it is just a place to define your
 /// implementation of `{trait_ident}`.
 enum {trait_ident}Impl {{}}
