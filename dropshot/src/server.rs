@@ -29,6 +29,9 @@ use hyper::Request;
 use hyper::Response;
 use hyper::service::Service;
 use rustls;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::PrivatePkcs8KeyDer;
+use rustls::pki_types::pem::PemObject;
 use scopeguard::{ScopeGuard, guard};
 use std::convert::TryFrom;
 use std::future::Future;
@@ -576,15 +579,17 @@ impl TryFrom<&ConfigTls> for rustls::ServerConfig {
             }
         };
 
-        let certs = rustls_pemfile::certs(&mut cert_reader)
+        let certs = CertificateDer::pem_reader_iter(&mut cert_reader)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| {
-                BuildError::generic_system(err, "loading TLS certificates")
+            .map_err(|err| BuildError::PemError {
+                context: "loading TLS certificates".to_string(),
+                error: err,
             })?;
-        let keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
+        let keys = PrivatePkcs8KeyDer::pem_reader_iter(&mut key_reader)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| {
-                BuildError::generic_system(err, "loading TLS private key")
+            .map_err(|err| BuildError::PemError {
+                context: "loading TLS private key".to_string(),
+                error: err,
             })?;
         let mut keys_iter = keys.into_iter();
         let (Some(private_key), None) = (keys_iter.next(), keys_iter.next())
@@ -1107,6 +1112,12 @@ pub enum BuildError {
     },
     #[error("expected exactly one TLS private key")]
     NotOnePrivateKey,
+    #[error("{context}")]
+    PemError {
+        context: String,
+        #[source]
+        error: rustls::pki_types::pem::Error,
+    },
     #[error("{context}")]
     SystemError {
         context: String,
