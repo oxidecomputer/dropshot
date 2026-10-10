@@ -16,6 +16,7 @@
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
 
 * The minimum supported Rust version is now 1.88.
+* Replaced the unmaintained `rustls-pemfile` crate with the PEM support in `rustls-pki-types`. Failures to parse TLS certificates or private keys are now reported with the new `BuildError::PemError` variant rather than `BuildError::SystemError`.
 
 == 0.17.1 (released 2026-06-02)
 
