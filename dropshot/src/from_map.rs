@@ -1,6 +1,6 @@
 // Copyright 2025 Oxide Computer Company
 
-use paste::paste;
+use pastey::paste;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::de::DeserializeSeed;
