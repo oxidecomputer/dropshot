@@ -32,7 +32,6 @@ multer = "3.1.0"
 paste = "1.0.15"
 percent-encoding = "2.3.2"
 rustls = { version = "0.23.40", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
-rustls-pemfile = "2.2.0"
 scopeguard = "1.2.0"
 semver = "1.0.28"
 serde_json = "1.0.150"
