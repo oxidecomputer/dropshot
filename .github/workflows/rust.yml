@@ -37,7 +37,7 @@ jobs:
         run: cargo --version
       - name: Report Clippy version
         run: cargo clippy -- --version
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-bin: false # See Swatinem/rust-cache#341.
       - name: Run Clippy Lints
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Report cargo version
         run: cargo --version
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-bin: false # See Swatinem/rust-cache#341.
       - name: Check Docs
@@ -83,7 +83,7 @@ jobs:
         run: cargo --version
       - name: Report rustc version
         run: rustc --version
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Matrix instances other than OS need to be added to this explicitly
           key: ${{ matrix.features }}
@@ -106,7 +106,7 @@ jobs:
         run: cargo --version
       - name: Report rustc version
         run: rustc --version
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-bin: false # See Swatinem/rust-cache#341.
       - name: Run trybuild tests
