@@ -374,21 +374,29 @@ fn j2oas_schema_object(
     obj: &schemars::schema::SchemaObject,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     if let Some(reference) = &obj.reference {
-        return openapiv3::ReferenceOr::Reference {
-            reference: reference.clone(),
+        let reference =
+            openapiv3::ReferenceOr::Reference { reference: reference.clone() };
+        if schema_object_is_nullable(obj) {
+            return openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData {
+                    nullable: true,
+                    ..Default::default()
+                },
+                schema_kind: openapiv3::SchemaKind::AllOf {
+                    all_of: vec![reference],
+                },
+            });
+        } else {
+            return reference;
         };
     }
 
     let kind = j2oas_schema_object_kind(obj);
 
-    let mut data = openapiv3::SchemaData::default();
-
-    if matches!(
-        &obj.extensions.get("nullable"),
-        Some(serde_json::Value::Bool(true))
-    ) {
-        data.nullable = true;
-    }
+    let mut data = openapiv3::SchemaData {
+        nullable: schema_object_is_nullable(obj),
+        ..Default::default()
+    };
 
     if let Some(metadata) = &obj.metadata {
         data.title.clone_from(&metadata.title);
@@ -418,6 +426,13 @@ fn j2oas_schema_object(
         schema_data: data,
         schema_kind: kind,
     })
+}
+
+fn schema_object_is_nullable(obj: &schemars::schema::SchemaObject) -> bool {
+    matches!(
+        obj.extensions.get("nullable"),
+        Some(serde_json::Value::Bool(true))
+    )
 }
 
 fn j2oas_schema_object_kind(
@@ -929,6 +944,7 @@ mod test {
 
     use super::j2oas_schema;
     use super::j2oas_schema_object;
+    use super::make_subschema_for;
     use schemars::JsonSchema;
 
     #[test]
@@ -1027,6 +1043,43 @@ mod test {
                     }],
                 },
             })
+        );
+    }
+
+    #[test]
+    fn test_nullable_subschema() {
+        #[expect(dead_code)]
+        #[derive(JsonSchema)]
+        struct Foo {
+            bar: String,
+        }
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
+
+        // Ensure that for Option<Foo>, the result after conversion from JSON
+        // Schema to OpenAPI is a schema with nullable: true.
+        let schema = make_subschema_for::<Option<Foo>>(&mut generator);
+        assert_eq!(
+            j2oas_schema(None, &schema),
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData {
+                    nullable: true,
+                    ..Default::default()
+                },
+                schema_kind: openapiv3::SchemaKind::AllOf {
+                    all_of: vec![openapiv3::ReferenceOr::Reference {
+                        reference: "#/components/schemas/Foo".to_string()
+                    }],
+                },
+            })
+        );
+
+        let schema = make_subschema_for::<Foo>(&mut generator);
+        assert_eq!(
+            j2oas_schema(None, &schema),
+            openapiv3::ReferenceOr::Reference {
+                reference: "#/components/schemas/Foo".to_string()
+            }
         );
     }
 
