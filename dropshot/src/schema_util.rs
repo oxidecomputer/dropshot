@@ -929,6 +929,7 @@ mod test {
 
     use super::j2oas_schema;
     use super::j2oas_schema_object;
+    use super::make_subschema_for;
     use schemars::JsonSchema;
 
     #[test]
@@ -1027,6 +1028,35 @@ mod test {
                     }],
                 },
             })
+        );
+    }
+
+    #[test]
+    fn test_nullable_subschema() {
+        #[expect(dead_code)]
+        #[derive(JsonSchema)]
+        struct Foo {
+            bar: String,
+        }
+        let settings = schemars::r#gen::SchemaSettings::openapi3();
+        let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
+
+        // BUG: Currently, the fact that the type is nullable is dropped,
+        // leading to the same output as Foo below.
+        let schema = make_subschema_for::<Option<Foo>>(&mut generator);
+        assert_eq!(
+            j2oas_schema(None, &schema),
+            openapiv3::ReferenceOr::Reference {
+                reference: "#/components/schemas/Foo".to_string()
+            }
+        );
+
+        let schema = make_subschema_for::<Foo>(&mut generator);
+        assert_eq!(
+            j2oas_schema(None, &schema),
+            openapiv3::ReferenceOr::Reference {
+                reference: "#/components/schemas/Foo".to_string()
+            }
         );
     }
 
