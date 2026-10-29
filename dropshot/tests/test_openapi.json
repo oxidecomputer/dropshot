@@ -945,7 +945,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CoolStruct"
+                "nullable": true,
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CoolStruct"
+                  }
+                ]
               }
             }
           },
@@ -957,7 +962,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CoolStruct"
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CoolStruct"
+                    }
+                  ]
                 }
               }
             }

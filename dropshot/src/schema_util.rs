@@ -374,21 +374,56 @@ fn j2oas_schema_object(
     obj: &schemars::schema::SchemaObject,
 ) -> openapiv3::ReferenceOr<openapiv3::Schema> {
     if let Some(reference) = &obj.reference {
-        return openapiv3::ReferenceOr::Reference {
-            reference: reference.clone(),
+        let reference =
+            openapiv3::ReferenceOr::Reference { reference: reference.clone() };
+
+        // schemars 0.8 has a bit of a footgun here: with
+        // `SchemaSettings::openapi3()`, `subschema_for::<Option<Foo>>()`
+        // returns:
+        //
+        //      { "$ref": "#/components/schemas/Foo", "nullable": true }
+        //
+        // This is not permitted by OpenAPI 3.0. From
+        // https://spec.openapis.org/oas/v3.0.4.html#fixed-fields-19 (§4.7.23.1):
+        //
+        // > This object cannot be extended with additional properties, and any
+        // > properties added SHALL be ignored.
+        //
+        // So we need to rewrite schemas of this form to use an `allOf` wrapper
+        // instead.
+        //
+        // This is supposed to be handled by schemars's `RemoveRefSiblings`
+        // visitor
+        // (https://docs.rs/schemars/0.8.22/schemars/visit/struct.RemoveRefSiblings.html),
+        // but (for some reason) that visitor is only automatically run within
+        // `into_root_schema_for`, not within `subschema_for`. But using
+        // `into_root_schema_for` is a bit strange because there isn't really
+        // such a thing as a root schema in OpenAPI.
+        //
+        // An alternative would be to run the RemoveRefSiblings visitor here,
+        // but the only sibling property that's possible to produce in Dropshot
+        // is `nullable`.
+        if schema_object_is_nullable(obj) {
+            return openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData {
+                    nullable: true,
+                    ..Default::default()
+                },
+                schema_kind: openapiv3::SchemaKind::AllOf {
+                    all_of: vec![reference],
+                },
+            });
+        } else {
+            return reference;
         };
     }
 
     let kind = j2oas_schema_object_kind(obj);
 
-    let mut data = openapiv3::SchemaData::default();
-
-    if matches!(
-        &obj.extensions.get("nullable"),
-        Some(serde_json::Value::Bool(true))
-    ) {
-        data.nullable = true;
-    }
+    let mut data = openapiv3::SchemaData {
+        nullable: schema_object_is_nullable(obj),
+        ..Default::default()
+    };
 
     if let Some(metadata) = &obj.metadata {
         data.title.clone_from(&metadata.title);
@@ -418,6 +453,13 @@ fn j2oas_schema_object(
         schema_data: data,
         schema_kind: kind,
     })
+}
+
+fn schema_object_is_nullable(obj: &schemars::schema::SchemaObject) -> bool {
+    matches!(
+        obj.extensions.get("nullable"),
+        Some(serde_json::Value::Bool(true))
+    )
 }
 
 fn j2oas_schema_object_kind(
@@ -1041,15 +1083,22 @@ mod test {
         let settings = schemars::r#gen::SchemaSettings::openapi3();
         let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
 
-        // BUG: Currently, the fact that the type is nullable is dropped from
-        // the output, leading to the generated schema for Option<Foo> being
-        // the same as the one for Foo below.
+        // Ensure that for Option<Foo>, the result after conversion from JSON
+        // Schema to OpenAPI is a schema with nullable: true.
         let schema = make_subschema_for::<Option<Foo>>(&mut generator);
         assert_eq!(
             j2oas_schema(None, &schema),
-            openapiv3::ReferenceOr::Reference {
-                reference: "#/components/schemas/Foo".to_string()
-            }
+            openapiv3::ReferenceOr::Item(openapiv3::Schema {
+                schema_data: openapiv3::SchemaData {
+                    nullable: true,
+                    ..Default::default()
+                },
+                schema_kind: openapiv3::SchemaKind::AllOf {
+                    all_of: vec![openapiv3::ReferenceOr::Reference {
+                        reference: "#/components/schemas/Foo".to_string()
+                    }],
+                },
+            })
         );
 
         let schema = make_subschema_for::<Foo>(&mut generator);
