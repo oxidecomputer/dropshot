@@ -376,6 +376,33 @@ fn j2oas_schema_object(
     if let Some(reference) = &obj.reference {
         let reference =
             openapiv3::ReferenceOr::Reference { reference: reference.clone() };
+
+        // schemars 0.8 has a bit of a footgun here: with
+        // `SchemaSettings::openapi3()`, `subschema_for::<Option<Foo>>()`
+        // returns:
+        //
+        //      { "$ref": "#/components/schemas/Foo", "nullable": true }
+        //
+        // This is not permitted by OpenAPI 3.0. From
+        // https://spec.openapis.org/oas/v3.0.4.html#fixed-fields-19 (§4.7.23.1):
+        //
+        // > This object cannot be extended with additional properties, and any
+        // > properties added SHALL be ignored.
+        //
+        // So we need to rewrite schemas of this form to use an `allOf` wrapper
+        // instead.
+        //
+        // This is supposed to be handled by schemars's `RemoveRefSiblings`
+        // visitor
+        // (https://docs.rs/schemars/0.8.22/schemars/visit/struct.RemoveRefSiblings.html),
+        // but (for some reason) that visitor is only automatically run within
+        // `into_root_schema_for`, not within `subschema_for`. But using
+        // `into_root_schema_for` is a bit strange because there isn't really
+        // such a thing as a root schema in OpenAPI.
+        //
+        // An alternative would be to run the RemoveRefSiblings visitor here,
+        // but the only sibling property that's possible to produce in Dropshot
+        // is `nullable`.
         if schema_object_is_nullable(obj) {
             return openapiv3::ReferenceOr::Item(openapiv3::Schema {
                 schema_data: openapiv3::SchemaData {
