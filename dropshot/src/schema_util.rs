@@ -1041,8 +1041,9 @@ mod test {
         let settings = schemars::r#gen::SchemaSettings::openapi3();
         let mut generator = schemars::r#gen::SchemaGenerator::new(settings);
 
-        // BUG: Currently, the fact that the type is nullable is dropped,
-        // leading to the same output as Foo below.
+        // BUG: Currently, the fact that the type is nullable is dropped from
+        // the output, leading to the generated schema for Option<Foo> being
+        // the same as the one for Foo below.
         let schema = make_subschema_for::<Option<Foo>>(&mut generator);
         assert_eq!(
             j2oas_schema(None, &schema),
