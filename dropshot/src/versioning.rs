@@ -122,8 +122,13 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
 ///
 /// - the header value cannot be parsed as a semver, or
 /// - the requested version is newer than `max_version` (see
-///   [`ClientSpecifiesVersionInHeader::new()`], which implies that the client
-///   is trying to use a newer version of the API than this server supports.
+///   [`ClientSpecifiesVersionInHeader::new()`]), which implies that the client
+///   is trying to use a newer version of the API than this server supports,
+///   or
+/// - a minimum version has been configured with [`Self::min_version`] and the
+///   requested version is older than that.  This means that the client is
+///   trying to use an older version of the API that this server no longer
+///   supports.
 ///
 /// By default, incoming requests will also be rejected with a 400-level error
 /// if the header is missing. To override this behavior, supply a default
@@ -136,6 +141,7 @@ pub trait DynamicVersionPolicy: std::fmt::Debug + Send + Sync {
 pub struct ClientSpecifiesVersionInHeader {
     name: HeaderName,
     max_version: Version,
+    min_version: Option<Version>,
     on_missing: Option<Version>,
 }
 
@@ -153,7 +159,35 @@ impl ClientSpecifiesVersionInHeader {
         name: HeaderName,
         max_version: Version,
     ) -> ClientSpecifiesVersionInHeader {
-        ClientSpecifiesVersionInHeader { name, max_version, on_missing: None }
+        ClientSpecifiesVersionInHeader {
+            name,
+            max_version,
+            min_version: None,
+            on_missing: None,
+        }
+    }
+
+    /// Reject requests for versions older than the provided version.
+    ///
+    /// By default, the policy accepts requests for any version up to
+    /// `max_version`.  Call this function when the server has retired support
+    /// for older versions of the API.  Requests for a version older than
+    /// `min_version` will then be rejected with a 400-level error.
+    ///
+    /// This check applies only to versions that the client provides in the
+    /// header.  It does not apply to the version provided to
+    /// [`Self::on_missing`].
+    ///
+    /// It might be a little surprising that the max version is required (and
+    /// passed into `new()`) while the min version is optional (and provided
+    /// with this builder method).  The reason is that a correct versioned
+    /// server essentially must consider the max version because it can't know
+    /// about versions that post-date it.  However, a server only needs to
+    /// consider the min version if there are older versions of its API that it
+    /// has retired.
+    pub fn min_version(mut self, min_version: Version) -> Self {
+        self.min_version = Some(min_version);
+        self
     }
 
     /// If the header is missing, use the provided version instead.
@@ -184,17 +218,30 @@ impl DynamicVersionPolicy for ClientSpecifiesVersionInHeader {
         let v = parse_header(request.headers(), &self.name)?;
         match (v, &self.on_missing) {
             (Some(v), _) => {
-                if v <= self.max_version {
-                    Ok(v)
-                } else {
-                    Err(HttpError::for_bad_request(
+                if v > self.max_version {
+                    return Err(HttpError::for_bad_request(
                         None,
                         format!(
                             "server does not support this API version: {}",
                             v
                         ),
-                    ))
+                    ));
                 }
+
+                if let Some(min_version) = &self.min_version {
+                    if v < *min_version {
+                        return Err(HttpError::for_bad_request(
+                            None,
+                            format!(
+                                "server no longer supports this API version: \
+                                 {} (oldest supported version: {})",
+                                v, min_version
+                            ),
+                        ));
+                    }
+                }
+
+                Ok(v)
             }
             (None, Some(on_missing)) => Ok(on_missing.clone()),
             (None, None) => Err(HttpError::for_bad_request(

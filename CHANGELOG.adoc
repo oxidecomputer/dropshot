@@ -25,6 +25,7 @@ This is breaking only if you have API endpoints using nullable bodies _and_ you 
 === Other notable changes
 
 * https://github.com/oxidecomputer/dropshot/pull/1694[#1694] The minimum supported Rust version is now 1.88.
+* https://github.com/oxidecomputer/dropshot/pull/1755[#1755] Added `ClientSpecifiesVersionInHeader::min_version` to reject requests for API versions older than a given version. Servers can use this to retire support for old API versions.
 
 == 0.17.1 (released 2026-06-02)
 
