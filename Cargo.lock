@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "dropshot"
-version = "0.17.1"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "dropshot_endpoint"
-version = "0.17.1"
+version = "0.18.0"
 dependencies = [
  "expectorate",
  "heck",
