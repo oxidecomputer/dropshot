@@ -15,9 +15,16 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...HEAD[Full list of commits]
 
-* The minimum supported Rust version is now 1.88.
+=== Breaking changes
+
 * Replaced the unmaintained `rustls-pemfile` crate with the PEM support in `rustls-pki-types`. Failures to parse TLS certificates or private keys are now reported with the new `BuildError::PemError` variant rather than `BuildError::SystemError`.
 * Fixed OpenAPI output for request and response bodies of type `Option<T>`, where `T` is a named schema type. Previously, these bodies were documented as a plain reference to `T` with `nullable` dropped, so generated clients failed to deserialize a `null` response. They're now documented as `{ "nullable": true, "allOf": [{ "$ref": ... }] }`, the same form already used for `Option<T>` struct fields. This changes the OpenAPI documents of APIs with such bodies.
++
+This is breaking only if you have API endpoints using nullable bodies _and_ you depend on documents for shipped versions not having changed, as might be the case if you use `dropshot-api-manager` to manage blessed documents that have this particular pattern.  We do not believe this affects many users.  But if it does affect you, you can look at https://github.com/oxidecomputer/omicron/issues/11623[omicron#11623] to see how we dealt with this in our own APIs.  If you have any questions about this, please feel free to reach out by either filing an issue or starting a GitHub discussion.
+
+=== Other notable changes
+
+* The minimum supported Rust version is now 1.88.
 
 == 0.17.1 (released 2026-06-02)
 
