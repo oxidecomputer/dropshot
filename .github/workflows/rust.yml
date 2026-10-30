@@ -62,8 +62,7 @@ jobs:
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     strategy:
       matrix:
-        # macos-14 for M1 runners
-        os: [ubuntu-22.04, windows-2022, macos-14]
+        os: [ubuntu-22.04, windows-2022, macos-26]
         features: [all, default]
         rust-version: [stable, msrv]
         include:
