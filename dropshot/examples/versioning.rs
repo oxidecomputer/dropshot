@@ -10,7 +10,9 @@
 //!   type with one field: `thing1_late`.
 //!
 //! The client chooses which version they want to use by specifying the
-//! `dropshot-demo-version` header with their request.
+//! `dropshot-demo-version` header with their request.  The server supports
+//! versions from 0.9.0 through 2.0.0.  It rejects requests for older or newer
+//! versions.
 //!
 //! ## Generating OpenAPI specs
 //!
@@ -60,6 +62,28 @@
 //! {
 //!   "request_id": "18c1964e-88c6-4122-8287-1f2f399871bd",
 //!   "message": "bad value for header \"dropshot-demo-version\": unexpected character 't' while parsing major version number: threeve"
+//! }
+//! ```
+//!
+//! If we provide a version older than 0.9.0, we get an error because this
+//! server no longer supports such old versions:
+//!
+//! ```text
+//! $ curl -H 'dropshot-demo-version: 0.8.0'  http://127.0.0.1:12345/thing1
+//! {
+//!   "request_id": "5f0a4c35-6d0c-4b0e-9a8f-3a3c6f2b9d41",
+//!   "message": "server no longer supports this API version: 0.8.0 (oldest supported version: 0.9.0)"
+//! }
+//! ```
+//!
+//! Similarly, if we provide a version newer than 2.0.0, we get an error
+//! because this server does not yet support that version:
+//!
+//! ```text
+//! $ curl -H 'dropshot-demo-version: 3.0.0'  http://127.0.0.1:12345/thing1
+//! {
+//!   "request_id": "6a5e1b1f-3f7e-4c8e-a7a2-1f4d3b9c2e10",
+//!   "message": "server does not support this API version: 3.0.0"
 //! }
 //! ```
 //!
@@ -159,7 +183,12 @@ async fn main() -> Result<(), String> {
         // Dropshot that, as the name suggests, the client always specifies the
         // version using the "dropshot-demo-version" header.  We specify a max
         // API version of "2.0.0".  This is the "current" (latest) API that this
-        // example server is intended to support.
+        // example server is intended to support.  We also specify a min API
+        // version of "0.9.0".  This is the oldest API that this example server
+        // still supports.  A server would typically raise its min version when
+        // it retires support for old versions.  If you don't specify a min
+        // version, the server accepts requests for any version up to the max
+        // version.
         //
         // You can provide your own impl of `DynamicVersionPolicy` that does
         // this differently (e.g., filling in a default if the client doesn't
@@ -167,9 +196,11 @@ async fn main() -> Result<(), String> {
         let header_name = "dropshot-demo-version"
             .parse::<HeaderName>()
             .map_err(|_| String::from("demo header name was not valid"))?;
+        let min_version = semver::Version::new(0, 9, 0);
         let max_version = semver::Version::new(2, 0, 0);
         let version_impl =
-            ClientSpecifiesVersionInHeader::new(header_name, max_version);
+            ClientSpecifiesVersionInHeader::new(header_name, max_version)
+                .min_version(min_version);
         let version_policy = VersionPolicy::Dynamic(Box::new(version_impl));
         let server = ServerBuilder::new(api, api_context, log)
             .config(config_dropshot)

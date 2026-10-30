@@ -359,6 +359,77 @@ async fn test_versions_on_missing() {
     assert_eq!(body, HANDLER4_MSG);
 }
 
+/// Test that `ClientSpecifiesVersionInHeader::min_version` rejects requests for
+/// versions older than the minimum and accepts the minimum version itself.
+#[tokio::test]
+async fn test_versions_min_version() {
+    let logctx = common::create_log_context("test_versions_min_version");
+    let server = ServerBuilder::new(api(), (), logctx.log.clone())
+        .version_policy(VersionPolicy::Dynamic(Box::new(
+            ClientSpecifiesVersionInHeader::new(
+                VERSION_HEADER_NAME.parse().unwrap(),
+                Version::new(1, 4, 0),
+            )
+            .min_version(Version::new(1, 1, 0)),
+        )))
+        .start()
+        .unwrap();
+
+    let server_addr = server.local_addr();
+    let url = format!("http://{}/demo", server_addr);
+    let client = reqwest::Client::new();
+
+    // Versions older than the minimum are rejected, even when some handler
+    // would otherwise serve them.
+    for version in ["0.9.0", "1.0.0", "1.1.0-rc1"] {
+        let response = client
+            .request(Method::GET, &url)
+            .header(VERSION_HEADER_NAME, version)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let error: HttpErrorResponseBody = response.json().await.unwrap();
+        assert_eq!(
+            error.message,
+            format!(
+                "server no longer supports this API version: {} \
+                 (oldest supported version: 1.1.0)",
+                version
+            )
+        );
+    }
+
+    // The minimum version itself and newer versions are accepted.
+    for (version, expected) in
+        [("1.1.0", HANDLER2_MSG), ("1.3.0", HANDLER3_MSG)]
+    {
+        let response = client
+            .request(Method::GET, &url)
+            .header(VERSION_HEADER_NAME, version)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: String = response.json().await.unwrap();
+        assert_eq!(body, expected);
+    }
+
+    // Versions newer than the maximum are still rejected.
+    let response = client
+        .request(Method::GET, &url)
+        .header(VERSION_HEADER_NAME, "1.5.0")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let error: HttpErrorResponseBody = response.json().await.unwrap();
+    assert_eq!(
+        error.message,
+        "server does not support this API version: 1.5.0"
+    );
+}
+
 /// Test that the generated OpenAPI spec only refers to handlers in that version
 /// and types that are used by those handlers.
 #[test]
