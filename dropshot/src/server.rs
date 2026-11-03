@@ -831,7 +831,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     });
 
     let maybe_response = http_request_handle(
-        server,
+        server.clone(),
         request,
         &request_id,
         request_log.new(o!()),
@@ -844,7 +844,7 @@ async fn http_request_handle_wrap<C: ServerContext>(
     let _ = ScopeGuard::into_inner(on_disconnect);
 
     let latency_us = start_time.elapsed().as_micros();
-    let response = match maybe_response {
+    let mut response = match maybe_response {
         Err(error) => {
             {
                 let status = error.status_code();
@@ -896,6 +896,8 @@ async fn http_request_handle_wrap<C: ServerContext>(
             response
         }
     };
+
+    server.version_policy.add_vary_headers(response.headers_mut());
 
     Ok(response)
 }
