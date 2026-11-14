@@ -67,6 +67,30 @@ pub struct ApiEndpoint<Context: ServerContext> {
     pub versions: ApiEndpointVersions,
 }
 
+// Implement Clone manually so that the context does not need to be Clone.
+impl<Context: ServerContext> Clone for ApiEndpoint<Context> {
+    fn clone(&self) -> Self {
+        Self {
+            operation_id: self.operation_id.clone(),
+            handler: self.handler.clone(),
+            method: self.method.clone(),
+            path: self.path.clone(),
+            parameters: self.parameters.clone(),
+            body_content_type: self.body_content_type.clone(),
+            request_body_max_bytes: self.request_body_max_bytes,
+            response: self.response.clone(),
+            error: self.error.clone(),
+            summary: self.summary.clone(),
+            description: self.description.clone(),
+            tags: self.tags.clone(),
+            extension_mode: self.extension_mode.clone(),
+            visible: self.visible,
+            deprecated: self.deprecated,
+            versions: self.versions.clone(),
+        }
+    }
+}
+
 impl<'a, Context: ServerContext> ApiEndpoint<Context> {
     pub fn new<HandlerType, FuncParams, ResponseType>(
         operation_id: String,
@@ -233,7 +257,7 @@ where
 /// ApiEndpointParameter represents the discrete path and query parameters for a
 /// given API endpoint. These are typically derived from the members of stucts
 /// used as parameters to handler functions.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiEndpointParameter {
     pub metadata: ApiEndpointParameterMetadata,
     pub description: Option<String>,
@@ -355,7 +379,7 @@ fn mime_split(mime_type: &str) -> Option<(&str, &str, Option<&str>)> {
     Some((type_, subtype, suffix))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiEndpointHeader {
     pub name: String,
     pub description: Option<String>,
@@ -364,7 +388,7 @@ pub struct ApiEndpointHeader {
 }
 
 /// Metadata for an API endpoint response: type information and status code.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ApiEndpointResponse {
     pub schema: Option<ApiSchemaGenerator>,
     pub headers: Vec<ApiEndpointHeader>,
@@ -373,7 +397,7 @@ pub struct ApiEndpointResponse {
 }
 
 /// Metadata for an API endpoint's error response type.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiEndpointErrorResponse {
     schema: ApiSchemaGenerator,
     type_name: &'static str,
@@ -387,6 +411,7 @@ impl ApiEndpointErrorResponse {
 }
 
 /// Wrapper for both dynamically generated and pre-generated schemas.
+#[derive(Clone)]
 pub enum ApiSchemaGenerator {
     Gen {
         name: fn() -> String,
@@ -414,10 +439,25 @@ impl std::fmt::Debug for ApiSchemaGenerator {
 /// An ApiDescription represents the endpoints and handler functions in your
 /// API.  Other metadata could also be provided here.  This object can be used
 /// to generate an OpenAPI spec or to run an HTTP server implementing the API.
+///
+/// Cloning a description copies its routing and API metadata, while sharing
+/// handler objects. Each copy can be modified independently and used to start
+/// a server with its own context value. The context type need not implement
+/// [`Clone`].
 pub struct ApiDescription<Context: ServerContext> {
     /// In practice, all the information we need is encoded in the router.
     router: HttpRouter<Context>,
     tag_config: TagConfig,
+}
+
+// Implement Clone manually so that the context does not need to be Clone.
+impl<Context: ServerContext> Clone for ApiDescription<Context> {
+    fn clone(&self) -> Self {
+        Self {
+            router: self.router.clone(),
+            tag_config: self.tag_config.clone(),
+        }
+    }
 }
 
 impl<Context: ServerContext> ApiDescription<Context> {
@@ -1223,7 +1263,7 @@ impl fmt::Display for ApiDescriptionRegisterError {
 impl std::error::Error for ApiDescriptionRegisterError {}
 
 /// Describes which versions of the API this endpoint is defined for
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ApiEndpointVersions {
     /// this endpoint covers all versions of the API
     All,
@@ -1240,7 +1280,7 @@ pub enum ApiEndpointVersions {
     Until(semver::Version),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct OrderedVersionPair {
     earliest: semver::Version,
     until: semver::Version,
@@ -1607,7 +1647,7 @@ impl<'a, Context: ServerContext> OpenApiDefinition<'a, Context> {
 /// Configuration used describe OpenAPI tags and to validate per-endpoint tags.
 /// Consumers may use this ensure that--for example--endpoints pick a tag from a
 /// known set, or that each endpoint has at least one tag.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TagConfig {
     /// Are endpoints allowed to use tags not specified in this config?
     pub allow_other_tags: bool,
@@ -1631,7 +1671,7 @@ impl Default for TagConfig {
 }
 
 /// Endpoint tagging policy
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EndpointTagPolicy {
     /// Any number of tags is permitted
     Any,
@@ -1642,14 +1682,14 @@ pub enum EndpointTagPolicy {
 }
 
 /// Details for a named tag
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TagDetails {
     pub description: Option<String>,
     pub external_docs: Option<TagExternalDocs>,
 }
 
 /// External docs description
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TagExternalDocs {
     pub description: Option<String>,
     pub url: String,
@@ -1702,6 +1742,109 @@ mod test {
         _: Path<TestPath>,
     ) -> Result<Response<Body>, HttpError> {
         panic!("test handler is not supposed to run");
+    }
+
+    #[test]
+    fn test_clone_preserves_metadata() {
+        // A description holds no context value and must not require Clone on it.
+        struct NonCloneContext;
+        async fn handler(
+            _: RequestContext<NonCloneContext>,
+        ) -> Result<crate::HttpResponseOk<String>, HttpError> {
+            unreachable!()
+        }
+
+        let mut api = ApiDescription::new().tag_config(TagConfig {
+            tags: [(
+                "tag".to_string(),
+                TagDetails {
+                    description: Some("original".to_string()),
+                    external_docs: Some(crate::TagExternalDocs {
+                        description: Some("docs".to_string()),
+                        url: "https://example.com".to_string(),
+                    }),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..TagConfig::default()
+        });
+        let endpoint = ApiEndpoint::new(
+            "handler".to_string(),
+            handler,
+            Method::GET,
+            CONTENT_TYPE_JSON,
+            "/original",
+            ApiEndpointVersions::from_until(
+                Version::new(1, 0, 0),
+                Version::new(2, 0, 0),
+            )
+            .unwrap(),
+        )
+        .tag("tag")
+        .summary("Original endpoint")
+        .description("Metadata retained when the description is cloned")
+        .deprecated(true);
+        let mut endpoint_clone = endpoint.clone();
+        assert!(std::sync::Arc::ptr_eq(
+            &endpoint.handler,
+            &endpoint_clone.handler
+        ));
+        endpoint_clone.tags.push("extra".to_string());
+        assert_eq!(endpoint.tags, ["tag"]);
+        api.register(endpoint).unwrap();
+
+        let mut cloned = api.clone();
+        let spec = |api: &ApiDescription<NonCloneContext>, version| {
+            api.openapi("clone test", version).json().unwrap()
+        };
+        for (version, present) in [
+            (Version::new(0, 0, 0), false),
+            (Version::new(1, 0, 0), true),
+            (Version::new(2, 0, 0), false),
+        ] {
+            let original = spec(&api, version.clone());
+            let copy = spec(&cloned, version.clone());
+            assert_eq!(original, copy, "OpenAPI differs at version {version}");
+            assert_eq!(
+                copy["paths"].get("/original").is_some(),
+                present,
+                "unexpected endpoint visibility at version {version}",
+            );
+        }
+        cloned.tag_config.tags.get_mut("tag").unwrap().description =
+            Some("changed".to_string());
+        assert_eq!(
+            api.tag_config.tags["tag"].description.as_deref(),
+            Some("original")
+        );
+        cloned
+            .register(ApiEndpoint::new(
+                "extra".to_string(),
+                handler,
+                Method::GET,
+                CONTENT_TYPE_JSON,
+                "/extra",
+                ApiEndpointVersions::All,
+            ))
+            .unwrap();
+        api.register(ApiEndpoint::new(
+            "other".to_string(),
+            handler,
+            Method::GET,
+            CONTENT_TYPE_JSON,
+            "/other",
+            ApiEndpointVersions::All,
+        ))
+        .unwrap();
+        let version = Version::new(1, 0, 0);
+        for (api, present, absent) in
+            [(&api, "/other", "/extra"), (&cloned, "/extra", "/other")]
+        {
+            let value = spec(api, version.clone());
+            assert!(value["paths"].get(present).is_some());
+            assert!(value["paths"].get(absent).is_none());
+        }
     }
 
     #[test]
