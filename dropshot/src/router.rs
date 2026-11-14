@@ -102,6 +102,36 @@ enum HttpRouterEdges<Context: ServerContext> {
     VariableRest(String, Box<HttpRouterNode<Context>>),
 }
 
+// Implement Clone manually so that the context does not need to be Clone.
+impl<Context: ServerContext> Clone for HttpRouter<Context> {
+    fn clone(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            has_versioned_routes: self.has_versioned_routes,
+        }
+    }
+}
+
+impl<Context: ServerContext> Clone for HttpRouterNode<Context> {
+    fn clone(&self) -> Self {
+        Self { methods: self.methods.clone(), edges: self.edges.clone() }
+    }
+}
+
+impl<Context: ServerContext> Clone for HttpRouterEdges<Context> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Literals(nodes) => Self::Literals(nodes.clone()),
+            Self::VariableSingle(name, node) => {
+                Self::VariableSingle(name.clone(), node.clone())
+            }
+            Self::VariableRest(name, node) => {
+                Self::VariableRest(name.clone(), node.clone())
+            }
+        }
+    }
+}
+
 /// `PathSegment` represents a segment in a URI path when the router is being
 /// configured.  Each segment may be either a literal string or a variable (the
 /// latter indicated by being wrapped in braces). Variables may consume a single
@@ -1236,6 +1266,37 @@ mod test {
             )
             .unwrap_err();
         assert_eq!(error.status_code, StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[test]
+    fn test_clone_preserves_routes() {
+        let mut router = HttpRouter::new();
+        for path in ["/literal", "/single/{id}", "/rest/{tail:.*}"] {
+            router.insert(new_endpoint_versions(
+                new_handler_named(path),
+                Method::GET,
+                path,
+                ApiEndpointVersions::from(Version::new(1, 0, 0)),
+            ));
+        }
+        let cloned = router.clone();
+        assert!(cloned.has_versioned_routes());
+        let version = Version::new(1, 0, 0);
+        let earlier = Version::new(0, 9, 0);
+        for path in ["/literal", "/single/value", "/rest/a/b"] {
+            let original = router
+                .lookup_route(&Method::GET, path.into(), Some(&version))
+                .unwrap();
+            let copy = cloned
+                .lookup_route(&Method::GET, path.into(), Some(&version))
+                .unwrap();
+            assert!(Arc::ptr_eq(&original.handler, &copy.handler));
+            assert_eq!(original.endpoint.variables, copy.endpoint.variables);
+            let error = cloned
+                .lookup_route(&Method::GET, path.into(), Some(&earlier))
+                .unwrap_err();
+            assert_eq!(error.status_code, StatusCode::NOT_FOUND);
+        }
     }
 
     #[test]

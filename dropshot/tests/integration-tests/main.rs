@@ -9,6 +9,7 @@
 extern crate slog;
 
 mod api_trait;
+mod cloned_api;
 mod common;
 mod config;
 mod custom_errors;
