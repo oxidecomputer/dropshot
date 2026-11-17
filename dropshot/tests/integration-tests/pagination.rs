@@ -799,14 +799,22 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
     );
 
     let log = logctx.log.new(o!());
+    // Cargo puts examples in the profile directory's `examples`. The test
+    // program sits a varying number of levels below the profile directory
+    // (`deps` in the old layout, `build/<package>/<hash>/out` in the
+    // Cargo 1.100 layout), so search its ancestors.
     let cmd_path = {
-        let mut my_path = current_exe().expect("failed to find test program");
-        my_path.pop();
-        assert_eq!(my_path.file_name().unwrap(), "deps");
-        my_path.pop();
-        my_path.push("examples");
-        my_path.push(path);
+        let my_path = current_exe().expect("failed to find test program");
         my_path
+            .ancestors()
+            .map(|dir| dir.join("examples").join(path))
+            .find(|candidate| candidate.is_file())
+            .unwrap_or_else(|| {
+                panic!(
+                    "failed to find example {:?} above test program {:?}",
+                    path, my_path
+                )
+            })
     };
 
     // We redirect stderr to /dev/null to avoid spamming the user's terminal.
