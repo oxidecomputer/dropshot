@@ -167,6 +167,7 @@ impl Drop for MultiServerContext {
 
 /// Context shared by all running servers.
 struct SharedMultiServerContext {
+    api: ApiDescription<MultiServerContext>,
     servers: Mutex<HashMap<String, HttpServer<MultiServerContext>>>,
     started_server_shutdown_handles: mpsc::Sender<ServerShutdownFuture>,
 }
@@ -175,7 +176,11 @@ impl SharedMultiServerContext {
     fn new(
         started_server_shutdown_handles: mpsc::Sender<ServerShutdownFuture>,
     ) -> Self {
-        Self { servers: Mutex::default(), started_server_shutdown_handles }
+        let mut api = ApiDescription::new();
+        api.register(api_get_servers).unwrap();
+        api.register(api_start_server).unwrap();
+        api.register(api_stop_server).unwrap();
+        Self { api, servers: Mutex::default(), started_server_shutdown_handles }
     }
 
     async fn start_server(
@@ -200,13 +205,6 @@ impl SharedMultiServerContext {
             .to_logger(format!("example-multiserver-{name}"))
             .map_err(|error| format!("failed to create logger: {}", error))?;
 
-        // TODO: Could `ApiDescription` implement `Clone`, or could we pass an
-        // `Arc<ApiDescription>` instead?
-        let mut api = ApiDescription::new();
-        api.register(api_get_servers).unwrap();
-        api.register(api_start_server).unwrap();
-        api.register(api_stop_server).unwrap();
-
         // Configure the server with the requested bind address.
         let config_dropshot =
             ConfigDropshot { bind_address, ..Default::default() };
@@ -217,7 +215,7 @@ impl SharedMultiServerContext {
             name: name.to_string(),
             log: log.clone(),
         };
-        let server = ServerBuilder::new(api, context, log)
+        let server = ServerBuilder::new(self.api.clone(), context, log)
             .config(config_dropshot)
             .start()
             .map_err(|error| format!("failed to create server: {}", error))?;

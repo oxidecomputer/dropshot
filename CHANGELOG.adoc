@@ -15,6 +15,8 @@
 
 https://github.com/oxidecomputer/dropshot/compare/v0.18.0\...HEAD[Full list of commits]
 
+* Added `Clone` for `ApiDescription<C>` without requiring `C: Clone`. Clones have independent routing and API metadata and share handler objects, allowing the same API to serve multiple servers with separate context values.
+
 == 0.18.0 (released 2026-10-30)
 
 https://github.com/oxidecomputer/dropshot/compare/v0.17.1\...v0.18.0[Full list of commits]
