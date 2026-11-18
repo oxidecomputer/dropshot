@@ -32,11 +32,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::collections::BTreeSet;
+use std::env::consts::EXE_SUFFIX;
 use std::env::current_exe;
 use std::fmt::Debug;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::ops::Bound;
+use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
@@ -783,6 +785,34 @@ impl Drop for ExampleContext {
     }
 }
 
+/// Returns the path of the named example program.
+fn example_path(name: &str) -> PathBuf {
+    let test_program = current_exe().expect("failed to find test program");
+
+    // The test program sits in `deps` or, with Cargo 1.100 and later, in
+    // `build/<package>/<hash>/out`. The nearest ancestor with an `examples`
+    // directory is the profile directory.
+    let examples_dir = test_program
+        .ancestors()
+        .skip(1)
+        .map(|dir| dir.join("examples"))
+        .find(|dir| dir.is_dir())
+        .unwrap_or_else(|| {
+            panic!(
+                "no examples directory above test program {}",
+                test_program.display(),
+            )
+        });
+
+    let path = examples_dir.join(format!("{name}{EXE_SUFFIX}"));
+    assert!(
+        path.is_file(),
+        "example program {} not found; run `cargo build --examples` first",
+        path.display(),
+    );
+    path
+}
+
 /// For one of the example programs that starts a Dropshot server on localhost
 /// using a TCP port provided as a command-line argument, this function starts
 /// the requested example on the requested TCP port and attempts to wait for the
@@ -799,23 +829,7 @@ async fn start_example(path: &str, port: u16) -> ExampleContext {
     );
 
     let log = logctx.log.new(o!());
-    // Cargo puts examples in the profile directory's `examples`. The test
-    // program sits a varying number of levels below the profile directory
-    // (`deps` in the old layout, `build/<package>/<hash>/out` in the
-    // Cargo 1.100 layout), so search its ancestors.
-    let cmd_path = {
-        let my_path = current_exe().expect("failed to find test program");
-        my_path
-            .ancestors()
-            .map(|dir| dir.join("examples").join(path))
-            .find(|candidate| candidate.is_file())
-            .unwrap_or_else(|| {
-                panic!(
-                    "failed to find example {:?} above test program {:?}",
-                    path, my_path
-                )
-            })
-    };
+    let cmd_path = example_path(path);
 
     // We redirect stderr to /dev/null to avoid spamming the user's terminal.
     // It would be better to put this in some log file that we manage similarly
