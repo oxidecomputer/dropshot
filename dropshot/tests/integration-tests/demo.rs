@@ -809,6 +809,66 @@ async fn test_untyped_body() {
     testctx.teardown().await;
 }
 
+#[tokio::test]
+async fn test_content_digest() {
+    use base64::Engine;
+    use sha2::Digest;
+
+    let api = demo_api();
+    let testctx = common::test_setup("test_content_digest", api);
+    let client = &testctx.client_testctx;
+
+    let digest = |body: &[u8]| {
+        format!(
+            "sha-256=:{}:",
+            base64::engine::general_purpose::STANDARD
+                .encode(sha2::Sha256::digest(body))
+        )
+    };
+    let request = |path: &str, body: &[u8], header: &str| {
+        hyper::Request::builder()
+            .method(Method::PUT)
+            .uri(client.url(path))
+            .header("content-digest", header)
+            .body(Body::from(body.to_vec()))
+            .unwrap()
+    };
+
+    for path in ["/testing/untyped_body", "/testing/streaming_body"] {
+        let body = vec![7u8; 1000];
+        client
+            .make_request_with_request(
+                request(path, &body, &digest(&body)),
+                StatusCode::OK,
+            )
+            .await
+            .unwrap();
+
+        let error = client
+            .make_request_with_request(
+                request(path, &body, &digest(b"something else")),
+                StatusCode::BAD_REQUEST,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.message, "content-digest does not match request body");
+
+        let error = client
+            .make_request_with_request(
+                request(path, &body, "sha-512=:AAAA:"),
+                StatusCode::BAD_REQUEST,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "invalid content-digest header: only sha-256 is supported"
+        );
+    }
+
+    testctx.teardown().await;
+}
+
 // Test `StreamingBody`.
 #[tokio::test]
 async fn test_streaming_body() {

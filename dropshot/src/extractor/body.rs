@@ -14,6 +14,7 @@ use crate::http_util::http_dump_body;
 use crate::schema_util::make_subschema_for;
 use crate::server::ServerContext;
 use async_trait::async_trait;
+use base64::Engine;
 use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
@@ -24,6 +25,7 @@ use schemars::JsonSchema;
 use schemars::schema::InstanceType;
 use schemars::schema::SchemaObject;
 use serde::de::DeserializeOwned;
+use sha2::Digest;
 use std::fmt::Debug;
 
 // TypedBody: body extractor for formats that can be deserialized to a specific
@@ -157,7 +159,9 @@ where
     BodyType: JsonSchema + DeserializeOwned + Send + Sync,
 {
     let (parts, body) = request.into_parts();
+    let expected_digest = content_digest_sha256(&parts.headers)?;
     let body = StreamingBody::new(body, request_body_max_bytes)
+        .with_expected_digest(expected_digest)
         .into_bytes_mut()
         .await?;
 
@@ -299,9 +303,11 @@ impl ExclusiveExtractor for UntypedBody {
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
     ) -> Result<UntypedBody, HttpError> {
+        let expected_digest = content_digest_sha256(request.headers())?;
         let body = request.into_body();
         let body_bytes =
             StreamingBody::new(body, rqctx.request_body_max_bytes())
+                .with_expected_digest(expected_digest)
                 .into_bytes_mut()
                 .await?;
         Ok(UntypedBody { content: body_bytes.freeze() })
@@ -322,11 +328,48 @@ impl ExclusiveExtractor for UntypedBody {
 pub struct StreamingBody {
     body: crate::Body,
     cap: usize,
+    expected_digest: Option<[u8; 32]>,
+}
+
+fn content_digest_sha256(
+    headers: &http::HeaderMap,
+) -> Result<Option<[u8; 32]>, HttpError> {
+    let Some(value) = headers.get("content-digest") else {
+        return Ok(None);
+    };
+    let bad = |message: &str| {
+        HttpError::for_bad_request(
+            None,
+            format!("invalid content-digest header: {}", message),
+        )
+    };
+    let value = value.to_str().map_err(|_| bad("not ASCII"))?;
+    for member in value.split(',') {
+        let Some(rest) = member.trim().strip_prefix("sha-256=") else {
+            continue;
+        };
+        let encoded = rest
+            .strip_prefix(':')
+            .and_then(|r| r.strip_suffix(':'))
+            .ok_or_else(|| bad("sha-256 value must be a byte sequence"))?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|_| bad("invalid base64"))?;
+        return <[u8; 32]>::try_from(bytes.as_slice())
+            .map(Some)
+            .map_err(|_| bad("sha-256 digest must be 32 bytes"));
+    }
+    Err(bad("only sha-256 is supported"))
 }
 
 impl StreamingBody {
     fn new(body: crate::Body, cap: usize) -> Self {
-        Self { body, cap }
+        Self { body, cap, expected_digest: None }
+    }
+
+    fn with_expected_digest(mut self, digest: Option<[u8; 32]>) -> Self {
+        self.expected_digest = digest;
+        self
     }
 
     /// Not part of the public API. Used only for doctests.
@@ -334,7 +377,7 @@ impl StreamingBody {
     pub fn __from_bytes(data: Bytes) -> Self {
         let cap = data.len();
         let body = crate::Body::from(data);
-        Self { body, cap }
+        Self { body, cap, expected_digest: None }
     }
 
     /// Converts `self` into a stream.
@@ -414,6 +457,7 @@ impl StreamingBody {
     ) -> impl Stream<Item = Result<Bytes, HttpError>> + Send {
         async_stream::try_stream! {
             let mut bytes_read: usize = 0;
+            let mut hasher = self.expected_digest.map(|_| sha2::Sha256::new());
             while let Some(frame_res) = self.body.frame().await {
                 let frame = frame_res.map_err(|e| HttpError::for_bad_request(
                     None,
@@ -437,7 +481,19 @@ impl StreamingBody {
                 }
 
                 bytes_read += len;
+                if let Some(hasher) = hasher.as_mut() {
+                    hasher.update(&buf);
+                }
                 yield buf;
+            }
+            if let (Some(hasher), Some(expected)) = (hasher, self.expected_digest) {
+                let actual: [u8; 32] = hasher.finalize().into();
+                if actual != expected {
+                    Err(HttpError::for_bad_request(
+                        None,
+                        String::from("content-digest does not match request body"),
+                    ))?;
+                }
             }
         }
     }
@@ -461,9 +517,11 @@ impl ExclusiveExtractor for StreamingBody {
         rqctx: &RequestContext<Context>,
         request: hyper::Request<crate::Body>,
     ) -> Result<Self, HttpError> {
+        let expected_digest = content_digest_sha256(request.headers())?;
         Ok(Self {
             body: request.into_body(),
             cap: rqctx.request_body_max_bytes(),
+            expected_digest,
         })
     }
 
