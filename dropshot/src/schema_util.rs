@@ -910,7 +910,11 @@ fn j2oas_array(
                 Some(box_reference_or(j2oas_schema(None, &schema)))
             }
             Some(schemars::schema::SingleOrVec::Vec(_)) => {
-                panic!("OpenAPI v3.0.x cannot support tuple-like arrays")
+                panic!(
+                    "OpenAPI v3.0.x cannot support tuple-like arrays: {}",
+                    serde_json::to_string(arr)
+                        .unwrap_or_else(|_| format!("{arr:?}")),
+                )
             }
             None => None,
         },
@@ -1311,6 +1315,18 @@ mod test {
         }
 
         let schema = schemars::schema_for!(Uno).schema;
+
+        let _ = j2oas_schema_object(None, &schema);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "OpenAPI v3.0.x cannot support tuple-like arrays: \
+                    {\"items\":[{\"type\":\"boolean\"},{\"type\":\"string\"}],\
+                    \"maxItems\":2,\"minItems\":2}"
+    )]
+    fn test_tuple_array_panic_shows_schema() {
+        let schema = schemars::schema_for!((bool, String)).schema;
 
         let _ = j2oas_schema_object(None, &schema);
     }
