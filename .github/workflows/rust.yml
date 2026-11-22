@@ -72,7 +72,7 @@ jobs:
             toolchain: stable
           - rust-version: msrv
             # Keep this in sync with rust-version in Cargo.toml.
-            toolchain: "1.88"
+            toolchain: "1.89"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust toolchain

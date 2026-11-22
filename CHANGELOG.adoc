@@ -16,6 +16,7 @@
 https://github.com/oxidecomputer/dropshot/compare/v0.18.0\...HEAD[Full list of commits]
 
 * Added `Clone` for `ApiDescription<C>` without requiring `C: Clone`. Clones have independent routing and API metadata and share handler objects, allowing the same API to serve multiple servers with separate context values.
+* The minimum supported Rust version is now 1.89.
 
 == 0.18.0 (released 2026-10-30)
 
