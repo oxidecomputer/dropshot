@@ -78,17 +78,22 @@ async fn test_multipart_client() {
 }
 
 // RFC 2046 section 5.1.1 allows the boundary to be quoted, and RFC 9110
-// section 8.3.1 allows other parameters after it, with parameter names
-// matched case-insensitively.
+// section 5.6.6 allows other parameters next to it and makes parameter names
+// case-insensitive. An unquoted boundary with "=", which RFC 2046 says needs
+// quotes, keeps working as it did before.
 #[tokio::test]
 async fn boundary_parameter_forms() {
     let api = api();
     let testctx = common::test_setup("multipart_client", api);
 
-    for content_type in [
-        "multipart/form-data; boundary=\"Y-BOUNDARY\"",
-        "multipart/form-data; boundary=Y-BOUNDARY; charset=utf-8",
-        "multipart/form-data; BOUNDARY=Y-BOUNDARY",
+    for (content_type, boundary) in [
+        ("multipart/form-data; boundary=\"Y-BOUNDARY\"", "Y-BOUNDARY"),
+        (
+            "multipart/form-data; boundary=Y-BOUNDARY; charset=utf-8",
+            "Y-BOUNDARY",
+        ),
+        ("multipart/form-data; BOUNDARY=Y-BOUNDARY", "Y-BOUNDARY"),
+        ("multipart/form-data; boundary=----=_Part_0_1", "----=_Part_0_1"),
     ] {
         let uri = testctx.client_testctx.url("/upload");
         let request = hyper::Request::builder()
@@ -96,13 +101,14 @@ async fn boundary_parameter_forms() {
             .uri(uri)
             .header("Content-Type", content_type)
             .body(
-                "--Y-BOUNDARY\r\n\
-                Content-Disposition: form-data; name=\"my_text_field\"\r\n\
-                \r\n\
-                abcd\r\n\
-                --Y-BOUNDARY--\r\n"
-                    .to_owned()
-                    .into(),
+                format!(
+                    "--{boundary}\r\n\
+                    Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                    \r\n\
+                    abcd\r\n\
+                    --{boundary}--\r\n"
+                )
+                .into(),
             )
             .expect("attempted to construct invalid request");
         let mut response = testctx
