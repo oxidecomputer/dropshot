@@ -16,6 +16,7 @@
 https://github.com/oxidecomputer/dropshot/compare/v0.18.0\...HEAD[Full list of commits]
 
 * The minimum supported Rust version is now 1.89.
+* https://github.com/oxidecomputer/dropshot/pull/1773[#1773] `MultipartBody` now parses the `content-type` header as a media type, so a quoted boundary, a parameter after the boundary or an upper-case `BOUNDARY` name no longer fails the request. A content type other than `multipart/form-data` is now rejected with 400.
 
 == 0.18.0 (released 2026-10-30)
 
