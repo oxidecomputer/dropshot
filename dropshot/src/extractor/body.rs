@@ -103,20 +103,20 @@ impl ExclusiveExtractor for MultipartBody {
                     format!("invalid content type: {}", e),
                 )
             })?;
-        // The boundary is the string after the "boundary=" part of the
-        // content-type header.
-        let boundary =
-            content_type.split("boundary=").nth(1).ok_or_else(|| {
-                HttpError::for_bad_request(
-                    None,
-                    "missing boundary in content-type header".to_string(),
-                )
-            })?;
+        // RFC 2046 section 5.1.1 allows a quoted boundary, and RFC 9110
+        // section 8.3.1 allows other parameters after it, so parse the
+        // header as a media type rather than splitting it on "boundary=".
+        let boundary = multer::parse_boundary(content_type).map_err(|e| {
+            let message = match e {
+                multer::Error::NoBoundary => {
+                    "missing boundary in content-type header".to_string()
+                }
+                e => format!("invalid content type: {}", e),
+            };
+            HttpError::for_bad_request(None, message)
+        })?;
         Ok(MultipartBody {
-            content: multer::Multipart::new(
-                body.into_data_stream(),
-                boundary.to_string(),
-            ),
+            content: multer::Multipart::new(body.into_data_stream(), boundary),
         })
     }
 

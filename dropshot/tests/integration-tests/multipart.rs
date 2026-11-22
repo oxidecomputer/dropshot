@@ -77,6 +77,46 @@ async fn test_multipart_client() {
     testctx.teardown().await;
 }
 
+// RFC 2046 section 5.1.1 allows the boundary to be quoted, and RFC 9110
+// section 8.3.1 allows other parameters after it, with parameter names
+// matched case-insensitively.
+#[tokio::test]
+async fn boundary_parameter_forms() {
+    let api = api();
+    let testctx = common::test_setup("multipart_client", api);
+
+    for content_type in [
+        "multipart/form-data; boundary=\"Y-BOUNDARY\"",
+        "multipart/form-data; boundary=Y-BOUNDARY; charset=utf-8",
+        "multipart/form-data; BOUNDARY=Y-BOUNDARY",
+    ] {
+        let uri = testctx.client_testctx.url("/upload");
+        let request = hyper::Request::builder()
+            .method(Method::POST)
+            .uri(uri)
+            .header("Content-Type", content_type)
+            .body(
+                "--Y-BOUNDARY\r\n\
+                Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                \r\n\
+                abcd\r\n\
+                --Y-BOUNDARY--\r\n"
+                    .to_owned()
+                    .into(),
+            )
+            .expect("attempted to construct invalid request");
+        let mut response = testctx
+            .client_testctx
+            .make_request_with_request(request, http::StatusCode::OK)
+            .await
+            .unwrap_or_else(|e| panic!("{content_type}: {}", e.message));
+        let body = read_string(&mut response).await;
+        assert_eq!(body, "abcd", "{content_type}");
+    }
+
+    testctx.teardown().await;
+}
+
 #[tokio::test]
 async fn missing_boundary() {
     let api = api();
