@@ -16,6 +16,7 @@
 https://github.com/oxidecomputer/dropshot/compare/v0.18.0\...HEAD[Full list of commits]
 
 * The minimum supported Rust version is now 1.89.
+* https://github.com/oxidecomputer/dropshot/pull/1773[#1773] `MultipartBody` now reads a quoted boundary, a boundary followed by other parameters and an upper-case `BOUNDARY` parameter name, which used to fail the request.
 
 == 0.18.0 (released 2026-10-30)
 

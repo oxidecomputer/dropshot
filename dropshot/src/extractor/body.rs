@@ -103,15 +103,12 @@ impl ExclusiveExtractor for MultipartBody {
                     format!("invalid content type: {}", e),
                 )
             })?;
-        // The boundary is the string after the "boundary=" part of the
-        // content-type header.
-        let boundary =
-            content_type.split("boundary=").nth(1).ok_or_else(|| {
-                HttpError::for_bad_request(
-                    None,
-                    "missing boundary in content-type header".to_string(),
-                )
-            })?;
+        let boundary = multipart_boundary(content_type).ok_or_else(|| {
+            HttpError::for_bad_request(
+                None,
+                "missing boundary in content-type header".to_string(),
+            )
+        })?;
         Ok(MultipartBody {
             content: multer::Multipart::new(
                 body.into_data_stream(),
@@ -144,6 +141,34 @@ impl ExclusiveExtractor for MultipartBody {
             parameters: vec![body],
         }
     }
+}
+
+/// Returns the boundary parameter of a multipart content type.
+///
+/// RFC 2046 section 5.1.1 allows the boundary to be quoted, and RFC 9110
+/// section 5.6.6 allows any number of parameters and makes their names
+/// case-insensitive. A boundary cannot contain ";" or a double quote, so
+/// splitting on ";" and dropping the quotes is enough. An unquoted boundary
+/// with a character that RFC 2046 says needs quotes, such as "=", is accepted
+/// as it is.
+fn multipart_boundary(content_type: &str) -> Option<&str> {
+    content_type
+        .split(';')
+        .skip(1)
+        .find_map(|parameter| {
+            let (name, value) = parameter.split_once('=')?;
+            if !name.trim().eq_ignore_ascii_case("boundary") {
+                return None;
+            }
+            let value = value.trim();
+            Some(
+                value
+                    .strip_prefix('"')
+                    .and_then(|v| v.strip_suffix('"'))
+                    .unwrap_or(value),
+            )
+        })
+        .filter(|boundary| !boundary.is_empty())
 }
 
 /// Given an HTTP request, attempt to read the body, parse it according

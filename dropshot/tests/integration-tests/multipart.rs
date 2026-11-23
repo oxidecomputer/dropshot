@@ -77,6 +77,52 @@ async fn test_multipart_client() {
     testctx.teardown().await;
 }
 
+// RFC 2046 section 5.1.1 allows the boundary to be quoted, and RFC 9110
+// section 5.6.6 allows other parameters next to it and makes parameter names
+// case-insensitive. An unquoted boundary with "=", which RFC 2046 says needs
+// quotes, keeps working as it did before.
+#[tokio::test]
+async fn boundary_parameter_forms() {
+    let api = api();
+    let testctx = common::test_setup("multipart_client", api);
+
+    for (content_type, boundary) in [
+        ("multipart/form-data; boundary=\"Y-BOUNDARY\"", "Y-BOUNDARY"),
+        (
+            "multipart/form-data; boundary=Y-BOUNDARY; charset=utf-8",
+            "Y-BOUNDARY",
+        ),
+        ("multipart/form-data; BOUNDARY=Y-BOUNDARY", "Y-BOUNDARY"),
+        ("multipart/form-data; boundary=----=_Part_0_1", "----=_Part_0_1"),
+    ] {
+        let uri = testctx.client_testctx.url("/upload");
+        let request = hyper::Request::builder()
+            .method(Method::POST)
+            .uri(uri)
+            .header("Content-Type", content_type)
+            .body(
+                format!(
+                    "--{boundary}\r\n\
+                    Content-Disposition: form-data; name=\"my_text_field\"\r\n\
+                    \r\n\
+                    abcd\r\n\
+                    --{boundary}--\r\n"
+                )
+                .into(),
+            )
+            .expect("attempted to construct invalid request");
+        let mut response = testctx
+            .client_testctx
+            .make_request_with_request(request, http::StatusCode::OK)
+            .await
+            .unwrap_or_else(|e| panic!("{content_type}: {}", e.message));
+        let body = read_string(&mut response).await;
+        assert_eq!(body, "abcd", "{content_type}");
+    }
+
+    testctx.teardown().await;
+}
+
 #[tokio::test]
 async fn missing_boundary() {
     let api = api();
