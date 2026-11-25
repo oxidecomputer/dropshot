@@ -35,7 +35,6 @@ note: required by a bound in `need_shared_extractor`
    | |__^ required by this bound in `need_shared_extractor`
 ...
 27 |       _param1: TypedBody<Stuff>,
-   |                --------- required by a bound in this function
    = note: this error originates in the attribute macro `endpoint` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `fn(RequestContext<()>, TypedBody<Stuff>, dropshot::Query<Stuff>) -> impl Future<Output = Result<HttpResponseOk<()>, HttpError>> {<impl std::convert::From<exclusive_extractor_not_last> for ApiEndpoint<<RequestContext<()> as RequestContextArgument>::Context>>::from::exclusive_extractor_not_last}: dropshot::handler::HttpHandlerFunc<_, _, _>` is not satisfied
@@ -53,8 +52,8 @@ error[E0277]: the trait bound `fn(RequestContext<()>, TypedBody<Stuff>, dropshot
 note: required by a bound in `ApiEndpoint::<Context>::new`
   --> src/api_description.rs
    |
+   | impl<'a, Context: ServerContext> ApiEndpoint<Context> {
    |     pub fn new<HandlerType, FuncParams, ResponseType>(
-   |            --- required by a bound in this associated function
 ...
    |         HandlerType: HttpHandlerFunc<Context, FuncParams, ResponseType>,
    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ApiEndpoint::<Context>::new`
